@@ -60,7 +60,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\smoke-windows-release.ps1 `
   -Archive .\dist-windows\ao2-0.4.80-windows-x86_64.tar.gz
 ```
 
-The GitHub workflows in `.github/workflows/` are manual-only templates.
+The main CI workflow in `.github/workflows/ci.yml` runs on pull request and
+`main` push, and can also be dispatched manually. Release workflows such as
+`release-gate.yml` and `public-release-build.yml` remain manual operator gates.
 
 ## Documentation
 
