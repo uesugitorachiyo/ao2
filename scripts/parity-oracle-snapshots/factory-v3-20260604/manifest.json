@@ -1,0 +1,35 @@
+{
+  "schema_version": "ao2.factory-v3-parity-oracle-snapshot.v1",
+  "snapshot_id": "factory-v3-20260604",
+  "generated_at_utc": "2026-06-04T06:35:00Z",
+  "source_repo": "uesugitorachiyo/ao-operator-private",
+  "source_legacy_slug": "factory-v3",
+  "source_git_head": "405e2739648366ad6299518352c1a51e6487783f",
+  "source_role": "read_only_parity_oracle_snapshot_for_hosted_ci",
+  "trust_boundary": {
+    "ao2_role": "canonical_producer",
+    "factory_v3_role": "parity_oracle_only",
+    "mutates_ao_artifacts": false,
+    "mutates_control_plane": false
+  },
+  "source_scripts_sha256": {
+    "scripts/ao_operator_ao2_provider_contract.py": "30c26409416758ea3ef326d0679feedd23658b0f5494a4b2279b34dbdf4bbccf",
+    "scripts/ao2_release_evaluator_decision.py": "a337fa1530b6e35daaf8f9383bcae1d606342697b37ab19dd9ead05f734f9b42",
+    "scripts/ao2_release_handoff_checklist.py": "61a13818f03f84dac30d86bcb6416735cfdb505a9479515b096b71867a874468",
+    "scripts/ao2_watchdog_cancel_authority_producer.py": "5efaca237d4786481ed50570f384c6f298a47007ce77a5b9cf97193160a57ec8"
+  },
+  "fixtures_sha256": {
+    "scripts/parity-oracle-fixtures/ao-dev-v1-runspec.json": "175924ad16d334424928a3c93c5c04656df5dd758fb1720d66f4e3f56b5d8c19",
+    "scripts/parity-oracle-fixtures/release-evaluator-decision-handoff.json": "2e7a0d8b907cd05d5209c7cef86bd1ee4fa16cccc881fff36d42908021d476ff",
+    "scripts/parity-oracle-fixtures/release-evaluator-decision-readiness.json": "136f6b58c68e391125abf15871aa0f27b7d8393455d36a2b32a9a84a3ed68e9a",
+    "scripts/parity-oracle-fixtures/release-evaluator-decision-support-bundle.json": "f7f76b2f7f08a6910c12023052022205acbda9e1d7e8bb7ce83703f862b7ba07",
+    "scripts/parity-oracle-fixtures/release-handoff-checklist-input.json": "32bbd57caa2c7039496591d9fc2fee8a71fa7a29c121aa1279bd77355d0d6df4"
+  },
+  "snapshots_sha256": {
+    "bridge-mapping.canonical.json": "cda521f5bd1ae42f06ab2f44689161034fa8790163b020ba888719312635cd99",
+    "release-evaluator-decision.canonical.json": "27fb68b704ce4c9f12c8938a1bf3e992c2ac01017dbbc6f437af0f450dae54fd",
+    "release-handoff-checklist.canonical.json": "0866f535d8f8274075586730a37b63151caa7b225838061ef9f70c6ae7676037",
+    "resolved-roles.canonical.json": "ca324c20371b5f5660a0e0935581434dd2fd2bb02a0fc6908329917f987f8ade",
+    "watchdog-no-active-runs-attestation.canonical.json": "62ef27d79cf7e78ec34bfda69282a96fc43bf66eb8bd1b97ef7b4c763c54ac26"
+  }
+}

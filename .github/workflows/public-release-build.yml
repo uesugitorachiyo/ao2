@@ -1,0 +1,74 @@
+name: Public Release Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build signed public release assets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+          targets: x86_64-pc-windows-gnu
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install QEMU for arm64 release packaging
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Build release assets
+        run: npm run release:build-all
+
+      - name: Run no factory-v3 green-path guard
+        run: npm run verify:no-factory-v3
+
+      - name: Run gate:full
+        env:
+          AO2_HOSTED_RELEASE_GATE: "1"
+          AO2_REQUIRE_NATIVE_WINDOWS_SMOKE: "0"
+          AO2_ALLOW_UNSIGNED_OBLIGATION_GATES: "1"
+        run: npm run gate:full
+
+      - name: Upload no factory-v3 guard report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: no-factory-v3-green-path-${{ github.sha }}
+          path: target/no-factory-v3-green-path/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload gate:full rollup
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate-full-rollup-${{ github.sha }}
+          path: target/release-gate-with-replacement/
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: ao2-public-release-assets
+          path: |
+            dist/*.tar.gz
+            dist-linux/*.tar.gz
+            dist-windows/*.tar.gz
+            dist-provenance/*
+          if-no-files-found: error

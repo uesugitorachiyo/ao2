@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ao2.local/schemas/run-record.schema.json",
+  "title": "AO2 Run Record",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "workflow_ref",
+    "status",
+    "events_head",
+    "artifacts",
+    "policy_decisions",
+    "approval_tickets",
+    "closure",
+    "evidence_pack",
+    "report"
+  ],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "run_id": { "type": "string" },
+    "workflow_ref": { "type": "string" },
+    "template_kind": { "type": ["string", "null"] },
+    "objective": { "type": "string" },
+    "roles": { "type": "array", "items": { "type": "string" } },
+    "acceptance": { "type": "array", "items": { "type": "string" } },
+    "verifier_command": { "type": "string" },
+    "status": { "type": "string" },
+    "events_head": { "type": "string" },
+    "artifacts": { "type": "array" },
+    "policy_decisions": { "type": "array" },
+    "approval_tickets": { "type": "array" },
+    "closure": { "type": ["object", "null"] },
+    "evidence_pack": { "type": "string" },
+    "report": { "type": "string" },
+    "repair_attempts": { "type": "array" }
+  }
+}

@@ -1,0 +1,29 @@
+[package]
+name        = "sdd-planner"
+version     = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+serde.workspace      = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+thiserror.workspace  = true
+anyhow.workspace     = true
+ulid.workspace       = true
+chrono.workspace     = true
+sha2.workspace       = true
+hex.workspace        = true
+walkdir.workspace    = true
+tiktoken-rs.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[build-dependencies]
+vergen-git2.workspace = true

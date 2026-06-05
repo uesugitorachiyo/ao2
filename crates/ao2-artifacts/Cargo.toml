@@ -1,0 +1,20 @@
+[package]
+name = "ao2-artifacts"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+ao2-core = { path = "../ao2-core" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+ao2-core = { path = "../ao2-core" }
+serde_json.workspace = true
+
+[lints]
+workspace = true

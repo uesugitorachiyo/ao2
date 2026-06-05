@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ao2.local/schemas/approval-ticket.schema.json",
+  "title": "AO2 Approval Ticket",
+  "type": "object",
+  "required": [
+    "ticket_id",
+    "run_id",
+    "requested_action",
+    "action_digest",
+    "risk_class",
+    "requester",
+    "status",
+    "scope",
+    "created_at",
+    "expires_at"
+  ],
+  "properties": {
+    "ticket_id": { "type": "string" },
+    "run_id": { "type": "string" },
+    "requested_action": { "type": "string" },
+    "action_digest": { "type": "string" },
+    "risk_class": { "type": "string" },
+    "requester": { "type": "string" },
+    "approver": { "type": ["string", "null"] },
+    "status": { "enum": ["pending", "approved", "denied", "expired"] },
+    "scope": { "type": "string" },
+    "created_at": { "type": "string" },
+    "expires_at": { "type": "string" }
+  }
+}

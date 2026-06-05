@@ -1,0 +1,26 @@
+{
+  "schema_version": "ao2.cp-release-candidate-handoff.v1",
+  "status": "ready",
+  "release": {
+    "version": "0.4.80",
+    "release_tag": "v0.4.80"
+  },
+  "gates": {
+    "release_cockpit": "ready",
+    "phase1_promotion": "observed",
+    "decision_signature": "present",
+    "provider_acceptance": "live_complete"
+  },
+  "acceptance": {
+    "codex": {"status": "passed", "source_class": "live"},
+    "claude": {"status": "passed", "source_class": "live"}
+  },
+  "operator_handoff": {
+    "control_plane_role": "read_only_observer",
+    "mutates_ao_artifacts": false,
+    "release_acceptance_owner": "factory-v3 evaluator-closer"
+  },
+  "links": {
+    "release_candidate_handoff_json": "http://127.0.0.1:8744/api/v1/release/handoff.json"
+  }
+}

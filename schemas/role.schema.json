@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ao2.local/schemas/role.schema.json",
+  "title": "AO2 Role",
+  "type": "object",
+  "required": ["id", "purpose", "allowed_context", "allowed_tools", "sandbox_profile"],
+  "properties": {
+    "id": { "type": "string" },
+    "purpose": { "type": "string" },
+    "provider_policy": { "type": "object" },
+    "allowed_context": { "type": "array" },
+    "allowed_tools": { "type": "array" },
+    "sandbox_profile": { "type": "string" },
+    "output_schema_ref": { "type": "string" },
+    "evidence_requirements": { "type": "array" }
+  }
+}

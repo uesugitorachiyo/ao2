@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ao2.local/schemas/policy-decision.schema.json",
+  "title": "AO2 Policy Decision",
+  "type": "object",
+  "required": [
+    "decision_id",
+    "principal",
+    "action",
+    "resource",
+    "request_digest",
+    "decision",
+    "reason",
+    "policy_version",
+    "created_at"
+  ],
+  "properties": {
+    "decision_id": { "type": "string" },
+    "principal": { "type": "string" },
+    "action": { "type": "string" },
+    "resource": { "type": "string" },
+    "request_digest": { "type": "string" },
+    "decision": { "enum": ["allow", "deny", "requires_approval"] },
+    "reason": { "type": "string" },
+    "policy_version": { "type": "string" },
+    "approval_ticket_id": { "type": ["string", "null"] },
+    "created_at": { "type": "string" }
+  }
+}

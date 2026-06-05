@@ -1,0 +1,46 @@
+{
+  "schema_version": "ao2.canonical-json-vectors.v1",
+  "algorithm": "ao2-canonical-v1",
+  "vectors": [
+    {
+      "name": "sorted_nested_controls",
+      "input": {
+        "z": [
+          3,
+          {
+            "b": true,
+            "a": null
+          }
+        ],
+        "a": "quote:\" slash:\\ newline:\n tab:\t nul:\u0000 unit:\u001f"
+      },
+      "canonical": "{\"a\":\"quote:\\\" slash:\\\\ newline:\\n tab:\\t nul:\\u0000 unit:\\u001f\",\"z\":[3,{\"a\":null,\"b\":true}]}",
+      "sha256": "fef5949f68b2a20ffd0f997d220103b18a0d013650562bb3b202f1873120f994"
+    },
+    {
+      "name": "unicode_non_bmp_key",
+      "input": {
+        "emoji-😀": "grin",
+        "emoji-😃": "smile",
+        "plain": "東京"
+      },
+      "canonical": "{\"emoji-😀\":\"grin\",\"emoji-😃\":\"smile\",\"plain\":\"東京\"}",
+      "sha256": "cc62a683e969b67a4fa94f2d788190b4849caf565307013ae459e0c19d10a718"
+    },
+    {
+      "name": "large_integer_and_float",
+      "input": {
+        "large_integer": 9007199254740993,
+        "ordinary_float": 1234.5,
+        "negative": -42,
+        "array": [
+          0,
+          1234.5,
+          9007199254740993
+        ]
+      },
+      "canonical": "{\"array\":[0,1234.5,9007199254740993],\"large_integer\":9007199254740993,\"negative\":-42,\"ordinary_float\":1234.5}",
+      "sha256": "28840a3906e3ed5bfa18fff1f4c98b9774c00e81ebeb57177b96c9097557d2a5"
+    }
+  ]
+}

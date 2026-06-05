@@ -1,0 +1,18 @@
+[package]
+name = "ao2-policy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+ao2-core = { path = "../ao2-core" }
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+# Property-based testing for the secret-redaction engine and the action-digest
+# canonicalization. Test-only; not pulled into any shipped artifact.
+proptest = "1"

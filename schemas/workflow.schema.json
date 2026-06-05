@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ao2.local/schemas/workflow.schema.json",
+  "title": "AO2 Workflow",
+  "type": "object",
+  "required": ["id", "version", "objective", "roles", "verifier", "policy"],
+  "properties": {
+    "id": { "type": "string" },
+    "version": { "type": "string" },
+    "template_kind": { "type": "string" },
+    "target_fixture": { "type": "string" },
+    "objective": { "type": "string" },
+    "roles": { "type": "array", "items": { "type": "string" } },
+    "verifier": { "type": "object" },
+    "policy": { "type": "object" },
+    "evidence": { "type": "object" },
+    "acceptance": { "type": "array", "items": { "type": "string" } }
+  }
+}

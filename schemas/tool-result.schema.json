@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ao2.local/schemas/tool-result.schema.json",
+  "title": "AO2 Tool Result",
+  "type": "object",
+  "required": ["status", "exit_code", "artifacts", "sanitized_summary", "side_effects_observed"],
+  "properties": {
+    "status": { "type": "string" },
+    "stdout_ref": { "type": ["string", "null"] },
+    "stderr_ref": { "type": ["string", "null"] },
+    "exit_code": { "type": "integer" },
+    "artifacts": { "type": "array" },
+    "sanitized_summary": { "type": "string" },
+    "side_effects_observed": { "type": "array" }
+  }
+}

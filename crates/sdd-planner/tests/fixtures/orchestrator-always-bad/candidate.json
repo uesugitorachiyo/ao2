@@ -1,0 +1,48 @@
+{
+  "schema_version": "ao2.sdd-plan-candidate.v1",
+  "plan_id": "01JALWAYSBADABCDEFGHJKMNPQ",
+  "generated_at_utc": "2026-05-27T20:11:00.000000Z",
+  "prompt": {
+    "text": "Build a tiny CLI that prints hello.",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "target": {
+    "repo_path": "/tmp/tiny",
+    "head_sha": "0000000000000000000000000000000000000000",
+    "head_subject": "initial",
+    "surface_map_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "plan": {
+    "kind": "build",
+    "title": "Tiny hello CLI",
+    "goal": "Print hello to stdout.",
+    "non_goals": [],
+    "steps": [
+      {
+        "id": "step_one",
+        "kind": "create",
+        "paths": ["src/main.rs"],
+        "rationale": "Single binary entrypoint.",
+        "acceptance": ["create src/main.rs printing hello"],
+        "depends_on": []
+      }
+    ],
+    "exit_criteria": {
+      "tests": ["cargo test --release"],
+      "gates": [],
+      "manual": []
+    }
+  },
+  "provenance": {
+    "attempts": 0,
+    "provider": "codex",
+    "engine_sha": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+    "cli_version": "0.1.0"
+  },
+  "trust_boundary": {
+    "control_plane_role": "read_only_observer",
+    "mutates_ao_artifacts": true,
+    "ingest_authority": "ao2-runner",
+    "release_acceptance_owner": "factory-v3 evaluator-closer"
+  }
+}

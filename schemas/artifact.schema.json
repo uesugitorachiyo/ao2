@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ao2.local/schemas/artifact.schema.json",
+  "title": "AO2 Artifact",
+  "type": "object",
+  "required": [
+    "artifact_id",
+    "artifact_type",
+    "uri",
+    "media_type",
+    "digest",
+    "producer",
+    "input_refs",
+    "sensitivity"
+  ],
+  "properties": {
+    "artifact_id": { "type": "string" },
+    "artifact_type": { "type": "string" },
+    "uri": { "type": "string" },
+    "media_type": { "type": "string" },
+    "digest": { "type": "string" },
+    "producer": { "type": "string" },
+    "input_refs": { "type": "array", "items": { "type": "string" } },
+    "sensitivity": { "type": "string" }
+  }
+}

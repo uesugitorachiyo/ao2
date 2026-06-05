@@ -1,0 +1,34 @@
+id: small-refactor
+version: 0.1.0
+template_kind: real_project
+objective: Improve code structure without changing externally observable behavior.
+roles:
+  - planner
+  - implementer
+  - reviewer
+  - test-engineer
+  - evaluator-closer
+verifier:
+  command: python -m pytest
+policy:
+  deny_by_default: true
+  approval_mode: exact_action_digest
+  risky_actions:
+    - git_push
+    - destructive_delete
+    - package_install
+    - network_egress
+    - secret_read
+evidence:
+  evidence_cockpit: required
+  replay: required
+  required_artifacts:
+    - plan
+    - patch_summary
+    - test_log
+    - closure_report
+acceptance:
+  - Public behavior remains unchanged.
+  - Existing tests pass without weakening assertions.
+  - The refactor reduces local complexity or duplication.
+  - Replay has zero digest failures.

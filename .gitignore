@@ -1,0 +1,17 @@
+/target/
+/dist/
+/dist-linux/
+/dist-linux-x86_64/
+/dist-windows/
+/dist-provenance/
+/.release-signing/
+/node_modules/
+/.DS_Store
+**/.DS_Store
+/.ao2/runs/
+/.ao2/control-plane/
+/.ao2/memory/
+**/.ao2/runs/
+**/.ao2/control-plane/
+**/.ao2/memory/
+*.log

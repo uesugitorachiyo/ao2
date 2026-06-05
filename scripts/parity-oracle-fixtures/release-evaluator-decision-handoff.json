@@ -1,0 +1,24 @@
+{
+  "schema": "factory-v3/ao2-release-handoff-checklist/v1",
+  "status": "ready_for_evaluator_closer",
+  "release": {"version": "0.4.80", "release_tag": "v0.4.80"},
+  "checks": [
+    {
+      "id": "provider_acceptance",
+      "label": "Provider acceptance",
+      "observed": "live_complete",
+      "expected": "live_complete",
+      "status": "passed"
+    }
+  ],
+  "blockers": [],
+  "operator_decision": {
+    "factory_v3_evaluator_closer_required": true,
+    "control_plane_approves_release": false
+  },
+  "trust_boundary": {
+    "control_plane_role": "read_only_observer",
+    "mutates_ao_artifacts": false,
+    "release_acceptance_owner": "factory-v3 evaluator-closer"
+  }
+}

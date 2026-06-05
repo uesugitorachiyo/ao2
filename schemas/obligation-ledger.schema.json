@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ao2.local/schemas/obligation-ledger.schema.json",
+  "title": "AO2 Obligation Ledger",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "source_contracts",
+    "obligations",
+    "summary",
+    "verdict",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": { "const": "ao2.obligation-ledger.v1" },
+    "source_contracts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": { "type": "string" },
+          "sha256": { "type": "string" }
+        }
+      }
+    },
+    "obligations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "statement",
+          "source_path",
+          "source_line",
+          "source_excerpt_hash",
+          "expected_fragments",
+          "status",
+          "evidence",
+          "waiver"
+        ],
+        "properties": {
+          "id": { "type": "string" },
+          "kind": { "type": "string" },
+          "statement": { "type": "string" },
+          "source_path": { "type": "string" },
+          "source_line": { "type": "integer", "minimum": 1 },
+          "source_excerpt_hash": { "type": "string" },
+          "expected_fragments": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "status": {
+            "enum": ["pass", "fail", "unverified", "waived"]
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["path", "line", "detail"],
+              "properties": {
+                "path": { "type": "string" },
+                "line": { "type": "integer", "minimum": 1 },
+                "detail": { "type": "string" }
+              }
+            }
+          },
+          "waiver": {
+            "type": ["string", "null"]
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["pass", "fail", "unverified", "waived"],
+      "properties": {
+        "pass": { "type": "integer", "minimum": 0 },
+        "fail": { "type": "integer", "minimum": 0 },
+        "unverified": { "type": "integer", "minimum": 0 },
+        "waived": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "verdict": {
+      "enum": ["accepted", "rejected"]
+    },
+    "created_at": {
+      "type": "string"
+    }
+  }
+}

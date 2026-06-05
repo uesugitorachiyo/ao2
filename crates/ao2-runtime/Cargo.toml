@@ -1,0 +1,29 @@
+[package]
+name = "ao2-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+ao2-artifacts = { path = "../ao2-artifacts" }
+ao2-adapters = { path = "../ao2-adapters" }
+ao2-core = { path = "../ao2-core" }
+ao2-policy = { path = "../ao2-policy" }
+chrono.workspace = true
+# Cross-platform advisory file locking (flock on Unix, LockFileEx on Windows)
+# behind one safe API, used to serialize the run-record/approval read-modify-write
+# in `RunLock`. Pure-Rust, no libc; builds on the workspace MSRV.
+fs4 = { version = "1", features = ["sync"] }
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile.workspace = true
+walkdir.workspace = true
+
+[lints]
+workspace = true

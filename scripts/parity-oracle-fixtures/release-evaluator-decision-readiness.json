@@ -1,0 +1,31 @@
+{
+  "schema": "factory-v3/hermes-ao-bridge/v1",
+  "action": "release-readiness-status",
+  "status": "ready",
+  "frontend_status": {
+    "status": "ready",
+    "release_version": "0.4.80",
+    "release_tag": "v0.4.80",
+    "gate_count": 8,
+    "blocked_gate_count": 0,
+    "blocker_count": 0,
+    "factory_v3_evaluator_closer_required": true,
+    "control_plane_approves_release": false,
+    "next_action": "factory-v3 evaluator-closer may review this readiness summary"
+  },
+  "readiness_snapshot": {
+    "schema_version": "ao2.cp-release-readiness.v1",
+    "status": "ready",
+    "release": {"version": "0.4.80", "release_tag": "v0.4.80"},
+    "blockers": [],
+    "operator_decision": {
+      "factory_v3_evaluator_closer_required": true,
+      "control_plane_approves_release": false
+    }
+  },
+  "links": {
+    "release_readiness_json": "http://127.0.0.1:8744/api/v1/release/readiness.json",
+    "release_candidate_handoff_json": "http://127.0.0.1:8744/api/v1/release/handoff.json"
+  },
+  "trust_boundary": {"mode": "release_readiness_read_only"}
+}

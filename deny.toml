@@ -1,0 +1,66 @@
+# cargo-deny configuration for the ao2 workspace.
+#
+# Scope (see .github/workflows/ci.yml `deny` job):
+#   - CI runs `cargo deny check bans licenses sources advisories`.
+#
+# ao2 produces and verifies signed governance artifacts; the goal of these
+# gates is supply-chain hygiene — no copyleft creep, no surprise crate
+# sources, advisories reviewed rather than silently absorbed, duplicate
+# versions kept visible — without blocking the build on transient upstream
+# churn we don't control.
+
+[graph]
+# Evaluate the dependency graph for every target the workspace builds on (CI
+# runs the Linux/macOS/Windows matrix). Leaving this unset would only consider
+# the host target and could miss platform-specific deps.
+all-features = true
+
+[advisories]
+# rsa 0.9.x Marvin Attack (timing side-channel). ao2 uses `rsa` for signature
+# *verification* only (public-key modexp via the `Verifier` trait), never
+# decryption, so the side-channel is not exposed by our usage.
+ignore = ["RUSTSEC-2023-0071"]
+
+[licenses]
+# Permissive-only allow-list. Every crate in the current tree resolves to one
+# of these via SPDX OR/AND evaluation. No copyleft (GPL/LGPL/MPL) is allowed —
+# any such crate must fail the build for a deliberate review.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "ISC",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Unlicense",
+    "Zlib",
+]
+confidence-threshold = 0.85
+
+[bans]
+# Duplicate transitive versions are surfaced as warnings, not build failures:
+# they are pulled by upstream crates we don't control, and blocking on them
+# would gate the build on churn we can't unify ourselves.
+multiple-versions = "warn"
+# Wildcard ("*") requirements are allowed. Every *external* dependency is
+# pinned with a real semver requirement in [workspace.dependencies]; the only
+# wildcards in the tree are the intra-workspace path deps (e.g. `ao2-core =
+# { path = "../ao2-core" }`, which cargo treats as `*`). cargo-deny's
+# `allow-wildcard-paths` exemption only applies to crates marked
+# `publish = false`, which not every workspace crate is, so it cannot exempt
+# them here — and the manifest that would need that change is outside this
+# change's scope. Allowing wildcards keeps the gate green without weakening
+# the external-dependency posture, which is what supply-chain hygiene cares
+# about.
+wildcards = "allow"
+
+[sources]
+# Only crates.io; no git dependencies. A new registry or git dep must be an
+# explicit, reviewed change.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

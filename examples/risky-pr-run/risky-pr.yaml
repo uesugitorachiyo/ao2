@@ -1,0 +1,16 @@
+id: risky-pr-run
+version: 0.1.0
+target_fixture: fixtures/discount-service
+objective: Add input validation to calculate_discount and update tests.
+roles:
+  - planner
+  - implementer
+  - reviewer
+  - test-engineer
+  - evaluator-closer
+verifier:
+  command: python -m pytest
+policy:
+  deny_by_default: true
+  approval_mode: exact_action_digest
+

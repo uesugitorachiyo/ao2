@@ -1,0 +1,17 @@
+{
+  "required_event_types": [
+    "run.created",
+    "run.compiled",
+    "tool.requested",
+    "tool.denied",
+    "approval.requested",
+    "approval.granted",
+    "closure.rejected",
+    "task.completed",
+    "closure.accepted"
+  ],
+  "required_markers": [
+    "policy_denied_git_push",
+    "review_missing_tests"
+  ]
+}

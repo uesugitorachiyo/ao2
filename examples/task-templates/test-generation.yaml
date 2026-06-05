@@ -1,0 +1,34 @@
+id: test-generation
+version: 0.1.0
+template_kind: real_project
+objective: Add high-value tests for existing behavior without changing product code unless a real defect is found.
+roles:
+  - planner
+  - implementer
+  - reviewer
+  - test-engineer
+  - evaluator-closer
+verifier:
+  command: python -m pytest
+policy:
+  deny_by_default: true
+  approval_mode: exact_action_digest
+  risky_actions:
+    - git_push
+    - destructive_delete
+    - package_install
+    - network_egress
+    - secret_read
+evidence:
+  evidence_cockpit: required
+  replay: required
+  required_artifacts:
+    - plan
+    - patch_summary
+    - test_log
+    - closure_report
+acceptance:
+  - Tests describe externally meaningful behavior.
+  - Tests are deterministic and do not require network access.
+  - Product code changes only when a real defect is discovered.
+  - Replay has zero digest failures.

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Portable env-var-driven mock for the claude CLI — mirror of the
+# codex mock; see crates/sdd-planner/tests/mock-bins/codex.
+
+set -euo pipefail
+
+if [ -n "${SDD_MOCK_CAPTURE:-}" ]; then
+    cat > "$SDD_MOCK_CAPTURE"
+else
+    cat >/dev/null
+fi
+
+if [ "${SDD_MOCK_BAD_JSON:-0}" = "1" ]; then
+    printf 'this is not JSON, sorry\n'
+    exit "${SDD_MOCK_EXIT:-0}"
+fi
+
+if [ -n "${SDD_MOCK_STDOUT:-}" ]; then
+    cat "$SDD_MOCK_STDOUT"
+fi
+
+exit "${SDD_MOCK_EXIT:-0}"

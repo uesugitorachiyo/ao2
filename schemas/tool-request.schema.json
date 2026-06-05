@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ao2.local/schemas/tool-request.schema.json",
+  "title": "AO2 Tool Request",
+  "type": "object",
+  "required": ["principal", "tool", "operation", "resource", "args", "expected_side_effects"],
+  "properties": {
+    "principal": { "type": "string" },
+    "tool": { "type": "string" },
+    "operation": { "type": "string" },
+    "resource": { "type": "string" },
+    "args": { "type": "array", "items": { "type": "string" } },
+    "expected_side_effects": { "type": "array", "items": { "type": "string" } }
+  }
+}

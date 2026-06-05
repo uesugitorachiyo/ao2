@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ao2.local/schemas/event.schema.json",
+  "title": "AO2 Event",
+  "type": "object",
+  "required": [
+    "event_id",
+    "event_type",
+    "run_id",
+    "workflow_id",
+    "timestamp",
+    "actor",
+    "correlation_id",
+    "trace_id",
+    "span_id",
+    "payload",
+    "payload_digest",
+    "schema_version",
+    "sensitivity"
+  ],
+  "properties": {
+    "event_id": { "type": "string" },
+    "event_type": { "type": "string" },
+    "run_id": { "type": "string" },
+    "workflow_id": { "type": "string" },
+    "role_id": { "type": ["string", "null"] },
+    "task_id": { "type": ["string", "null"] },
+    "timestamp": { "type": "string" },
+    "actor": { "type": "object" },
+    "causation_id": { "type": ["string", "null"] },
+    "correlation_id": { "type": "string" },
+    "trace_id": { "type": "string" },
+    "span_id": { "type": "string" },
+    "payload": {},
+    "payload_digest": { "type": "string" },
+    "schema_version": { "type": "string" },
+    "sensitivity": { "type": "string" }
+  }
+}

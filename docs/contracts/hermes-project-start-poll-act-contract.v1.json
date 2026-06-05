@@ -1,0 +1,135 @@
+{
+  "schema_version": "ao2.hermes-project-start-poll-act-contract.v1",
+  "purpose": "Canonical Hermes front-end poll/act contract for AO2 project-start queue completion.",
+  "commands": {
+    "poll": "ao2 factory queue-project-start-complete-status --target <workspace> --run-id <run-id> --out-dir <project-start-out> --json",
+    "act": "ao2 factory queue-project-start-complete --target <workspace> --project-spec <spec.md> --project-root <generated-project> --run-id <run-id> --provider <provider> --provider-prompt-dir <provider-prompts> --verifier-command <command> --signing-key <key.pem> --signer-id <signer> --out-dir <project-start-out> --json"
+  },
+  "loop": [
+    {
+      "step": "poll_status",
+      "command": "poll",
+      "reads": [
+        "status",
+        "completion_record_state",
+        "blocker_codes",
+        "ready_for_operator_review"
+      ]
+    },
+    {
+      "step": "decide",
+      "source": "blocker_codes and completion_record_state"
+    },
+    {
+      "step": "act_once_when_safe",
+      "command": "act",
+      "only_when_decision": "call_queue_project_start_complete"
+    },
+    {
+      "step": "poll_after_act",
+      "command": "poll"
+    },
+    {
+      "step": "publish_operator_record",
+      "only_when": {
+        "status": "accepted",
+        "completion_record_state": "complete",
+        "ready_for_operator_review": true
+      }
+    }
+  ],
+  "decision_table": [
+    {
+      "completion_record_state": "complete",
+      "blocker_codes": [],
+      "decision": "publish_operator_record"
+    },
+    {
+      "blocker_code": "missing_queue_file",
+      "decision": "call_queue_project_start_complete"
+    },
+    {
+      "blocker_code": "missing_queue_entry",
+      "decision": "call_queue_project_start_complete"
+    },
+    {
+      "blocker_code": "queue_entry_status_queued",
+      "decision": "call_queue_project_start_complete"
+    },
+    {
+      "blocker_code": "queue_entry_status_running",
+      "decision": "wait_and_poll"
+    },
+    {
+      "blocker_code": "queue_entry_status_rejected",
+      "decision": "operator_review_required"
+    },
+    {
+      "blocker_code": "queue_entry_status_missing",
+      "decision": "operator_review_required"
+    },
+    {
+      "blocker_code": "wrong_job_kind",
+      "decision": "operator_review_required"
+    },
+    {
+      "blocker_code": "missing_compact_artifact_queue_submit",
+      "decision": "call_queue_project_start_complete"
+    },
+    {
+      "blocker_code": "missing_compact_artifact_queue_run_next",
+      "decision": "call_queue_project_start_complete"
+    },
+    {
+      "blocker_code": "missing_compact_artifact_completion_contract",
+      "decision": "call_queue_project_start_complete"
+    },
+    {
+      "blocker_code": "missing_compact_artifact_completion_contract_consumer",
+      "decision": "call_queue_project_start_complete"
+    },
+    {
+      "blocker_code": "artifact_run_id_mismatch_queue_submit",
+      "decision": "operator_review_required"
+    },
+    {
+      "blocker_code": "artifact_run_id_mismatch_queue_run_next",
+      "decision": "operator_review_required"
+    },
+    {
+      "blocker_code": "artifact_run_id_mismatch_completion_contract",
+      "decision": "operator_review_required"
+    },
+    {
+      "blocker_code": "artifact_status_mismatch_completion_contract",
+      "decision": "operator_review_required"
+    },
+    {
+      "blocker_code": "artifact_status_mismatch_completion_contract_consumer",
+      "decision": "operator_review_required"
+    },
+    {
+      "blocker_code": "trust_boundary_mismatch_completion_contract_consumer",
+      "decision": "operator_review_required"
+    }
+  ],
+  "forbidden_hermes_behaviors": [
+    "edit raw queue JSON",
+    "scrape raw queue JSON instead of using the status command",
+    "rebuild compact wrappers during polling",
+    "mutate project artifacts directly",
+    "write control-plane release approval",
+    "use provider API-key authentication",
+    "log bearer tokens, cookies, PEM material, or credentials"
+  ],
+  "trust_boundary": {
+    "hermes_role": "front_end_queue_cron_memory_bookkeeping",
+    "ao2_role": "trusted_execution_queue_memory_replay_signed_evidence_producer",
+    "factory_v3_role": "evaluator-closer / parity oracle",
+    "control_plane_role": "read_only_observer_after_signed_evidence",
+    "release_acceptance_owner": "factory-v3 evaluator-closer",
+    "control_plane_approves_release": false,
+    "mutates_ao_artifacts": false,
+    "provider_auth": "local OAuth CLI only; API-key provider auth forbidden"
+  }
+}

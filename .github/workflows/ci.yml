@@ -1,0 +1,478 @@
+name: CI
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify ${{ matrix.os }} / ${{ matrix.phase }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: ${{ matrix.timeout_minutes }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            phase: fmt
+            timeout_minutes: 10
+            command: cargo fmt --all -- --check
+          - os: ubuntu-latest
+            phase: test-workspace-non-cli
+            timeout_minutes: 30
+            command: cargo test --workspace --exclude ao2-cli
+          - os: ubuntu-latest
+            phase: test-cli-approval-core
+            timeout_minutes: 20
+            command: |
+              cargo test -p ao2-cli --test cli_approval_replay cli_adapter
+              cargo test -p ao2-cli --test cli_approval_replay cli_can_pause
+              cargo test -p ao2-cli --test cli_approval_replay cli_cockpit
+              cargo test -p ao2-cli --test cli_approval_replay cli_contract
+              cargo test -p ao2-cli --test cli_approval_replay cli_doctor
+              cargo test -p ao2-cli --test cli_approval_replay cli_evidence
+              cargo test -p ao2-cli --test cli_approval_replay cli_git
+              cargo test -p ao2-cli --test cli_approval_replay cli_init
+              cargo test -p ao2-cli --test cli_approval_replay cli_install
+              cargo test -p ao2-cli --test cli_approval_replay cli_memory
+              cargo test -p ao2-cli --test cli_approval_replay cli_repair
+              cargo test -p ao2-cli --test cli_approval_replay cli_report
+              cargo test -p ao2-cli --test cli_approval_replay cli_run
+              cargo test -p ao2-cli --test cli_approval_replay cli_skill
+              cargo test -p ao2-cli --test cli_approval_replay cli_template
+              cargo test -p ao2-cli --test cli_approval_replay cli_upgrade
+              cargo test -p ao2-cli --test cli_approval_replay cli_version
+          - os: ubuntu-latest
+            phase: test-cli-approval-control-plane
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_control_plane
+          - os: ubuntu-latest
+            phase: test-cli-approval-factory-plan
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_factory_plan
+          - os: ubuntu-latest
+            phase: test-cli-approval-factory-queue
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_factory_queue
+          - os: ubuntu-latest
+            phase: test-cli-approval-factory-project
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_factory_project
+          - os: ubuntu-latest
+            phase: test-cli-approval-factory-other
+            timeout_minutes: 20
+            command: |
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_app
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_closer
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_evaluator
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_governed
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_greenfield
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_pack
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_replacement
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_run
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_verify
+              cargo test -p ao2-cli --test cli_approval_replay cli_greenfield
+          - os: ubuntu-latest
+            phase: test-cli-approval-plugin
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_plugin
+          - os: ubuntu-latest
+            phase: test-cli-approval-pulse-provider-release
+            timeout_minutes: 20
+            command: |
+              cargo test -p ao2-cli --test cli_approval_replay cli_pulse
+              cargo test -p ao2-cli --test cli_approval_replay cli_provider
+              cargo test -p ao2-cli --test cli_approval_replay cli_release
+          - os: ubuntu-latest
+            phase: test-cli-approval-workbench-core
+            timeout_minutes: 20
+            command: |
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_api
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_evidence
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_export
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_factory
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_greenfield
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_launch
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_lists
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_memory
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_obligation
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_operator
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_serve
+          - os: ubuntu-latest
+            phase: test-cli-approval-workbench-project
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_workbench_project_start
+          - os: ubuntu-latest
+            phase: test-cli-approval-workbench-provider
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_workbench_provider
+          - os: ubuntu-latest
+            phase: test-cli-approval-workbench-queue
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_workbench_queue -- --test-threads=1
+          - os: ubuntu-latest
+            phase: test-cli-approval-workbench-release-run-support
+            timeout_minutes: 20
+            command: |
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_release
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_run_evidence
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_support
+          - os: ubuntu-latest
+            phase: test-cli-contract-support
+            timeout_minutes: 15
+            command: >-
+              cargo test -p ao2-cli
+              --test contract_gate_support_signing
+              --test contract_obligation_gate_signing_survey
+              --test contract_verify_obligation_gate_signing
+          - os: ubuntu-latest
+            phase: test-cli-release-gate-signing-sidecars
+            timeout_minutes: 15
+            command: |
+              cargo test -p ao2-cli --test release_gate_obligation_gate_signing release_gate_accepts_signed
+              cargo test -p ao2-cli --test release_gate_obligation_gate_signing release_gate_accepts_relocated
+              cargo test -p ao2-cli --test release_gate_obligation_gate_signing release_gate_default_on
+          - os: ubuntu-latest
+            phase: test-cli-release-gate-signing-verified
+            timeout_minutes: 15
+            command: |
+              cargo test -p ao2-cli --test release_gate_obligation_gate_signing release_gate_accepts_verified
+              cargo test -p ao2-cli --test release_gate_obligation_gate_signing release_gate_accepts_windows
+              cargo test -p ao2-cli --test release_gate_obligation_gate_signing release_gate_can_verify_hosted
+              cargo test -p ao2-cli --test release_gate_obligation_gate_signing release_provenance
+          - os: ubuntu-latest
+            phase: test-cli-release-gate-signing-rejections
+            timeout_minutes: 15
+            command: |
+              cargo test -p ao2-cli --test release_gate_obligation_gate_signing release_gate_fails
+              cargo test -p ao2-cli --test release_gate_obligation_gate_signing release_gate_requires
+              cargo test -p ao2-cli --test release_gate_obligation_gate_signing release_gate_allow_unsigned
+              cargo test -p ao2-cli --test release_gate_obligation_gate_signing release_gate_legacy
+          - os: ubuntu-latest
+            phase: test-cli-release-support
+            timeout_minutes: 15
+            command: >-
+              cargo test -p ao2-cli
+              --test cp_release_snapshot
+              --test release_evaluator_decision
+              --test release_handoff_checklist
+          - os: ubuntu-latest
+            phase: test-cli-release-packaging
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test release_packaging
+          - os: ubuntu-latest
+            phase: test-cli-factory-bridge
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test factory_bridge
+          - os: ubuntu-latest
+            phase: test-cli-factory-cancel
+            timeout_minutes: 15
+            command: >-
+              cargo test -p ao2-cli
+              --test factory_cancel_authority
+              --test factory_cancel_transition
+          - os: ubuntu-latest
+            phase: test-cli-sdd
+            timeout_minutes: 15
+            command: cargo test -p ao2-cli --test sdd_subcommand
+          - os: ubuntu-latest
+            phase: clippy
+            timeout_minutes: 30
+            command: cargo clippy --workspace --all-targets -- -D warnings
+          - os: ubuntu-latest
+            phase: build-release
+            timeout_minutes: 20
+            command: cargo build --release -p ao2-cli
+          - os: macos-latest
+            phase: test-workspace-non-cli
+            timeout_minutes: 30
+            command: cargo test --workspace --exclude ao2-cli
+          - os: macos-latest
+            phase: test-cli-approval-core
+            timeout_minutes: 20
+            command: |
+              cargo test -p ao2-cli --test cli_approval_replay cli_adapter
+              cargo test -p ao2-cli --test cli_approval_replay cli_can_pause
+              cargo test -p ao2-cli --test cli_approval_replay cli_cockpit
+              cargo test -p ao2-cli --test cli_approval_replay cli_contract
+              cargo test -p ao2-cli --test cli_approval_replay cli_doctor
+              cargo test -p ao2-cli --test cli_approval_replay cli_evidence
+              cargo test -p ao2-cli --test cli_approval_replay cli_git
+              cargo test -p ao2-cli --test cli_approval_replay cli_init
+              cargo test -p ao2-cli --test cli_approval_replay cli_install
+              cargo test -p ao2-cli --test cli_approval_replay cli_memory
+              cargo test -p ao2-cli --test cli_approval_replay cli_repair
+              cargo test -p ao2-cli --test cli_approval_replay cli_report
+              cargo test -p ao2-cli --test cli_approval_replay cli_run
+              cargo test -p ao2-cli --test cli_approval_replay cli_skill
+              cargo test -p ao2-cli --test cli_approval_replay cli_template
+              cargo test -p ao2-cli --test cli_approval_replay cli_upgrade
+              cargo test -p ao2-cli --test cli_approval_replay cli_version
+          - os: macos-latest
+            phase: test-cli-approval-control-plane
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_control_plane
+          - os: macos-latest
+            phase: test-cli-approval-factory-plan
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_factory_plan
+          - os: macos-latest
+            phase: test-cli-approval-factory-queue
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_factory_queue
+          - os: macos-latest
+            phase: test-cli-approval-factory-project
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_factory_project
+          - os: macos-latest
+            phase: test-cli-approval-factory-other
+            timeout_minutes: 20
+            command: |
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_app
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_closer
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_evaluator
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_governed
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_greenfield
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_pack
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_replacement
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_run
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_verify
+              cargo test -p ao2-cli --test cli_approval_replay cli_greenfield
+          - os: macos-latest
+            phase: test-cli-approval-plugin
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_plugin
+          - os: macos-latest
+            phase: test-cli-approval-pulse-provider-release
+            timeout_minutes: 20
+            command: |
+              cargo test -p ao2-cli --test cli_approval_replay cli_pulse
+              cargo test -p ao2-cli --test cli_approval_replay cli_provider
+              cargo test -p ao2-cli --test cli_approval_replay cli_release
+          - os: macos-latest
+            phase: test-cli-approval-workbench-core
+            timeout_minutes: 20
+            command: |
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_api
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_evidence
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_export
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_factory
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_greenfield
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_launch
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_lists
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_memory
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_obligation
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_operator
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_serve
+          - os: macos-latest
+            phase: test-cli-approval-workbench-project
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_workbench_project_start
+          - os: macos-latest
+            phase: test-cli-approval-workbench-provider
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_workbench_provider
+          - os: macos-latest
+            phase: test-cli-approval-workbench-queue
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_workbench_queue -- --test-threads=1
+          - os: macos-latest
+            phase: test-cli-approval-workbench-release-run-support
+            timeout_minutes: 20
+            command: |
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_release
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_run_evidence
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_support
+          - os: macos-latest
+            phase: test-cli-non-approval
+            timeout_minutes: 30
+            command: >-
+              cargo test -p ao2-cli
+              --test contract_gate_support_signing
+              --test contract_obligation_gate_signing_survey
+              --test contract_verify_obligation_gate_signing
+              --test cp_release_snapshot
+              --test factory_bridge
+              --test factory_cancel_authority
+              --test factory_cancel_transition
+              --test release_evaluator_decision
+              --test release_gate_obligation_gate_signing
+              --test release_handoff_checklist
+              --test release_packaging
+              --test sdd_subcommand
+            command: cargo test -p ao2-cli --test sdd_subcommand
+          - os: macos-latest
+            phase: clippy
+            timeout_minutes: 30
+            command: cargo clippy --workspace --all-targets -- -D warnings
+          - os: macos-latest
+            phase: build-release
+            timeout_minutes: 20
+            command: cargo build --release -p ao2-cli
+          - os: windows-latest
+            phase: test-workspace-non-cli
+            timeout_minutes: 30
+            command: cargo test --workspace --exclude ao2-cli
+          - os: windows-latest
+            phase: test-cli-approval-core
+            timeout_minutes: 20
+            command: |
+              cargo test -p ao2-cli --test cli_approval_replay cli_adapter
+              cargo test -p ao2-cli --test cli_approval_replay cli_can_pause
+              cargo test -p ao2-cli --test cli_approval_replay cli_cockpit
+              cargo test -p ao2-cli --test cli_approval_replay cli_contract
+              cargo test -p ao2-cli --test cli_approval_replay cli_doctor
+              cargo test -p ao2-cli --test cli_approval_replay cli_evidence
+              cargo test -p ao2-cli --test cli_approval_replay cli_git
+              cargo test -p ao2-cli --test cli_approval_replay cli_init
+              cargo test -p ao2-cli --test cli_approval_replay cli_install
+              cargo test -p ao2-cli --test cli_approval_replay cli_memory
+              cargo test -p ao2-cli --test cli_approval_replay cli_repair
+              cargo test -p ao2-cli --test cli_approval_replay cli_report
+              cargo test -p ao2-cli --test cli_approval_replay cli_run
+              cargo test -p ao2-cli --test cli_approval_replay cli_skill
+              cargo test -p ao2-cli --test cli_approval_replay cli_template
+              cargo test -p ao2-cli --test cli_approval_replay cli_upgrade
+              cargo test -p ao2-cli --test cli_approval_replay cli_version
+          - os: windows-latest
+            phase: test-cli-approval-control-plane
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_control_plane
+          - os: windows-latest
+            phase: test-cli-approval-factory-plan
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_factory_plan
+          - os: windows-latest
+            phase: test-cli-approval-factory-queue
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_factory_queue
+          - os: windows-latest
+            phase: test-cli-approval-factory-project
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_factory_project
+          - os: windows-latest
+            phase: test-cli-approval-factory-other
+            timeout_minutes: 20
+            command: |
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_app
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_closer
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_evaluator
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_governed
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_greenfield
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_pack
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_replacement
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_run
+              cargo test -p ao2-cli --test cli_approval_replay cli_factory_verify
+              cargo test -p ao2-cli --test cli_approval_replay cli_greenfield
+          - os: windows-latest
+            phase: test-cli-approval-plugin
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_plugin
+          - os: windows-latest
+            phase: test-cli-approval-pulse-provider-release
+            timeout_minutes: 20
+            command: |
+              cargo test -p ao2-cli --test cli_approval_replay cli_pulse
+              cargo test -p ao2-cli --test cli_approval_replay cli_provider
+              cargo test -p ao2-cli --test cli_approval_replay cli_release
+          - os: windows-latest
+            phase: test-cli-approval-workbench-core
+            timeout_minutes: 20
+            command: |
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_api
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_evidence
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_export
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_factory
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_greenfield
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_launch
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_lists
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_memory
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_obligation
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_operator
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_serve
+          - os: windows-latest
+            phase: test-cli-approval-workbench-project
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_workbench_project_start
+          - os: windows-latest
+            phase: test-cli-approval-workbench-provider
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_workbench_provider
+          - os: windows-latest
+            phase: test-cli-approval-workbench-queue
+            timeout_minutes: 20
+            command: cargo test -p ao2-cli --test cli_approval_replay cli_workbench_queue -- --test-threads=1
+          - os: windows-latest
+            phase: test-cli-approval-workbench-release-run-support
+            timeout_minutes: 20
+            command: |
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_release
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_run_evidence
+              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_support
+          - os: windows-latest
+            phase: test-cli-non-approval
+            timeout_minutes: 30
+            command: >-
+              cargo test -p ao2-cli
+              --test contract_gate_support_signing
+              --test contract_obligation_gate_signing_survey
+              --test contract_verify_obligation_gate_signing
+              --test cp_release_snapshot
+              --test factory_bridge
+              --test factory_cancel_authority
+              --test factory_cancel_transition
+              --test release_evaluator_decision
+              --test release_gate_obligation_gate_signing
+              --test release_handoff_checklist
+              --test release_packaging
+              --test sdd_subcommand
+          - os: windows-latest
+            phase: clippy
+            timeout_minutes: 30
+            command: cargo clippy --workspace --all-targets -- -D warnings
+          - os: windows-latest
+            phase: build-release
+            timeout_minutes: 20
+            command: cargo build --release -p ao2-cli
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+
+      - name: Run ${{ matrix.phase }}
+        shell: bash
+        run: ${{ matrix.command }}
+
+      - name: Upload ao2 binary
+        if: matrix.phase == 'build-release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ao2-${{ matrix.os }}
+          path: |
+            target/release/ao2
+            target/release/ao2.exe
+          if-no-files-found: ignore
+
+  deny:
+    name: Cargo deny (supply chain)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-deny
+        run: cargo install --locked cargo-deny
+      # Gates the dependency graph against the checked-in deny.toml: license
+      # allow-list (permissive-only, no copyleft), source allow-list
+      # (crates.io only, no git deps), advisory review (the rsa Marvin-attack
+      # disposition is recorded in deny.toml), and duplicate-version
+      # visibility (warn-only).
+      - name: Deny check
+        run: cargo deny check bans licenses sources advisories

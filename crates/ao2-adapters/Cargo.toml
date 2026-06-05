@@ -1,0 +1,21 @@
+[package]
+name = "ao2-adapters"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+ao2-adapter-claude = { path = "../ao2-adapter-claude" }
+ao2-adapter-codex = { path = "../ao2-adapter-codex" }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+uuid.workspace = true
+walkdir.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

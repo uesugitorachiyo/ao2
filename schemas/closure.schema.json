@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ao2.local/schemas/closure.schema.json",
+  "title": "AO2 Closure Report",
+  "type": "object",
+  "required": [
+    "verdict",
+    "acceptance_criteria_results",
+    "evidence_refs",
+    "unresolved_concerns",
+    "blockers",
+    "policy_exceptions",
+    "cost_summary",
+    "created_at"
+  ],
+  "properties": {
+    "verdict": {
+      "enum": ["accepted", "accepted_with_concerns", "rejected", "blocked", "needs_human_decision"]
+    },
+    "acceptance_criteria_results": { "type": "array", "items": { "type": "string" } },
+    "evidence_refs": { "type": "array", "items": { "type": "string" } },
+    "unresolved_concerns": { "type": "array", "items": { "type": "string" } },
+    "blockers": { "type": "array", "items": { "type": "string" } },
+    "policy_exceptions": { "type": "array", "items": { "type": "string" } },
+    "cost_summary": { "type": "string" },
+    "created_at": { "type": "string" }
+  }
+}

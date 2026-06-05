@@ -1,0 +1,83 @@
+{
+  "schema_version": "ao2.sdd-plan.v1",
+  "plan_id": "01JFULLDEFGHJKMNPQRSTVWXYZ1",
+  "generated_at_utc": "2026-05-27T17:05:00.000000Z",
+  "prompt": {
+    "text": "Build a richer plan exercising all schema fields.",
+    "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "target": {
+    "repo_path": "/tmp/repo-full",
+    "head_sha": "1111111111111111111111111111111111111111",
+    "head_subject": "Add scaffolding",
+    "surface_map_sha256": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "plan": {
+    "kind": "build",
+    "title": "Full valid plan exercising multiple steps and exit criteria",
+    "goal": "Confirm the validator accepts a fully-populated plan.",
+    "non_goals": [
+      "do not regress the minimal fixture",
+      "do not exceed 25 steps"
+    ],
+    "steps": [
+      {
+        "id": "step_scaffold",
+        "kind": "create",
+        "paths": ["src/lib.rs", "Cargo.toml"],
+        "rationale": "Bootstrap the workspace.",
+        "acceptance": [
+          "create src/lib.rs with module exports",
+          "create Cargo.toml describing the package"
+        ],
+        "depends_on": []
+      },
+      {
+        "id": "step_tests",
+        "kind": "test",
+        "paths": ["tests/smoke.rs"],
+        "rationale": "Cover the scaffolded surface.",
+        "acceptance": [
+          "add a smoke test that runs in under one second",
+          "verify cargo test passes"
+        ],
+        "depends_on": ["step_scaffold"]
+      },
+      {
+        "id": "step_release",
+        "kind": "verify",
+        "paths": ["Cargo.toml"],
+        "rationale": "Confirm releasability.",
+        "acceptance": [
+          "run cargo publish --dry-run",
+          "report the publish-readiness verdict"
+        ],
+        "depends_on": ["step_tests"]
+      }
+    ],
+    "exit_criteria": {
+      "tests": [
+        "cargo test --release",
+        "cargo clippy --workspace -- -D warnings"
+      ],
+      "gates": [
+        "ao2 release gate --json"
+      ],
+      "manual": [
+        "operator confirms the release-line dashboard renders the new evidence"
+      ]
+    }
+  },
+  "provenance": {
+    "attempts": 2,
+    "provider": "claude",
+    "engine_sha": "2222222222222222222222222222222222222222",
+    "cli_version": "0.1.1"
+  },
+  "trust_boundary": {
+    "control_plane_role": "read_only_observer",
+    "mutates_ao_artifacts": false,
+    "ingest_authority": "ao-operator",
+    "release_acceptance_owner": "factory-v3 evaluator-closer"
+  }
+}

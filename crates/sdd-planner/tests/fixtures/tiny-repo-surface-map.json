@@ -1,0 +1,1 @@
+{"files":[{"kind":"toml","path":"Cargo.toml","public_symbols":[],"sha256":"df2f9f9af6556bee5895eb031b424e0568f2d49641bf9b6b55b9f68b2c5da762"},{"kind":"rust","path":"src/lib.rs","public_symbols":["Config","Mode","Wakeup","greet"],"sha256":"cb4306b0af7a2249537498d6e96473b81c195280b9b1156b384ea77222da29ea"}],"head_sha":"0000000000000000000000000000000000000000"}

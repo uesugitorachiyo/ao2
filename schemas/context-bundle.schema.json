@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ao2.local/schemas/context-bundle.schema.json",
+  "title": "AO2 Context Bundle",
+  "type": "object",
+  "required": ["bundle_id", "role_id", "sources", "digests", "redactions", "role_scope", "created_at"],
+  "properties": {
+    "bundle_id": { "type": "string" },
+    "role_id": { "type": "string" },
+    "sources": { "type": "array" },
+    "digests": { "type": "array" },
+    "redactions": { "type": "array" },
+    "role_scope": { "type": "string" },
+    "template_kind": { "type": ["string", "null"] },
+    "prompt_ref": { "type": ["string", "null"] },
+    "created_at": { "type": "string" }
+  }
+}

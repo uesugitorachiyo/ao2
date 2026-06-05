@@ -1,0 +1,16 @@
+{
+  "schema_version": "ao2.evidence-pack.v1",
+  "workflow_id": "risky-pr-run@0.1.0",
+  "verdict": "accepted",
+  "required_markers": [
+    "policy_denied_git_push",
+    "review_missing_tests"
+  ],
+  "required_roles": [
+    "planner",
+    "implementer",
+    "reviewer",
+    "test-engineer",
+    "evaluator-closer"
+  ]
+}

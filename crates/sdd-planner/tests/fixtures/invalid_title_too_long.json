@@ -1,0 +1,48 @@
+{
+  "schema_version": "ao2.sdd-plan.v1",
+  "plan_id": "01JABCDEFGHJKMNPQRSTVWXYZ0",
+  "generated_at_utc": "2026-05-27T17:00:00.000000Z",
+  "prompt": {
+    "text": "title length exceeds 80 characters.",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "target": {
+    "repo_path": "/tmp/repo",
+    "head_sha": "0000000000000000000000000000000000000000",
+    "head_subject": "Initial commit",
+    "surface_map_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "plan": {
+    "kind": "build",
+    "title": "this title is intentionally written to exceed the eighty character maximum allowed by validation rule ten",
+    "goal": "Verify the validator rejects titles longer than 80 characters.",
+    "non_goals": [],
+    "steps": [
+      {
+        "id": "step_one",
+        "kind": "create",
+        "paths": ["a.txt"],
+        "rationale": "Single step.",
+        "acceptance": ["create a.txt"],
+        "depends_on": []
+      }
+    ],
+    "exit_criteria": {
+      "tests": ["cargo test --release"],
+      "gates": [],
+      "manual": []
+    }
+  },
+  "provenance": {
+    "attempts": 1,
+    "provider": "codex",
+    "engine_sha": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+    "cli_version": "0.1.0"
+  },
+  "trust_boundary": {
+    "control_plane_role": "read_only_observer",
+    "mutates_ao_artifacts": false,
+    "ingest_authority": "ao2-runner",
+    "release_acceptance_owner": "factory-v3 evaluator-closer"
+  }
+}

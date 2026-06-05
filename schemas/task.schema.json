@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ao2.local/schemas/task.schema.json",
+  "title": "AO2 Task",
+  "type": "object",
+  "required": ["id", "kind", "role_id", "depends_on", "side_effect_class"],
+  "properties": {
+    "id": { "type": "string" },
+    "kind": {
+      "enum": [
+        "artifact_transform",
+        "agent_session",
+        "tool_request",
+        "human_approval",
+        "command_verification",
+        "review",
+        "closure_eval"
+      ]
+    },
+    "role_id": { "type": "string" },
+    "input": {},
+    "output": {},
+    "depends_on": { "type": "array", "items": { "type": "string" } },
+    "side_effect_class": { "type": "string" },
+    "approval_required": { "type": "boolean" },
+    "timeout_seconds": { "type": "integer" },
+    "idempotency_key": { "type": "string" }
+  }
+}

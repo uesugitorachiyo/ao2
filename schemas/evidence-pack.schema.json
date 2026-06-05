@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ao2.local/schemas/evidence-pack.schema.json",
+  "title": "AO2 Evidence Pack",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "run_id",
+    "workflow_id",
+    "objective",
+    "verdict",
+    "roles",
+    "policy_decisions",
+    "approvals",
+    "artifacts",
+    "closures"
+  ],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "run_id": { "type": "string" },
+    "workflow_id": { "type": "string" },
+    "template_kind": { "type": ["string", "null"] },
+    "objective": { "type": "string" },
+    "verifier_command": { "type": "string" },
+    "verdict": { "type": "string" },
+    "roles": { "type": "array", "items": { "type": "string" } },
+    "policy_decisions": { "type": "array" },
+    "approvals": { "type": "array" },
+    "artifacts": { "type": "array" },
+    "repair_source": { "type": ["object", "null"] },
+    "closures": { "type": "array" },
+    "obligation_ledger": { "type": ["object", "null"] },
+    "obligation_verdict": { "type": ["string", "null"] },
+    "repair_attempts": { "type": "array" },
+    "run_health": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "verdict",
+        "repair_status",
+        "repair_attempt_count",
+        "failed_repair_attempts",
+        "accepted_repair_attempts",
+        "budget_exhausted",
+        "unresolved_concerns",
+        "attention_required",
+        "next_action",
+        "evidence_refs",
+        "timeline"
+      ],
+      "properties": {
+        "schema_version": { "const": "ao2.run-health.v1" },
+        "verdict": { "type": "string" },
+        "repair_status": { "type": "string" },
+        "repair_attempt_count": { "type": "integer", "minimum": 0 },
+        "failed_repair_attempts": { "type": "integer", "minimum": 0 },
+        "accepted_repair_attempts": { "type": "integer", "minimum": 0 },
+        "budget_exhausted": { "type": "boolean" },
+        "unresolved_concerns": { "type": "array", "items": { "type": "string" } },
+        "attention_required": { "type": "boolean" },
+        "next_action": { "type": "string" },
+        "evidence_refs": { "type": "array", "items": { "type": "string" } },
+        "timeline": { "type": "array" }
+      }
+    },
+    "markers": { "type": "array", "items": { "type": "string" } }
+  }
+}

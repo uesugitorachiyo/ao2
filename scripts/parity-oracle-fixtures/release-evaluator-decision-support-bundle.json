@@ -1,0 +1,35 @@
+{
+  "schema": "factory-v3/hermes-ao-bridge/v1",
+  "action": "release-support-bundle-status",
+  "frontend_status": {
+    "status": "assembled",
+    "release_candidate_version": "0.4.80",
+    "release_tag": "v0.4.80",
+    "candidate_correlation": "matched",
+    "required_artifact_count": 6,
+    "missing_artifact_count": 0,
+    "control_plane_approves_release": false,
+    "release_acceptance_owner": "factory-v3 evaluator-closer",
+    "next_action": "factory-v3 evaluator-closer reviews this assembled same-candidate bundle"
+  },
+  "support_bundle_snapshot": {
+    "schema_version": "ao2.cp-release-support-bundle.v1",
+    "release_assembly": {
+      "schema_version": "ao2.cp-release-assembly.v1",
+      "status": "assembled",
+      "release_candidate_version": "0.4.80",
+      "release_tag": "v0.4.80",
+      "candidate_correlation": "matched",
+      "required_artifacts": [
+        {"id": "release_publication", "status": "observed"},
+        {"id": "phase1_checklist", "status": "observed"},
+        {"id": "phase1_decision", "status": "observed"},
+        {"id": "three_os_smoke", "status": "observed"},
+        {"id": "provider_acceptance_codex", "status": "observed", "release_candidate_version": "0.4.80"},
+        {"id": "provider_acceptance_claude", "status": "observed", "release_candidate_version": "0.4.80"}
+      ],
+      "release_acceptance_owner": "factory-v3 evaluator-closer",
+      "control_plane_approves_release": false
+    }
+  }
+}

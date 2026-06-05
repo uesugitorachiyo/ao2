@@ -1,0 +1,16 @@
+{
+  "apiVersion": "ao.dev/v1",
+  "kind": "Run",
+  "metadata": {"name": "factory-v3-parity-fixture-ao-dev-v1"},
+  "spec": {
+    "tasks": [
+      {"id": "planner-intake", "kind": "agent", "deps": []},
+      {"id": "plan-hardener", "kind": "agent", "deps": ["planner-intake"]},
+      {"id": "factory-manager", "kind": "agent", "deps": ["plan-hardener"]},
+      {"id": "implementer-slice", "kind": "agent", "deps": ["factory-manager"]},
+      {"id": "reviewer-slice", "kind": "agent", "deps": ["implementer-slice"]},
+      {"id": "integrator", "kind": "agent", "deps": ["reviewer-slice"]},
+      {"id": "evaluator-closer", "kind": "agent", "deps": ["integrator"]}
+    ]
+  }
+}
