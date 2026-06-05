@@ -43,6 +43,12 @@ npm run control-plane:observer-hardening # read-only observer + restore hardenin
 npm run provider:phase2-contract-hardening # provider contract Phase 2 hardening gate
 npm run release:train-drill # side-effect-free public release train rehearsal
 npm run next:lengthy:gate # aggregate local gate for the next lengthy task set
+npm run control-plane:cross-repo-observer # cross-repo AO2/control-plane observer integration
+npm run release:install-update-fixture # signed fixture install/update verification
+npm run workbench:browser-qa # no-archaeology workbench browser-review evidence
+npm run provider:adversarial-corpus # adversarial provider transcript corpus gate
+npm run release:dr-retention-snapshot # DR/retention long-run fixture snapshot
+npm run frontier:lengthy:gate # aggregate local gate for the frontier lengthy task set
 npm run gate:full            # 3-stage ready-to-ship gate (guard + replacement + release-gate)
 scripts/smoke-release-archives.sh
 ```
@@ -200,6 +206,34 @@ Result:
 - `npm run next:lengthy:gate`: runs the five lengthy-task gates above and emits
   `ao2.next-lengthy-gate.v1` at
   `target/next-lengthy-gate/latest/summary.json`
+- `npm run control-plane:cross-repo-observer`: runs a signed AO2 evidence
+  bundle through ao2-control-plane ingest/readback, verifies the public
+  control-plane observer helper scripts, runs the restore drill, and preserves
+  the read-only observer boundary; emits
+  `ao2.cross-repo-control-plane-observer.v1` at
+  `target/cross-repo-control-plane-observer/latest/summary.json`
+- `npm run release:install-update-fixture`: builds a local signed fixture
+  archive with `SHA256SUMS`, `provenance.json`, and a signature sidecar,
+  verifies checksum/install/update behavior, references `release:download-verify`
+  for real release assets, and emits `ao2.release-install-update-fixture.v1`
+  at `target/release-install-update-fixture/latest/summary.json`
+- `npm run workbench:browser-qa`: runs the no-archaeology workbench audit,
+  statically inspects the generated HTML review surface, records a screenshot
+  manifest for browser-review evidence, and emits `ao2.workbench-browser-qa.v1`
+  at `target/workbench-browser-qa/latest/summary.json`
+- `npm run provider:adversarial-corpus`: runs the provider Phase 2 hardening
+  gate plus focused transcript parser tests against
+  `fixtures/provider-adversarial-corpus`, covering malformed transcript,
+  approval boundary, patch digest mismatch, blocker taxonomy, and fail-closed
+  cases; emits `ao2.provider-adversarial-corpus.v1` at
+  `target/provider-adversarial-corpus/latest/summary.json`
+- `npm run release:dr-retention-snapshot`: composes the control-plane restore
+  drill, retention preflight, artifact index, and artifact health into a
+  fixture snapshot manifest; emits `ao2.dr-retention-long-run-snapshot.v1` at
+  `target/dr-retention-long-run-snapshot/latest/summary.json`
+- `npm run frontier:lengthy:gate`: runs the five frontier lengthy gates above
+  and emits `ao2.frontier-lengthy-gate.v1` at
+  `target/frontier-lengthy-gate/latest/summary.json`
 - `npm run post-merge:canary`: runs artifact indexing, release artifact
   consumer dry-run, Pulse resume dry-run, and the ao2-control-plane long-lived
   smoke into `ao2.post-merge-canary.v1`

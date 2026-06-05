@@ -1,0 +1,5 @@
+stdout:
+Summary: attempted patch digest mismatch
+Changed files: src/main.rs
+Patch digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+Blocker: patch_digest_mismatch

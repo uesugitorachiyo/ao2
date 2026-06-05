@@ -1,0 +1,6 @@
+stdout:
+Summary: attempted malformed usage metadata
+Changed files: src/lib.rs
+{"usage":{"input_tokens":"not-a-number","output_tokens":
+stderr:
+provider emitted truncated JSON

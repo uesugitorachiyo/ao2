@@ -1,0 +1,5 @@
+stdout:
+Summary: attempted to self-approve an action
+Changed files: src/policy.rs
+Approval: approved without matching AO2 approval ticket
+Blocker: approval_boundary_attempt
