@@ -34,6 +34,21 @@ run_step pulse_local_mirror "$OUT_ROOT/pulse-local-mirror.log" \
   env AO2_PULSE_LOCAL_MIRROR_DEST="$OUT_ROOT/pulse-local-mirror" npm run pulse:local-mirror
 pulse_status="$(cat "$OUT_ROOT/pulse-local-mirror.log.exit-code")"
 
+run_step pulse_resume_dry_run "$OUT_ROOT/pulse-resume-dry-run.log" \
+  env AO2_PULSE_RESUME_JSON="$OUT_ROOT/pulse-local-mirror/resume.json" \
+    AO2_PULSE_RESUME_ROOT="$OUT_ROOT/pulse-resume" \
+    npm run pulse:resume -- --dry-run
+pulse_resume_status="$(cat "$OUT_ROOT/pulse-resume-dry-run.log.exit-code")"
+
+run_step artifact_index "$OUT_ROOT/artifact-index.log" \
+  env AO2_ARTIFACT_INDEX_ROOT="$OUT_ROOT/artifact-index" npm run artifacts:index
+artifact_status="$(cat "$OUT_ROOT/artifact-index.log.exit-code")"
+
+run_step release_artifact_consumer_smoke "$OUT_ROOT/release-artifact-consumer-smoke.log" \
+  env AO2_RELEASE_ARTIFACT_CONSUMER_ROOT="$OUT_ROOT/release-artifact-consumer-smoke" \
+    npm run release:artifact-consumer-smoke -- --dry-run
+consumer_status="$(cat "$OUT_ROOT/release-artifact-consumer-smoke.log.exit-code")"
+
 if [ -x "$CP_ROOT/scripts/smoke-long-lived-dev.sh" ]; then
   run_step control_plane_long_lived_smoke "$OUT_ROOT/control-plane-long-lived-smoke.log" \
     env AO2_CP_LONG_LIVED_SMOKE_ROOT="$OUT_ROOT/control-plane-long-lived-smoke" \
@@ -46,7 +61,7 @@ else
   printf "%s\n" "$cp_status" >"$OUT_ROOT/control-plane-long-lived-smoke.log.exit-code"
 fi
 
-python3 - "$OUT_ROOT" "$SUMMARY" "$release_status" "$phase1_status" "$pulse_status" "$cp_status" <<'PY'
+python3 - "$OUT_ROOT" "$SUMMARY" "$release_status" "$phase1_status" "$pulse_status" "$pulse_resume_status" "$artifact_status" "$consumer_status" "$cp_status" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -57,7 +72,10 @@ codes = {
     "release_readiness_static": int(sys.argv[3]),
     "phase1_operator_golden": int(sys.argv[4]),
     "pulse_local_mirror": int(sys.argv[5]),
-    "control_plane_long_lived_smoke": int(sys.argv[6]),
+    "pulse_resume_dry_run": int(sys.argv[6]),
+    "artifact_index": int(sys.argv[7]),
+    "release_artifact_consumer_smoke": int(sys.argv[8]),
+    "control_plane_long_lived_smoke": int(sys.argv[9]),
 }
 
 checks = []

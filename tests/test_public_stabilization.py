@@ -356,3 +356,94 @@ def test_pulse_local_mirror_resume_command_contract():
         "ao2.pulse-local-mirror-resume.v1",
     ]:
         assert needle in text
+
+
+def test_artifact_index_consumer_canary_and_pulse_resume_contracts():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    expected_scripts = {
+        "artifacts:index": "node scripts/run-sh-script.js scripts/artifact-index-report.sh",
+        "release:artifact-consumer-smoke": "node scripts/run-sh-script.js scripts/release-artifact-consumer-smoke.sh",
+        "post-merge:canary": "node scripts/run-sh-script.js scripts/post-merge-canary.sh",
+        "pulse:resume": "node scripts/run-sh-script.js scripts/pulse-resume.sh",
+    }
+    for name, command in expected_scripts.items():
+        assert package_json["scripts"][name] == command
+
+    for script_name, schema in [
+        ("artifact-index-report.sh", "ao2.artifact-index-report.v1"),
+        ("release-artifact-consumer-smoke.sh", "ao2.release-artifact-consumer-smoke.v1"),
+        ("post-merge-canary.sh", "ao2.post-merge-canary.v1"),
+        ("pulse-resume.sh", "ao2.pulse-resume.v1"),
+    ]:
+        script = REPO_ROOT / "scripts" / script_name
+        assert script.is_file()
+        assert script.stat().st_mode & stat.S_IXUSR
+        text = script.read_text(encoding="utf-8")
+        assert schema in text
+        assert "OPENAI_API_KEY" not in text
+        assert "ANTHROPIC_API_KEY" not in text
+
+    artifact_index = read("scripts/artifact-index-report.sh")
+    for needle in [
+        "../ao2-control-plane",
+        "target/ci-artifacts",
+        "target/dr-restore-drill",
+        ".ao2-local/pulse/latest",
+        "report.md",
+    ]:
+        assert needle in artifact_index
+
+    consumer_smoke = read("scripts/release-artifact-consumer-smoke.sh")
+    for needle in [
+        "--dry-run",
+        "gh run download",
+        "schema_version",
+        "sha256",
+        "clean-workspace",
+        "uesugitorachiyo/ao2-control-plane",
+    ]:
+        assert needle in consumer_smoke
+
+    canary = read("scripts/post-merge-canary.sh")
+    for needle in [
+        "artifacts:index",
+        "release:artifact-consumer-smoke",
+        "pulse:resume",
+        "../ao2-control-plane/scripts/smoke-long-lived-dev.sh",
+    ]:
+        assert needle in canary
+
+    pulse_resume = read("scripts/pulse-resume.sh")
+    for needle in [
+        "--dry-run",
+        "resume.json",
+        "pulse_eval_loop_sha256",
+        "shasum",
+        "resume_command",
+    ]:
+        assert needle in pulse_resume
+
+    for needle in [
+        "npm run artifacts:index",
+        "npm run release:artifact-consumer-smoke -- --dry-run",
+        "npm run post-merge:canary",
+        "npm run pulse:resume -- --dry-run",
+        "ao2.artifact-index-report.v1",
+        "ao2.post-merge-canary.v1",
+    ]:
+        assert needle in verification
+
+
+def test_release_readiness_regression_gate_includes_artifact_and_resume_gates():
+    text = read("scripts/release-readiness-regression-gate.sh")
+    for needle in [
+        "artifacts:index",
+        "release:artifact-consumer-smoke",
+        "pulse:resume",
+        "artifact_index",
+        "release_artifact_consumer_smoke",
+        "pulse_resume_dry_run",
+    ]:
+        assert needle in text

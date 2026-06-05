@@ -23,6 +23,10 @@ npm run smoke:evidence-control-plane # signed evidence-pack publish/readback con
 npm run smoke:phase1-operator-golden # signed Phase 1 publish/readback/dashboard smoke
 npm run release:readiness    # local release-readiness guardrails for AO2 + control-plane
 npm run release:readiness:regression-gate # local static/smoke/Pulse/control-plane evidence gate
+npm run artifacts:index      # local cross-repo artifact index/report
+npm run release:artifact-consumer-smoke -- --dry-run # CI artifact consumer smoke contract
+npm run post-merge:canary    # local post-merge AO2 + control-plane canary
+npm run pulse:resume -- --dry-run # validate the resumable Pulse event-loop command
 npm run gate:full            # 3-stage ready-to-ship gate (guard + replacement + release-gate)
 scripts/smoke-release-archives.sh
 ```
@@ -40,7 +44,12 @@ npm run pulse:local-mirror
 The mirror also writes `.ao2-local/pulse/latest/resume.json` and
 `.ao2-local/pulse/latest/resume-command.sh` with the latest
 `pulse-eval-loop.json` digest so a later local event-loop run can resume the
-chain after `target/` cleanup.
+chain after `target/` cleanup. Validate that resume packet without executing a
+new loop by running:
+
+```sh
+npm run pulse:resume -- --dry-run
+```
 
 Result:
 
@@ -76,9 +85,19 @@ Result:
   and the local next-length verification commands; emits
   `ao2.release-readiness-local.v1` plus local `report.md` and `report.html`
 - `npm run release:readiness:regression-gate`: runs static release readiness,
-  Phase 1 operator golden-path smoke, Pulse local mirror, and the
+  Phase 1 operator golden-path smoke, Pulse local mirror, Pulse resume dry-run,
+  artifact indexing, release artifact consumer dry-run, and the
   ao2-control-plane long-lived smoke into one local evidence bundle; emits
   `ao2.release-readiness-regression-gate.v1`
+- `npm run artifacts:index`: scans AO2 and ao2-control-plane local/CI evidence
+  roots, writes `ao2.artifact-index-report.v1`, and renders a local `report.md`
+- `npm run release:artifact-consumer-smoke -- --dry-run`: records the clean
+  GitHub Actions artifact consumer workflow without downloading artifacts; a
+  non-dry run uses `gh run download` and records checksums plus discovered
+  `schema_version` values in `ao2.release-artifact-consumer-smoke.v1`
+- `npm run post-merge:canary`: runs artifact indexing, release artifact
+  consumer dry-run, Pulse resume dry-run, and the ao2-control-plane long-lived
+  smoke into `ao2.post-merge-canary.v1`
 - `npm run phase1:promote`: prepares Phase 1 prerequisites, runs promotion
   preflights, publishes to ao2-control-plane when
   `AO2_PHASE1_CONTROL_PLANE_URL` is set, and may capture a dashboard snapshot
