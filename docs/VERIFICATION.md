@@ -23,6 +23,7 @@ npm run smoke:evidence-control-plane # signed evidence-pack publish/readback con
 npm run smoke:phase1-operator-golden # signed Phase 1 publish/readback/dashboard smoke
 npm run release:readiness    # local release-readiness guardrails for AO2 + control-plane
 npm run release:readiness:regression-gate # local static/smoke/Pulse/control-plane evidence gate
+npm run local:canary         # local equivalent of the manual Local Canary workflow
 npm run artifacts:index      # local cross-repo artifact index/report
 npm run artifacts:health     # summarize latest local artifact index health
 npm run release:artifact-consumer-smoke -- --dry-run # CI artifact consumer smoke contract
@@ -30,6 +31,7 @@ npm run release:artifact-consumer-smoke -- --require-artifact ao2-python-guard -
 npm run post-merge:canary    # local post-merge AO2 + control-plane canary
 npm run pulse:resume -- --dry-run # validate the resumable Pulse event-loop command
 npm run pulse:resume -- --execute # explicitly resume the latest local Pulse event loop
+npm run pulse:execute-safety-corpus # Pulse execute-mode refusal/simulation corpus
 npm run gate:full            # 3-stage ready-to-ship gate (guard + replacement + release-gate)
 scripts/smoke-release-archives.sh
 ```
@@ -100,6 +102,11 @@ Result:
   `ao2.artifact-evidence-health.v1` to
   `target/artifact-health/latest/summary.json`, and groups failing, missing,
   stale, empty, and healthy evidence bundles for local triage
+  Policy knobs:
+  `AO2_ARTIFACT_HEALTH_REQUIRED_ROOTS`,
+  `AO2_ARTIFACT_HEALTH_ALLOWED_MISSING_ROOTS`,
+  `AO2_ARTIFACT_HEALTH_FAIL_ON_ATTENTION`, and
+  `AO2_ARTIFACT_HEALTH_STALE_AFTER_SECONDS`
 - `npm run release:artifact-consumer-smoke -- --dry-run`: records the clean
   GitHub Actions artifact consumer workflow without downloading artifacts; a
   non-dry run uses `gh run download` and records checksums plus discovered
@@ -108,11 +115,19 @@ Result:
   public repos; it runs the artifact consumer smoke, Pulse local mirror/resume
   dry-run, control-plane negative restore drill, artifact index, and uploads
   `ao2-local-canary`
+- `npm run local:canary`: runs the same local canary sequence and writes
+  `ao2.local-canary-run.v1` to
+  `target/local-canary/latest/local-canary-summary.json`
 - Pulse execute simulation: a local resume fixture can set
   `simulation=true` and `simulation_output_path` so
   `npm run pulse:resume -- --resume-json <fixture> --execute` writes
   `ao2.pulse-execute-simulation.v1` evidence without starting a real Pulse
   loop
+- `npm run pulse:execute-safety-corpus`: runs hash mismatch, unsafe output
+  path, missing simulation output path, failing simulated command, and
+  dry-run/execute conflict fixtures, then writes
+  `ao2.pulse-execute-safety-corpus.v1` to
+  `target/pulse-execute-safety-corpus/latest/summary.json`
 - `npm run post-merge:canary`: runs artifact indexing, release artifact
   consumer dry-run, Pulse resume dry-run, and the ao2-control-plane long-lived
   smoke into `ao2.post-merge-canary.v1`
