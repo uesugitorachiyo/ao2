@@ -40,6 +40,11 @@ function containsForbiddenText(file) {
 const readback = readJson(readbackSummaryPath);
 assert(readback.status === 'passed', 'readback smoke did not pass');
 assert(readback.schema_version === 'ao2.phase1-control-plane-readback-smoke.v1', 'unexpected readback schema');
+assert(readback.operator_support_bundle, 'missing operator support bundle readback summary');
+assert(readback.operator_support_bundle.schema_version === 'ao2.cp-phase1-operator-support-bundle.v1', 'unexpected operator support bundle schema');
+assert(readback.operator_support_bundle.verification_schema_version === 'ao2.cp-phase1-operator-support-bundle-verification.v1', 'unexpected operator support bundle verification schema');
+assert(readback.operator_support_bundle.checksums_schema_version === 'ao2.cp-phase1-operator-support-bundle-checksums.v1', 'unexpected operator support bundle checksums schema');
+assert(readback.operator_support_bundle.verification_status === 'verified', 'operator support bundle verification must pass');
 assert(readback.signature_verified === true, 'signed decision must verify');
 assert(readback.dashboard_decision_mode === 'governed_run_primary', 'dashboard must show governed_run_primary');
 assert((readback.governed_run_evidence_count || 0) >= 3, 'dashboard must show three governed-run evidence entries');
@@ -69,6 +74,7 @@ const summary = {
   dashboard_decision_mode: readback.dashboard_decision_mode,
   governed_run_evidence_count: readback.governed_run_evidence_count,
   signature_verified: readback.signature_verified,
+  operator_support_bundle: readback.operator_support_bundle,
   artifacts
 };
 
