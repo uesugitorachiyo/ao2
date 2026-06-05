@@ -844,3 +844,231 @@ def test_release_evidence_closure_contract():
         "target/release-evidence-closure/latest/closure.html",
     ]:
         assert needle in verification
+
+
+def test_mvp_acceptance_matrix_gate_contract():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["mvp:acceptance-matrix-gate"]
+        == "node scripts/run-sh-script.js scripts/mvp-acceptance-matrix-gate.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "mvp-acceptance-matrix-gate.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.mvp-acceptance-matrix-gate.v1",
+        "risky-pr:golden",
+        "AC-01",
+        "AC-12",
+        "UAT-01",
+        "UAT-12",
+        "evidence must exist before evaluator closure accepts a run",
+        "manual_filesystem_archaeology_required",
+        "acceptance_matrix",
+        "stores_credentials",
+    ]:
+        assert needle in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+    for needle in [
+        "npm run mvp:acceptance-matrix-gate",
+        "ao2.mvp-acceptance-matrix-gate.v1",
+        "target/mvp-acceptance-matrix/latest/summary.json",
+    ]:
+        assert needle in verification
+
+
+def test_no_archaeology_workbench_audit_contract():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["workbench:no-archaeology-audit"]
+        == "node scripts/run-sh-script.js scripts/no-archaeology-workbench-audit.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "no-archaeology-workbench-audit.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.no-archaeology-workbench-audit.v1",
+        "objective",
+        "denied_action",
+        "approved_digest",
+        "changed_files",
+        "test_evidence",
+        "rejection_reason",
+        "correction",
+        "closure_verdict",
+        "export_path",
+        "replay_status",
+        "manual_filesystem_archaeology_required",
+        "workbench export",
+    ]:
+        assert needle in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+    for needle in [
+        "npm run workbench:no-archaeology-audit",
+        "ao2.no-archaeology-workbench-audit.v1",
+        "target/no-archaeology-workbench/latest/summary.json",
+    ]:
+        assert needle in verification
+
+
+def test_control_plane_observer_hardening_contract():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["control-plane:observer-hardening"]
+        == "node scripts/run-sh-script.js scripts/control-plane-observer-hardening.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "control-plane-observer-hardening.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.control-plane-observer-hardening.v1",
+        "smoke:evidence-control-plane",
+        "cp-dr-restore-drill.sh",
+        "negative_restore_drill",
+        "long_lived_smoke",
+        "artifact_health",
+        "dashboard_schema_stability",
+        "read_only_observer",
+        "can_approve_runs",
+        "can_mutate_ao2_evidence",
+        "stores_credentials",
+    ]:
+        assert needle in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+    for needle in [
+        "npm run control-plane:observer-hardening",
+        "ao2.control-plane-observer-hardening.v1",
+        "target/control-plane-observer-hardening/latest/summary.json",
+    ]:
+        assert needle in verification
+
+
+def test_provider_phase2_contract_hardening_contract():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["provider:phase2-contract-hardening"]
+        == "node scripts/run-sh-script.js scripts/provider-phase2-contract-hardening.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "provider-phase2-contract-hardening.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.provider-phase2-contract-hardening.v1",
+        "provider contract --verify --require codex",
+        "provider contract --verify --require claude",
+        "transcript_parsing_corpus",
+        "sandbox_patch_digest_boundary",
+        "exact_approval_enforcement",
+        "blocker_taxonomy",
+        "fail_closed_live_guards",
+        "verify:no-factory-v3",
+        "verify:replacement",
+        "stores_credentials",
+    ]:
+        assert needle in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+    for needle in [
+        "npm run provider:phase2-contract-hardening",
+        "ao2.provider-phase2-contract-hardening.v1",
+        "target/provider-phase2-contract-hardening/latest/summary.json",
+    ]:
+        assert needle in verification
+
+
+def test_public_release_train_drill_contract():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["release:train-drill"]
+        == "node scripts/run-sh-script.js scripts/public-release-train-drill.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "public-release-train-drill.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.public-release-train-drill.v1",
+        "release:evidence-closure",
+        "release:readiness:regression-gate",
+        "release:retention-preflight",
+        "release:artifact-consumer-smoke -- --dry-run",
+        "release:download-verify",
+        "install_update_smoke_reference",
+        "post-merge:canary",
+        "refuses_publish_side_effects_by_default",
+        "tag_push_publish_deploy",
+        "closure.html",
+    ]:
+        assert needle in text
+    assert "git push origin" not in text
+    assert "gh release create" not in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+    for needle in [
+        "npm run release:train-drill",
+        "ao2.public-release-train-drill.v1",
+        "target/public-release-train-drill/latest/summary.json",
+    ]:
+        assert needle in verification
+
+
+def test_next_lengthy_gate_contract():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["next:lengthy:gate"]
+        == "node scripts/run-sh-script.js scripts/next-lengthy-gate.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "next-lengthy-gate.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.next-lengthy-gate.v1",
+        "mvp:acceptance-matrix-gate",
+        "workbench:no-archaeology-audit",
+        "control-plane:observer-hardening",
+        "provider:phase2-contract-hardening",
+        "release:train-drill",
+        "component_summaries",
+        "stores_credentials",
+    ]:
+        assert needle in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+    for needle in [
+        "npm run next:lengthy:gate",
+        "ao2.next-lengthy-gate.v1",
+        "target/next-lengthy-gate/latest/summary.json",
+    ]:
+        assert needle in verification

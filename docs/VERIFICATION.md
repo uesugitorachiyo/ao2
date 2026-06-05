@@ -37,6 +37,12 @@ npm run pulse:execute-safety-corpus # Pulse execute-mode refusal/simulation corp
 npm run pulse:real-execute-containment # bounded real Pulse execute fixture
 npm run phase1:promotion-golden # Phase 1 promotion golden readback/token-boundary evidence
 npm run release:evidence-closure # final local release evidence closure JSON/HTML
+npm run mvp:acceptance-matrix-gate # PRD AC / Risky PR UAT evidence matrix
+npm run workbench:no-archaeology-audit # cockpit/workbench inspectability audit
+npm run control-plane:observer-hardening # read-only observer + restore hardening
+npm run provider:phase2-contract-hardening # provider contract Phase 2 hardening gate
+npm run release:train-drill # side-effect-free public release train rehearsal
+npm run next:lengthy:gate # aggregate local gate for the next lengthy task set
 npm run gate:full            # 3-stage ready-to-ship gate (guard + replacement + release-gate)
 scripts/smoke-release-archives.sh
 ```
@@ -161,6 +167,39 @@ Result:
   `ao2.release-evidence-closure.v1` at
   `target/release-evidence-closure/latest/summary.json` plus
   `target/release-evidence-closure/latest/closure.html`
+- `npm run mvp:acceptance-matrix-gate`: runs the provider-free Risky PR golden
+  path and maps PRD `AC-01` through `AC-12` plus SDD `UAT-01` through
+  `UAT-12` to concrete evidence without manual filesystem archaeology; emits
+  `ao2.mvp-acceptance-matrix-gate.v1` at
+  `target/mvp-acceptance-matrix/latest/summary.json`
+- `npm run workbench:no-archaeology-audit`: generates cockpit and workbench
+  evidence for a Risky PR run, then proves the operator can answer objective,
+  denied action, approved digest, changed files, test evidence, rejection
+  reason, correction, closure verdict, export path, and replay status from
+  evidence surfaces alone; emits `ao2.no-archaeology-workbench-audit.v1` at
+  `target/no-archaeology-workbench/latest/summary.json`
+- `npm run control-plane:observer-hardening`: composes signed evidence-pack
+  ingest/readback, negative restore drill, long-lived control-plane smoke,
+  artifact index, and fail-on-attention artifact health while verifying the
+  control plane remains a read-only observer; emits
+  `ao2.control-plane-observer-hardening.v1` at
+  `target/control-plane-observer-hardening/latest/summary.json`
+- `npm run provider:phase2-contract-hardening`: verifies Codex and Claude
+  provider contracts, replacement parity, no-factory-v3 guardrails, transcript
+  parsing, sandbox patch digest boundaries, exact approval enforcement,
+  blocker taxonomy, and fail-closed live guards; emits
+  `ao2.provider-phase2-contract-hardening.v1` at
+  `target/provider-phase2-contract-hardening/latest/summary.json`
+- `npm run release:train-drill`: rehearses release evidence closure, release
+  readiness regression, retention preflight with pruning disabled, artifact
+  consumer dry-run, and post-merge canary without tag, push, publish, or deploy
+  side effects. It records install/update verification as a
+  `release:download-verify` reference for real release assets and emits
+  `ao2.public-release-train-drill.v1` at
+  `target/public-release-train-drill/latest/summary.json`
+- `npm run next:lengthy:gate`: runs the five lengthy-task gates above and emits
+  `ao2.next-lengthy-gate.v1` at
+  `target/next-lengthy-gate/latest/summary.json`
 - `npm run post-merge:canary`: runs artifact indexing, release artifact
   consumer dry-run, Pulse resume dry-run, and the ao2-control-plane long-lived
   smoke into `ao2.post-merge-canary.v1`
