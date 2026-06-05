@@ -14,6 +14,9 @@ npm run release:verify-provenance
 npm run smoke:three-os
 npm run verify:replacement   # 4-step replacement-parity composite (Phase 2 readiness)
 npm run verify:no-factory-v3 # factory-v3 green-path regression guard
+npm run risky-pr:golden      # local Risky PR Run golden path with report/cockpit assertions
+npm run smoke:evidence-control-plane # signed evidence-pack publish/readback contract smoke
+npm run release:readiness    # local release-readiness guardrails for AO2 + control-plane
 npm run gate:full            # 3-stage ready-to-ship gate (guard + replacement + release-gate)
 scripts/smoke-release-archives.sh
 ```
@@ -33,6 +36,19 @@ Result:
 - `npm run gate:full`: PASS 3/3 (no-factory-v3 guard, replacement-parity,
   then canonical `ao2 release gate`); emits
   `ao2.release-gate-with-replacement-parity.v1`
+- `npm run risky-pr:golden`: runs the provider-free Risky PR Run through
+  policy denial, exact approval, evaluator rejection, correction, accepted
+  closure, replay, evidence-pack export, report rendering, and cockpit index;
+  emits `ao2.risky-pr-golden-path.v1`
+- `npm run smoke:evidence-control-plane`: builds AO2 and ao2-control-plane,
+  publishes a signed `ao2.evidence-pack.v1`, reads dashboard/detail/latest
+  observer endpoints, pins the `ao2.cp-evidence-pack-dashboard.v1`,
+  `ao2.cp-evidence-pack-detail.v1`, and `ao2.cp-ingest-receipt.v1` schemas,
+  and verifies the control-plane remains a read-only observer
+- `npm run release:readiness`: checks public CI triggers, manual release
+  workflows, branch protection, latest `main` CI status in both public repos,
+  and the local next-length verification commands; emits
+  `ao2.release-readiness-local.v1`
 - four cross-OS archives at v0.4.80 (macOS aarch64, Linux aarch64, Linux
   x86_64, Windows x86_64) all SHA256 + RSA signature verified
 

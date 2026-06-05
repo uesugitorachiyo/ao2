@@ -132,14 +132,47 @@ latest = json.loads(Path(latest_path).read_text(encoding="utf-8"))
 
 detail_pack = detail.get("evidence_pack", detail)
 latest_pack = latest.get("evidence_pack", latest)
+expected_schemas = {
+    "publish": "ao2.evidence-pack-control-plane-publish.v1",
+    "receipt": "ao2.cp-ingest-receipt.v1",
+    "dashboard": "ao2.cp-evidence-pack-dashboard.v1",
+    "detail": "ao2.cp-evidence-pack-detail.v1",
+    "latest": "ao2.cp-evidence-pack-detail.v1",
+    "evidence_pack": "ao2.evidence-pack.v1",
+}
+observed_schemas = {
+    "publish": publish.get("schema_version"),
+    "receipt": publish.get("receipt", {}).get("schema_version"),
+    "dashboard": dashboard.get("schema_version"),
+    "detail": detail.get("schema_version"),
+    "latest": latest.get("schema_version"),
+    "evidence_pack": detail_pack.get("schema_version"),
+}
+for key, expected in expected_schemas.items():
+    if observed_schemas.get(key) != expected:
+        raise SystemExit(f"{key} schema mismatch: {observed_schemas.get(key)} != {expected}")
 if publish["receipt"]["sha256"] != sha:
     raise SystemExit("publish sha mismatch")
+if publish["receipt"].get("ingested_schema_version") != "ao2.evidence-pack.v1":
+    raise SystemExit("receipt ingested schema mismatch")
 if detail_pack.get("run_id") != run_id:
     raise SystemExit("detail run_id mismatch")
 if latest_pack.get("run_id") != run_id:
     raise SystemExit("latest run_id mismatch")
+if detail_pack.get("verdict") != "accepted":
+    raise SystemExit("detail verdict mismatch")
+if latest_pack.get("verdict") != "accepted":
+    raise SystemExit("latest verdict mismatch")
 if not dashboard.get("summary", {}).get("read_only_observer", False):
     raise SystemExit("dashboard did not declare read-only observer")
+for label, payload in [("detail", detail), ("latest", latest)]:
+    trust = payload.get("trust_boundary", {})
+    if trust.get("role") != "read_only_observer_for_signed_evidence":
+        raise SystemExit(f"{label} trust boundary role mismatch")
+    if trust.get("can_approve_runs") is not False:
+        raise SystemExit(f"{label} trust boundary must not approve runs")
+    if trust.get("can_mutate_ao2_evidence") is not False:
+        raise SystemExit(f"{label} trust boundary must not mutate AO2 evidence")
 
 payload = {
     "schema_version": "ao2.evidence-pack-control-plane-smoke.v1",
@@ -150,8 +183,13 @@ payload = {
     "dashboard_schema_version": dashboard.get("schema_version"),
     "detail_schema_version": detail.get("schema_version"),
     "latest_schema_version": latest.get("schema_version"),
+    "receipt_schema_version": publish.get("receipt", {}).get("schema_version"),
+    "ingested_schema_version": publish.get("receipt", {}).get("ingested_schema_version"),
+    "contract_schemas": observed_schemas,
     "verdict": detail_pack.get("verdict"),
     "read_only_observer": True,
+    "can_approve_runs": False,
+    "can_mutate_ao2_evidence": False,
     "token_leak_detected": False,
 }
 Path(summary).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")

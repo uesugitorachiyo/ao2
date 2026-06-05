@@ -110,7 +110,93 @@ def test_evidence_control_plane_smoke_script_is_token_safe_and_exposed_by_npm():
         "/api/v1/evidence-pack/run/",
         "token_leak_detected",
         "ao2.evidence-pack-control-plane-smoke.v1",
+        "ao2.evidence-pack-control-plane-publish.v1",
+        "ao2.cp-ingest-receipt.v1",
+        "ao2.cp-evidence-pack-dashboard.v1",
+        "ao2.cp-evidence-pack-detail.v1",
+        "read_only_observer_for_signed_evidence",
+        "can_approve_runs",
+        "can_mutate_ao2_evidence",
     ]
     for needle in required:
         assert needle in text
     assert "$AO2_CP_API_TOKEN\"" not in text
+
+
+def test_risky_pr_golden_path_script_is_exposed_and_checks_uat_surface():
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["risky-pr:golden"]
+        == "node scripts/run-sh-script.js scripts/risky-pr-golden-path.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "risky-pr-golden-path.sh"
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    required = [
+        "env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY",
+        "--pause-for-approval",
+        "approval_ticket_id",
+        "approve \"$TICKET\"",
+        "run --resume",
+        "ao2.risky-pr-golden-path.v1",
+        "policy_denial_observed",
+        "exact_approval_observed",
+        "evaluator_rejection_observed",
+        "evaluator_acceptance_observed",
+        "acceptance_evidence_observed",
+        "Policy Decisions",
+        "Closure Reports",
+        "Run Markers",
+    ]
+    for needle in required:
+        assert needle in text
+    assert "OPENAI_API_KEY=" not in text
+    assert "ANTHROPIC_API_KEY=" not in text
+
+
+def test_release_readiness_script_is_local_only_and_checks_repo_guardrails():
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["release:readiness"]
+        == "node scripts/run-sh-script.js scripts/release-readiness.sh"
+    )
+    assert (
+        package_json["scripts"]["release:readiness:static"]
+        == "node scripts/run-sh-script.js scripts/release-readiness.sh --static-only"
+    )
+    assert (
+        package_json["scripts"]["release:readiness:full"]
+        == "node scripts/run-sh-script.js scripts/release-readiness.sh --full"
+    )
+
+    script = REPO_ROOT / "scripts" / "release-readiness.sh"
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    required = [
+        "ao2.release-readiness-local.v1",
+        "branch_protection",
+        "latest_main_ci",
+        "risky-pr:golden",
+        "smoke:evidence-control-plane",
+        "verify:no-factory-v3",
+        "release-gate.yml",
+        "public-release-build.yml",
+        "uesugitorachiyo/ao2",
+        "uesugitorachiyo/ao2-control-plane",
+    ]
+    for needle in required:
+        assert needle in text
+    assert "cat target/long-lived-control-plane/api-token" not in text
+
+
+def test_verification_docs_include_next_length_task_commands():
+    verification = read("docs/VERIFICATION.md")
+    for needle in [
+        "npm run risky-pr:golden",
+        "npm run smoke:evidence-control-plane",
+        "npm run release:readiness",
+        "ao2.risky-pr-golden-path.v1",
+        "ao2.release-readiness-local.v1",
+    ]:
+        assert needle in verification
