@@ -571,3 +571,116 @@ def test_artifact_health_local_canary_bundle_and_pulse_execute_simulation_contra
         "ao2.pulse-execute-simulation.v1",
     ]:
         assert needle in verification
+
+
+def test_local_canary_runner_matches_manual_workflow_contract():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["local:canary"]
+        == "node scripts/run-sh-script.js scripts/local-canary.sh"
+    )
+
+    runner = REPO_ROOT / "scripts" / "local-canary.sh"
+    assert runner.is_file()
+    assert runner.stat().st_mode & stat.S_IXUSR
+    text = runner.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.local-canary-run.v1",
+        "release:artifact-consumer-smoke -- --dry-run",
+        "pulse:local-mirror",
+        "pulse:resume -- --dry-run",
+        "../ao2-control-plane/scripts/cp-dr-restore-drill.sh --negative-only",
+        "artifacts:index",
+        "artifacts:health",
+        "step_results",
+        "local-canary-summary.json",
+        "stores_credentials",
+    ]:
+        assert needle in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+    workflow = read(".github/workflows/local-canary.yml")
+    assert "npm run local:canary" in workflow
+    assert "ao2/target/local-canary" in workflow
+
+    for needle in [
+        "npm run local:canary",
+        "ao2.local-canary-run.v1",
+        "target/local-canary/latest/local-canary-summary.json",
+    ]:
+        assert needle in verification
+
+
+def test_artifact_health_policy_knobs_contract():
+    health = read("scripts/artifact-evidence-health.sh")
+    verification = read("docs/VERIFICATION.md")
+
+    for needle in [
+        "AO2_ARTIFACT_HEALTH_REQUIRED_ROOTS",
+        "AO2_ARTIFACT_HEALTH_ALLOWED_MISSING_ROOTS",
+        "AO2_ARTIFACT_HEALTH_FAIL_ON_ATTENTION",
+        "AO2_ARTIFACT_HEALTH_STALE_AFTER_SECONDS",
+        "required_roots",
+        "allowed_missing_roots",
+        "policy_violations",
+        "fail_on_attention",
+        "stale_threshold_override_seconds",
+    ]:
+        assert needle in health
+
+    for needle in [
+        "AO2_ARTIFACT_HEALTH_REQUIRED_ROOTS",
+        "AO2_ARTIFACT_HEALTH_ALLOWED_MISSING_ROOTS",
+        "AO2_ARTIFACT_HEALTH_FAIL_ON_ATTENTION",
+        "AO2_ARTIFACT_HEALTH_STALE_AFTER_SECONDS",
+    ]:
+        assert needle in verification
+
+
+def test_pulse_execute_safety_corpus_contract():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["pulse:execute-safety-corpus"]
+        == "node scripts/run-sh-script.js scripts/pulse-execute-safety-corpus.sh"
+    )
+
+    corpus = REPO_ROOT / "scripts" / "pulse-execute-safety-corpus.sh"
+    assert corpus.is_file()
+    assert corpus.stat().st_mode & stat.S_IXUSR
+    corpus_text = corpus.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.pulse-execute-safety-corpus.v1",
+        "hash_mismatch",
+        "unsafe_output_path",
+        "missing_simulation_output_path",
+        "failing_simulated_command",
+        "dry_run_execute_conflict",
+        "expected_exit_code",
+        "expected_status",
+        "expected_reason",
+        "pulse-resume",
+        "target/pulse-execute-safety-corpus/latest/summary.json",
+    ]:
+        assert needle in corpus_text
+    assert "OPENAI_API_KEY" not in corpus_text
+    assert "ANTHROPIC_API_KEY" not in corpus_text
+
+    pulse_resume = read("scripts/pulse-resume.sh")
+    for needle in [
+        "simulated_exit_code",
+        "simulated failure",
+        "unsafe simulation_output_path",
+    ]:
+        assert needle in pulse_resume
+
+    for needle in [
+        "npm run pulse:execute-safety-corpus",
+        "ao2.pulse-execute-safety-corpus.v1",
+        "target/pulse-execute-safety-corpus/latest/summary.json",
+    ]:
+        assert needle in verification

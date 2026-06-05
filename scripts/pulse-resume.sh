@@ -68,9 +68,11 @@ sha_matches = observed_sha == expected_sha
 resume_command = str(resume["resume_command"])
 simulation = bool(resume.get("simulation", False))
 simulation_output_path = resume.get("simulation_output_path")
+simulated_exit_code = int(resume.get("simulated_exit_code", 0) or 0)
 exit_code = 0
 reason = None
 simulation_executed = False
+resolved_simulation_output_path = None
 
 def safe_relative_path(value: object) -> Path:
     rel = Path(str(value))
@@ -85,27 +87,36 @@ elif not sha_matches:
     reason = "hash_mismatch"
     exit_code = 1
 elif execute and simulation:
-    if simulation_output_path is None:
+    if simulated_exit_code != 0:
+        reason = str(resume.get("simulation_reason", "simulated failure"))
+        exit_code = simulated_exit_code
+    elif simulation_output_path is None:
         reason = "simulation_output_path missing"
         exit_code = 1
     else:
-        output_path = safe_relative_path(simulation_output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_payload = {
-            "schema_version": "ao2.pulse-execute-simulation.v1",
-            "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-            "status": "passed",
-            "resume_json": str(resume_json),
-            "resume_command": resume_command,
-            "pulse_eval_loop_sha256": expected_sha,
-            "trust_boundary": {
-                "local_only": True,
-                "stores_credentials": False,
-                "side_effects": "simulation_evidence_only",
-            },
-        }
-        output_path.write_text(json.dumps(output_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        simulation_executed = True
+        try:
+            output_path = safe_relative_path(simulation_output_path)
+        except ValueError as exc:
+            reason = str(exc)
+            exit_code = 1
+        else:
+            resolved_simulation_output_path = str(output_path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_payload = {
+                "schema_version": "ao2.pulse-execute-simulation.v1",
+                "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                "status": "passed",
+                "resume_json": str(resume_json),
+                "resume_command": resume_command,
+                "pulse_eval_loop_sha256": expected_sha,
+                "trust_boundary": {
+                    "local_only": True,
+                    "stores_credentials": False,
+                    "side_effects": "simulation_evidence_only",
+                },
+            }
+            output_path.write_text(json.dumps(output_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            simulation_executed = True
 elif execute:
     result = subprocess.run(shlex.split(resume_command), cwd=root, check=False)
     exit_code = int(result.returncode)
@@ -126,7 +137,8 @@ payload = {
     "reason": reason,
     "simulation": simulation,
     "simulation_executed": simulation_executed,
-    "simulation_output_path": str(safe_relative_path(simulation_output_path)) if simulation_output_path else None,
+    "simulated_exit_code": simulated_exit_code,
+    "simulation_output_path": resolved_simulation_output_path or (str(simulation_output_path) if simulation_output_path else None),
     "resume_json": str(resume_json),
     "pulse_eval_loop_path": str(eval_loop_path),
     "pulse_eval_loop_sha256": expected_sha,

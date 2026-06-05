@@ -6,10 +6,14 @@ INDEX_JSON="${AO2_ARTIFACT_HEALTH_INDEX:-$ROOT/target/artifact-index/latest/arti
 OUT_DIR="${AO2_ARTIFACT_HEALTH_ROOT:-$ROOT/target/artifact-health/latest}"
 SUMMARY="$OUT_DIR/summary.json"
 REPORT="$OUT_DIR/report.md"
+REQUIRED_ROOTS="${AO2_ARTIFACT_HEALTH_REQUIRED_ROOTS:-}"
+ALLOWED_MISSING_ROOTS="${AO2_ARTIFACT_HEALTH_ALLOWED_MISSING_ROOTS:-}"
+FAIL_ON_ATTENTION="${AO2_ARTIFACT_HEALTH_FAIL_ON_ATTENTION:-0}"
+STALE_AFTER_SECONDS="${AO2_ARTIFACT_HEALTH_STALE_AFTER_SECONDS:-}"
 
 mkdir -p "$OUT_DIR"
 
-python3 - "$ROOT" "$INDEX_JSON" "$SUMMARY" "$REPORT" <<'PY'
+python3 - "$ROOT" "$INDEX_JSON" "$SUMMARY" "$REPORT" "$REQUIRED_ROOTS" "$ALLOWED_MISSING_ROOTS" "$FAIL_ON_ATTENTION" "$STALE_AFTER_SECONDS" <<'PY'
 import json
 import sys
 from datetime import datetime, timezone
@@ -19,6 +23,10 @@ root = Path(sys.argv[1]).resolve()
 index_path = Path(sys.argv[2]).resolve()
 summary_path = Path(sys.argv[3]).resolve()
 report_path = Path(sys.argv[4]).resolve()
+required_roots = [item for item in sys.argv[5].split() if item]
+allowed_missing_roots = set(item for item in sys.argv[6].split() if item)
+fail_on_attention = sys.argv[7].lower() in {"1", "true", "yes"}
+stale_threshold_override_seconds = int(sys.argv[8]) if sys.argv[8] else None
 
 generated_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 payload = {
@@ -32,6 +40,14 @@ payload = {
     "stale_bundles": [],
     "empty_bundles": [],
     "healthy_bundles": [],
+    "allowed_missing_bundles": [],
+    "policy": {
+        "required_roots": required_roots,
+        "allowed_missing_roots": sorted(allowed_missing_roots),
+        "fail_on_attention": fail_on_attention,
+        "stale_threshold_override_seconds": stale_threshold_override_seconds,
+    },
+    "policy_violations": [],
     "trust_boundary": {
         "local_only": True,
         "stores_credentials": False,
@@ -47,38 +63,72 @@ else:
     if index.get("status") != "passed":
         payload["status"] = "failed"
         payload["reason"] = f"artifact index status was {index.get('status')!r}"
+    observed_roots = set()
     for repo in index.get("repositories", []):
         repo_name = str(repo.get("name", "unknown"))
         for bundle in repo.get("bundles", []):
+            bundle_root = str(bundle.get("root", ""))
+            root_key = f"{repo_name}/{bundle_root}"
+            observed_roots.add(bundle_root)
+            observed_roots.add(root_key)
+            age_seconds = bundle.get("age_seconds")
+            stale_after_seconds = (
+                stale_threshold_override_seconds
+                if stale_threshold_override_seconds is not None
+                else bundle.get("stale_after_seconds")
+            )
+            health = str(bundle.get("health", "unknown"))
+            if (
+                health == "healthy"
+                and age_seconds is not None
+                and stale_after_seconds is not None
+                and int(age_seconds) > int(stale_after_seconds)
+            ):
+                health = "stale"
             item = {
                 "repository": repo_name,
-                "root": str(bundle.get("root", "")),
-                "health": str(bundle.get("health", "unknown")),
+                "root": bundle_root,
+                "root_key": root_key,
+                "health": health,
                 "file_count": int(bundle.get("file_count", 0) or 0),
                 "latest_generated_at_utc": bundle.get("latest_generated_at_utc"),
-                "age_seconds": bundle.get("age_seconds"),
-                "stale_after_seconds": bundle.get("stale_after_seconds"),
+                "age_seconds": age_seconds,
+                "stale_after_seconds": stale_after_seconds,
             }
-            health = item["health"]
             if health == "healthy":
                 payload["healthy_bundles"].append(item)
             elif health == "missing":
-                payload["missing_bundles"].append(item)
+                if bundle_root in allowed_missing_roots or root_key in allowed_missing_roots:
+                    payload["allowed_missing_bundles"].append(item)
+                else:
+                    payload["missing_bundles"].append(item)
             elif health == "empty":
                 payload["empty_bundles"].append(item)
             elif health == "stale":
                 payload["stale_bundles"].append(item)
             else:
                 payload["failing_bundles"].append(item)
+    for required in required_roots:
+        if required not in observed_roots:
+            payload["policy_violations"].append(
+                {
+                    "type": "required_root_missing",
+                    "root": required,
+                }
+            )
 
 payload["attention_required_count"] = (
     len(payload["failing_bundles"])
     + len(payload["missing_bundles"])
     + len(payload["stale_bundles"])
     + len(payload["empty_bundles"])
+    + len(payload["policy_violations"])
 )
 if payload["status"] == "passed" and payload["attention_required_count"]:
     payload["status"] = "attention_required"
+if payload["status"] == "attention_required" and fail_on_attention:
+    payload["status"] = "failed"
+    payload["reason"] = "attention_required_policy_failed"
 
 summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -89,15 +139,19 @@ lines = [
     f"- Status: `{payload['status']}`",
     f"- Artifact index: `{index_path.relative_to(root) if index_path.is_relative_to(root) else index_path}`",
     f"- Attention required: `{payload['attention_required_count']}`",
+    f"- Fail on attention: `{fail_on_attention}`",
     "",
 ]
-for key in ["failing_bundles", "missing_bundles", "stale_bundles", "empty_bundles", "healthy_bundles"]:
+for key in ["policy_violations", "failing_bundles", "missing_bundles", "stale_bundles", "empty_bundles", "allowed_missing_bundles", "healthy_bundles"]:
     lines.append(f"## {key}")
     items = payload[key]
     if not items:
         lines.append("- none")
     for item in items:
-        lines.append(f"- `{item['repository']}/{item['root']}`: {item['health']}, {item['file_count']} files")
+        if key == "policy_violations":
+            lines.append(f"- `{item['type']}`: `{item['root']}`")
+        else:
+            lines.append(f"- `{item['repository']}/{item['root']}`: {item['health']}, {item['file_count']} files")
     lines.append("")
 report_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
