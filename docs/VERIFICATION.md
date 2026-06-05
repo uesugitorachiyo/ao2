@@ -25,8 +25,10 @@ npm run release:readiness    # local release-readiness guardrails for AO2 + cont
 npm run release:readiness:regression-gate # local static/smoke/Pulse/control-plane evidence gate
 npm run artifacts:index      # local cross-repo artifact index/report
 npm run release:artifact-consumer-smoke -- --dry-run # CI artifact consumer smoke contract
+npm run release:artifact-consumer-smoke -- --require-artifact ao2-python-guard --require-schema ao2.python-guard-ci-artifacts.v1
 npm run post-merge:canary    # local post-merge AO2 + control-plane canary
 npm run pulse:resume -- --dry-run # validate the resumable Pulse event-loop command
+npm run pulse:resume -- --execute # explicitly resume the latest local Pulse event loop
 npm run gate:full            # 3-stage ready-to-ship gate (guard + replacement + release-gate)
 scripts/smoke-release-archives.sh
 ```
@@ -90,11 +92,17 @@ Result:
   ao2-control-plane long-lived smoke into one local evidence bundle; emits
   `ao2.release-readiness-regression-gate.v1`
 - `npm run artifacts:index`: scans AO2 and ao2-control-plane local/CI evidence
-  roots, writes `ao2.artifact-index-report.v1`, and renders a local `report.md`
+  roots, writes `ao2.artifact-index-report.v1`, renders a local `report.md`,
+  and writes the `ao2.artifact-evidence-dashboard.v1` HTML dashboard at
+  `target/artifact-index/latest/dashboard.html`
 - `npm run release:artifact-consumer-smoke -- --dry-run`: records the clean
   GitHub Actions artifact consumer workflow without downloading artifacts; a
   non-dry run uses `gh run download` and records checksums plus discovered
   `schema_version` values in `ao2.release-artifact-consumer-smoke.v1`
+- `.github/workflows/local-canary.yml`: manual GitHub Actions canary for the
+  public repos; it runs the artifact consumer smoke, Pulse local mirror/resume
+  dry-run, control-plane negative restore drill, artifact index, and uploads
+  `ao2-local-canary`
 - `npm run post-merge:canary`: runs artifact indexing, release artifact
   consumer dry-run, Pulse resume dry-run, and the ao2-control-plane long-lived
   smoke into `ao2.post-merge-canary.v1`
