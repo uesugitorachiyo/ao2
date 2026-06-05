@@ -206,6 +206,8 @@ def test_release_readiness_script_is_local_only_and_checks_repo_guardrails():
         "verify:no-factory-v3",
         "release-gate.yml",
         "public-release-build.yml",
+        "report.md",
+        "report.html",
         "uesugitorachiyo/ao2",
         "uesugitorachiyo/ao2-control-plane",
     ]
@@ -219,8 +221,10 @@ def test_verification_docs_include_next_length_task_commands():
     for needle in [
         "npm run risky-pr:golden",
         "npm run smoke:evidence-control-plane",
+        "npm run smoke:phase1-operator-golden",
         "npm run release:readiness",
         "ao2.risky-pr-golden-path.v1",
+        "ao2.phase1-operator-golden-path-smoke.v1",
         "ao2.release-readiness-local.v1",
     ]:
         assert needle in verification

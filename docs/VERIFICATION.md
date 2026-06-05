@@ -20,6 +20,7 @@ npm run verify:replacement   # 4-step replacement-parity composite (Phase 2 read
 npm run verify:no-factory-v3 # factory-v3 green-path regression guard
 npm run risky-pr:golden      # local Risky PR Run golden path with report/cockpit assertions
 npm run smoke:evidence-control-plane # signed evidence-pack publish/readback contract smoke
+npm run smoke:phase1-operator-golden # signed Phase 1 publish/readback/dashboard smoke
 npm run release:readiness    # local release-readiness guardrails for AO2 + control-plane
 npm run gate:full            # 3-stage ready-to-ship gate (guard + replacement + release-gate)
 scripts/smoke-release-archives.sh
@@ -49,10 +50,14 @@ Result:
   observer endpoints, pins the `ao2.cp-evidence-pack-dashboard.v1`,
   `ao2.cp-evidence-pack-detail.v1`, and `ao2.cp-ingest-receipt.v1` schemas,
   and verifies the control-plane remains a read-only observer
+- `npm run smoke:phase1-operator-golden`: runs the signed Phase 1 decision
+  publish/readback path against a local control-plane instance, checks the
+  dashboard and operator panel, and emits
+  `ao2.phase1-operator-golden-path-smoke.v1`
 - `npm run release:readiness`: checks public CI triggers, manual release
   workflows, branch protection, latest `main` CI status in both public repos,
   and the local next-length verification commands; emits
-  `ao2.release-readiness-local.v1`
+  `ao2.release-readiness-local.v1` plus local `report.md` and `report.html`
 - `npm run phase1:promote`: prepares Phase 1 prerequisites, runs promotion
   preflights, publishes to ao2-control-plane when
   `AO2_PHASE1_CONTROL_PLANE_URL` is set, and may capture a dashboard snapshot

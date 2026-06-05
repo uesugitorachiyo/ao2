@@ -29,6 +29,7 @@
     "smoke:workbench-release-comparison-export": "node scripts/run-sh-script.js scripts/smoke-workbench-release-comparison-export.sh",
     "smoke:workbench-provider-pilot-acceptance-export": "node scripts/run-sh-script.js scripts/smoke-workbench-provider-pilot-acceptance-export.sh",
     "smoke:phase1-control-plane-readback": "node scripts/run-sh-script.js scripts/smoke-phase1-control-plane-readback.sh",
+    "smoke:phase1-operator-golden": "node scripts/run-sh-script.js scripts/smoke-phase1-operator-golden-path.sh",
     "smoke:factory-greenfield-run": "node scripts/run-sh-script.js scripts/smoke-factory-greenfield-run.sh",
     "smoke:factory-app-run": "node scripts/run-sh-script.js scripts/smoke-factory-app-run.sh",
     "smoke:factory-project-run": "node scripts/run-sh-script.js scripts/smoke-factory-project-run.sh",

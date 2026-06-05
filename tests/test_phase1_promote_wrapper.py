@@ -17,6 +17,10 @@ def test_package_json_exposes_one_command_phase1_promotion():
         package_json["scripts"]["phase1:dashboard-snapshot"]
         == "node scripts/run-sh-script.js scripts/phase1-control-plane-dashboard-snapshot.sh"
     )
+    assert (
+        package_json["scripts"]["smoke:phase1-operator-golden"]
+        == "node scripts/run-sh-script.js scripts/smoke-phase1-operator-golden-path.sh"
+    )
 
 
 def test_phase1_promote_wrapper_prepares_preflights_and_publishes_without_token_literal():
@@ -58,3 +62,19 @@ def test_operator_docs_explain_one_command_phase1_promotion_and_token_boundary()
         assert "bearer token" in doc.lower()
         assert "AO2_PHASE1_DASHBOARD_SNAPSHOT=1" in doc
         assert "phase1:dashboard-snapshot" in doc
+
+
+def test_phase1_operator_golden_smoke_reuses_signed_readback_and_preserves_token_boundary():
+    script = (REPO_ROOT / "scripts" / "smoke-phase1-operator-golden-path.sh").read_text(
+        encoding="utf-8"
+    )
+
+    assert "scripts/smoke-phase1-control-plane-readback.sh" in script
+    assert "ao2.phase1-operator-golden-path-smoke.v1" in script
+    assert "signed_phase1_decision_publish_readback_dashboard" in script
+    assert "read_only_observer_for_signed_phase1_evidence" in script
+    assert "evidence must exist before evaluator closure accepts a run" in script
+    assert "Authorization: Bearer" in script
+    assert "cat target/long-lived-control-plane/api-token" not in script
+    assert "OPENAI_API_KEY=" not in script
+    assert "ANTHROPIC_API_KEY=" not in script
