@@ -228,3 +228,41 @@ def test_verification_docs_include_next_length_task_commands():
         "ao2.release-readiness-local.v1",
     ]:
         assert needle in verification
+
+
+def test_ci_runs_python_guard_tests_and_pulse_docs_reference_persistent_local_mirror():
+    ci = read(".github/workflows/ci.yml")
+    verification = read("docs/VERIFICATION.md")
+
+    assert "phase: python-guard-tests" in ci
+    assert (
+        "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest "
+        "tests/test_public_stabilization.py "
+        "tests/test_phase1_promote_wrapper.py -q"
+    ) in ci
+    assert ".ao2-local/pulse/" in verification
+    assert "cargo clean" in verification
+    assert "target/pulse-next-recommended-tasks" in verification
+
+
+def test_pulse_local_mirror_script_is_exposed_and_ignored():
+    package_json = json.loads(read("package.json"))
+    gitignore = read(".gitignore")
+    script = REPO_ROOT / "scripts" / "pulse-local-mirror.sh"
+
+    assert (
+        package_json["scripts"]["pulse:local-mirror"]
+        == "node scripts/run-sh-script.js scripts/pulse-local-mirror.sh"
+    )
+    assert "/.ao2-local/" in gitignore
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    assert "target/pulse-next-recommended-tasks" in text
+    assert ".ao2-local/pulse" in text
+    assert "pulse-eval-loop.json" in text
+    assert "executor-evidence.json" in text
+    assert "shasum -a 256" in text
+    assert "ao2.pulse-local-mirror.v1" in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
