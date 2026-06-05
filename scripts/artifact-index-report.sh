@@ -27,7 +27,7 @@ dashboard_path = Path(sys.argv[6]).resolve()
 stale_after_seconds = 24 * 60 * 60
 
 scan_specs = [
-    ("ao2", root, ["target/ci-artifacts", "target/release-readiness-regression-gate", "target/release-readiness-ci", ".ao2-local/pulse/latest"]),
+    ("ao2", root, ["target/ci-artifacts", "target/release-readiness-regression-gate", "target/release-readiness-ci", "target/release-evidence-closure", "target/phase1-promotion-golden", "target/pulse-real-execute-containment", ".ao2-local/pulse/latest"]),
     ("ao2-control-plane", cp_root, ["target/ci-artifacts", "target/dr-restore-drill"]),
 ]
 

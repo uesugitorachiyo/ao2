@@ -32,6 +32,10 @@ run_step release_artifact_consumer_smoke \
   env AO2_RELEASE_ARTIFACT_CONSUMER_ROOT="$OUT_ROOT/release-artifact-consumer-smoke" \
   npm run release:artifact-consumer-smoke -- --dry-run
 
+run_step ci_artifact_download_contract \
+  env AO2_CI_ARTIFACT_DOWNLOAD_ROOT="$ROOT/target/ci-artifacts/latest" \
+  npm run artifacts:ci-download-contract
+
 run_step pulse_local_mirror \
   env AO2_PULSE_LOCAL_MIRROR_SOURCE="$PULSE_SOURCE" \
   npm run pulse:local-mirror
@@ -55,6 +59,9 @@ run_step artifact_health \
   env \
     AO2_ARTIFACT_HEALTH_INDEX="$OUT_ROOT/artifact-index/artifact-index.json" \
     AO2_ARTIFACT_HEALTH_ROOT="$OUT_ROOT/artifact-health" \
+    AO2_ARTIFACT_HEALTH_REQUIRED_ROOTS="ao2/target/ci-artifacts ao2/.ao2-local/pulse/latest ao2-control-plane/target/ci-artifacts ao2-control-plane/target/dr-restore-drill" \
+    AO2_ARTIFACT_HEALTH_ALLOWED_MISSING_ROOTS="ao2/target/release-readiness-regression-gate ao2/target/release-readiness-ci ao2/target/release-evidence-closure ao2/target/phase1-promotion-golden ao2/target/pulse-real-execute-containment" \
+    AO2_ARTIFACT_HEALTH_FAIL_ON_ATTENTION=1 \
     npm run artifacts:health
 
 python3 - "$ROOT" "$OUT_ROOT" "$SUMMARY" "$CP_RESTORE_ROOT" <<'PY'
@@ -71,6 +78,7 @@ log_dir = out_root / "logs"
 
 steps = [
     "release_artifact_consumer_smoke",
+    "ci_artifact_download_contract",
     "pulse_local_mirror",
     "pulse_resume_dry_run",
     "control_plane_restore_negative",
@@ -100,6 +108,7 @@ payload = {
     "step_results": step_results,
     "evidence": {
         "release_artifact_consumer_smoke": str(out_root / "release-artifact-consumer-smoke" / "summary.json"),
+        "ci_artifact_download_contract": str(root / "target/ci-artifacts/latest/summary.json"),
         "pulse_resume": str(out_root / "pulse-resume" / "summary.json"),
         "control_plane_restore": str(cp_restore_root / "dr-restore-report.json"),
         "artifact_index": str(out_root / "artifact-index" / "artifact-index.json"),

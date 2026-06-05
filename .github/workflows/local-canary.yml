@@ -27,6 +27,7 @@ jobs:
         run: |
           # Mirrors:
           # npm run release:artifact-consumer-smoke -- --dry-run
+          # npm run artifacts:ci-download-contract
           # npm run pulse:local-mirror
           # npm run pulse:resume -- --dry-run
           # ../ao2-control-plane/scripts/cp-dr-restore-drill.sh --negative-only
@@ -40,6 +41,7 @@ jobs:
           name: ao2-local-canary
           path: |
             ao2/target/release-artifact-consumer-smoke
+            ao2/target/ci-artifacts
             ao2/target/artifact-index
             ao2/target/artifact-index/latest/artifact-index.json
             ao2/target/artifact-index/latest/dashboard.html
@@ -47,5 +49,6 @@ jobs:
             ao2/target/local-canary
             ao2/target/pulse-resume
             ao2/.ao2-local/pulse
+            ao2-control-plane/target/ci-artifacts
             ao2-control-plane/target/dr-restore-drill/local-canary
             ao2-control-plane/target/dr-restore-drill/local-canary/dr-restore-report.json
