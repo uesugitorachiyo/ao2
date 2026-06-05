@@ -31,6 +31,7 @@ echo "mode=$MODE"
 
 python3 - "$ROOT" "$CP_ROOT" "$MODE" "$SUMMARY" <<'PY'
 import json
+import html
 import re
 import subprocess
 import sys
@@ -123,16 +124,72 @@ if mode == "full":
         add("full_command:" + " ".join(command), "passed" if result.returncode == 0 else "failed", (result.stdout + "\n" + result.stderr)[-4000:])
 
 status = "passed" if all(check["status"] == "passed" for check in checks) else "failed"
+report_md_path = summary_path.with_name("report.md")
+report_html_path = summary_path.with_name("report.html")
 summary = {
     "schema_version": "ao2.release-readiness-local.v1",
     "status": status,
     "mode": mode,
     "ao2_root": str(root),
     "control_plane_root_exists": cp_root.is_dir(),
+    "report_md": str(report_md_path),
+    "report_html": str(report_html_path),
     "checks": checks,
 }
 summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+def compact(value, limit=600):
+    value = str(value or "").replace("\n", " ").strip()
+    if len(value) > limit:
+        return value[: limit - 3] + "..."
+    return value
+
+lines = [
+    "# AO2 Release Readiness",
+    "",
+    f"- Schema: `{summary['schema_version']}`",
+    f"- Status: `{status}`",
+    f"- Mode: `{mode}`",
+    f"- AO2 root: `{root}`",
+    f"- Control-plane root exists: `{cp_root.is_dir()}`",
+    "",
+    "| Check | Status | Detail |",
+    "| --- | --- | --- |",
+]
+for check in checks:
+    name = compact(check["name"]).replace("|", "\\|")
+    check_status = compact(check["status"]).replace("|", "\\|")
+    detail = compact(check.get("detail", "")).replace("|", "\\|")
+    lines.append(f"| `{name}` | `{check_status}` | {detail} |")
+report_md_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+rows = []
+for check in checks:
+    rows.append(
+        "<tr>"
+        f"<td><code>{html.escape(compact(check['name']))}</code></td>"
+        f"<td><code>{html.escape(compact(check['status']))}</code></td>"
+        f"<td>{html.escape(compact(check.get('detail', '')))}</td>"
+        "</tr>"
+    )
+report_html_path.write_text(
+    "<!doctype html>\n"
+    "<html><head><meta charset=\"utf-8\"><title>AO2 Release Readiness</title>"
+    "<style>body{font-family:system-ui,sans-serif;margin:2rem;line-height:1.45}"
+    "table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:.4rem;text-align:left}"
+    "th{background:#f5f5f5}code{white-space:pre-wrap}</style></head><body>"
+    "<h1>AO2 Release Readiness</h1>"
+    f"<p><strong>Status:</strong> <code>{html.escape(status)}</code></p>"
+    f"<p><strong>Mode:</strong> <code>{html.escape(mode)}</code></p>"
+    f"<p><strong>Schema:</strong> <code>{html.escape(summary['schema_version'])}</code></p>"
+    "<table><thead><tr><th>Check</th><th>Status</th><th>Detail</th></tr></thead><tbody>"
+    + "".join(rows)
+    + "</tbody></table></body></html>\n",
+    encoding="utf-8",
+)
 print(f"summary={summary_path}")
+print(f"report_md={report_md_path}")
+print(f"report_html={report_html_path}")
 print(f"status={status}")
 if status != "passed":
     for check in checks:
