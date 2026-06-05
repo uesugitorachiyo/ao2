@@ -50,6 +50,7 @@
     "pulse:local-mirror": "node scripts/run-sh-script.js scripts/pulse-local-mirror.sh",
     "pulse:resume": "node scripts/run-sh-script.js scripts/pulse-resume.sh",
     "artifacts:index": "node scripts/run-sh-script.js scripts/artifact-index-report.sh",
+    "artifacts:health": "node scripts/run-sh-script.js scripts/artifact-evidence-health.sh",
     "release:artifact-consumer-smoke": "node scripts/run-sh-script.js scripts/release-artifact-consumer-smoke.sh",
     "post-merge:canary": "node scripts/run-sh-script.js scripts/post-merge-canary.sh",
     "ci:license-provenance": "node scripts/run-sh-script.js scripts/license-provenance-gate.sh",

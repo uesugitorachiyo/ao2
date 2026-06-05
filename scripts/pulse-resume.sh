@@ -10,6 +10,14 @@ DRY_RUN=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --resume-json)
+      RESUME_JSON="${2:-}"
+      if [ -z "$RESUME_JSON" ]; then
+        echo "--resume-json requires a path" >&2
+        exit 2
+      fi
+      shift 2
+      ;;
     --dry-run)
       DRY_RUN=1
       shift
@@ -19,7 +27,7 @@ while [ "$#" -gt 0 ]; do
       shift
       ;;
     *)
-      echo "usage: $0 (--dry-run | --execute)" >&2
+      echo "usage: $0 [--resume-json <path>] (--dry-run | --execute)" >&2
       exit 2
       ;;
   esac
@@ -58,8 +66,17 @@ observed_sha = shasum(eval_loop_path)
 expected_sha = str(resume["pulse_eval_loop_sha256"])
 sha_matches = observed_sha == expected_sha
 resume_command = str(resume["resume_command"])
+simulation = bool(resume.get("simulation", False))
+simulation_output_path = resume.get("simulation_output_path")
 exit_code = 0
 reason = None
+simulation_executed = False
+
+def safe_relative_path(value: object) -> Path:
+    rel = Path(str(value))
+    if rel.is_absolute() or ".." in rel.parts:
+        raise ValueError(f"unsafe simulation_output_path: {value!r}")
+    return root / rel
 
 if not dry_run and not execute:
     reason = "refusing to execute without --execute"
@@ -67,6 +84,28 @@ if not dry_run and not execute:
 elif not sha_matches:
     reason = "hash_mismatch"
     exit_code = 1
+elif execute and simulation:
+    if simulation_output_path is None:
+        reason = "simulation_output_path missing"
+        exit_code = 1
+    else:
+        output_path = safe_relative_path(simulation_output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_payload = {
+            "schema_version": "ao2.pulse-execute-simulation.v1",
+            "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "status": "passed",
+            "resume_json": str(resume_json),
+            "resume_command": resume_command,
+            "pulse_eval_loop_sha256": expected_sha,
+            "trust_boundary": {
+                "local_only": True,
+                "stores_credentials": False,
+                "side_effects": "simulation_evidence_only",
+            },
+        }
+        output_path.write_text(json.dumps(output_payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        simulation_executed = True
 elif execute:
     result = subprocess.run(shlex.split(resume_command), cwd=root, check=False)
     exit_code = int(result.returncode)
@@ -85,6 +124,9 @@ payload = {
     "execute": execute,
     "execution_mode": "execute" if execute else ("dry_run" if dry_run else "refused"),
     "reason": reason,
+    "simulation": simulation,
+    "simulation_executed": simulation_executed,
+    "simulation_output_path": str(safe_relative_path(simulation_output_path)) if simulation_output_path else None,
     "resume_json": str(resume_json),
     "pulse_eval_loop_path": str(eval_loop_path),
     "pulse_eval_loop_sha256": expected_sha,
