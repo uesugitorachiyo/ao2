@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.3
         with:
           fetch-depth: 0
 
@@ -53,7 +53,7 @@ jobs:
           targets: x86_64-pc-windows-gnu
 
       - name: Install Node (for npm scripts)
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6.4.0
         with:
           node-version: '20'
 
@@ -68,7 +68,7 @@ jobs:
 
       - name: Upload no factory-v3 guard report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: no-factory-v3-green-path-${{ github.sha }}
           path: target/no-factory-v3-green-path/
@@ -77,7 +77,7 @@ jobs:
 
       - name: Upload gate:full rollup
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: gate-full-rollup-${{ github.sha }}
           path: target/release-gate-with-replacement/
@@ -148,7 +148,7 @@ Diff:
       # ADD:
       - name: Upload no factory-v3 guard report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: no-factory-v3-green-path-${{ github.sha }}
           path: target/no-factory-v3-green-path/
@@ -158,7 +158,7 @@ Diff:
       # ADD:
       - name: Upload gate:full rollup
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: gate-full-rollup-${{ github.sha }}
           path: target/release-gate-with-replacement/
@@ -166,7 +166,7 @@ Diff:
           retention-days: 90
 
       - name: Upload release assets
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         ...
 ```
 

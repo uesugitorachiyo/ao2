@@ -66,6 +66,30 @@ def test_ci_matrix_entries_do_not_repeat_top_level_keys():
     assert not duplicates
 
 
+def test_github_owned_actions_use_node24_runtime_majors():
+    workflows = [
+        ".github/workflows/ci.yml",
+        ".github/workflows/release-gate.yml",
+        ".github/workflows/public-release-build.yml",
+        ".github/workflows/windows-release-smoke.yml",
+    ]
+    combined = "\n".join(read(workflow) for workflow in workflows)
+
+    assert "uses: actions/checkout@v6.0.3" in combined
+    assert "uses: actions/setup-node@v6.4.0" in combined
+    assert "uses: actions/upload-artifact@v7.0.1" in combined
+    assert "uses: docker/setup-qemu-action@v4.1.0" in combined
+
+    stale_actions = [
+        "actions/checkout@v4",
+        "actions/setup-node@v4",
+        "actions/upload-artifact@v4",
+        "docker/setup-qemu-action@v3",
+    ]
+    for stale_action in stale_actions:
+        assert stale_action not in combined
+
+
 def test_public_agent_coordination_doc_exists_and_matches_agents_contract():
     agents = read("AGENTS.md")
     assert "docs/AGENT-COORDINATION.md" in agents

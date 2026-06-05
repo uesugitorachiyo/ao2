@@ -445,7 +445,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.3
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -458,7 +458,7 @@ jobs:
 
       - name: Upload ao2 binary
         if: matrix.phase == 'build-release'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: ao2-${{ matrix.os }}
           path: |
@@ -471,7 +471,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.3
       - uses: dtolnay/rust-toolchain@stable
       - name: Install cargo-deny
         run: cargo install --locked cargo-deny

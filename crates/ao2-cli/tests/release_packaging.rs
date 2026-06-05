@@ -2552,7 +2552,7 @@ fn release_build_all_script_and_manual_workflow_cover_public_release_sequence() 
     assert!(!workflow.contains("pull_request:"));
     assert!(!workflow.contains("\n  push:"));
     assert!(workflow.contains("npm run release:build-all"));
-    assert!(workflow.contains("actions/upload-artifact@v4"));
+    assert!(workflow.contains("actions/upload-artifact@v7.0.1"));
 }
 
 #[test]

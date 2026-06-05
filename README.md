@@ -52,6 +52,26 @@ Build a local release archive:
 npm run package:local
 ```
 
+Run the Phase 1 promotion wrapper after starting a local ao2-control-plane
+instance and placing the control-plane bearer token in an environment variable:
+
+```sh
+export AO2_PHASE1_CONTROL_PLANE_URL=http://127.0.0.1:3000
+export AO2_PHASE1_API_TOKEN_ENV=AO2_CP_API_TOKEN
+export AO2_CP_API_TOKEN=<redacted-local-token>
+npm run phase1:prepare-prerequisites
+npm run phase1:promote
+```
+
+The wrapper publishes through `--api-token-env AO2_CP_API_TOKEN` so the bearer
+token stays out of process arguments, URLs, logs, and generated evidence. To
+capture the read-only control-plane dashboard in the same local run:
+
+```sh
+AO2_PHASE1_DASHBOARD_SNAPSHOT=1 npm run phase1:promote
+npm run phase1:dashboard-snapshot
+```
+
 Run the native Windows release smoke on a Windows host after building or
 downloading the current archive:
 
