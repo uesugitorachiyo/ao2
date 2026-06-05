@@ -1,0 +1,52 @@
+name: Local Canary
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  local-canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout AO2
+        uses: actions/checkout@v6.0.3
+        with:
+          path: ao2
+
+      - name: Checkout control plane
+        uses: actions/checkout@v6.0.3
+        with:
+          repository: uesugitorachiyo/ao2-control-plane
+          path: ao2-control-plane
+
+      - name: Prepare Pulse dry-run fixture
+        working-directory: ao2
+        run: |
+          mkdir -p target/pulse-next-recommended-tasks/loop-000
+          printf '{}\n' > target/pulse-next-recommended-tasks/executor-evidence.json
+          printf '# Packet\n' > target/pulse-next-recommended-tasks/packet.md
+          printf '# Board\n' > target/pulse-next-recommended-tasks/board.md
+          printf '{"schema_version":"ao2.pulse-eval-loop.v1","status":"passed"}\n' > target/pulse-next-recommended-tasks/loop-000/pulse-eval-loop.json
+
+      - name: Run local canary subset
+        working-directory: ao2
+        run: |
+          npm run release:artifact-consumer-smoke -- --dry-run
+          npm run pulse:local-mirror
+          npm run pulse:resume -- --dry-run
+          ../ao2-control-plane/scripts/cp-dr-restore-drill.sh --negative-only --work-dir ../ao2-control-plane/target/dr-restore-drill/local-canary --out ../ao2-control-plane/target/dr-restore-drill/local-canary/dr-restore-report.json
+          npm run artifacts:index
+
+      - name: Upload local canary artifacts
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-local-canary
+          path: |
+            ao2/target/release-artifact-consumer-smoke
+            ao2/target/artifact-index
+            ao2/target/pulse-resume
+            ao2/.ao2-local/pulse
+            ao2-control-plane/target/dr-restore-drill/local-canary

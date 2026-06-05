@@ -447,3 +447,70 @@ def test_release_readiness_regression_gate_includes_artifact_and_resume_gates():
         "pulse_resume_dry_run",
     ]:
         assert needle in text
+
+
+def test_real_artifact_consumer_dashboard_pulse_execute_and_manual_canary_contracts():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["release:artifact-consumer-smoke"]
+        == "node scripts/run-sh-script.js scripts/release-artifact-consumer-smoke.sh"
+    )
+
+    consumer = read("scripts/release-artifact-consumer-smoke.sh")
+    for needle in [
+        "--fixture-dir",
+        "--require-artifact",
+        "--require-schema",
+        "required_artifacts",
+        "missing_required_artifacts",
+        "missing_required_schemas",
+        "ao2.release-artifact-consumer-smoke.v1",
+        "gh run download",
+    ]:
+        assert needle in consumer
+
+    artifact_index = read("scripts/artifact-index-report.sh")
+    for needle in [
+        "dashboard.html",
+        "ao2.artifact-evidence-dashboard.v1",
+        "stale_after_seconds",
+        "health",
+        "latest_generated_at_utc",
+    ]:
+        assert needle in artifact_index
+
+    pulse_resume = read("scripts/pulse-resume.sh")
+    for needle in [
+        "--execute",
+        "execution_mode",
+        "hash_mismatch",
+        "refusing to execute without --execute",
+        "shlex.split",
+    ]:
+        assert needle in pulse_resume
+
+    workflow = read(".github/workflows/local-canary.yml")
+    for needle in [
+        "name: Local Canary",
+        "workflow_dispatch:",
+        "permissions:",
+        "contents: read",
+        "npm run release:artifact-consumer-smoke -- --dry-run",
+        "npm run artifacts:index",
+        "npm run pulse:resume -- --dry-run",
+        "../ao2-control-plane/scripts/cp-dr-restore-drill.sh --negative-only",
+        "actions/upload-artifact@v7.0.1",
+        "ao2-local-canary",
+    ]:
+        assert needle in workflow
+
+    for needle in [
+        "npm run release:artifact-consumer-smoke -- --require-artifact",
+        "target/artifact-index/latest/dashboard.html",
+        "npm run pulse:resume -- --execute",
+        ".github/workflows/local-canary.yml",
+        "ao2.artifact-evidence-dashboard.v1",
+    ]:
+        assert needle in verification
