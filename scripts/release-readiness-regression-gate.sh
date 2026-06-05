@@ -31,18 +31,33 @@ run_step phase1_operator_golden "$OUT_ROOT/phase1-operator-golden.log" \
 phase1_status="$(cat "$OUT_ROOT/phase1-operator-golden.log.exit-code")"
 
 run_step pulse_local_mirror "$OUT_ROOT/pulse-local-mirror.log" \
-  env AO2_PULSE_LOCAL_MIRROR_DEST="$OUT_ROOT/pulse-local-mirror" npm run pulse:local-mirror
+  env AO2_PULSE_LOCAL_MIRROR_DEST="$ROOT/.ao2-local/pulse/latest" npm run pulse:local-mirror
 pulse_status="$(cat "$OUT_ROOT/pulse-local-mirror.log.exit-code")"
 
 run_step pulse_resume_dry_run "$OUT_ROOT/pulse-resume-dry-run.log" \
-  env AO2_PULSE_RESUME_JSON="$OUT_ROOT/pulse-local-mirror/resume.json" \
+  env AO2_PULSE_RESUME_JSON="$ROOT/.ao2-local/pulse/latest/resume.json" \
     AO2_PULSE_RESUME_ROOT="$OUT_ROOT/pulse-resume" \
     npm run pulse:resume -- --dry-run
 pulse_resume_status="$(cat "$OUT_ROOT/pulse-resume-dry-run.log.exit-code")"
 
+run_step ci_artifact_download_contract "$OUT_ROOT/ci-artifact-download-contract.log" \
+  env AO2_CI_ARTIFACT_DOWNLOAD_ROOT="$ROOT/target/ci-artifacts/latest" \
+    npm run artifacts:ci-download-contract
+ci_artifact_status="$(cat "$OUT_ROOT/ci-artifact-download-contract.log.exit-code")"
+
 run_step artifact_index "$OUT_ROOT/artifact-index.log" \
   env AO2_ARTIFACT_INDEX_ROOT="$OUT_ROOT/artifact-index" npm run artifacts:index
 artifact_status="$(cat "$OUT_ROOT/artifact-index.log.exit-code")"
+
+run_step artifact_health "$OUT_ROOT/artifact-health.log" \
+  env \
+    AO2_ARTIFACT_HEALTH_INDEX="$OUT_ROOT/artifact-index/artifact-index.json" \
+    AO2_ARTIFACT_HEALTH_ROOT="$OUT_ROOT/artifact-health" \
+    AO2_ARTIFACT_HEALTH_REQUIRED_ROOTS="ao2/target/ci-artifacts ao2/target/release-readiness-regression-gate ao2/.ao2-local/pulse/latest ao2-control-plane/target/ci-artifacts" \
+    AO2_ARTIFACT_HEALTH_ALLOWED_MISSING_ROOTS="ao2/target/release-readiness-ci ao2/target/release-evidence-closure ao2/target/phase1-promotion-golden ao2/target/pulse-real-execute-containment ao2-control-plane/target/dr-restore-drill" \
+    AO2_ARTIFACT_HEALTH_FAIL_ON_ATTENTION=1 \
+    npm run artifacts:health
+artifact_health_status="$(cat "$OUT_ROOT/artifact-health.log.exit-code")"
 
 run_step release_artifact_consumer_smoke "$OUT_ROOT/release-artifact-consumer-smoke.log" \
   env AO2_RELEASE_ARTIFACT_CONSUMER_ROOT="$OUT_ROOT/release-artifact-consumer-smoke" \
@@ -61,7 +76,7 @@ else
   printf "%s\n" "$cp_status" >"$OUT_ROOT/control-plane-long-lived-smoke.log.exit-code"
 fi
 
-python3 - "$OUT_ROOT" "$SUMMARY" "$release_status" "$phase1_status" "$pulse_status" "$pulse_resume_status" "$artifact_status" "$consumer_status" "$cp_status" <<'PY'
+python3 - "$OUT_ROOT" "$SUMMARY" "$release_status" "$phase1_status" "$pulse_status" "$pulse_resume_status" "$ci_artifact_status" "$artifact_status" "$artifact_health_status" "$consumer_status" "$cp_status" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -73,9 +88,11 @@ codes = {
     "phase1_operator_golden": int(sys.argv[4]),
     "pulse_local_mirror": int(sys.argv[5]),
     "pulse_resume_dry_run": int(sys.argv[6]),
-    "artifact_index": int(sys.argv[7]),
-    "release_artifact_consumer_smoke": int(sys.argv[8]),
-    "control_plane_long_lived_smoke": int(sys.argv[9]),
+    "ci_artifact_download_contract": int(sys.argv[7]),
+    "artifact_index": int(sys.argv[8]),
+    "artifact_health": int(sys.argv[9]),
+    "release_artifact_consumer_smoke": int(sys.argv[10]),
+    "control_plane_long_lived_smoke": int(sys.argv[11]),
 }
 
 checks = []

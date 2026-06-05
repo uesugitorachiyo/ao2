@@ -24,14 +24,19 @@ npm run smoke:phase1-operator-golden # signed Phase 1 publish/readback/dashboard
 npm run release:readiness    # local release-readiness guardrails for AO2 + control-plane
 npm run release:readiness:regression-gate # local static/smoke/Pulse/control-plane evidence gate
 npm run local:canary         # local equivalent of the manual Local Canary workflow
+npm run artifacts:ci-download-contract # real CI artifact download contract
 npm run artifacts:index      # local cross-repo artifact index/report
 npm run artifacts:health     # summarize latest local artifact index health
+AO2_ARTIFACT_HEALTH_FAIL_ON_ATTENTION=1 npm run artifacts:health
 npm run release:artifact-consumer-smoke -- --dry-run # CI artifact consumer smoke contract
 npm run release:artifact-consumer-smoke -- --require-artifact ao2-python-guard --require-schema ao2.python-guard-ci-artifacts.v1
 npm run post-merge:canary    # local post-merge AO2 + control-plane canary
 npm run pulse:resume -- --dry-run # validate the resumable Pulse event-loop command
 npm run pulse:resume -- --execute # explicitly resume the latest local Pulse event loop
 npm run pulse:execute-safety-corpus # Pulse execute-mode refusal/simulation corpus
+npm run pulse:real-execute-containment # bounded real Pulse execute fixture
+npm run phase1:promotion-golden # Phase 1 promotion golden readback/token-boundary evidence
+npm run release:evidence-closure # final local release evidence closure JSON/HTML
 npm run gate:full            # 3-stage ready-to-ship gate (guard + replacement + release-gate)
 scripts/smoke-release-archives.sh
 ```
@@ -91,9 +96,18 @@ Result:
   `ao2.release-readiness-local.v1` plus local `report.md` and `report.html`
 - `npm run release:readiness:regression-gate`: runs static release readiness,
   Phase 1 operator golden-path smoke, Pulse local mirror, Pulse resume dry-run,
-  artifact indexing, release artifact consumer dry-run, and the
+  real CI artifact download contract, artifact indexing, fail-on-attention
+  artifact health, release artifact consumer dry-run, and the
   ao2-control-plane long-lived smoke into one local evidence bundle; emits
   `ao2.release-readiness-regression-gate.v1`
+- `npm run artifacts:ci-download-contract`: runs
+  `release:artifact-consumer-smoke` in non-dry-run mode by default using
+  `gh run download`, validates required artifact names and `schema_version`
+  values, mirrors AO2 evidence to `target/ci-artifacts/latest`, mirrors
+  control-plane evidence to `../ao2-control-plane/target/ci-artifacts/latest`,
+  and emits `ao2.ci-artifact-download-contract.v1` at
+  `target/ci-artifacts/latest/summary.json`. Use `--fixture-dir <path>` for
+  deterministic local tests.
 - `npm run artifacts:index`: scans AO2 and ao2-control-plane local/CI evidence
   roots, writes `ao2.artifact-index-report.v1`, renders a local `report.md`,
   and writes the `ao2.artifact-evidence-dashboard.v1` HTML dashboard at
@@ -112,8 +126,9 @@ Result:
   non-dry run uses `gh run download` and records checksums plus discovered
   `schema_version` values in `ao2.release-artifact-consumer-smoke.v1`
 - `.github/workflows/local-canary.yml`: manual GitHub Actions canary for the
-  public repos; it runs the artifact consumer smoke, Pulse local mirror/resume
-  dry-run, control-plane negative restore drill, artifact index, and uploads
+  public repos; it runs the artifact consumer smoke, CI artifact download
+  contract, Pulse local mirror/resume dry-run, control-plane negative restore
+  drill, artifact index, fail-on-attention artifact health, and uploads
   `ao2-local-canary`
 - `npm run local:canary`: runs the same local canary sequence and writes
   `ao2.local-canary-run.v1` to
@@ -128,6 +143,24 @@ Result:
   dry-run/execute conflict fixtures, then writes
   `ao2.pulse-execute-safety-corpus.v1` to
   `target/pulse-execute-safety-corpus/latest/summary.json`
+- `npm run pulse:real-execute-containment`: creates a deterministic local
+  resume fixture, executes it through `npm run pulse:resume -- --resume-json
+  <fixture> --execute`, permits writes only under
+  `target/pulse-real-execute-containment/latest/allowed-output`, and emits
+  `ao2.pulse-real-execute-containment.v1` at
+  `target/pulse-real-execute-containment/latest/summary.json`
+- `npm run phase1:promotion-golden`: runs the signed Phase 1 operator golden
+  smoke, records readback/dashboard evidence, scans logs/artifacts for bearer
+  token leaks, preserves the `AO2_PHASE1_API_TOKEN_ENV` boundary, and emits
+  `ao2.phase1-promotion-golden-path.v1` at
+  `target/phase1-promotion-golden/latest/summary.json`
+- `npm run release:evidence-closure`: runs CI artifact download, local canary,
+  Phase 1 promotion golden evidence, Pulse execute safety, bounded real Pulse
+  execute, control-plane negative restore evidence, artifact index, and
+  fail-on-attention artifact health, then writes
+  `ao2.release-evidence-closure.v1` at
+  `target/release-evidence-closure/latest/summary.json` plus
+  `target/release-evidence-closure/latest/closure.html`
 - `npm run post-merge:canary`: runs artifact indexing, release artifact
   consumer dry-run, Pulse resume dry-run, and the ao2-control-plane long-lived
   smoke into `ao2.post-merge-canary.v1`

@@ -684,3 +684,163 @@ def test_pulse_execute_safety_corpus_contract():
         "target/pulse-execute-safety-corpus/latest/summary.json",
     ]:
         assert needle in verification
+
+
+def test_ci_artifact_download_contract_and_health_gate_wiring():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["artifacts:ci-download-contract"]
+        == "node scripts/run-sh-script.js scripts/ci-artifact-download-contract.sh"
+    )
+
+    contract = REPO_ROOT / "scripts" / "ci-artifact-download-contract.sh"
+    assert contract.is_file()
+    assert contract.stat().st_mode & stat.S_IXUSR
+    text = contract.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.ci-artifact-download-contract.v1",
+        "target/ci-artifacts/latest",
+        "release:artifact-consumer-smoke",
+        "--require-artifact",
+        "--require-schema",
+        "--fixture-dir",
+        "gh run download",
+        "schema_versions",
+        "stores_credentials",
+    ]:
+        assert needle in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+    local_canary = read("scripts/local-canary.sh")
+    regression_gate = read("scripts/release-readiness-regression-gate.sh")
+    for runner in [local_canary, regression_gate]:
+        for needle in [
+            "artifacts:ci-download-contract",
+            "AO2_ARTIFACT_HEALTH_FAIL_ON_ATTENTION=1",
+            "AO2_ARTIFACT_HEALTH_REQUIRED_ROOTS",
+            "target/ci-artifacts",
+        ]:
+            assert needle in runner
+
+    workflow = read(".github/workflows/local-canary.yml")
+    assert "ao2/target/ci-artifacts" in workflow
+    assert "npm run artifacts:ci-download-contract" in workflow
+
+    for needle in [
+        "npm run artifacts:ci-download-contract",
+        "ao2.ci-artifact-download-contract.v1",
+        "target/ci-artifacts/latest/summary.json",
+        "AO2_ARTIFACT_HEALTH_FAIL_ON_ATTENTION=1",
+    ]:
+        assert needle in verification
+
+
+def test_phase1_promotion_golden_path_contract():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["phase1:promotion-golden"]
+        == "node scripts/run-sh-script.js scripts/phase1-promotion-golden-path.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "phase1-promotion-golden-path.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.phase1-promotion-golden-path.v1",
+        "smoke:phase1-operator-golden",
+        "AO2_PHASE1_API_TOKEN_ENV",
+        "Authorization: Bearer",
+        "token_leak_scan",
+        "dashboard_snapshot",
+        "readback_summary",
+        "stores_credentials",
+    ]:
+        assert needle in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+    for needle in [
+        "npm run phase1:promotion-golden",
+        "ao2.phase1-promotion-golden-path.v1",
+        "target/phase1-promotion-golden/latest/summary.json",
+    ]:
+        assert needle in verification
+
+
+def test_pulse_real_execute_containment_contract():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["pulse:real-execute-containment"]
+        == "node scripts/run-sh-script.js scripts/pulse-real-execute-containment.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "pulse-real-execute-containment.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.pulse-real-execute-containment.v1",
+        "target/pulse-real-execute-containment/latest",
+        "allowed-output",
+        "pulse:resume -- --resume-json",
+        "--execute",
+        "sha256_matches",
+        "resume_command_digest",
+        "stores_credentials",
+    ]:
+        assert needle in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+    for needle in [
+        "npm run pulse:real-execute-containment",
+        "ao2.pulse-real-execute-containment.v1",
+        "target/pulse-real-execute-containment/latest/summary.json",
+    ]:
+        assert needle in verification
+
+
+def test_release_evidence_closure_contract():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["release:evidence-closure"]
+        == "node scripts/run-sh-script.js scripts/release-evidence-closure.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "release-evidence-closure.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.release-evidence-closure.v1",
+        "local:canary",
+        "artifacts:health",
+        "phase1:promotion-golden",
+        "pulse:execute-safety-corpus",
+        "pulse:real-execute-containment",
+        "control_plane_restore_negative",
+        "closure.html",
+        "evidence must exist before evaluator closure accepts a run",
+        "stores_credentials",
+    ]:
+        assert needle in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+    for needle in [
+        "npm run release:evidence-closure",
+        "ao2.release-evidence-closure.v1",
+        "target/release-evidence-closure/latest/summary.json",
+        "target/release-evidence-closure/latest/closure.html",
+    ]:
+        assert needle in verification
