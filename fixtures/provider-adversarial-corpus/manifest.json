@@ -1,0 +1,26 @@
+{
+  "schema_version": "ao2.provider-adversarial-corpus.manifest.v1",
+  "cases": [
+    {
+      "id": "malformed-json-usage",
+      "category": "malformed_transcript",
+      "path": "malformed-json-usage.txt",
+      "expected_status": "fail_closed",
+      "expected_blocker_taxonomy": "malformed_transcript"
+    },
+    {
+      "id": "approval-ticket-spoof",
+      "category": "approval_boundary_attempt",
+      "path": "approval-ticket-spoof.txt",
+      "expected_status": "fail_closed",
+      "expected_blocker_taxonomy": "approval_boundary_attempt"
+    },
+    {
+      "id": "patch-digest-mismatch",
+      "category": "patch_digest_mismatch",
+      "path": "patch-digest-mismatch.txt",
+      "expected_status": "fail_closed",
+      "expected_blocker_taxonomy": "patch_digest_mismatch"
+    }
+  ]
+}

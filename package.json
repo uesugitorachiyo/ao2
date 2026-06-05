@@ -70,6 +70,12 @@
     "verify": "cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings",
     "verify:replacement": "node scripts/run-sh-script.js scripts/verify-replacement-parity.sh",
     "verify:no-factory-v3": "node scripts/run-sh-script.js scripts/verify-no-factory-v3-green-path.sh",
-    "gate:full": "node scripts/run-sh-script.js scripts/gate-with-replacement.sh"
+    "gate:full": "node scripts/run-sh-script.js scripts/gate-with-replacement.sh",
+    "control-plane:cross-repo-observer": "node scripts/run-sh-script.js scripts/cross-repo-control-plane-observer.sh",
+    "release:install-update-fixture": "node scripts/run-sh-script.js scripts/release-install-update-fixture.sh",
+    "workbench:browser-qa": "node scripts/run-sh-script.js scripts/workbench-browser-qa.sh",
+    "provider:adversarial-corpus": "node scripts/run-sh-script.js scripts/provider-adversarial-corpus.sh",
+    "release:dr-retention-snapshot": "node scripts/run-sh-script.js scripts/dr-retention-long-run-snapshot.sh",
+    "frontier:lengthy:gate": "node scripts/run-sh-script.js scripts/frontier-lengthy-gate.sh"
   }
 }

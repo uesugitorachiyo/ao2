@@ -1072,3 +1072,240 @@ def test_next_lengthy_gate_contract():
         "target/next-lengthy-gate/latest/summary.json",
     ]:
         assert needle in verification
+
+
+def test_cross_repo_control_plane_observer_contract():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["control-plane:cross-repo-observer"]
+        == "node scripts/run-sh-script.js scripts/cross-repo-control-plane-observer.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "cross-repo-control-plane-observer.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.cross-repo-control-plane-observer.v1",
+        "AO2_CONTROL_PLANE_REPO",
+        "../ao2-control-plane",
+        "smoke-ingest-from-ao2.sh",
+        "cp-health-snapshot.sh",
+        "cp-dashboard-snapshot.sh",
+        "cp-dr-restore-drill.sh",
+        "signed_evidence_bundle",
+        "read_only_observer",
+        "can_approve_runs",
+        "can_mutate_ao2_evidence",
+        "stores_credentials",
+    ]:
+        assert needle in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+    for needle in [
+        "npm run control-plane:cross-repo-observer",
+        "ao2.cross-repo-control-plane-observer.v1",
+        "target/cross-repo-control-plane-observer/latest/summary.json",
+    ]:
+        assert needle in verification
+
+
+def test_release_install_update_fixture_contract():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["release:install-update-fixture"]
+        == "node scripts/run-sh-script.js scripts/release-install-update-fixture.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "release-install-update-fixture.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.release-install-update-fixture.v1",
+        "AO2_RELEASE_INSTALL_UPDATE_FIXTURE_DIR",
+        "SHA256SUMS",
+        "provenance.json",
+        "signature",
+        "checksum_verification",
+        "install_smoke",
+        "update_smoke",
+        "release:download-verify",
+        "refuses_publish_side_effects_by_default",
+        "stores_credentials",
+    ]:
+        assert needle in text
+    assert "git push origin" not in text
+    assert "gh release create" not in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+    for needle in [
+        "npm run release:install-update-fixture",
+        "ao2.release-install-update-fixture.v1",
+        "target/release-install-update-fixture/latest/summary.json",
+    ]:
+        assert needle in verification
+
+
+def test_workbench_browser_qa_contract():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["workbench:browser-qa"]
+        == "node scripts/run-sh-script.js scripts/workbench-browser-qa.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "workbench-browser-qa.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.workbench-browser-qa.v1",
+        "workbench:no-archaeology-audit",
+        "browser_review",
+        "screenshot_manifest",
+        "html_inspection",
+        "objective",
+        "denied_action",
+        "approved_digest",
+        "changed_files",
+        "test_evidence",
+        "manual_filesystem_archaeology_required",
+        "stores_credentials",
+    ]:
+        assert needle in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+    for needle in [
+        "npm run workbench:browser-qa",
+        "ao2.workbench-browser-qa.v1",
+        "target/workbench-browser-qa/latest/summary.json",
+    ]:
+        assert needle in verification
+
+
+def test_provider_adversarial_corpus_contract():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["provider:adversarial-corpus"]
+        == "node scripts/run-sh-script.js scripts/provider-adversarial-corpus.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "provider-adversarial-corpus.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.provider-adversarial-corpus.v1",
+        "fixtures/provider-adversarial-corpus",
+        "malformed_transcript",
+        "approval_boundary_attempt",
+        "patch_digest_mismatch",
+        "blocker_taxonomy",
+        "fail_closed",
+        "cargo test -p ao2-adapters transcript",
+        "provider:phase2-contract-hardening",
+        "stores_credentials",
+    ]:
+        assert needle in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+    fixture = REPO_ROOT / "fixtures" / "provider-adversarial-corpus" / "manifest.json"
+    assert fixture.is_file()
+    manifest = json.loads(fixture.read_text(encoding="utf-8"))
+    assert manifest["schema_version"] == "ao2.provider-adversarial-corpus.manifest.v1"
+    assert {case["category"] for case in manifest["cases"]} >= {
+        "malformed_transcript",
+        "approval_boundary_attempt",
+        "patch_digest_mismatch",
+    }
+
+    for needle in [
+        "npm run provider:adversarial-corpus",
+        "ao2.provider-adversarial-corpus.v1",
+        "target/provider-adversarial-corpus/latest/summary.json",
+    ]:
+        assert needle in verification
+
+
+def test_dr_retention_snapshot_contract():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["release:dr-retention-snapshot"]
+        == "node scripts/run-sh-script.js scripts/dr-retention-long-run-snapshot.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "dr-retention-long-run-snapshot.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.dr-retention-long-run-snapshot.v1",
+        "cp-dr-restore-drill.sh",
+        "release:retention-preflight",
+        "artifacts:index",
+        "artifacts:health",
+        "fixture_snapshot_manifest",
+        "restore_drill_evidence",
+        "retention_preflight_evidence",
+        "artifact_health_evidence",
+        "stores_credentials",
+    ]:
+        assert needle in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+    for needle in [
+        "npm run release:dr-retention-snapshot",
+        "ao2.dr-retention-long-run-snapshot.v1",
+        "target/dr-retention-long-run-snapshot/latest/summary.json",
+    ]:
+        assert needle in verification
+
+
+def test_frontier_lengthy_gate_contract():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["frontier:lengthy:gate"]
+        == "node scripts/run-sh-script.js scripts/frontier-lengthy-gate.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "frontier-lengthy-gate.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.frontier-lengthy-gate.v1",
+        "control-plane:cross-repo-observer",
+        "release:install-update-fixture",
+        "workbench:browser-qa",
+        "provider:adversarial-corpus",
+        "release:dr-retention-snapshot",
+        "component_summaries",
+        "stores_credentials",
+    ]:
+        assert needle in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+    for needle in [
+        "npm run frontier:lengthy:gate",
+        "ao2.frontier-lengthy-gate.v1",
+        "target/frontier-lengthy-gate/latest/summary.json",
+    ]:
+        assert needle in verification
