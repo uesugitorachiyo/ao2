@@ -8,6 +8,10 @@ Last verified: 2026-05-27
 npm run verify
 npm run build:release
 npm run package:local
+npm run phase1:prepare-prerequisites
+npm run phase1:promote
+AO2_PHASE1_DASHBOARD_SNAPSHOT=1 npm run phase1:promote
+npm run phase1:dashboard-snapshot
 npm run ci:local
 npm run ci:license-provenance
 npm run release:verify-provenance
@@ -49,8 +53,35 @@ Result:
   workflows, branch protection, latest `main` CI status in both public repos,
   and the local next-length verification commands; emits
   `ao2.release-readiness-local.v1`
+- `npm run phase1:promote`: prepares Phase 1 prerequisites, runs promotion
+  preflights, publishes to ao2-control-plane when
+  `AO2_PHASE1_CONTROL_PLANE_URL` is set, and may capture a dashboard snapshot
+  with `AO2_PHASE1_DASHBOARD_SNAPSHOT=1`
 - four cross-OS archives at v0.4.80 (macOS aarch64, Linux aarch64, Linux
   x86_64, Windows x86_64) all SHA256 + RSA signature verified
+
+## Phase 1 Promotion Token Boundary
+
+Before a local Phase 1 promotion, point AO2 at the self-hosted control plane and
+name the environment variable containing the local bearer token:
+
+```sh
+export AO2_PHASE1_CONTROL_PLANE_URL=http://127.0.0.1:3000
+export AO2_PHASE1_API_TOKEN_ENV=AO2_CP_API_TOKEN
+export AO2_CP_API_TOKEN=<redacted-local-token>
+npm run phase1:prepare-prerequisites
+npm run phase1:promote
+```
+
+AO2 passes the token as `--api-token-env AO2_CP_API_TOKEN`; do not put bearer
+token values in command-line arguments, URLs, tracked docs, or generated
+evidence. To include the read-only observer dashboard in the same local
+promotion evidence, run:
+
+```sh
+AO2_PHASE1_DASHBOARD_SNAPSHOT=1 npm run phase1:promote
+npm run phase1:dashboard-snapshot
+```
 
 Workspace test coverage:
 

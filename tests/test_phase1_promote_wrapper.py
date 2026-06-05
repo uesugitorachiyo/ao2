@@ -49,12 +49,9 @@ def test_phase1_dashboard_snapshot_wrapper_delegates_to_control_plane_helper_wit
 
 def test_operator_docs_explain_one_command_phase1_promotion_and_token_boundary():
     readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
-    status = (
-        REPO_ROOT
-        / "docs/status/20260530T020000Z-phase1-one-command-promotion.md"
-    ).read_text(encoding="utf-8")
+    verification = (REPO_ROOT / "docs/VERIFICATION.md").read_text(encoding="utf-8")
 
-    for doc in (readme, status):
+    for doc in (readme, verification):
         assert "npm run phase1:promote" in doc
         assert "phase1:prepare-prerequisites" in doc
         assert "--api-token-env AO2_CP_API_TOKEN" in doc
