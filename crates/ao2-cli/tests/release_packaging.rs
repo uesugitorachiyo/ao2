@@ -2612,7 +2612,7 @@ fn w4_release_workflows_include_no_factory_v3_guard_artifacts() {
 }
 
 #[test]
-fn ci_workflow_is_manual_only_while_release_gates_stay_manual() {
+fn ci_workflow_runs_on_public_changes_while_release_gates_stay_manual() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let ci = fs::read_to_string(root.join(".github/workflows/ci.yml"))
         .expect("normal CI workflow exists");
@@ -2623,9 +2623,11 @@ fn ci_workflow_is_manual_only_while_release_gates_stay_manual() {
             .expect("public release build workflow exists");
 
     assert!(ci.contains("workflow_dispatch:"));
-    assert!(!ci.contains("pull_request:"));
-    assert!(!ci.contains("\n  push:"));
-    assert!(!ci.contains("branches: [main]"));
+    assert!(ci.contains("pull_request:"));
+    assert!(ci.contains("\n  push:"));
+    assert!(ci.contains("branches: [main]"));
+    assert!(ci.contains("concurrency:"));
+    assert!(ci.contains("cancel-in-progress: true"));
     for approval_phase in [
         "phase: test-cli-approval-core",
         "phase: test-cli-approval-control-plane",

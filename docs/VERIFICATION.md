@@ -433,18 +433,18 @@ macOS-orchestrated three-platform release proof with direct Windows SSH, see
 
 ## GitHub CI Status
 
-Private repository:
+Public repository:
 
 ```text
 https://github.com/uesugitorachiyo/ao2
 ```
 
-The CI workflow is present at `.github/workflows/ci.yml` and is configured in
-git for manual `workflow_dispatch` only. The workflow is also disabled manually
-at the GitHub repository level because GitHub continued to create zero-job
-failed push runs after automatic triggers were removed. Local and self-hosted
-verification remain the active gates until the operator explicitly accepts
-hosted runner spend and re-enables `CI`.
+The CI workflow at `.github/workflows/ci.yml` runs on pull request and `main`
+push, and can also be dispatched manually. Release workflows stay explicit
+operator gates: `.github/workflows/release-gate.yml` and
+`.github/workflows/public-release-build.yml` use `workflow_dispatch` only.
+Local and self-hosted verification remain valid pre-release evidence, but public
+hosted CI is the default regression guard for ordinary changes.
 
 ## Current Production Readiness Boundary
 
