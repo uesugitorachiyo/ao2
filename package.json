@@ -46,6 +46,7 @@
     "release:readiness": "node scripts/run-sh-script.js scripts/release-readiness.sh",
     "release:readiness:static": "node scripts/run-sh-script.js scripts/release-readiness.sh --static-only",
     "release:readiness:full": "node scripts/run-sh-script.js scripts/release-readiness.sh --full",
+    "pulse:local-mirror": "node scripts/run-sh-script.js scripts/pulse-local-mirror.sh",
     "ci:license-provenance": "node scripts/run-sh-script.js scripts/license-provenance-gate.sh",
     "ci:local": "node scripts/run-sh-script.js scripts/local-ci.sh",
     "verify": "cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings",

@@ -26,6 +26,16 @@ npm run gate:full            # 3-stage ready-to-ship gate (guard + replacement +
 scripts/smoke-release-archives.sh
 ```
 
+Pulse event-loop evidence written under `target/pulse-next-recommended-tasks`
+is local and ignored, but it can be removed by `cargo clean`. When preserving a
+local chain across cleanup, mirror the same packet, board, executor evidence,
+and `pulse-eval-loop.json` under `.ao2-local/pulse/`; that path is also local
+and ignored, but is outside Cargo's build directory:
+
+```sh
+npm run pulse:local-mirror
+```
+
 Result:
 
 - `cargo fmt --all -- --check`: passed

@@ -27,6 +27,10 @@ jobs:
             timeout_minutes: 10
             command: cargo fmt --all -- --check
           - os: ubuntu-latest
+            phase: python-guard-tests
+            timeout_minutes: 5
+            command: python3 -m pip install pytest && PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py tests/test_phase1_promote_wrapper.py -q
+          - os: ubuntu-latest
             phase: test-workspace-non-cli
             timeout_minutes: 30
             command: cargo test --workspace --exclude ao2-cli

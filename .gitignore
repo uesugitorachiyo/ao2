@@ -11,6 +11,7 @@
 /.ao2/runs/
 /.ao2/control-plane/
 /.ao2/memory/
+/.ao2-local/
 **/.ao2/runs/
 **/.ao2/control-plane/
 **/.ao2/memory/
