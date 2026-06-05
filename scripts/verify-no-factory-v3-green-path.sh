@@ -79,6 +79,10 @@ def classify(rel: str, line: str) -> tuple[bool, str]:
         "no-factory-v3" in line or "no_factory_v3" in line or "no factory-v3" in line
     ):
         return True, "guardrail_invocation"
+    if rel.startswith("scripts/") and (
+        "verify:no-factory-v3" in line or "no_factory_v3" in line or "no factory-v3" in line
+    ):
+        return True, "guardrail_invocation"
     if rel.startswith("scripts/parity-oracle-fixtures/"):
         return True, "parity_oracle_fixture"
     if rel.startswith("scripts/parity-oracle-snapshots/"):
