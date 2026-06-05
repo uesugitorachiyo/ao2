@@ -271,6 +271,11 @@ dashboard_json="$AO2_PHASE1_CP_SMOKE_ROOT/phase1-dashboard.json"
 dashboard_html="$AO2_PHASE1_CP_SMOKE_ROOT/phase1-dashboard.html"
 operator_panel_json="$AO2_PHASE1_CP_SMOKE_ROOT/phase1-operator-panel.json"
 operator_panel_html="$AO2_PHASE1_CP_SMOKE_ROOT/phase1-operator-panel.html"
+operator_support_bundle_json="$AO2_PHASE1_CP_SMOKE_ROOT/phase1-operator-support-bundle.json"
+operator_support_bundle_download_json="$AO2_PHASE1_CP_SMOKE_ROOT/phase1-operator-support-bundle-download.json"
+operator_support_bundle_checksums="$AO2_PHASE1_CP_SMOKE_ROOT/phase1-operator-support-bundle-SHA256SUMS"
+operator_support_bundle_verify_html="$AO2_PHASE1_CP_SMOKE_ROOT/phase1-operator-support-bundle-verify.html"
+operator_support_bundle_verify_json="$AO2_PHASE1_CP_SMOKE_ROOT/phase1-operator-support-bundle-verify.json"
 summary_json="$AO2_PHASE1_CP_SMOKE_ROOT/phase1-control-plane-readback-summary.json"
 server_log="$AO2_PHASE1_CP_SMOKE_ROOT/ao2-cp-server.log"
 server_err="$AO2_PHASE1_CP_SMOKE_ROOT/ao2-cp-server.err"
@@ -353,9 +358,21 @@ curl -fsS -H "$auth_header" "$AO2_PHASE1_CP_BASE_URL/api/v1/phase1/promotion/das
 curl -fsS -H "$auth_header" "$AO2_PHASE1_CP_BASE_URL/api/v1/phase1/promotion/dashboard" -o "$dashboard_html"
 curl -fsS -H "$auth_header" "$AO2_PHASE1_CP_BASE_URL/api/v1/phase1/promotion/operator-panel.json" -o "$operator_panel_json"
 curl -fsS -H "$auth_header" "$AO2_PHASE1_CP_BASE_URL/api/v1/phase1/promotion/operator-panel" -o "$operator_panel_html"
+curl -fsS -H "$auth_header" "$AO2_PHASE1_CP_BASE_URL/api/v1/phase1/promotion/operator-support-bundle.json" -o "$operator_support_bundle_json"
+curl -fsS -H "$auth_header" "$AO2_PHASE1_CP_BASE_URL/api/v1/phase1/promotion/operator-support-bundle/download" -o "$operator_support_bundle_download_json"
+curl -fsS -H "$auth_header" "$AO2_PHASE1_CP_BASE_URL/api/v1/phase1/promotion/operator-support-bundle/SHA256SUMS" -o "$operator_support_bundle_checksums"
+curl -fsS -H "$auth_header" -H "Content-Type: application/json" \
+  --data-binary "@$operator_support_bundle_download_json" \
+  "$AO2_PHASE1_CP_BASE_URL/api/v1/phase1/promotion/operator-support-bundle/verify" \
+  -o "$operator_support_bundle_verify_html"
+curl -fsS -H "$auth_header" -H "Content-Type: application/json" \
+  --data-binary "@$operator_support_bundle_download_json" \
+  "$AO2_PHASE1_CP_BASE_URL/api/v1/phase1/promotion/operator-support-bundle/verify.json" \
+  -o "$operator_support_bundle_verify_json"
 
-node - "$publish_json" "$history_json" "$latest_decision_json" "$signature_json" "$dashboard_json" "$operator_panel_json" "$summary_json" "$AO2_PHASE1_CP_BASE_URL" "$AO2_PHASE1_DECISION" <<'NODE'
+node - "$publish_json" "$history_json" "$latest_decision_json" "$signature_json" "$dashboard_json" "$operator_panel_json" "$operator_support_bundle_json" "$operator_support_bundle_download_json" "$operator_support_bundle_checksums" "$operator_support_bundle_verify_json" "$summary_json" "$AO2_PHASE1_CP_BASE_URL" "$AO2_PHASE1_DECISION" <<'NODE'
 const fs = require('fs');
+const crypto = require('crypto');
 const [
   publishPath,
   historyPath,
@@ -363,6 +380,10 @@ const [
   signaturePath,
   dashboardPath,
   operatorPanelPath,
+  operatorSupportBundlePath,
+  operatorSupportBundleDownloadPath,
+  operatorSupportBundleChecksumsPath,
+  operatorSupportBundleVerifyPath,
   summaryPath,
   baseUrl,
   decisionPath,
@@ -384,6 +405,10 @@ const latestDecision = read(latestDecisionPath);
 const signature = read(signaturePath);
 const dashboard = read(dashboardPath);
 const panel = read(operatorPanelPath);
+const operatorSupportBundle = read(operatorSupportBundlePath);
+const operatorSupportBundleDownload = read(operatorSupportBundleDownloadPath);
+const operatorSupportBundleVerify = read(operatorSupportBundleVerifyPath);
+const operatorSupportBundleChecksums = fs.readFileSync(operatorSupportBundleChecksumsPath, 'utf8');
 
 assert(publish.schema_version === 'ao2.phase1-promotion-decision-control-plane-publish.v1', 'unexpected publish schema');
 assert(publish.signed === true, 'publish result must be signed');
@@ -401,7 +426,20 @@ assert((dashboard.decision_artifact.governed_run_evidence_count || 0) >= 3, 'das
 assert(dashboard.decision_artifact.signature && dashboard.decision_artifact.signature.signature_verified === true, 'dashboard must show verified decision signature');
 assert(panel.schema_version === 'ao2.cp-phase1-operator-panel.v1', 'operator panel schema mismatch');
 assert(panel.badges && panel.badges.decision_mode === 'governed_run_primary', 'operator panel must show governed_run_primary');
-assert(JSON.stringify({publish, history, latestDecision, signature, dashboard, panel}).indexOf('Bearer ') === -1, 'bearer token leaked into artifacts');
+assert(operatorSupportBundle.schema_version === 'ao2.cp-phase1-operator-support-bundle.v1', 'operator support bundle schema mismatch');
+assert(operatorSupportBundleDownload.schema_version === 'ao2.cp-phase1-operator-support-bundle.v1', 'operator support bundle download schema mismatch');
+assert(operatorSupportBundle.trust_boundary && operatorSupportBundle.trust_boundary.role === 'read_only_observer', 'operator support bundle trust boundary mismatch');
+assert(operatorSupportBundle.mutates_ao_artifacts === false, 'operator support bundle must not mutate AO artifacts');
+assert(operatorSupportBundleVerify.schema_version === 'ao2.cp-phase1-operator-support-bundle-verification.v1', 'operator support bundle verification schema mismatch');
+assert(operatorSupportBundleVerify.status === 'verified', 'operator support bundle verification must pass');
+assert(operatorSupportBundleChecksums.includes('ao2.cp-phase1-operator-support-bundle-checksums.v1'), 'operator support bundle checksums schema missing');
+assert(operatorSupportBundleChecksums.includes('ao2-phase1-operator-support-bundle.json'), 'operator support bundle checksums filename missing');
+const supportBundleDownloadSha256 = crypto.createHash('sha256')
+  .update(fs.readFileSync(operatorSupportBundleDownloadPath))
+  .digest('hex');
+assert(operatorSupportBundleChecksums.includes(`${supportBundleDownloadSha256}  ao2-phase1-operator-support-bundle.json`), 'operator support bundle checksum mismatch');
+assert(JSON.stringify({publish, history, latestDecision, signature, dashboard, panel, operatorSupportBundle, operatorSupportBundleDownload, operatorSupportBundleVerify}).indexOf('Bearer ') === -1, 'bearer token leaked into artifacts');
+assert(operatorSupportBundleChecksums.indexOf('Bearer ') === -1, 'bearer token leaked into operator support bundle checksums');
 
 const summary = {
   schema_version: 'ao2.phase1-control-plane-readback-smoke.v1',
@@ -414,6 +452,14 @@ const summary = {
   dashboard_decision_mode: dashboard.decision_artifact.decision_mode,
   governed_run_evidence_count: dashboard.decision_artifact.governed_run_evidence_count,
   signature_verified: signature.signature.signature_verified,
+  operator_support_bundle: {
+    schema_version: operatorSupportBundle.schema_version,
+    verification_schema_version: operatorSupportBundleVerify.schema_version,
+    verification_status: operatorSupportBundleVerify.status,
+    checksums_schema_version: 'ao2.cp-phase1-operator-support-bundle-checksums.v1',
+    download_sha256: supportBundleDownloadSha256,
+    trust_boundary: operatorSupportBundle.trust_boundary,
+  },
   history_counts: history.counts,
   trust_boundary: {
     role: 'read_only_observer',
@@ -426,7 +472,11 @@ const summary = {
     latest_decision: latestDecisionPath,
     signature: signaturePath,
     dashboard: dashboardPath,
-    operator_panel: operatorPanelPath
+    operator_panel: operatorPanelPath,
+    operator_support_bundle: operatorSupportBundlePath,
+    operator_support_bundle_download: operatorSupportBundleDownloadPath,
+    operator_support_bundle_checksums: operatorSupportBundleChecksumsPath,
+    operator_support_bundle_verify: operatorSupportBundleVerifyPath
   }
 };
 fs.writeFileSync(summaryPath, `${JSON.stringify(summary, null, 2)}\n`);
@@ -434,6 +484,7 @@ NODE
 
 grep -q 'governed_run_primary' "$dashboard_html"
 grep -q 'governed_run_primary' "$operator_panel_html"
+grep -q 'verified' "$operator_support_bundle_verify_html"
 
 printf "phase1_control_plane_readback_root=%s\n" "$AO2_PHASE1_CP_SMOKE_ROOT"
 printf "phase1_control_plane_readback_summary=%s\n" "$summary_json"
@@ -441,4 +492,6 @@ printf "phase1_control_plane_readback_publish=%s\n" "$publish_json"
 printf "phase1_control_plane_readback_history=%s\n" "$history_json"
 printf "phase1_control_plane_readback_dashboard=%s\n" "$dashboard_json"
 printf "phase1_control_plane_readback_operator_panel=%s\n" "$operator_panel_json"
+printf "phase1_control_plane_readback_operator_support_bundle=%s\n" "$operator_support_bundle_json"
+printf "phase1_control_plane_readback_operator_support_bundle_verify=%s\n" "$operator_support_bundle_verify_json"
 printf "phase1_control_plane_readback=passed\n"

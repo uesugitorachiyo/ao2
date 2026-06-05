@@ -22,6 +22,7 @@ npm run risky-pr:golden      # local Risky PR Run golden path with report/cockpi
 npm run smoke:evidence-control-plane # signed evidence-pack publish/readback contract smoke
 npm run smoke:phase1-operator-golden # signed Phase 1 publish/readback/dashboard smoke
 npm run release:readiness    # local release-readiness guardrails for AO2 + control-plane
+npm run release:readiness:regression-gate # local static/smoke/Pulse/control-plane evidence gate
 npm run gate:full            # 3-stage ready-to-ship gate (guard + replacement + release-gate)
 scripts/smoke-release-archives.sh
 ```
@@ -35,6 +36,11 @@ and ignored, but is outside Cargo's build directory:
 ```sh
 npm run pulse:local-mirror
 ```
+
+The mirror also writes `.ao2-local/pulse/latest/resume.json` and
+`.ao2-local/pulse/latest/resume-command.sh` with the latest
+`pulse-eval-loop.json` digest so a later local event-loop run can resume the
+chain after `target/` cleanup.
 
 Result:
 
@@ -62,12 +68,17 @@ Result:
   and verifies the control-plane remains a read-only observer
 - `npm run smoke:phase1-operator-golden`: runs the signed Phase 1 decision
   publish/readback path against a local control-plane instance, checks the
-  dashboard and operator panel, and emits
+  dashboard, operator panel, and Phase 1 operator support bundle verification,
+  and emits
   `ao2.phase1-operator-golden-path-smoke.v1`
 - `npm run release:readiness`: checks public CI triggers, manual release
   workflows, branch protection, latest `main` CI status in both public repos,
   and the local next-length verification commands; emits
   `ao2.release-readiness-local.v1` plus local `report.md` and `report.html`
+- `npm run release:readiness:regression-gate`: runs static release readiness,
+  Phase 1 operator golden-path smoke, Pulse local mirror, and the
+  ao2-control-plane long-lived smoke into one local evidence bundle; emits
+  `ao2.release-readiness-regression-gate.v1`
 - `npm run phase1:promote`: prepares Phase 1 prerequisites, runs promotion
   preflights, publishes to ao2-control-plane when
   `AO2_PHASE1_CONTROL_PLANE_URL` is set, and may capture a dashboard snapshot

@@ -29,7 +29,9 @@ jobs:
           - os: ubuntu-latest
             phase: python-guard-tests
             timeout_minutes: 5
-            command: python3 -m pip install pytest && PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py tests/test_phase1_promote_wrapper.py -q
+            # Equivalent focused command:
+            # PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py tests/test_phase1_promote_wrapper.py -q
+            command: python3 -m pip install pytest && scripts/ci-python-guard-artifacts.sh
           - os: ubuntu-latest
             phase: test-workspace-non-cli
             timeout_minutes: 30
@@ -460,6 +462,14 @@ jobs:
         shell: bash
         run: ${{ matrix.command }}
 
+      - name: Upload Python guard artifacts
+        if: matrix.phase == 'python-guard-tests'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-python-guard-${{ matrix.os }}
+          path: target/ci-artifacts/python-guard-tests
+          if-no-files-found: error
+
       - name: Upload ao2 binary
         if: matrix.phase == 'build-release'
         uses: actions/upload-artifact@v7.0.1
@@ -469,6 +479,27 @@ jobs:
             target/release/ao2
             target/release/ao2.exe
           if-no-files-found: ignore
+
+  release-readiness-artifacts:
+    name: Release readiness artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Run static release readiness
+        shell: bash
+        run: |
+          AO2_RELEASE_READINESS_ROOT=target/release-readiness-ci \
+            scripts/release-readiness.sh --static-only
+      - name: Upload release-readiness artifacts
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-release-readiness
+          path: target/release-readiness-ci
+          if-no-files-found: error
 
   deny:
     name: Cargo deny (supply chain)

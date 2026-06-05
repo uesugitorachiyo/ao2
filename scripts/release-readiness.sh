@@ -59,6 +59,7 @@ for name in [
     "risky-pr:golden",
     "release:readiness",
     "release:readiness:static",
+    "release:readiness:regression-gate",
     "smoke:evidence-control-plane",
 ]:
     add(f"package_script:{name}", "passed" if name in scripts else "failed", scripts.get(name, "missing"))

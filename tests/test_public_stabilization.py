@@ -266,3 +266,93 @@ def test_pulse_local_mirror_script_is_exposed_and_ignored():
     assert "ao2.pulse-local-mirror.v1" in text
     assert "OPENAI_API_KEY" not in text
     assert "ANTHROPIC_API_KEY" not in text
+
+
+def test_ci_uploads_guard_and_release_readiness_artifacts():
+    package_json = json.loads(read("package.json"))
+    ci = read(".github/workflows/ci.yml")
+
+    assert (
+        package_json["scripts"]["release:readiness:regression-gate"]
+        == "node scripts/run-sh-script.js scripts/release-readiness-regression-gate.sh"
+    )
+    assert "scripts/ci-python-guard-artifacts.sh" in ci
+    assert "Upload Python guard artifacts" in ci
+    assert "ao2-python-guard-${{ matrix.os }}" in ci
+    assert "target/ci-artifacts/python-guard-tests" in ci
+    assert "release-readiness-artifacts" in ci
+    assert "Upload release-readiness artifacts" in ci
+    assert "ao2-release-readiness" in ci
+    assert "target/release-readiness-ci" in ci
+
+    for script_name in [
+        "ci-python-guard-artifacts.sh",
+        "release-readiness-regression-gate.sh",
+    ]:
+        script = REPO_ROOT / "scripts" / script_name
+        assert script.is_file()
+        assert script.stat().st_mode & stat.S_IXUSR
+
+
+def test_phase1_operator_support_bundle_smoke_contract():
+    readback_script = read("scripts/smoke-phase1-control-plane-readback.sh")
+    golden_script = read("scripts/smoke-phase1-operator-golden-path.sh")
+
+    for endpoint in [
+        "/api/v1/phase1/promotion/operator-support-bundle.json",
+        "/api/v1/phase1/promotion/operator-support-bundle/download",
+        "/api/v1/phase1/promotion/operator-support-bundle/SHA256SUMS",
+        "/api/v1/phase1/promotion/operator-support-bundle/verify",
+        "/api/v1/phase1/promotion/operator-support-bundle/verify.json",
+    ]:
+        assert endpoint in readback_script
+
+    for needle in [
+        "operator_support_bundle",
+        "ao2.cp-phase1-operator-support-bundle.v1",
+        "ao2.cp-phase1-operator-support-bundle-verification.v1",
+        "ao2.cp-phase1-operator-support-bundle-checksums.v1",
+    ]:
+        assert needle in readback_script
+        assert needle in golden_script
+
+
+def test_release_readiness_regression_gate_contract():
+    package_json = json.loads(read("package.json"))
+    script = REPO_ROOT / "scripts" / "release-readiness-regression-gate.sh"
+
+    assert (
+        package_json["scripts"]["release:readiness:regression-gate"]
+        == "node scripts/run-sh-script.js scripts/release-readiness-regression-gate.sh"
+    )
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.release-readiness-regression-gate.v1",
+        "release:readiness:static",
+        "smoke:phase1-operator-golden",
+        "pulse:local-mirror",
+        "../ao2-control-plane/scripts/smoke-long-lived-dev.sh",
+        "control_plane_long_lived_smoke",
+        "phase1_operator_golden",
+        "pulse_local_mirror",
+    ]:
+        assert needle in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+
+def test_pulse_local_mirror_resume_command_contract():
+    text = read("scripts/pulse-local-mirror.sh")
+
+    for needle in [
+        "resume.json",
+        "resume-command.sh",
+        "pulse_eval_loop_sha256",
+        "pulse_eval_loop_path",
+        "ao2 pulse eval-loop run --chain",
+        "ao2.pulse-local-mirror-resume.v1",
+    ]:
+        assert needle in text
