@@ -39,6 +39,7 @@ jobs:
           npm run pulse:resume -- --dry-run
           ../ao2-control-plane/scripts/cp-dr-restore-drill.sh --negative-only --work-dir ../ao2-control-plane/target/dr-restore-drill/local-canary --out ../ao2-control-plane/target/dr-restore-drill/local-canary/dr-restore-report.json
           npm run artifacts:index
+          npm run artifacts:health
 
       - name: Upload local canary artifacts
         uses: actions/upload-artifact@v7.0.1
@@ -47,6 +48,10 @@ jobs:
           path: |
             ao2/target/release-artifact-consumer-smoke
             ao2/target/artifact-index
+            ao2/target/artifact-index/latest/artifact-index.json
+            ao2/target/artifact-index/latest/dashboard.html
+            ao2/target/artifact-health
             ao2/target/pulse-resume
             ao2/.ao2-local/pulse
             ao2-control-plane/target/dr-restore-drill/local-canary
+            ao2-control-plane/target/dr-restore-drill/local-canary/dr-restore-report.json

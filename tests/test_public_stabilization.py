@@ -514,3 +514,60 @@ def test_real_artifact_consumer_dashboard_pulse_execute_and_manual_canary_contra
         "ao2.artifact-evidence-dashboard.v1",
     ]:
         assert needle in verification
+
+
+def test_artifact_health_local_canary_bundle_and_pulse_execute_simulation_contracts():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["artifacts:health"]
+        == "node scripts/run-sh-script.js scripts/artifact-evidence-health.sh"
+    )
+
+    health_script = REPO_ROOT / "scripts" / "artifact-evidence-health.sh"
+    assert health_script.is_file()
+    assert health_script.stat().st_mode & stat.S_IXUSR
+    health = health_script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.artifact-evidence-health.v1",
+        "artifact-index.json",
+        "failing_bundles",
+        "missing_bundles",
+        "stale_bundles",
+        "empty_bundles",
+        "target/artifact-health/latest",
+        "stores_credentials",
+    ]:
+        assert needle in health
+    assert "OPENAI_API_KEY" not in health
+    assert "ANTHROPIC_API_KEY" not in health
+
+    pulse_resume = read("scripts/pulse-resume.sh")
+    for needle in [
+        "--resume-json",
+        "simulation",
+        "simulation_executed",
+        "simulation_output_path",
+        "ao2.pulse-execute-simulation.v1",
+    ]:
+        assert needle in pulse_resume
+
+    workflow = read(".github/workflows/local-canary.yml")
+    for needle in [
+        "npm run artifacts:health",
+        "ao2/target/artifact-health",
+        "ao2/target/artifact-index/latest/artifact-index.json",
+        "ao2/target/artifact-index/latest/dashboard.html",
+        "ao2-control-plane/target/dr-restore-drill/local-canary/dr-restore-report.json",
+    ]:
+        assert needle in workflow
+
+    for needle in [
+        "npm run artifacts:health",
+        "ao2.artifact-evidence-health.v1",
+        "target/artifact-health/latest/summary.json",
+        "Pulse execute simulation",
+        "ao2.pulse-execute-simulation.v1",
+    ]:
+        assert needle in verification
