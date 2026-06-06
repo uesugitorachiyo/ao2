@@ -1,0 +1,175 @@
+{
+  "schema_version": "ao2.pulse-lengthy-gates-manifest.v1",
+  "trust_boundary": {
+    "local_only": true,
+    "stores_credentials": false,
+    "side_effects": "runner_blocks_missing_commands_before_execution"
+  },
+  "gates": [
+    {
+      "id": "operator-readiness",
+      "replaces": "scripts/operator-readiness-lengthy-gate.sh",
+      "disposition": "preserve_then_consolidate",
+      "commands": [
+        "control-plane:local-bootstrap",
+        "release:real-install-update-drill",
+        "workbench:operator-cockpit-uat",
+        "control-plane:retention-audit-load",
+        "provider:pilot-readiness-dashboard",
+        "release:public-ship-rehearsal"
+      ]
+    },
+    {
+      "id": "pulse-continuation",
+      "replaces": "scripts/pulse-continuation-lengthy-gate.sh",
+      "disposition": "preserve_then_consolidate",
+      "commands": [
+        "release:cross-os-attestation",
+        "control-plane:fleet-soak",
+        "provider:live-pilot-corpus",
+        "workbench:visual-regression",
+        "release:public-ship-dry-run"
+      ]
+    },
+    {
+      "id": "pulse-autonomy",
+      "replaces": "scripts/pulse-autonomy-lengthy-gate.sh",
+      "disposition": "preserve_then_consolidate",
+      "commands": [
+        "release:asset-publication-readiness",
+        "pulse:resume-real-execution-audit",
+        "control-plane:source-registry-hardening",
+        "provider:budget-score-regression",
+        "evidence:dashboard-accessibility-audit"
+      ]
+    },
+    {
+      "id": "pulse-closure",
+      "replaces": "scripts/pulse-closure-lengthy-gate.sh",
+      "disposition": "preserve_then_consolidate",
+      "commands": [
+        "release:publish-blocker-closure-drill",
+        "pulse:chain-gc-proof",
+        "control-plane:history-export-uat",
+        "provider:score-budget-workbench-uat",
+        "evidence:dashboard-browser-qa"
+      ]
+    },
+    {
+      "id": "pulse-publish-simulation",
+      "replaces": "scripts/pulse-publish-simulation-lengthy-gate.sh",
+      "disposition": "preserve_then_consolidate",
+      "commands": [
+        "release:artifact-publish-simulation",
+        "pulse:multi-loop-soak",
+        "control-plane:operator-recovery-drill",
+        "provider:workbench-live-preview-hardening",
+        "evidence:browser-backed-dashboard-qa"
+      ]
+    },
+    {
+      "id": "pulse-candidate",
+      "replaces": "scripts/pulse-candidate-lengthy-gate.sh",
+      "disposition": "preserve_then_consolidate",
+      "commands": [
+        "release:candidate-binary-diff-audit",
+        "pulse:autonomous-retry-recovery",
+        "control-plane:disaster-recovery-tabletop",
+        "provider:pilot-command-safety-audit",
+        "evidence:dashboard-screenshot-regression-suite"
+      ]
+    },
+    {
+      "id": "pulse-cutover",
+      "replaces": "scripts/pulse-cutover-lengthy-gate.sh",
+      "disposition": "preserve_then_consolidate",
+      "commands": [
+        "release:cutover-readiness-lock",
+        "pulse:retry-failure-matrix",
+        "control-plane:dr-runbook-export",
+        "provider:pilot-safety-regression-matrix",
+        "evidence:dashboard-visual-baseline-lock"
+      ]
+    },
+    {
+      "id": "pulse-consolidation",
+      "replaces": "scripts/pulse-consolidation-lengthy-gate.sh",
+      "disposition": "preserve_then_consolidate",
+      "commands": [
+        "pulse:shared-gate-lib-audit",
+        "public:hardening",
+        "evidence:operator-index",
+        "scripts:tracking-intent-audit",
+        "pulse:next-task-quality-filter"
+      ]
+    },
+    {
+      "id": "pulse-useful",
+      "replaces": "scripts/pulse-useful-lengthy-gate.sh",
+      "disposition": "preserve_then_consolidate",
+      "commands": [
+        "pulse:shared-gate-library-migration",
+        "public:hardening-ci-workflow",
+        "evidence:operator-index-control-plane-smoke",
+        "scripts:tracking-decision-cleanup",
+        "pulse:quality-filter-enforcement"
+      ]
+    },
+    {
+      "id": "pulse-followup",
+      "replaces": "scripts/pulse-followup-lengthy-gate.sh",
+      "disposition": "preserve_then_consolidate",
+      "commands": [
+        "pulse:apply-shared-gate-helper-to-release-gates",
+        "public:hardening-workflow-file-dry-run",
+        "evidence:operator-index-control-plane-readback-drill",
+        "scripts:tracking-review-pack",
+        "pulse:quality-filter-negative-corpus"
+      ]
+    },
+    {
+      "id": "pulse-required",
+      "replaces": "scripts/pulse-required-lengthy-gate.sh",
+      "disposition": "preserve_then_consolidate",
+      "commands": [
+        "release:helper-migration-actual-patch",
+        "public:hardening-workflow-tracked-proposal",
+        "evidence:operator-index-control-plane-fixture-ingest",
+        "scripts:tracking-review-to-commit-plan",
+        "pulse:quality-filter-required-gate"
+      ]
+    },
+    {
+      "id": "pulse-quality-hardening",
+      "replaces": "scripts/pulse-quality-hardening-lengthy-gate.sh",
+      "disposition": "preserve_then_consolidate",
+      "commands": [
+        "release:helper-migration-broader-rollout",
+        "public:hardening-ci-local-runner-parity",
+        "control-plane:fixture-consumer-smoke",
+        "scripts:tracking-commit-ready-diff",
+        "pulse:registration-quality-hardening"
+      ]
+    },
+    {
+      "id": "pulse-final-sweep",
+      "replaces": "scripts/pulse-final-sweep-lengthy-gate.sh",
+      "disposition": "preserve_then_consolidate",
+      "commands": [
+        "release:helper-migration-final-sweep",
+        "public:hardening-workflow-materialization-review",
+        "control-plane:fixture-negative-corpus",
+        "scripts:tracking-ready-review-pack",
+        "pulse:registration-blocking-regression"
+      ]
+    },
+    {
+      "id": "release-helper-migration-final-sweep",
+      "replaces": "scripts/release-helper-migration-final-sweep.sh",
+      "disposition": "preserve_then_consolidate",
+      "commands": [
+        "release:helper-migration-broader-rollout"
+      ]
+    }
+  ]
+}
