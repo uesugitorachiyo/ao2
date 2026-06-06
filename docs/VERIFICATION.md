@@ -46,6 +46,8 @@ npm run pulse:terminal-eval-loop-schema-compatibility # normalize script packets
 npm run pulse:auto-advance-runner-contract # static contract for the local auto-advance runner
 npm run pulse:stop-and-dedup-ledger # stop signal and duplicate digest ledger evidence
 npm run pulse:auto-advance-integration-gate # composed auto-advance restart gate
+npm run pulse:lengthy-gate:contract # static contract for the manifest-driven lengthy gate runner
+npm run pulse:lengthy-gate -- --gate pulse-consolidation # run one promoted lengthy gate by manifest id
 npm run pulse:next-task-quality-filter # next task quality filter
 npm run pulse:quality-filter-negative-corpus # Pulse quality filter negative fixtures
 npm run pulse:quality-filter-required-gate # required Pulse quality gate boundary evidence
@@ -112,6 +114,19 @@ conditions, and per-candidate `strategic_score` metadata. `npm run
 pulse:daemon:start` runs the forever loop through launchctl or a detached tmux
 fallback; `npm run pulse:daemon:status` emits `ao2.pulse-daemon.v1` at
 `target/pulse-daemon/latest/summary.json`.
+
+The Pulse lengthy-gate surface is manifest-driven so local RSI follow-up
+wrappers can be preserved before promotion without adding one public command per
+wrapper. `scripts/pulse-lengthy-gates-manifest.json` records the preserved
+wrapper names, disposition, and npm command sequence for each consolidated
+gate. `npm run pulse:lengthy-gate:contract` validates the
+`ao2.pulse-lengthy-gates-manifest.v1` manifest and writes
+`ao2.pulse-lengthy-gate-runner.v1` evidence under
+`target/pulse-lengthy-gate/latest/summary.json`. `npm run pulse:lengthy-gate --
+--gate <id>` runs only a named promoted gate; if a manifest command is not
+exposed in `package.json`, the runner blocks before execution and reports
+`missing_package_commands`. The runner is local-only, stores no credentials,
+does not delete files, and does not push.
 
 
 The mirror also writes `.ao2-local/pulse/latest/resume.json` and

@@ -113,6 +113,8 @@
     "pulse:resume-workspace-cli-fallback": "node scripts/run-sh-script.js scripts/pulse-resume-workspace-cli-fallback.sh",
     "pulse:stop-and-dedup-ledger": "node scripts/run-sh-script.js scripts/pulse-stop-and-dedup-ledger.sh",
     "pulse:terminal-eval-loop-schema-compatibility": "node scripts/run-sh-script.js scripts/pulse-terminal-eval-loop-schema-compatibility.sh",
+    "pulse:lengthy-gate": "node scripts/run-sh-script.js scripts/pulse-lengthy-gate-runner.sh",
+    "pulse:lengthy-gate:contract": "node scripts/run-sh-script.js scripts/pulse-lengthy-gate-runner.sh --contract",
     "release:artifact-publish-simulation": "node scripts/run-sh-script.js scripts/release-artifact-publish-simulation.sh",
     "release:asset-publication-readiness": "node scripts/run-sh-script.js scripts/release-asset-publication-readiness.sh",
     "release:candidate-binary-diff-audit": "node scripts/run-sh-script.js scripts/release-candidate-binary-diff-audit.sh",

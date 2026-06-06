@@ -1637,3 +1637,86 @@ def test_frontier_lengthy_gate_contract():
         "target/frontier-lengthy-gate/latest/summary.json",
     ]:
         assert needle in verification
+
+
+def test_pulse_lengthy_gate_runner_is_exposed_and_contract_safe():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["pulse:lengthy-gate"]
+        == "node scripts/run-sh-script.js scripts/pulse-lengthy-gate-runner.sh"
+    )
+    assert (
+        package_json["scripts"]["pulse:lengthy-gate:contract"]
+        == "node scripts/run-sh-script.js scripts/pulse-lengthy-gate-runner.sh --contract"
+    )
+
+    runner = REPO_ROOT / "scripts" / "pulse-lengthy-gate-runner.sh"
+    manifest_path = REPO_ROOT / "scripts" / "pulse-lengthy-gates-manifest.json"
+    assert runner.is_file()
+    assert runner.stat().st_mode & stat.S_IXUSR
+    assert manifest_path.is_file()
+
+    runner_text = runner.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.pulse-lengthy-gate-runner.v1",
+        "missing_package_commands",
+        "--contract",
+        "--gate",
+        "--list",
+        "stores_credentials",
+        "deletes_files",
+        "pushes",
+        'status in {"blocked", "failed"}',
+    ]:
+        assert needle in runner_text
+    assert "OPENAI_API_KEY" not in runner_text
+    assert "ANTHROPIC_API_KEY" not in runner_text
+    assert "gh release create" not in runner_text
+    assert "git push origin" not in runner_text
+
+    for needle in [
+        "npm run pulse:lengthy-gate:contract",
+        "npm run pulse:lengthy-gate -- --gate",
+        "ao2.pulse-lengthy-gates-manifest.v1",
+        "ao2.pulse-lengthy-gate-runner.v1",
+        "manifest-driven",
+        "missing_package_commands",
+    ]:
+        assert needle in verification
+
+
+def test_pulse_lengthy_gate_manifest_preserves_wrapper_intent_without_private_auth():
+    manifest = json.loads(read("scripts/pulse-lengthy-gates-manifest.json"))
+
+    assert manifest["schema_version"] == "ao2.pulse-lengthy-gates-manifest.v1"
+    assert manifest["trust_boundary"]["local_only"] is True
+    assert manifest["trust_boundary"]["stores_credentials"] is False
+    assert manifest["trust_boundary"]["side_effects"] == (
+        "runner_blocks_missing_commands_before_execution"
+    )
+    assert len(manifest["gates"]) >= 10
+
+    replacements = {gate["replaces"] for gate in manifest["gates"]}
+    assert "scripts/pulse-consolidation-lengthy-gate.sh" in replacements
+    assert "scripts/pulse-useful-lengthy-gate.sh" in replacements
+    assert "scripts/pulse-final-sweep-lengthy-gate.sh" in replacements
+
+    text = json.dumps(manifest, sort_keys=True)
+    for forbidden in [
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "/Users/torachiyouesugi/Documents/private",
+        "target/long-lived-control-plane/api-token",
+        "gh release create",
+        "git push origin",
+    ]:
+        assert forbidden not in text
+
+    for gate in manifest["gates"]:
+        assert gate["disposition"] == "preserve_then_consolidate"
+        assert gate["replaces"].startswith("scripts/")
+        assert gate["replaces"].endswith(".sh")
+        assert gate["commands"]
+        assert all(isinstance(command, str) for command in gate["commands"])
