@@ -1720,3 +1720,71 @@ def test_pulse_lengthy_gate_manifest_preserves_wrapper_intent_without_private_au
         assert gate["replaces"].endswith(".sh")
         assert gate["commands"]
         assert all(isinstance(command, str) for command in gate["commands"])
+
+
+def test_pulse_consolidation_manifest_gate_is_promoted_to_public_scripts():
+    package_json = json.loads(read("package.json"))
+    manifest = json.loads(read("scripts/pulse-lengthy-gates-manifest.json"))
+    gate = next(item for item in manifest["gates"] if item["id"] == "pulse-consolidation")
+
+    expected_scripts = {
+        "pulse:shared-gate-lib-audit": "node scripts/run-sh-script.js scripts/pulse-shared-gate-lib-audit.sh",
+        "public:hardening": "node scripts/run-sh-script.js scripts/public-hardening-subset.sh",
+        "scripts:tracking-intent-audit": "node scripts/run-sh-script.js scripts/script-tracking-intent-audit.sh",
+    }
+    for script_name, command in expected_scripts.items():
+        assert package_json["scripts"][script_name] == command
+
+    assert not [
+        command for command in gate["commands"] if command not in package_json["scripts"]
+    ]
+
+    for script_name in [
+        "pulse-shared-gate-lib-audit.sh",
+        "public-hardening-subset.sh",
+        "script-tracking-intent-audit.sh",
+    ]:
+        script = REPO_ROOT / "scripts" / script_name
+        assert script.is_file()
+        assert script.stat().st_mode & stat.S_IXUSR
+
+
+def test_promoted_pulse_consolidation_scripts_are_public_safe_and_clean_checkout_safe():
+    verification = read("docs/VERIFICATION.md")
+    scripts = {
+        "pulse-shared-gate-lib-audit.sh": [
+            "ao2.pulse-shared-gate-lib-audit.v1",
+            "ao2.pulse-gate-lib.v1",
+            "ao2_gate_forbidden_string_scan",
+        ],
+        "public-hardening-subset.sh": [
+            "ao2.public-hardening-subset.v1",
+            "test_public_stabilization.py",
+            "pulse:lengthy-gate:contract",
+            "scripts/pulse-lengthy-gate-runner.sh",
+        ],
+        "script-tracking-intent-audit.sh": [
+            "ao2.script-tracking-intent-audit.v1",
+            "ao2.script-tracking-manifest.v1",
+            "track_in_repo",
+        ],
+    }
+
+    for script_name, needles in scripts.items():
+        text = read(f"scripts/{script_name}")
+        for needle in needles:
+            assert needle in text
+        for forbidden in [
+            "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "/Users/torachiyouesugi/Documents/private",
+            "target/long-lived-control-plane/api-token",
+            "gh release create",
+            "git push origin",
+        ]:
+            assert forbidden not in text
+
+    public_hardening = read("scripts/public-hardening-subset.sh")
+    assert "scripts/pulse-consolidation-lengthy-gate.sh" not in public_hardening
+    assert "npm run pulse:lengthy-gate -- --gate pulse-consolidation" in verification
+    assert "ao2.pulse-lengthy-gate-runner.v1" in verification
