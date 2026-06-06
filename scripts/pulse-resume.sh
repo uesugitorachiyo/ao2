@@ -48,6 +48,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+DEFAULT_OPERATOR_PROMPT = "After each task batch, re-evaluate AO2 and ao2-control-plane at project level. Choose next tasks by highest long-term value, not similarity to last tasks. Prefer public reliability, Ubuntu/macOS/Windows correctness, CI confidence, evidence quality, security/safety boundaries, control-plane integration, release readiness, and developer/operator usability. Avoid narrow recursion or low-value daemon work unless it is the bottleneck. Generate next lengthy tasks with rationale, required evidence, and stop conditions, then register and continue through the AO2 event loop."
+
 root = Path(sys.argv[1]).resolve()
 resume_json = Path(sys.argv[2]).resolve()
 summary_path = Path(sys.argv[3]).resolve()
@@ -66,6 +68,10 @@ observed_sha = shasum(eval_loop_path)
 expected_sha = str(resume["pulse_eval_loop_sha256"])
 sha_matches = observed_sha == expected_sha
 resume_command = str(resume["resume_command"])
+operator_prompt = str(resume.get("operator_prompt", DEFAULT_OPERATOR_PROMPT))
+operator_prompt_path_value = resume.get("operator_prompt_path")
+operator_prompt_sha256 = str(resume.get("operator_prompt_sha256", ""))
+auto_advance = resume.get("auto_advance") if isinstance(resume.get("auto_advance"), dict) else {}
 simulation = bool(resume.get("simulation", False))
 simulation_output_path = resume.get("simulation_output_path")
 simulated_exit_code = int(resume.get("simulated_exit_code", 0) or 0)
@@ -73,6 +79,9 @@ exit_code = 0
 reason = None
 simulation_executed = False
 resolved_simulation_output_path = None
+operator_prompt_observed_sha256 = None
+operator_prompt_sha256_matches = None
+resolved_operator_prompt_path = None
 
 def safe_relative_path(value: object) -> Path:
     rel = Path(str(value))
@@ -80,7 +89,33 @@ def safe_relative_path(value: object) -> Path:
         raise ValueError(f"unsafe simulation_output_path: {value!r}")
     return root / rel
 
-if not dry_run and not execute:
+def safe_resume_relative_path(value: object, label: str) -> Path:
+    rel = Path(str(value))
+    if rel.is_absolute() or ".." in rel.parts:
+        raise ValueError(f"unsafe {label}: {value!r}")
+    return resume_json.parent / rel
+
+if operator_prompt_path_value:
+    try:
+        operator_prompt_path = safe_resume_relative_path(operator_prompt_path_value, "operator_prompt_path")
+    except ValueError as exc:
+        reason = str(exc)
+        exit_code = 1
+    else:
+        resolved_operator_prompt_path = str(operator_prompt_path)
+        if not operator_prompt_path.is_file():
+            reason = f"operator_prompt_path not found: {operator_prompt_path}"
+            exit_code = 1
+        else:
+            operator_prompt_observed_sha256 = shasum(operator_prompt_path)
+            operator_prompt_sha256_matches = operator_prompt_observed_sha256 == operator_prompt_sha256
+            if not operator_prompt_sha256_matches:
+                reason = "operator_prompt_hash_mismatch"
+                exit_code = 1
+
+if exit_code != 0:
+    pass
+elif not dry_run and not execute:
     reason = "refusing to execute without --execute"
     exit_code = 2
 elif not sha_matches:
@@ -121,7 +156,7 @@ elif execute:
     result = subprocess.run(shlex.split(resume_command), cwd=root, check=False)
     exit_code = int(result.returncode)
 
-if dry_run and sha_matches:
+if dry_run and sha_matches and exit_code == 0:
     status = "dry_run"
 elif execute and sha_matches and exit_code == 0:
     status = "passed"
@@ -144,6 +179,12 @@ payload = {
     "pulse_eval_loop_sha256": expected_sha,
     "observed_sha256": observed_sha,
     "sha256_matches": sha_matches,
+    "operator_prompt": operator_prompt,
+    "operator_prompt_path": resolved_operator_prompt_path or operator_prompt_path_value,
+    "operator_prompt_sha256": operator_prompt_sha256 or None,
+    "operator_prompt_observed_sha256": operator_prompt_observed_sha256,
+    "operator_prompt_sha256_matches": operator_prompt_sha256_matches,
+    "auto_advance": auto_advance,
     "resume_command": resume_command,
     "exit_code": exit_code,
     "trust_boundary": {

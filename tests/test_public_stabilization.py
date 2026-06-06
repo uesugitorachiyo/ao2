@@ -358,6 +358,334 @@ def test_pulse_local_mirror_resume_command_contract():
         assert needle in text
 
 
+def test_pulse_auto_advance_prompt_registration_contract():
+    package_json = json.loads(read("package.json"))
+    mirror = read("scripts/pulse-local-mirror.sh")
+    resume = read("scripts/pulse-resume.sh")
+    register = read("scripts/pulse-register-auto-advance.sh")
+    generator = read("scripts/pulse-generate-next.sh")
+    verification = read("docs/VERIFICATION.md")
+    prompt = (
+        "After each task batch, re-evaluate AO2 and ao2-control-plane at project level. "
+        "Choose next tasks by highest long-term value, not similarity to last tasks. "
+        "Prefer public reliability, Ubuntu/macOS/Windows correctness, CI confidence, "
+        "evidence quality, security/safety boundaries, control-plane integration, "
+        "release readiness, and developer/operator usability. Avoid narrow recursion "
+        "or low-value daemon work unless it is the bottleneck. Generate next lengthy "
+        "tasks with rationale, required evidence, and stop conditions, then register "
+        "and continue through the AO2 event loop."
+    )
+
+    assert (
+        package_json["scripts"]["pulse:register-auto-advance"]
+        == "node scripts/run-sh-script.js scripts/pulse-register-auto-advance.sh"
+    )
+    register_path = REPO_ROOT / "scripts" / "pulse-register-auto-advance.sh"
+    assert register_path.is_file()
+    assert register_path.stat().st_mode & stat.S_IXUSR
+
+    for text in [mirror, resume, register, generator]:
+        assert prompt in text
+        assert "OPENAI_API_KEY" not in text
+        assert "ANTHROPIC_API_KEY" not in text
+        assert "git push origin" not in text
+        assert "gh release create" not in text
+
+    for needle in [
+        "AO2_PULSE_AUTO_ADVANCE_PROMPT",
+        "operator-prompt.txt",
+        "operator_prompt_sha256",
+        "auto_advance",
+        "registered_once",
+        "continue_until_stopped",
+        "stop_signal",
+        "stores_credentials",
+    ]:
+        assert needle in mirror
+
+    for needle in [
+        "operator_prompt_sha256_matches",
+        "operator_prompt_path",
+        "auto_advance",
+        "operator_prompt",
+    ]:
+        assert needle in resume
+
+    for needle in [
+        "ao2.pulse-auto-advance-registration.v1",
+        "pulse:local-mirror",
+        "resume.json",
+        "auto_advance",
+        "operator_prompt_sha256",
+        "trust_boundary",
+    ]:
+        assert needle in register
+
+    for needle in [
+        "npm run pulse:register-auto-advance",
+        "ao2.pulse-auto-advance-registration.v1",
+        "target/pulse-auto-advance-registration/latest/summary.json",
+    ]:
+        assert needle in verification
+
+
+def test_pulse_auto_advance_runner_restart_contract():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+    expected_scripts = {
+        "pulse:auto-advance": "scripts/pulse-auto-advance.sh",
+        "pulse:resume-workspace-cli-fallback": "scripts/pulse-resume-workspace-cli-fallback.sh",
+        "pulse:terminal-eval-loop-schema-compatibility": "scripts/pulse-terminal-eval-loop-schema-compatibility.sh",
+        "pulse:auto-advance-runner-contract": "scripts/pulse-auto-advance-runner-contract.sh",
+        "pulse:stop-and-dedup-ledger": "scripts/pulse-stop-and-dedup-ledger.sh",
+        "pulse:auto-advance-integration-gate": "scripts/pulse-auto-advance-integration-gate.sh",
+    }
+
+    for command, script_path in expected_scripts.items():
+        assert package_json["scripts"][command] == f"node scripts/run-sh-script.js {script_path}"
+        script = REPO_ROOT / script_path
+        assert script.is_file()
+        assert script.stat().st_mode & stat.S_IXUSR
+        text = script.read_text(encoding="utf-8")
+        assert "OPENAI_API_KEY" not in text
+        assert "ANTHROPIC_API_KEY" not in text
+        assert "git push origin" not in text
+        assert "gh release create" not in text
+        assert "stores_credentials" in text
+
+    runner = read("scripts/pulse-auto-advance.sh")
+    for needle in [
+        "ao2.pulse-auto-advance-run.v1",
+        "ao2.pulse-auto-advance-heartbeat.v1",
+        "AO2_PULSE_AUTO_ADVANCE_STOP_FILE",
+        ".ao2-local/pulse/STOP",
+        "pulse-auto-advance-ledger.jsonl",
+        "operator_prompt_sha256",
+        "recommended_tasks",
+        "duplicate_eval_loop_digest",
+        "waiting_for_new_eval_loop_digest",
+        "continue_until_stopped",
+        "--forever",
+        "MAX_ITERATIONS=0",
+        "sleep_seconds",
+        "max_iterations",
+    ]:
+        assert needle in runner
+
+    script_needles = {
+        "scripts/pulse-resume-workspace-cli-fallback.sh": [
+            "ao2.pulse-resume-workspace-cli-fallback.v1",
+            "cargo run -q -p ao2-cli -- pulse eval-loop run --help",
+            "global_ao2_supports_pulse",
+            "workspace_cli_supports_pulse",
+        ],
+        "scripts/pulse-terminal-eval-loop-schema-compatibility.sh": [
+            "ao2.pulse-terminal-eval-loop-schema-compatibility.v1",
+            "ready_for_next_pulse_task",
+            "recommendation_only",
+            "terminal",
+            "fixed_interval_loop_successor",
+        ],
+        "scripts/pulse-auto-advance-runner-contract.sh": [
+            "ao2.pulse-auto-advance-runner-contract.v1",
+            "pulse:auto-advance",
+            "bash -n scripts/pulse-auto-advance.sh",
+            "recommended_tasks",
+        ],
+        "scripts/pulse-stop-and-dedup-ledger.sh": [
+            "ao2.pulse-stop-and-dedup-ledger.v1",
+            "AO2_PULSE_AUTO_ADVANCE_STOP_FILE",
+            "duplicate_eval_loop_digest",
+            "pulse-auto-advance-ledger.jsonl",
+        ],
+        "scripts/pulse-auto-advance-integration-gate.sh": [
+            "ao2.pulse-auto-advance-integration-gate.v1",
+            "pulse:resume-workspace-cli-fallback",
+            "pulse:terminal-eval-loop-schema-compatibility",
+            "pulse:auto-advance-runner-contract",
+            "pulse:stop-and-dedup-ledger",
+        ],
+    }
+    for script_path, needles in script_needles.items():
+        text = read(script_path)
+        for needle in needles:
+            assert needle in text
+
+    for needle in [
+        "npm run pulse:auto-advance",
+        "npm run pulse:auto-advance -- --forever",
+        "npm run pulse:resume-workspace-cli-fallback",
+        "npm run pulse:terminal-eval-loop-schema-compatibility",
+        "npm run pulse:auto-advance-runner-contract",
+        "npm run pulse:stop-and-dedup-ledger",
+        "npm run pulse:auto-advance-integration-gate",
+        "ao2.pulse-auto-advance-run.v1",
+        "target/pulse-auto-advance/latest/summary.json",
+    ]:
+        assert needle in verification
+
+
+def test_pulse_daemon_supervisor_contract():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+    expected_scripts = {
+        "pulse:daemon:start": "node scripts/run-sh-script.js scripts/pulse-daemon.sh start",
+        "pulse:daemon:status": "node scripts/run-sh-script.js scripts/pulse-daemon.sh status",
+        "pulse:daemon:stop": "node scripts/run-sh-script.js scripts/pulse-daemon.sh stop",
+        "pulse:daemon:restart": "node scripts/run-sh-script.js scripts/pulse-daemon.sh restart",
+        "pulse:daemon:contract": "node scripts/run-sh-script.js scripts/pulse-daemon-contract.sh",
+    }
+    for command, expected in expected_scripts.items():
+        assert package_json["scripts"][command] == expected
+
+    for script_name, schema in [
+        ("pulse-daemon.sh", "ao2.pulse-daemon.v1"),
+        ("pulse-daemon-contract.sh", "ao2.pulse-daemon-contract.v1"),
+    ]:
+        script = REPO_ROOT / "scripts" / script_name
+        assert script.is_file()
+        assert script.stat().st_mode & stat.S_IXUSR
+        text = script.read_text(encoding="utf-8")
+        assert schema in text
+        assert "OPENAI_API_KEY" not in text
+        assert "ANTHROPIC_API_KEY" not in text
+        assert "git push origin" not in text
+        assert "gh release create" not in text
+        assert "stores_credentials" in text
+
+    daemon = read("scripts/pulse-daemon.sh")
+    for needle in [
+        "launchctl bootstrap",
+        "launchctl print",
+        "launchctl bootout",
+        "launchctl kickstart",
+        "tmux new-session",
+        "tmux has-session",
+        "tmux kill-session",
+        "KeepAlive",
+        "RunAtLoad",
+        "pulse-auto-advance.sh",
+        "--forever",
+        "STOP",
+        "heartbeat_summary",
+        "active_backend",
+        "process_alive",
+    ]:
+        assert needle in daemon
+
+    for needle in [
+        "npm run pulse:daemon:start",
+        "npm run pulse:daemon:status",
+        "npm run pulse:daemon:stop",
+        "npm run pulse:daemon:restart",
+        "npm run pulse:daemon:contract",
+        "ao2.pulse-daemon.v1",
+        "target/pulse-daemon/latest/summary.json",
+    ]:
+        assert needle in verification
+
+
+def test_pulse_generate_next_auto_registration_contract():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+    expected_scripts = {
+        "pulse:generate-next": "node scripts/run-sh-script.js scripts/pulse-generate-next.sh",
+        "pulse:generate-next:contract": "node scripts/run-sh-script.js scripts/pulse-generate-next-contract.sh",
+    }
+    for command, expected in expected_scripts.items():
+        assert package_json["scripts"][command] == expected
+
+    for script_name, schema in [
+        ("pulse-generate-next.sh", "ao2.pulse-generate-next.v1"),
+        ("pulse-generate-next-contract.sh", "ao2.pulse-generate-next-contract.v1"),
+    ]:
+        script = REPO_ROOT / "scripts" / script_name
+        assert script.is_file()
+        assert script.stat().st_mode & stat.S_IXUSR
+        text = script.read_text(encoding="utf-8")
+        assert schema in text
+        assert "OPENAI_API_KEY" not in text
+        assert "ANTHROPIC_API_KEY" not in text
+        assert "git push origin" not in text
+        assert "gh release create" not in text
+        assert "stores_credentials" in text
+
+    generator = read("scripts/pulse-generate-next.sh")
+    for needle in [
+        "ao2.pulse-generate-next.v1",
+        "ao2.pulse-next-lengthy-tasks.v1",
+        "cross-platform-compatibility",
+        "Ubuntu macOS Windows compatibility evidence",
+        "release:cross-os-attestation",
+        "ao2.cross-os-release-attestation.v1",
+        "pulse-eval-loop.json",
+        "packet.md",
+        "board.md",
+        "executor-evidence.json",
+        "AO2_PULSE_GENERATE_NEXT_REGISTER",
+        "pulse:register-auto-advance",
+        "cursor",
+        "recommended_tasks",
+    ]:
+        assert needle in generator
+
+    runner = read("scripts/pulse-auto-advance.sh")
+    for needle in [
+        "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT",
+        "pulse_generate_next",
+        "pulse:generate-next",
+        "register_next_packet",
+        "generated_next_packet",
+    ]:
+        assert needle in runner
+
+    for needle in [
+        "npm run pulse:generate-next",
+        "npm run pulse:generate-next:contract",
+        "ao2.pulse-generate-next.v1",
+        "target/pulse-generate-next/latest/summary.json",
+    ]:
+        assert needle in verification
+
+
+def test_pulse_generate_next_uses_project_level_strategic_scoring():
+    generator = read("scripts/pulse-generate-next.sh")
+    verification = read("docs/VERIFICATION.md")
+
+    for needle in [
+        "project_level_reassessment",
+        "strategic_score",
+        "anti_recursion",
+        "ledger_history",
+        "docs/PRD.md",
+        "docs/SDD-risky-pr-run.md",
+        "docs/SCHEMAS-AND-INTERFACES.md",
+        "docs/IMPLEMENTATION-SLICES.md",
+        "public_reliability",
+        "cross_platform_correctness",
+        "ci_confidence",
+        "evidence_quality",
+        "security_safety_boundaries",
+        "control_plane_integration",
+        "release_readiness",
+        "developer_operator_usability",
+        "novelty",
+        "rationale",
+        "required_evidence",
+        "stop_conditions",
+        "avoid narrow recursion",
+    ]:
+        assert needle in generator
+
+    for needle in [
+        "strategic scoring",
+        "project-level reassessment",
+        "anti-recursion",
+        "ledger history",
+    ]:
+        assert needle in verification
+
+
 def test_artifact_index_consumer_canary_and_pulse_resume_contracts():
     package_json = json.loads(read("package.json"))
     verification = read("docs/VERIFICATION.md")

@@ -31,6 +31,24 @@ AO2_ARTIFACT_HEALTH_FAIL_ON_ATTENTION=1 npm run artifacts:health
 npm run release:artifact-consumer-smoke -- --dry-run # CI artifact consumer smoke contract
 npm run release:artifact-consumer-smoke -- --require-artifact ao2-python-guard --require-schema ao2.python-guard-ci-artifacts.v1
 npm run post-merge:canary    # local post-merge AO2 + control-plane canary
+npm run pulse:register-auto-advance # register the local Pulse auto-advance prompt
+npm run pulse:auto-advance # run the registered local Pulse task packet once with stop/dedup guards
+npm run pulse:auto-advance -- --forever # keep polling registered Pulse packets until STOP/failure/interruption
+npm run pulse:generate-next # generate and register the next local Pulse packet from daemon evidence
+npm run pulse:generate-next:contract # static contract for next-packet generation
+npm run pulse:daemon:start # install/load the local supervisor for Pulse auto-advance
+npm run pulse:daemon:status # report supervisor and Pulse heartbeat evidence
+npm run pulse:daemon:stop # stop the supervisor and write the local STOP file
+npm run pulse:daemon:restart # restart the local Pulse supervisor
+npm run pulse:daemon:contract # static contract for the local Pulse daemon
+npm run pulse:resume-workspace-cli-fallback # verify workspace CLI fallback for Pulse resume
+npm run pulse:terminal-eval-loop-schema-compatibility # normalize script packets to terminal eval-loop evidence
+npm run pulse:auto-advance-runner-contract # static contract for the local auto-advance runner
+npm run pulse:stop-and-dedup-ledger # stop signal and duplicate digest ledger evidence
+npm run pulse:auto-advance-integration-gate # composed auto-advance restart gate
+npm run pulse:next-task-quality-filter # next task quality filter
+npm run pulse:quality-filter-negative-corpus # Pulse quality filter negative fixtures
+npm run pulse:quality-filter-required-gate # required Pulse quality gate boundary evidence
 npm run pulse:resume -- --dry-run # validate the resumable Pulse event-loop command
 npm run pulse:resume -- --execute # explicitly resume the latest local Pulse event loop
 npm run pulse:execute-safety-corpus # Pulse execute-mode refusal/simulation corpus
@@ -61,7 +79,40 @@ and ignored, but is outside Cargo's build directory:
 
 ```sh
 npm run pulse:local-mirror
+npm run pulse:register-auto-advance
+npm run pulse:auto-advance
+npm run pulse:auto-advance -- --forever
+npm run pulse:generate-next
+npm run pulse:daemon:start
+npm run pulse:daemon:status
 ```
+The Pulse RSI core is local-first and public-safe. `npm run pulse:register-auto-advance`
+records the operator prompt in `.ao2-local/pulse/latest/operator-prompt.txt`,
+adds `operator_prompt_sha256` to `resume.json`, and emits
+`ao2.pulse-auto-advance-registration.v1` at
+`target/pulse-auto-advance-registration/latest/summary.json`.
+`npm run pulse:auto-advance` verifies the registered eval-loop and prompt
+digests, honors `.ao2-local/pulse/STOP`, rejects duplicate eval-loop digests via
+`.ao2-local/pulse/pulse-auto-advance-ledger.jsonl`, runs `recommended_tasks`,
+and emits `ao2.pulse-auto-advance-run.v1` at
+`target/pulse-auto-advance/latest/summary.json`. With `--forever`, it writes
+`ao2.pulse-auto-advance-heartbeat.v1` while waiting and calls
+`npm run pulse:generate-next` after each successful packet.
+
+`npm run pulse:generate-next` emits `ao2.pulse-generate-next.v1` at
+`target/pulse-generate-next/latest/summary.json` and writes a fresh
+`packet.md`, `board.md`, `executor-evidence.json`, `pulse-eval-loop.json`, and
+`ao2.pulse-next-lengthy-tasks.v1` packet. Generated packets use strategic scoring
+instead of blind rotation: each cycle performs project-level reassessment
+against `docs/PRD.md`, `docs/SDD-risky-pr-run.md`,
+`docs/SCHEMAS-AND-INTERFACES.md`, and `docs/IMPLEMENTATION-SLICES.md`, samples
+ledger history from `.ao2-local/pulse/pulse-auto-advance-ledger.jsonl`, applies
+anti-recursion penalties, and includes rationale, required evidence, stop
+conditions, and per-candidate `strategic_score` metadata. `npm run
+pulse:daemon:start` runs the forever loop through launchctl or a detached tmux
+fallback; `npm run pulse:daemon:status` emits `ao2.pulse-daemon.v1` at
+`target/pulse-daemon/latest/summary.json`.
+
 
 The mirror also writes `.ao2-local/pulse/latest/resume.json` and
 `.ao2-local/pulse/latest/resume-command.sh` with the latest
