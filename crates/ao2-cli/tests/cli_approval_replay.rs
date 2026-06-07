@@ -29486,6 +29486,8 @@ fn cli_workbench_run_evidence_publish_api_posts_signed_pack() {
     assert!(child.wait().unwrap().success());
     assert!(html_response.contains("run-evidence-publish-form"));
     assert!(html_response.contains("/api/runs/evidence/publish"));
+    assert!(html_response.contains("name=\"kind\""));
+    assert!(html_response.contains("value=\"operator-packet\""));
     assert!(html_response.contains("run-evidence-open-published-detail-button"));
     assert!(html_response.contains("Open Verified Detail"));
     assert!(html_response.contains("openPublishedEvidenceDetail"));
@@ -29497,6 +29499,110 @@ fn cli_workbench_run_evidence_publish_api_posts_signed_pack() {
         "name=\"control_plane_url\" value=\"http://127.0.0.1:{cp_port}\""
     )));
     assert!(!html_response.contains("value=\"cp-token\""));
+}
+
+#[test]
+fn cli_workbench_run_evidence_publish_api_posts_signed_operator_packet() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("discount-service");
+    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    let signing_key = temp
+        .path()
+        .join("workbench-operator-packet-signing-key.pem");
+    generate_native_signing_key(&signing_key, 2048);
+
+    let run = ao2([
+        "run",
+        "../../examples/risky-pr-run/risky-pr.yaml",
+        "--target",
+        repo.to_str().unwrap(),
+        "--run-id",
+        "workbench-operator-packet-publish",
+    ]);
+    assert!(run.status.success(), "{}", stderr(&run));
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let cp_port = listener.local_addr().unwrap().port();
+    let server = std::thread::spawn(move || {
+        let mut stream =
+            accept_test_connection(&listener, "signed operator packet publish request");
+        let mut buffer = vec![0_u8; 1024 * 1024];
+        let read = read_test_http_request(&mut stream, &mut buffer);
+        let request = String::from_utf8_lossy(&buffer[..read]).to_string();
+        assert!(request.starts_with("POST /api/v1/operator-packet/signed HTTP/1.1"));
+        assert!(request.contains("Authorization: Bearer cp-token"));
+        assert!(request.contains("\"schema_version\":\"ao2.cp-operator-packet-signed-upload.v1\""));
+        assert!(request.contains("\"schema_version\":\"ao2.operator-evidence-packet.v1\""));
+        assert!(request.contains("\"run_id\":\"workbench-operator-packet-publish\""));
+        assert!(request.contains("\"signer_id\":\"ao2-workbench-operator\""));
+        assert!(request.contains("\"operator_packet_b64\""));
+        assert!(request.contains("\"signature_algorithm\":\"RSA/SHA-256\""));
+        let body = r#"{"schema_version":"ao2.cp-ingest-receipt.v1","sha256":"publishedoperatorpacket","stored_at":"2026-06-07T00:00:00Z","ingested_schema_version":"ao2.operator-evidence-packet.v1"}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        stream.write_all(response.as_bytes()).unwrap();
+    });
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ao2"))
+        .args([
+            "workbench",
+            "serve",
+            "--target",
+            repo.to_str().unwrap(),
+            "--port",
+            "0",
+            "--once",
+            "--api-token",
+            "test-token",
+            "--support-signing-key",
+            signing_key.to_str().unwrap(),
+            "--support-signer-id",
+            "ao2-workbench-operator",
+        ])
+        .env_remove("OPENAI_API_KEY")
+        .env_remove("ANTHROPIC_API_KEY")
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let port = read_server_port(&mut child);
+    let body = format!(
+        "kind=operator-packet&run_id=workbench-operator-packet-publish&control_plane_url=http://127.0.0.1:{cp_port}&api_token=cp-token"
+    );
+    let response = http_request(
+        port,
+        &format!(
+            "POST /api/runs/evidence/publish?token=test-token HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        ),
+    );
+    server.join().unwrap();
+    assert!(child.wait().unwrap().success());
+    assert!(response.starts_with("HTTP/1.1 200 OK"), "{response}");
+    let json: serde_json::Value = serde_json::from_str(http_body(&response)).unwrap();
+    assert_eq!(
+        json["schema_version"],
+        "ao2.operator-packet-control-plane-publish.v1"
+    );
+    assert_eq!(json["receipt"]["sha256"], "publishedoperatorpacket");
+    assert_eq!(
+        json["receipt"]["ingested_schema_version"],
+        "ao2.operator-evidence-packet.v1"
+    );
+    assert_eq!(
+        json["detail_url"],
+        format!("http://127.0.0.1:{cp_port}/api/v1/operator-packet/publishedoperatorpacket/detail")
+    );
+    assert_eq!(
+        json["dashboard_url"],
+        format!("http://127.0.0.1:{cp_port}/api/v1/operator-packet/dashboard")
+    );
+    assert_eq!(json["signature"]["signer_id"], "ao2-workbench-operator");
+    assert_eq!(json["signature"]["signature_algorithm"], "RSA/SHA-256");
 }
 
 #[test]
