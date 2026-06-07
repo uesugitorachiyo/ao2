@@ -537,6 +537,12 @@ Workspace test coverage:
   run record, static report HTML, evidence pack, evaluator closure verdict,
   replay status, and provider scorecard for signed support-bundle readback;
 - CLI local workbench exposes operator-token protected
+  `/api/runs/evidence/publish`, publishes either a signed evidence pack
+  (`kind=evidence-pack`, default) or a real run-derived signed operator packet
+  (`kind=operator-packet`) to ao2-control-plane with the server-side
+  `--support-signing-key`; the control plane remains a read-only observer and
+  receives the operator packet through `/api/v1/operator-packet/signed`;
+- CLI local workbench exposes operator-token protected
   `/api/obligations/annotate`, records manual path/line evidence or explicit
   waivers into a run's sidecar obligation ledger, appends an audited
   `obligation_annotate` Workbench event, writes a

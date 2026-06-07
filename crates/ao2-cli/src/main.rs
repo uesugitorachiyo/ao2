@@ -32849,22 +32849,43 @@ fn workbench_evidence_publish_json(
     support_signing: Option<&WorkbenchSupportSigning>,
 ) -> Result<serde_json::Value> {
     let signing = support_signing
-        .context("start workbench with --support-signing-key to publish signed evidence packs")?;
+        .context("start workbench with --support-signing-key to publish signed evidence")?;
+    let kind = form_value_owned(form, "kind").unwrap_or_else(|| "evidence-pack".to_string());
     let run_id = form_value_owned(form, "run_id").context("run_id is required")?;
     let control_plane_url =
         form_value_owned(form, "control_plane_url").context("control_plane_url is required")?;
     let api_token = form_value_owned(form, "api_token").context("api_token is required")?;
-    let summary = workbench_run_evidence_summary_json(target, &format!("run_id={run_id}"))?;
-    let evidence_pack = PathBuf::from(json_string(&summary, "evidence_pack"));
-    let mut result = evidence_pack_publish_to_control_plane_json(
-        &evidence_pack,
-        &signing.key_path,
-        &signing.signer_id,
-        &control_plane_url,
-        &api_token,
-    )?;
+    let mut result = match kind.as_str() {
+        "evidence-pack" | "pack" => {
+            let summary = workbench_run_evidence_summary_json(target, &format!("run_id={run_id}"))?;
+            let evidence_pack = PathBuf::from(json_string(&summary, "evidence_pack"));
+            evidence_pack_publish_to_control_plane_json(
+                &evidence_pack,
+                &signing.key_path,
+                &signing.signer_id,
+                &control_plane_url,
+                &api_token,
+            )?
+        }
+        "operator-packet" => {
+            let mut export_form = BTreeMap::new();
+            export_form.insert("kind".to_string(), "operator-packet".to_string());
+            export_form.insert("run_id".to_string(), run_id.clone());
+            let export = workbench_evidence_export_json(target, &export_form)?;
+            let export_path = PathBuf::from(json_string(&export, "export_path"));
+            operator_packet_publish_to_control_plane_json(
+                &export_path,
+                &signing.key_path,
+                &signing.signer_id,
+                &control_plane_url,
+                &api_token,
+            )?
+        }
+        other => return Err(anyhow!("unsupported evidence publish kind {other}")),
+    };
     let receipt_html = evidence_publish_receipt_html(&result);
     if let Some(object) = result.as_object_mut() {
+        object.insert("publish_kind".to_string(), serde_json::json!(kind));
         object.insert("detail_html".to_string(), serde_json::json!(receipt_html));
     }
     Ok(result)
@@ -60222,12 +60243,13 @@ fn render_workbench_runs(
     if support_signing_enabled {
         write!(
             html,
-            r#"<h3>Publish Signed Evidence Pack</h3>
+            r#"<h3>Publish Signed Evidence</h3>
 <form id="run-evidence-publish-form" class="queue-actions">
   <label>Run<input name="run_id" placeholder="run-id"></label>
+  <label>Kind<select name="kind"><option value="evidence-pack">Evidence Pack</option><option value="operator-packet">Operator Packet</option></select></label>
   <label>Control Plane URL<input name="control_plane_url" value="{control_plane_url}" placeholder="http://127.0.0.1:8744"></label>
   <label>API Token<input name="api_token" type="password" placeholder="control-plane token"></label>
-  <button type="submit">Publish Evidence</button>
+  <button type="submit">Publish Signed Evidence</button>
 </form>
 "#,
             control_plane_url = escape_html(control_plane_url.unwrap_or(""))
