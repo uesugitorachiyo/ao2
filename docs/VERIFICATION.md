@@ -378,6 +378,14 @@ Result:
   as the Ubuntu/macOS/Windows `Workbench operator packet control-plane smoke`
   matrix job with `ao2-control-plane` checked out as a sibling repository and
   uploads one smoke evidence artifact per OS.
+- `npm run smoke:workbench-operator-packet-control-plane:index`: validates the
+  downloaded Ubuntu/macOS/Windows smoke artifacts, requires each OS to have an
+  `ao2.workbench-operator-packet-control-plane-smoke.v1` summary, fails on
+  missing OS coverage, `token_leak_detected=true`, non-accepted evaluator
+  closure or replay status, or missing provider-score evidence, and emits
+  `ao2.workbench-operator-packet-control-plane-smoke-index.v1` under
+  `target/workbench-operator-packet-control-plane-smoke-index/latest/`. CI runs
+  this after the smoke matrix and uploads the index artifact.
 - `npm run provider:phase2-contract-hardening`: verifies Codex and Claude
   provider contracts, replacement parity, no-factory-v3 guardrails, transcript
   parsing, sandbox patch digest boundaries, exact approval enforcement,

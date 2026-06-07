@@ -2376,6 +2376,34 @@ fn workbench_operator_packet_control_plane_smoke_is_release_wired() {
 }
 
 #[test]
+fn workbench_operator_packet_control_plane_smoke_index_is_release_wired() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let package_json = fs::read_to_string(root.join("package.json")).expect("package json exists");
+    let index_script = fs::read_to_string(
+        root.join("scripts/workbench-operator-packet-control-plane-smoke-index.sh"),
+    )
+    .expect("workbench operator packet smoke index script exists");
+    let verification =
+        fs::read_to_string(root.join("docs/VERIFICATION.md")).expect("verification docs exists");
+
+    assert!(package_json.contains("\"smoke:workbench-operator-packet-control-plane:index\""));
+    assert!(package_json.contains("scripts/workbench-operator-packet-control-plane-smoke-index.sh"));
+    assert!(index_script.contains("ao2.workbench-operator-packet-control-plane-smoke-index.v1"));
+    assert!(index_script.contains("AO2_WORKBENCH_OPERATOR_PACKET_CP_INDEX_REQUIRED_OS"));
+    assert!(index_script.contains("ubuntu-latest,macos-latest,windows-latest"));
+    assert!(index_script.contains("ao2.workbench-operator-packet-control-plane-smoke.v1"));
+    assert!(index_script.contains("token_leak_detected"));
+    assert!(index_script.contains("evaluator_closure_verdict"));
+    assert!(index_script.contains("replay_status"));
+    assert!(index_script.contains("provider_score_present"));
+    assert!(index_script.contains("missing_os"));
+    assert!(index_script.contains("operator_packet_validation_failed"));
+    assert!(index_script.contains("python_command()"));
+    assert!(verification.contains("smoke:workbench-operator-packet-control-plane:index"));
+    assert!(verification.contains("ao2.workbench-operator-packet-control-plane-smoke-index.v1"));
+}
+
+#[test]
 fn codex_provider_smoke_script_is_guarded_and_evidence_driven() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let script = fs::read_to_string(root.join("scripts/smoke-codex-provider.sh"))
@@ -2750,6 +2778,14 @@ fn ci_workflow_runs_on_public_changes_while_release_gates_stay_manual() {
     assert!(ci.contains("npm run smoke:workbench-operator-packet-control-plane"));
     assert!(ci.contains("ao2-workbench-operator-packet-control-plane-smoke-${{ matrix.os }}"));
     assert!(ci.contains("target/workbench-operator-packet-control-plane-smoke"));
+    assert!(ci.contains("workbench-operator-packet-control-plane-smoke-index:"));
+    assert!(ci.contains("name: Workbench operator packet control-plane smoke index"));
+    assert!(ci.contains("needs: workbench-operator-packet-control-plane-smoke"));
+    assert!(ci.contains("actions/download-artifact@v7.0.1"));
+    assert!(ci.contains("pattern: ao2-workbench-operator-packet-control-plane-smoke-*"));
+    assert!(ci.contains("AO2_WORKBENCH_OPERATOR_PACKET_CP_INDEX_REQUIRED_OS: ubuntu-latest,macos-latest,windows-latest"));
+    assert!(ci.contains("npm run smoke:workbench-operator-packet-control-plane:index"));
+    assert!(ci.contains("ao2-workbench-operator-packet-control-plane-smoke-index"));
 
     for release_workflow in [&release_gate, &public_release] {
         assert!(release_workflow.contains("workflow_dispatch:"));
