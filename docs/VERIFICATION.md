@@ -144,8 +144,11 @@ from `.ao2-local/pulse/latest/pulse-task-manifest.json` by default and emits
 `target/pulse-task-executor/latest/summary.json`. Evidence-gate and verification
 tasks may run local commands, while `product_code` tasks materialize
 product-code implementation packets under `implementation-packets/` without
-requiring a shell command. The executor rejects non-local manifests and any
-manifest that stores credentials.
+requiring a shell command. product_code tasks require verification evidence:
+the executor rejects packets that do not name both a verification command and
+expected evidence. A product_code task cannot close from packet materialization alone.
+The executor rejects non-local manifests and any manifest that stores
+credentials.
 
 The Pulse lengthy-gate surface is manifest-driven so local RSI follow-up
 wrappers can be preserved before promotion without adding one public command per
@@ -251,7 +254,10 @@ Result:
 - `npm run risky-pr:golden`: runs the provider-free Risky PR Run through
   policy denial, exact approval, evaluator rejection, correction, accepted
   closure, replay, evidence-pack export, report rendering, and cockpit index;
-  emits `ao2.risky-pr-golden-path.v1`
+  emits `ao2.risky-pr-golden-path.v1`. The generated static report exposes
+  `Local Run Record`, `Static Export Evidence`, `Evaluator Closure Evidence`,
+  and `Replay Evidence` sections so operators can inspect closure evidence
+  without filesystem archaeology.
 - `npm run risky-pr:product-readiness`: runs the Risky PR golden path once,
   then verifies local run record, static report/export, and evaluator closure
   evidence from that single run; emits

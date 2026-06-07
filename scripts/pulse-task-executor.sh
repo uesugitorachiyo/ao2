@@ -95,6 +95,24 @@ def render_verification(items: object) -> list[str]:
     return rendered
 
 
+def has_product_verification_evidence(items: object) -> bool:
+    if not isinstance(items, list):
+        return False
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        command = item.get("command")
+        expected = item.get("expected_evidence")
+        if (
+            isinstance(command, str)
+            and command.strip()
+            and isinstance(expected, str)
+            and expected.strip()
+        ):
+            return True
+    return False
+
+
 def materialize_product_packet(task: dict) -> dict:
     task_id = require_string(task.get("id"), "product_code_id_missing")
     title = require_string(task.get("title"), "product_code_title_missing")
@@ -198,6 +216,15 @@ for index, task in enumerate(tasks, start=1):
         fail("task_kind_unsupported")
     payload["counts"][kind] += 1
     if kind == "product_code":
+        if not has_product_verification_evidence(task.get("verification")):
+            payload["results"].append({
+                "id": task_id,
+                "kind": "product_code",
+                "title": task.get("title", task_id),
+                "status": "failed",
+                "reason": "product_code_verification_evidence_missing",
+            })
+            fail("product_code_verification_evidence_missing")
         payload["results"].append(materialize_product_packet(task))
     elif kind in EXECUTABLE_KINDS:
         result = run_executable_task(task, index)

@@ -63,6 +63,7 @@ pub struct RunSummary {
     pub run_dir: PathBuf,
     pub evidence_pack_path: PathBuf,
     pub report_path: PathBuf,
+    pub run_record_path: PathBuf,
     pub denied_actions: Vec<PolicyDecision>,
     pub approvals: Vec<ApprovalTicket>,
     pub rejection_count: usize,
@@ -282,6 +283,7 @@ pub fn run_risky_pr_with_provider_prompt(options: ProviderRunOptions) -> Result<
         run_dir: ctx.run_dir.clone(),
         evidence_pack_path,
         report_path,
+        run_record_path: ctx.run_dir.join("run-record.json"),
         denied_actions,
         approvals,
         rejection_count,
@@ -524,6 +526,7 @@ pub fn resume_risky_pr_provider_free(options: ResumeOptions) -> Result<RunSummar
         run_dir: ctx.run_dir.clone(),
         evidence_pack_path,
         report_path,
+        run_record_path: ctx.run_dir.join("run-record.json"),
         denied_actions,
         approvals,
         rejection_count,
@@ -2565,6 +2568,23 @@ fn render_static_report(ctx: &RunContext, evidence_pack_path: &Path) -> Result<P
     let dir = ctx.run_dir.join("report");
     fs::create_dir_all(&dir)?;
     let path = dir.join("index.html");
+    let run_record_path = ctx.run_dir.join("run-record.json");
+    let replay_path = ctx.run_dir.join("events.jsonl");
+    let closure_items = ctx
+        .closure_reports
+        .iter()
+        .map(|report| {
+            format!(
+                "<li><strong>{}</strong> at {} evidence=[{}] blockers=[{}] unresolved=[{}]</li>",
+                report.verdict,
+                report.created_at,
+                report.evidence_refs.join(", "),
+                report.blockers.join(", "),
+                report.unresolved_concerns.join(", ")
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
     let denied = ctx
         .policy_decisions
         .iter()
@@ -2593,6 +2613,17 @@ fn render_static_report(ctx: &RunContext, evidence_pack_path: &Path) -> Result<P
 <p>Approvals granted: {approvals}</p>
 <h2>Evidence</h2>
 <p>Evidence pack: {evidence}</p>
+<h2>Local Run Record</h2>
+<p>Run record: {run_record}</p>
+<h2>Static Export Evidence</h2>
+<p>Evidence pack export: {evidence}</p>
+<p>Report artifact: {report}</p>
+<h2>Evaluator Closure Evidence</h2>
+<ul>
+{closure_items}
+</ul>
+<h2>Replay Evidence</h2>
+<p>Replay source: {replay}</p>
 </body>
 </html>
 "#,
@@ -2605,7 +2636,11 @@ fn render_static_report(ctx: &RunContext, evidence_pack_path: &Path) -> Result<P
             .unwrap_or("blocked"),
         denied = denied,
         approvals = ctx.approvals.len(),
-        evidence = evidence_pack_path.display()
+        evidence = evidence_pack_path.display(),
+        run_record = run_record_path.display(),
+        report = path.display(),
+        closure_items = closure_items,
+        replay = replay_path.display()
     );
     atomic_write(&path, content)?;
     Ok(path)
@@ -2773,6 +2808,7 @@ fn summary_from_accepted_record(target_repo: &Path, run_id: &str) -> Result<RunS
         run_dir: ctx.run_dir.clone(),
         evidence_pack_path,
         report_path,
+        run_record_path: record_path,
         denied_actions: denied_actions(&ctx.policy_decisions),
         approvals: ctx.approvals.clone(),
         rejection_count: ctx
