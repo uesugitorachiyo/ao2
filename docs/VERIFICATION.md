@@ -529,10 +529,13 @@ Workspace test coverage:
   run through the same diff contract, rejects runs without a previous baseline,
   and renders a Changed Since Previous control in the Workbench UI;
 - CLI local workbench exposes operator-token protected
-  `/api/runs/evidence/export`, writes summary, diff, or changed-evidence JSON
-  support handoff artifacts under `.ao2/workbench/evidence-exports/`, rejects
-  viewer tokens, and renders Export Summary / Export Diff / Export Changes
-  controls in the Workbench UI;
+  `/api/runs/evidence/export`, writes summary, diff, changed-evidence, or
+  operator evidence packet JSON support handoff artifacts under
+  `.ao2/workbench/evidence-exports/`, rejects viewer tokens, and renders
+  Export Summary / Export Diff / Export Changes controls in the Workbench UI.
+  Operator packets use `ao2.operator-evidence-packet.v1` and bundle the local
+  run record, static report HTML, evidence pack, evaluator closure verdict,
+  replay status, and provider scorecard for signed support-bundle readback;
 - CLI local workbench exposes operator-token protected
   `/api/obligations/annotate`, records manual path/line evidence or explicit
   waivers into a run's sidecar obligation ledger, appends an audited
@@ -582,7 +585,8 @@ Workspace test coverage:
   local support bundle containing queue state, audit events, and job logs;
 - CLI local workbench support bundles attach existing Workbench evidence
   exports from `.ao2/workbench/evidence-exports/`, including export kind,
-  SHA256, generated timestamp, and JSON content;
+  SHA256, generated timestamp, JSON content, and operator-packet run/closure/
+  replay/provider score summaries;
 - signed Workbench support-bundle metadata records `evidence_export_count`, and
   support-bundle verification checks that signed count against the bundle body;
 - CLI local workbench exposes viewer-token protected `/api/support/latest`,
@@ -1006,10 +1010,11 @@ Result:
 - `ao2 workbench support-verify --bundle-dir <dir>` verifies workbench
   support-bundle schema, queue schema, signed metadata, bundle digest, and
   signed count fields. JSON output includes attached evidence export
-  summaries.
+  summaries, including `ao2.operator-evidence-packet.v1` run ID, closure
+  verdict, replay status, provider score, and artifact digests when present.
 - `ao2 workbench support-inspect --bundle-dir <dir>` returns the same verified
   trust status as read-only JSON or text without creating a support case,
-  including attached evidence export counts and run subjects.
+  including attached evidence export counts and run/operator-packet subjects.
 - `ao2 workbench support-import --bundle-dir <dir>` verifies before copying a
   bundle into an offline support case with `import-summary.json` and
   `index.html`, including an `Evidence Exports` table when the bundle carries
