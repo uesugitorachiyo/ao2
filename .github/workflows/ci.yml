@@ -525,6 +525,41 @@ jobs:
           path: ao2/target/workbench-operator-packet-control-plane-smoke
           if-no-files-found: error
 
+  workbench-operator-packet-control-plane-smoke-index:
+    name: Workbench operator packet control-plane smoke index
+    runs-on: ubuntu-latest
+    needs: workbench-operator-packet-control-plane-smoke
+    timeout-minutes: 10
+    steps:
+      - name: Checkout AO2
+        uses: actions/checkout@v6.0.3
+        with:
+          path: ao2
+
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+
+      - name: Download Workbench operator packet smoke artifacts
+        uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: ao2-workbench-operator-packet-control-plane-smoke-*
+          path: ao2/target/workbench-operator-packet-control-plane-smoke-ci-artifacts
+
+      - name: Verify Workbench operator packet smoke index
+        working-directory: ao2
+        env:
+          AO2_WORKBENCH_OPERATOR_PACKET_CP_INDEX_REQUIRED_OS: ubuntu-latest,macos-latest,windows-latest
+        run: npm run smoke:workbench-operator-packet-control-plane:index
+
+      - name: Upload Workbench operator packet smoke index
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-workbench-operator-packet-control-plane-smoke-index
+          path: ao2/target/workbench-operator-packet-control-plane-smoke-index
+          if-no-files-found: error
+
   release-readiness-artifacts:
     name: Release readiness artifacts
     runs-on: ubuntu-latest
