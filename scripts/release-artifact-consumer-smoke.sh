@@ -47,6 +47,7 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+rm -rf "$OUT_ROOT/clean-workspace"
 mkdir -p "$OUT_ROOT/clean-workspace"
 
 if [ -n "$FIXTURE_DIR" ]; then

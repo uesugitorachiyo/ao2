@@ -65,8 +65,8 @@ run_step artifact_health \
   env \
     AO2_ARTIFACT_HEALTH_INDEX="$OUT_ROOT/artifact-index/artifact-index.json" \
     AO2_ARTIFACT_HEALTH_ROOT="$OUT_ROOT/artifact-health" \
-    AO2_ARTIFACT_HEALTH_REQUIRED_ROOTS="ao2/target/ci-artifacts ao2/target/release-evidence-closure ao2/.ao2-local/pulse/latest ao2-control-plane/target/ci-artifacts ao2-control-plane/target/dr-restore-drill" \
-    AO2_ARTIFACT_HEALTH_ALLOWED_MISSING_ROOTS="ao2/target/release-readiness-ci ao2/target/release-readiness-regression-gate ao2/target/phase1-promotion-golden ao2/target/pulse-real-execute-containment" \
+    AO2_ARTIFACT_HEALTH_REQUIRED_ROOTS="ao2/target/ci-artifacts ao2/.ao2-local/pulse/latest ao2-control-plane/target/ci-artifacts ao2-control-plane/target/dr-restore-drill" \
+    AO2_ARTIFACT_HEALTH_ALLOWED_MISSING_ROOTS="ao2/target/release-evidence-closure ao2/target/release-readiness-ci ao2/target/release-readiness-regression-gate ao2/target/phase1-promotion-golden ao2/target/pulse-real-execute-containment" \
     AO2_ARTIFACT_HEALTH_FAIL_ON_ATTENTION=1 \
     npm run artifacts:health
 
