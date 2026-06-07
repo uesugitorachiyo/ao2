@@ -49,6 +49,7 @@ npm run pulse:auto-advance-integration-gate # composed auto-advance restart gate
 npm run pulse:lengthy-gate:contract # static contract for the manifest-driven lengthy gate runner
 npm run pulse:lengthy-gate -- --gate pulse-consolidation # run one promoted lengthy gate by manifest id
 npm run pulse:shared-gate-lib-audit # shared Pulse gate helper audit
+npm run pulse:shared-gate-library-migration # shared gate helper migration evidence
 npm run public:hardening # CI-friendly public hardening subset
 npm run public:hardening-ci-workflow # local evidence for tracked public hardening CI workflow
 npm run public:hardening-workflow-file-dry-run # render side-effect-free public hardening workflow preview
@@ -146,6 +147,15 @@ missing package command references without running those wrappers. The gate emit
 `snapshot-manifest.json` and `classification-report.md`. This is preservation
 and decision support only: it does not auto-promote, delete, push, publish, or
 store credentials.
+
+`npm run pulse:shared-gate-library-migration` promotes the local helper
+migration wrapper into a tracked, public-safe evidence gate. It runs the shared
+gate helper audit, writes `ao2.shared-gate-library-migration.v1` at
+`target/shared-gate-library-migration/latest/summary.json`, and emits a helper
+adoption matrix at
+`target/shared-gate-library-migration/latest/helper-adoption-matrix.json`.
+The gate is local-only, stores no credentials, and performs no publishing or
+repository mutation.
 
 
 The mirror also writes `.ao2-local/pulse/latest/resume.json` and

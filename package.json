@@ -116,6 +116,7 @@
     "pulse:lengthy-gate": "node scripts/run-sh-script.js scripts/pulse-lengthy-gate-runner.sh",
     "pulse:lengthy-gate:contract": "node scripts/run-sh-script.js scripts/pulse-lengthy-gate-runner.sh --contract",
     "pulse:shared-gate-lib-audit": "node scripts/run-sh-script.js scripts/pulse-shared-gate-lib-audit.sh",
+    "pulse:shared-gate-library-migration": "node scripts/run-sh-script.js scripts/shared-gate-library-migration.sh",
     "public:hardening": "node scripts/run-sh-script.js scripts/public-hardening-subset.sh",
     "public:hardening-ci-workflow": "node scripts/run-sh-script.js scripts/public-hardening-ci-workflow.sh",
     "public:hardening-workflow-file-dry-run": "node scripts/run-sh-script.js scripts/public-hardening-workflow-file-dry-run.sh",
