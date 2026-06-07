@@ -1884,6 +1884,48 @@ def test_promoted_pulse_consolidation_scripts_are_public_safe_and_clean_checkout
     assert "ao2.pulse-lengthy-gate-runner.v1" in verification
 
 
+def test_script_surface_audit_preserves_local_rsi_scripts_before_promotion():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+    assert (
+        package_json["scripts"]["scripts:surface-audit"]
+        == "node scripts/run-sh-script.js scripts/script-surface-audit.sh"
+    )
+
+    script_path = REPO_ROOT / "scripts" / "script-surface-audit.sh"
+    assert script_path.is_file()
+    assert script_path.stat().st_mode & stat.S_IXUSR
+    text = script_path.read_text(encoding="utf-8")
+
+    for needle in [
+        "ao2.script-surface-audit.v1",
+        "snapshot_manifest",
+        "classification_report",
+        "missing_package_commands",
+        "promote_candidates",
+        "defer_control_plane",
+        "consolidate",
+        "no_auto_promotion",
+        "scripts/lib/pulse-gate-lib.sh",
+    ]:
+        assert needle in text
+
+    for forbidden in [
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "/Users/torachiyouesugi/Documents/private",
+        "target/long-lived-control-plane/api-token",
+        "gh release create",
+        "git push origin",
+        "npm publish",
+    ]:
+        assert forbidden not in text
+
+    assert "npm run scripts:surface-audit" in verification
+    assert "ao2.script-surface-audit.v1" in verification
+    assert "target/script-surface-audit/latest/summary.json" in verification
+
+
 def test_cross_os_release_attestation_is_ci_safe_and_separates_optional_native_proof():
     package_json = json.loads(read("package.json"))
     assert (
