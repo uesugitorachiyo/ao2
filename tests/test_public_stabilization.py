@@ -1926,6 +1926,45 @@ def test_script_surface_audit_preserves_local_rsi_scripts_before_promotion():
     assert "target/script-surface-audit/latest/summary.json" in verification
 
 
+def test_shared_gate_library_migration_is_promoted_as_public_safe_gate():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+    assert (
+        package_json["scripts"]["pulse:shared-gate-library-migration"]
+        == "node scripts/run-sh-script.js scripts/shared-gate-library-migration.sh"
+    )
+
+    script_path = REPO_ROOT / "scripts" / "shared-gate-library-migration.sh"
+    assert script_path.is_file()
+    assert script_path.stat().st_mode & stat.S_IXUSR
+    text = script_path.read_text(encoding="utf-8")
+
+    for needle in [
+        "ao2.shared-gate-library-migration.v1",
+        "ao2.shared-gate-library-migration.matrix.v1",
+        "pulse:shared-gate-lib-audit",
+        "helper_adoption_matrix",
+        "behavior_preservation_check",
+        "scripts/lib/pulse-gate-lib.sh",
+    ]:
+        assert needle in text
+
+    for forbidden in [
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "/Users/torachiyouesugi/Documents/private",
+        "target/long-lived-control-plane/api-token",
+        "gh release create",
+        "git push origin",
+        "npm publish",
+    ]:
+        assert forbidden not in text
+
+    assert "npm run pulse:shared-gate-library-migration" in verification
+    assert "ao2.shared-gate-library-migration.v1" in verification
+    assert "target/shared-gate-library-migration/latest/summary.json" in verification
+
+
 def test_cross_os_release_attestation_is_ci_safe_and_separates_optional_native_proof():
     package_json = json.loads(read("package.json"))
     assert (
