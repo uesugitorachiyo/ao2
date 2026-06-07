@@ -605,6 +605,9 @@ def test_pulse_auto_advance_runner_restart_contract():
         "pulse-auto-advance-ledger.jsonl",
         "operator_prompt_sha256",
         "recommended_tasks",
+        "pulse-task-manifest.json",
+        "pulse:task-executor",
+        "AO2_PULSE_TASK_EXECUTOR_MANIFEST",
         "duplicate_eval_loop_digest",
         "waiting_for_new_eval_loop_digest",
         "continue_until_stopped",
@@ -666,6 +669,99 @@ def test_pulse_auto_advance_runner_restart_contract():
         "target/pulse-auto-advance/latest/summary.json",
     ]:
         assert needle in verification
+
+
+def test_pulse_auto_advance_delegates_structured_manifest_to_task_executor(tmp_path):
+    pulse_dir = tmp_path / "pulse"
+    out_root = tmp_path / "auto-advance"
+    ledger = tmp_path / "ledger.jsonl"
+    stop_file = tmp_path / "STOP"
+    pulse_dir.mkdir()
+
+    eval_loop = {
+        "schema_version": "ao2.pulse-eval-loop.v1",
+        "status": "ready",
+        "recommended_tasks": [
+            {
+                "id": "risky-pr-report-surface",
+                "kind": "product_code",
+                "title": "Risky PR report surface",
+            }
+        ],
+        "trust_boundary": {"local_only": True, "stores_credentials": False},
+    }
+    manifest = {
+        "schema_version": "ao2.pulse-task-manifest.v1",
+        "trust_boundary": {
+            "local_only": True,
+            "stores_credentials": False,
+            "side_effects": "local_process_execution_and_packet_materialization",
+        },
+        "tasks": [
+            {
+                "id": "risky-pr-report-surface",
+                "kind": "product_code",
+                "title": "Risky PR report surface",
+                "objective": "Expose local run record and evaluator closure evidence in the report surface.",
+                "files": ["crates/ao2-cli/src/main.rs"],
+                "acceptance": ["Report links local run evidence."],
+                "verification": [
+                    {
+                        "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py -q",
+                        "expected_evidence": "pytest.tests.test_public_stabilization",
+                    }
+                ],
+                "stop_conditions": ["Stop if provider API keys are required."],
+            }
+        ],
+    }
+    eval_loop_path = pulse_dir / "pulse-eval-loop.json"
+    manifest_path = pulse_dir / "pulse-task-manifest.json"
+    prompt_path = pulse_dir / "operator-prompt.txt"
+    eval_loop_path.write_text(json.dumps(eval_loop, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    prompt_path.write_text("advance product-code tasks\n", encoding="utf-8")
+    resume = {
+        "schema_version": "ao2.pulse-local-mirror-resume.v1",
+        "status": "ready",
+        "pulse_eval_loop_path": "pulse-eval-loop.json",
+        "pulse_eval_loop_sha256": __import__("hashlib").sha256(eval_loop_path.read_bytes()).hexdigest(),
+        "operator_prompt_path": "operator-prompt.txt",
+        "operator_prompt_sha256": __import__("hashlib").sha256(prompt_path.read_bytes()).hexdigest(),
+        "auto_advance": {"continue_until_stopped": True, "stores_credentials": False},
+        "trust_boundary": {"local_only": True, "stores_credentials": False},
+    }
+    resume_path = pulse_dir / "resume.json"
+    resume_path.write_text(json.dumps(resume, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:auto-advance"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_RESUME_JSON": str(resume_path),
+            "AO2_PULSE_AUTO_ADVANCE_ROOT": str(out_root),
+            "AO2_PULSE_AUTO_ADVANCE_LEDGER": str(ledger),
+            "AO2_PULSE_AUTO_ADVANCE_STOP_FILE": str(stop_file),
+            "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT": "0",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "passed"
+    assert summary["task_execution_mode"] == "structured_manifest"
+    assert summary["pulse_task_manifest_path"] == str(manifest_path.resolve())
+    assert summary["results"][0]["id"] == "pulse-task-executor"
+    assert summary["results"][0]["status"] == "passed"
+    executor_summary = Path(summary["results"][0]["summary"])
+    assert executor_summary.is_file()
+    executor = json.loads(executor_summary.read_text(encoding="utf-8"))
+    assert executor["counts"]["product_code"] == 1
+    assert (executor_summary.parent / "implementation-packets" / "risky-pr-report-surface.md").is_file()
 
 
 def test_pulse_daemon_supervisor_contract():
@@ -757,6 +853,8 @@ def test_pulse_generate_next_auto_registration_contract():
     for needle in [
         "ao2.pulse-generate-next.v1",
         "ao2.pulse-next-lengthy-tasks.v1",
+        "product_code",
+        "Risky PR report/evaluator closure UX implementation",
         "cross-platform-compatibility",
         "Ubuntu macOS Windows compatibility evidence",
         "release:cross-os-attestation",
@@ -822,8 +920,17 @@ def test_pulse_generate_next_writes_structured_task_manifest(tmp_path):
         "side_effects": "local_process_execution_and_packet_materialization",
     }
     assert manifest["tasks"]
-    assert all(task["kind"] == "evidence_gate" for task in manifest["tasks"])
-    assert all(task["command"].startswith("npm run ") or task["command"].startswith("PYTHONDONTWRITEBYTECODE=") for task in manifest["tasks"])
+    assert any(task["kind"] == "product_code" for task in manifest["tasks"])
+    assert any(task["kind"] == "evidence_gate" for task in manifest["tasks"])
+    for task in manifest["tasks"]:
+        if task["kind"] == "evidence_gate":
+            assert task["command"].startswith("npm run ") or task["command"].startswith("PYTHONDONTWRITEBYTECODE=")
+        if task["kind"] == "product_code":
+            assert "command" not in task
+            assert task["objective"]
+            assert task["files"]
+            assert task["acceptance"]
+            assert task["verification"]
     summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
     assert any(item["path"] == "pulse-task-manifest.json" for item in summary["files"])
 

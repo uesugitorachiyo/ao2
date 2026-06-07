@@ -368,6 +368,44 @@ next_cursor = {"index": (cursor_index + 1) % len(catalog), "generation": generat
 cursor_file.write_text(json.dumps(next_cursor, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 tasks = []
+if selection["id"] == "risky-pr-product-mvp":
+    tasks.append({
+        "id": f"ao2-risky-pr-report-evaluator-closure-ux-g{generation}",
+        "kind": "product_code",
+        "title": "Risky PR report/evaluator closure UX implementation",
+        "objective": (
+            "Make the Risky PR Run MVP easier to inspect by surfacing the local run record, "
+            "static report/export links, and evaluator closure evidence as a product-facing implementation slice."
+        ),
+        "files": [
+            "crates/ao2-cli/src/main.rs",
+            "crates/ao2-cli/tests/cli_approval_replay.rs",
+            "docs/VERIFICATION.md",
+        ],
+        "acceptance": [
+            "Risky PR report output exposes local run record and static report/export evidence without filesystem archaeology.",
+            "Evaluator closure evidence remains required before closure can pass.",
+            "The implementation stays local-first and adds no provider API-key auth path.",
+        ],
+        "verification": [
+            {
+                "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py -q",
+                "expected_evidence": "pytest.tests.test_public_stabilization",
+            },
+            {
+                "command": "npm run risky-pr:product-readiness",
+                "expected_evidence": "ao2.risky-pr-product-readiness-gate.v1",
+            },
+        ],
+        "stop_conditions": [
+            "Stop if product evidence cannot be produced from one local risky-pr golden run.",
+            "Stop if the task would require provider API keys or credential storage.",
+            "Stop if evaluator closure can pass without evidence.",
+        ],
+        "why": "Create an actual product-code implementation packet before running supporting evidence gates.",
+        "rationale": selection["rationale"],
+        "required_evidence": selection["required_evidence"],
+    })
 for task_id, title, command, expected_evidence, why in selection["tasks"]:
     tasks.append({
         "id": f"{task_id}-g{generation}",
