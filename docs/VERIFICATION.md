@@ -114,15 +114,21 @@ adds `operator_prompt_sha256` to `resume.json`, and emits
 digests, honors `.ao2-local/pulse/STOP`, rejects duplicate eval-loop digests via
 `.ao2-local/pulse/pulse-auto-advance-ledger.jsonl`, runs `recommended_tasks`,
 and emits `ao2.pulse-auto-advance-run.v1` at
-`target/pulse-auto-advance/latest/summary.json`. With `--forever`, it writes
+`target/pulse-auto-advance/latest/summary.json`. When the packet contains a
+sibling `pulse-task-manifest.json`, auto-advance delegates execution to
+`npm run pulse:task-executor` so `product_code` tasks become implementation
+packets instead of command-only shell tasks. With `--forever`, it writes
 `ao2.pulse-auto-advance-heartbeat.v1` while waiting and calls
 `npm run pulse:generate-next` after each successful packet.
 
 `npm run pulse:generate-next` emits `ao2.pulse-generate-next.v1` at
 `target/pulse-generate-next/latest/summary.json` and writes a fresh
 `packet.md`, `board.md`, `executor-evidence.json`, `pulse-eval-loop.json`, and
-`ao2.pulse-next-lengthy-tasks.v1` packet. Generated packets use strategic scoring
-instead of blind rotation: each cycle performs project-level reassessment
+`pulse-task-manifest.json` / `ao2.pulse-next-lengthy-tasks.v1` packet. For the
+Risky PR product MVP selection, the manifest includes a product-code
+implementation packet for the report/evaluator closure UX before the supporting
+evidence gates. Generated packets use strategic scoring instead of blind
+rotation: each cycle performs project-level reassessment
 against `docs/PRD.md`, `docs/SDD-risky-pr-run.md`,
 `docs/SCHEMAS-AND-INTERFACES.md`, and `docs/IMPLEMENTATION-SLICES.md`, samples
 ledger history from `.ao2-local/pulse/pulse-auto-advance-ledger.jsonl`, applies

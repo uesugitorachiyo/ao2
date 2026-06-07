@@ -235,6 +235,7 @@ while True:
     if not isinstance(tasks, list) or not tasks:
         payload["reason"] = "recommended_tasks_missing"
         break
+    pulse_task_manifest_path = eval_loop_path.with_name("pulse-task-manifest.json")
 
     iteration += 1
     payload["schema_version"] = "ao2.pulse-auto-advance-run.v1"
@@ -243,36 +244,66 @@ while True:
     payload["generated_at_utc"] = utc_now()
     payload["current_iteration"] = iteration
     payload["current_task_count"] = len(tasks)
+    payload["pulse_task_manifest_path"] = str(pulse_task_manifest_path) if pulse_task_manifest_path.is_file() else None
     write_summary(payload)
     iteration_results = []
-    for index, task in enumerate(tasks, start=1):
-        task_id = str(task.get("id") or f"task-{index}")
-        command = str(task.get("command") or "")
-        if not command:
-            iteration_results.append({"index": index, "id": task_id, "status": "failed", "reason": "command_missing"})
-            break
-        safe_id = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in task_id)
-        log_path = log_dir / f"iteration-{iteration:02d}-{index:02d}-{safe_id}.log"
+    if pulse_task_manifest_path.is_file():
+        payload["task_execution_mode"] = "structured_manifest"
+        executor_root = out_root / "task-executor" / f"iteration-{iteration:02d}"
+        log_path = log_dir / f"iteration-{iteration:02d}-pulse-task-executor.log"
+        env = dict(os.environ)
+        env["AO2_PULSE_TASK_EXECUTOR_MANIFEST"] = str(pulse_task_manifest_path)
+        env["AO2_PULSE_TASK_EXECUTOR_ROOT"] = str(executor_root)
         with log_path.open("w", encoding="utf-8") as log:
-            log.write(f"$ {command}\n")
+            log.write("$ npm run pulse:task-executor\n")
+            log.write(f"AO2_PULSE_TASK_EXECUTOR_MANIFEST={pulse_task_manifest_path}\n")
+            log.write(f"AO2_PULSE_TASK_EXECUTOR_ROOT={executor_root}\n")
             log.flush()
-            result = subprocess.run(command, cwd=root, shell=True, stdout=log, stderr=subprocess.STDOUT)
+            result = subprocess.run("npm run pulse:task-executor", cwd=root, shell=True, env=env, stdout=log, stderr=subprocess.STDOUT)
         status = "passed" if result.returncode == 0 else "failed"
         iteration_results.append({
             "iteration": iteration,
-            "index": index,
-            "id": task_id,
-            "title": task.get("title"),
-            "command": command,
-            "expected_evidence": task.get("expected_evidence"),
+            "index": 1,
+            "id": "pulse-task-executor",
+            "title": "Pulse structured task manifest executor",
+            "command": "npm run pulse:task-executor",
+            "manifest": str(pulse_task_manifest_path),
+            "summary": str(executor_root / "summary.json"),
             "status": status,
             "exit_code": int(result.returncode),
             "log": str(log_path),
         })
-        if result.returncode != 0:
-            break
+    else:
+        payload["task_execution_mode"] = "recommended_tasks"
+        for index, task in enumerate(tasks, start=1):
+            task_id = str(task.get("id") or f"task-{index}")
+            command = str(task.get("command") or "")
+            if not command:
+                iteration_results.append({"index": index, "id": task_id, "status": "failed", "reason": "command_missing"})
+                break
+            safe_id = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in task_id)
+            log_path = log_dir / f"iteration-{iteration:02d}-{index:02d}-{safe_id}.log"
+            with log_path.open("w", encoding="utf-8") as log:
+                log.write(f"$ {command}\n")
+                log.flush()
+                result = subprocess.run(command, cwd=root, shell=True, stdout=log, stderr=subprocess.STDOUT)
+            status = "passed" if result.returncode == 0 else "failed"
+            iteration_results.append({
+                "iteration": iteration,
+                "index": index,
+                "id": task_id,
+                "title": task.get("title"),
+                "command": command,
+                "expected_evidence": task.get("expected_evidence"),
+                "status": status,
+                "exit_code": int(result.returncode),
+                "log": str(log_path),
+            })
+            if result.returncode != 0:
+                break
     payload["results"].extend(iteration_results)
-    if all(item.get("status") == "passed" for item in iteration_results) and len(iteration_results) == len(tasks):
+    expected_result_count = 1 if pulse_task_manifest_path.is_file() else len(tasks)
+    if all(item.get("status") == "passed" for item in iteration_results) and len(iteration_results) == expected_result_count:
         payload["completed_iterations"] = iteration
     else:
         payload["status"] = "failed"
