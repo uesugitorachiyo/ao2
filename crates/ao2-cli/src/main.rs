@@ -31946,6 +31946,8 @@ fn workbench_run_evidence_summary_json(target: &Path, query: &str) -> Result<ser
             error.to_string(),
         ),
     };
+    let report_path = PathBuf::from(json_string(&run, "report"));
+    let report_sections = report_sections_from_html(&report_path);
 
     Ok(serde_json::json!({
         "schema_version": "ao2.workbench-run-evidence-summary.v1",
@@ -31969,9 +31971,28 @@ fn workbench_run_evidence_summary_json(target: &Path, query: &str) -> Result<ser
             .cloned()
             .unwrap_or(serde_json::json!({"present": false})),
         "obligation_gates": obligation_gate_history_json(&run_dir.join("evidence-pack")),
+        "run_record": json_string(&run, "run_record"),
         "evidence_pack": json_string(&run, "evidence_pack"),
+        "static_report": json_string(&run, "report"),
+        "report_sections": report_sections,
         "cockpit": json_string(&run, "cockpit")
     }))
+}
+
+fn report_sections_from_html(report_path: &Path) -> Vec<String> {
+    let Ok(html) = fs::read_to_string(report_path) else {
+        return Vec::new();
+    };
+    [
+        "Local Run Record",
+        "Static Export Evidence",
+        "Evaluator Closure Evidence",
+        "Replay Evidence",
+    ]
+    .into_iter()
+    .filter(|section| html.contains(section))
+    .map(str::to_string)
+    .collect()
 }
 
 fn workbench_obligation_ledger_path(target: &Path, run_id: &str) -> Result<PathBuf> {
@@ -62745,6 +62766,7 @@ li + li {{ margin-top: 6px; }}
         objective = escape_html(&objective)
     )?;
 
+    render_static_evidence_links(&mut html, evidence_pack_path)?;
     render_provider_summaries(&mut html, pack)?;
     render_run_health(&mut html, pack)?;
     render_policy_decisions(&mut html, pack)?;
@@ -62757,6 +62779,44 @@ li + li {{ margin-top: 6px; }}
 
     html.push_str("</main>\n</body>\n</html>\n");
     Ok(html)
+}
+
+fn render_static_evidence_links(html: &mut String, evidence_pack_path: &Path) -> Result<()> {
+    let run_record = run_artifact_path(evidence_pack_path, &["run-record.json"]);
+    let static_report = run_artifact_path(evidence_pack_path, &["report", "index.html"]);
+    write!(
+        html,
+        r#"<section>
+<h2>Local Run Record</h2>
+<p class="muted">Primary local run evidence: <code>{run_record}</code>.</p>
+</section>
+<section>
+<h2>Static Export Evidence</h2>
+<table><thead><tr><th>Artifact</th><th>Local Path</th></tr></thead><tbody>
+<tr><td>Evidence Pack</td><td><code>{evidence_pack}</code></td></tr>
+<tr><td>Static Report</td><td><code>{static_report}</code></td></tr>
+</tbody></table>
+</section>
+"#,
+        run_record = escape_html(&run_record),
+        evidence_pack = escape_html(&evidence_pack_path.display().to_string()),
+        static_report = escape_html(&static_report)
+    )?;
+    Ok(())
+}
+
+fn run_artifact_path(evidence_pack_path: &Path, relative_path: &[&str]) -> String {
+    let Some(run_dir) = evidence_pack_path
+        .parent()
+        .and_then(|parent| parent.parent())
+    else {
+        return String::new();
+    };
+    let mut path = run_dir.to_path_buf();
+    for segment in relative_path {
+        path.push(segment);
+    }
+    path.display().to_string()
 }
 
 fn render_provider_summaries(html: &mut String, pack: &serde_json::Value) -> Result<()> {
@@ -62873,7 +62933,7 @@ fn render_artifacts(html: &mut String, pack: &serde_json::Value) -> Result<()> {
 }
 
 fn render_closures(html: &mut String, pack: &serde_json::Value) -> Result<()> {
-    html.push_str("<section>\n<h2>Closure Reports</h2>\n<table><thead><tr><th>Verdict</th><th>Acceptance Criteria</th><th>Unresolved Concerns</th><th>Blockers</th></tr></thead><tbody>\n");
+    html.push_str("<section>\n<h2>Evaluator Closure Evidence</h2>\n<p class=\"muted\">Closure Reports</p>\n<table><thead><tr><th>Verdict</th><th>Acceptance Criteria</th><th>Unresolved Concerns</th><th>Blockers</th></tr></thead><tbody>\n");
     for closure in json_array(pack, "closures") {
         writeln!(
             html,
@@ -62925,7 +62985,8 @@ fn render_replay(
     write!(
         html,
         r#"<section>
-<h2>Replay Integrity</h2>
+<h2>Replay Evidence</h2>
+<p class="muted">Replay Integrity</p>
 <div class="summary-grid">
 <div class="metric"><div class="label">Status</div><div class="value ok">Replay {status}</div></div>
 <div class="metric"><div class="label">Events</div><div class="value">{events}</div></div>

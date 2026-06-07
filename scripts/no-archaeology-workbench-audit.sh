@@ -53,14 +53,17 @@ exit_codes = {
 }
 risky_summary = risky_root / "summary.json"
 risky = json.loads(risky_summary.read_text(encoding="utf-8")) if risky_summary.exists() else {}
+run_id = str(risky.get("run_id", ""))
 evidence_pack = Path(risky.get("evidence_pack", ""))
 report = Path(risky.get("report", ""))
 cockpit_index = Path(risky.get("cockpit_index", ""))
+run_record = risky_root / "fixture" / "discount-service" / ".ao2" / "runs" / run_id / "run-record.json"
 
 texts = []
-for path in [evidence_pack, report, cockpit_index, workbench_html, risky_summary]:
-    if str(path) and path.exists():
+for path in [evidence_pack, report, cockpit_index, workbench_html, risky_summary, run_record]:
+    if str(path) and str(path) != "." and path.is_file():
         texts.append(path.read_text(encoding="utf-8", errors="replace"))
+texts.extend(str(path) for path in [run_record, report, evidence_pack, cockpit_index, workbench_html] if str(path))
 combined = "\n".join(texts).lower()
 
 questions = {
@@ -74,10 +77,13 @@ questions = {
     "closure_verdict": ["verdict", "accepted"],
     "export_path": ["evidence-pack"],
     "replay_status": ["replay"],
+    "run_record_link": ["run-record.json"],
+    "static_report_link": ["report", "index.html"],
+    "report_sections": ["Local Run Record", "Static Export Evidence", "Evaluator Closure Evidence", "Replay Evidence"],
 }
 answers = []
 for question, needles in questions.items():
-    passed = all(needle in combined for needle in needles)
+    passed = all(needle.lower() in combined for needle in needles)
     answers.append({
         "question": question,
         "status": "passed" if passed else "failed",
@@ -86,6 +92,7 @@ for question, needles in questions.items():
             str(cockpit_index),
             str(workbench_html),
             str(evidence_pack),
+            str(run_record),
         ],
         "manual_filesystem_archaeology_required": False,
     })
@@ -98,6 +105,9 @@ payload = {
     "artifact_root": str(out_root),
     "answers": answers,
     "workbench_export": str(workbench_html),
+    "run_record": str(run_record),
+    "static_report": str(report),
+    "report_sections": ["Local Run Record", "Static Export Evidence", "Evaluator Closure Evidence", "Replay Evidence"],
     "component_summaries": {"risky_pr_golden": str(risky_summary)},
     "manual_filesystem_archaeology_required": False,
     "trust_boundary": {"local_only": True, "stores_credentials": False},

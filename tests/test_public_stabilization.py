@@ -171,8 +171,12 @@ def test_risky_pr_golden_path_script_is_exposed_and_checks_uat_surface():
         "evaluator_rejection_observed",
         "evaluator_acceptance_observed",
         "acceptance_evidence_observed",
+        "Local Run Record",
+        "Static Export Evidence",
         "Policy Decisions",
+        "Evaluator Closure Evidence",
         "Closure Reports",
+        "Replay Evidence",
         "Run Markers",
     ]
     for needle in required:
@@ -1826,6 +1830,13 @@ def test_no_archaeology_workbench_audit_contract():
         "closure_verdict",
         "export_path",
         "replay_status",
+        "run_record_link",
+        "static_report_link",
+        "report_sections",
+        "Local Run Record",
+        "Static Export Evidence",
+        "Evaluator Closure Evidence",
+        "Replay Evidence",
         "manual_filesystem_archaeology_required",
         "workbench export",
     ]:
@@ -1837,6 +1848,7 @@ def test_no_archaeology_workbench_audit_contract():
         "npm run workbench:no-archaeology-audit",
         "ao2.no-archaeology-workbench-audit.v1",
         "target/no-archaeology-workbench/latest/summary.json",
+        "run-record/report/evaluator-closure links",
     ]:
         assert needle in verification
 
