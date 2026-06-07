@@ -216,6 +216,9 @@ def test_risky_pr_product_readiness_gate_reuses_one_golden_run_for_product_evide
         "local run record",
         "static report/export",
         "evaluator closure",
+        "Local Run Record",
+        "Evaluator Closure Evidence",
+        "Replay Evidence",
     ]:
         assert needle in verification
 
@@ -1025,6 +1028,8 @@ def test_pulse_task_executor_contract_supports_product_code_tasks():
         "ao2.pulse-task-executor.v1",
         "ao2.pulse-task-manifest.v1",
         "product-code implementation packets",
+        "product_code tasks require verification evidence",
+        "product_code task cannot close from packet materialization alone",
     ]:
         assert needle in verification
 
@@ -1142,6 +1147,56 @@ def test_pulse_task_executor_rejects_credential_storing_manifest(tmp_path):
     summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
     assert summary["status"] == "failed"
     assert summary["reason"] == "credential_storing_manifest_rejected"
+
+
+def test_pulse_task_executor_rejects_product_code_without_verification_evidence(tmp_path):
+    out_root = tmp_path / "executor"
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.pulse-task-manifest.v1",
+                "trust_boundary": {
+                    "local_only": True,
+                    "stores_credentials": False,
+                    "side_effects": "local_process_execution_and_packet_materialization",
+                },
+                "tasks": [
+                    {
+                        "id": "risky-pr-report-surface",
+                        "kind": "product_code",
+                        "title": "Risky PR report surface",
+                        "objective": "Expose local run record and evaluator closure evidence in the report surface.",
+                        "files": ["crates/ao2-runtime/src/lib.rs"],
+                        "acceptance": ["Report contains local run record evidence."],
+                        "stop_conditions": ["Stop if verification evidence is missing."],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:task-executor"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_TASK_EXECUTOR_MANIFEST": str(manifest),
+            "AO2_PULSE_TASK_EXECUTOR_ROOT": str(out_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "failed"
+    assert summary["reason"] == "product_code_verification_evidence_missing"
+    assert summary["results"][0]["id"] == "risky-pr-report-surface"
+    assert summary["results"][0]["status"] == "failed"
+    assert summary["results"][0]["reason"] == "product_code_verification_evidence_missing"
 
 
 def test_pulse_next_task_quality_filter_rejects_script_wrapper_only_packets(tmp_path):

@@ -45,6 +45,7 @@ fn risky_pr_run_rejects_once_then_accepts_with_exported_evidence() {
     assert_eq!(summary.approvals.len(), 1);
     assert!(summary.evidence_pack_path.exists());
     assert!(summary.report_path.exists());
+    assert!(summary.run_record_path.exists());
 
     let evidence = fs::read_to_string(&summary.evidence_pack_path).unwrap();
     let evidence_json: serde_json::Value = serde_json::from_str(&evidence).unwrap();
@@ -57,6 +58,31 @@ fn risky_pr_run_rejects_once_then_accepts_with_exported_evidence() {
         .unwrap()
         .iter()
         .any(|artifact| artifact["artifact_type"] == "adapter_transcript"));
+
+    let report = fs::read_to_string(&summary.report_path).unwrap();
+    let run_record_path = summary.run_record_path.display().to_string();
+    let evidence_pack_path = summary.evidence_pack_path.display().to_string();
+    assert!(report.contains("Local Run Record"));
+    assert!(report.contains(&run_record_path));
+    assert!(report.contains("Static Export Evidence"));
+    assert!(report.contains(&evidence_pack_path));
+    assert!(report.contains("Evaluator Closure Evidence"));
+    assert!(report.contains("rejected"));
+    assert!(report.contains("accepted"));
+    assert!(report.contains("Replay Evidence"));
+    assert!(report.contains("events.jsonl"));
+
+    let run_record = fs::read_to_string(&summary.run_record_path).unwrap();
+    let run_record_json: serde_json::Value = serde_json::from_str(&run_record).unwrap();
+    assert_eq!(run_record_json["closure"]["verdict"], "accepted");
+    assert_eq!(
+        run_record_json["evidence_pack"].as_str().unwrap(),
+        evidence_pack_path
+    );
+    assert_eq!(
+        run_record_json["report"].as_str().unwrap(),
+        summary.report_path.display().to_string()
+    );
 
     let events = fs::read_to_string(repo.join(".ao2/runs/test-run/events.jsonl")).unwrap();
     assert!(events.contains("\"event_type\":\"tool.denied\""));
