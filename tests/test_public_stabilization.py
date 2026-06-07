@@ -1749,6 +1749,75 @@ def test_pulse_consolidation_manifest_gate_is_promoted_to_public_scripts():
         assert script.stat().st_mode & stat.S_IXUSR
 
 
+def test_public_hardening_ci_workflow_is_tracked_and_public_safe():
+    package_json = json.loads(read("package.json"))
+    expected_scripts = {
+        "public:hardening-ci-workflow": "node scripts/run-sh-script.js scripts/public-hardening-ci-workflow.sh",
+        "public:hardening-workflow-file-dry-run": "node scripts/run-sh-script.js scripts/public-hardening-workflow-file-dry-run.sh",
+        "public:hardening-workflow-tracked-proposal": "node scripts/run-sh-script.js scripts/public-hardening-workflow-tracked-proposal.sh",
+        "public:hardening-ci-local-runner-parity": "node scripts/run-sh-script.js scripts/public-hardening-ci-local-runner-parity.sh",
+    }
+    for script_name, command in expected_scripts.items():
+        assert package_json["scripts"][script_name] == command
+
+    workflow = read(".github/workflows/ao2-public-hardening.yml")
+    assert re.search(r"(?m)^\s*pull_request:\s*$", workflow)
+    assert re.search(r"(?m)^\s*workflow_dispatch:\s*$", workflow)
+    assert not re.search(r"(?m)^\s*push:\s*$", workflow)
+    assert "permissions:\n  contents: read" in workflow
+    assert "uses: actions/checkout@v6.0.3" in workflow
+    assert "uses: actions/setup-node@v6.4.0" in workflow
+    assert "node-version: \"22\"" in workflow
+    for command in [
+        "npm ci",
+        "AO2_PULSE_GENERATE_NEXT_REGISTER=0 npm run pulse:generate-next",
+        "AO2_PULSE_LOCAL_MIRROR_SOURCE=target/pulse-next-recommended-tasks/generated-next npm run pulse:local-mirror",
+        "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py -q",
+        "npm run public:hardening",
+        "npm run pulse:resume -- --dry-run",
+    ]:
+        assert f"run: {command}" in workflow
+
+    for forbidden in [
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "target/long-lived-control-plane/api-token",
+        "/Users/",
+        "gh release create",
+        "git push",
+        "npm publish",
+    ]:
+        assert forbidden not in workflow
+
+
+def test_promoted_public_hardening_ci_scripts_are_clean_checkout_safe():
+    promoted = [
+        "scripts/public-hardening-ci-workflow.sh",
+        "scripts/public-hardening-workflow-file-dry-run.sh",
+        "scripts/public-hardening-workflow-tracked-proposal.sh",
+        "scripts/public-hardening-ci-local-runner-parity.sh",
+    ]
+    for script_path in promoted:
+        script = REPO_ROOT / script_path
+        assert script.is_file()
+        assert script.stat().st_mode & stat.S_IXUSR
+        text = script.read_text(encoding="utf-8")
+        assert "scripts/lib/pulse-gate-lib.sh" in text
+        assert "ao2.public-hardening" in text
+        for forbidden in [
+            "OPENAI_API_KEY",
+            "ANTHROPIC_API_KEY",
+            "target/long-lived-control-plane/api-token",
+            "/Users/",
+            "gh release create",
+            "git push",
+            "npm publish",
+            "actions/checkout@v4",
+            "actions/setup-node@v4",
+        ]:
+            assert forbidden not in text
+
+
 def test_promoted_pulse_consolidation_scripts_are_public_safe_and_clean_checkout_safe():
     verification = read("docs/VERIFICATION.md")
     scripts = {

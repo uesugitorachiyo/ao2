@@ -1,0 +1,43 @@
+name: AO2 Public Hardening
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ao2-public-hardening-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  public-hardening:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Seed local Pulse mirror
+        run: AO2_PULSE_GENERATE_NEXT_REGISTER=0 npm run pulse:generate-next
+
+      - name: Mirror local Pulse packet
+        run: AO2_PULSE_LOCAL_MIRROR_SOURCE=target/pulse-next-recommended-tasks/generated-next npm run pulse:local-mirror
+
+      - name: Public stabilization tests
+        run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py -q
+
+      - name: Public hardening subset
+        run: npm run public:hardening
+
+      - name: Pulse resume dry-run
+        run: npm run pulse:resume -- --dry-run

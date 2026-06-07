@@ -50,6 +50,10 @@ npm run pulse:lengthy-gate:contract # static contract for the manifest-driven le
 npm run pulse:lengthy-gate -- --gate pulse-consolidation # run one promoted lengthy gate by manifest id
 npm run pulse:shared-gate-lib-audit # shared Pulse gate helper audit
 npm run public:hardening # CI-friendly public hardening subset
+npm run public:hardening-ci-workflow # local evidence for tracked public hardening CI workflow
+npm run public:hardening-workflow-file-dry-run # render side-effect-free public hardening workflow preview
+npm run public:hardening-workflow-tracked-proposal # tracked workflow proposal evidence
+npm run public:hardening-ci-local-runner-parity # compare workflow commands to local runner commands
 npm run scripts:tracking-intent-audit # script tracking intent and promotion manifest
 npm run pulse:next-task-quality-filter # next task quality filter
 npm run pulse:quality-filter-negative-corpus # Pulse quality filter negative fixtures
@@ -745,6 +749,16 @@ operator gates: `.github/workflows/release-gate.yml` and
 `.github/workflows/public-release-build.yml` use `workflow_dispatch` only.
 Local and self-hosted verification remain valid pre-release evidence, but public
 hosted CI is the default regression guard for ordinary changes.
+
+The public hardening workflow at `.github/workflows/ao2-public-hardening.yml`
+runs on pull request and manual dispatch only. It uses read-only repository
+permissions, seeds a local Pulse packet with `pulse:generate-next`, mirrors that
+packet with `pulse:local-mirror`, then runs the public stabilization tests,
+`public:hardening`, and `pulse:resume -- --dry-run`. The local parity commands
+above emit `ao2.public-hardening-ci-workflow.v1`,
+`ao2.public-hardening-workflow-file-dry-run.v1`,
+`ao2.public-hardening-workflow-tracked-proposal.v1`, and
+`ao2.public-hardening-ci-local-runner-parity.v1` under `target/`.
 
 ## Current Production Readiness Boundary
 
