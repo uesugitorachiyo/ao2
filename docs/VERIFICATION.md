@@ -56,6 +56,7 @@ npm run public:hardening-workflow-file-dry-run # render side-effect-free public 
 npm run public:hardening-workflow-tracked-proposal # tracked workflow proposal evidence
 npm run public:hardening-ci-local-runner-parity # compare workflow commands to local runner commands
 npm run scripts:tracking-intent-audit # script tracking intent and promotion manifest
+npm run scripts:tracking-decision-cleanup # script promotion decision cleanup evidence
 npm run scripts:surface-audit # preserve and classify local RSI/Pulse scripts before promotion
 npm run pulse:next-task-quality-filter # next task quality filter
 npm run pulse:quality-filter-negative-corpus # Pulse quality filter negative fixtures
@@ -147,6 +148,14 @@ missing package command references without running those wrappers. The gate emit
 `snapshot-manifest.json` and `classification-report.md`. This is preservation
 and decision support only: it does not auto-promote, delete, push, publish, or
 store credentials.
+
+`npm run scripts:tracking-decision-cleanup` promotes the local script tracking
+decision cleanup wrapper into a tracked, public-safe evidence gate. It runs the
+script tracking intent audit, writes `ao2.script-tracking-decision-cleanup.v1`
+at `target/script-tracking-decision-cleanup/latest/summary.json`, and emits
+`target/script-tracking-decision-cleanup/latest/pre-commit-cleanup-list.json`
+with track-in-repo and local-only decision lists. The gate is local-only, stores
+no credentials, and performs no publishing or repository mutation.
 
 `npm run pulse:shared-gate-library-migration` promotes the local helper
 migration wrapper into a tracked, public-safe evidence gate. It runs the shared

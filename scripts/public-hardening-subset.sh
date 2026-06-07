@@ -19,8 +19,8 @@ ao2_gate_run_step "$LOG_DIR" pulse_resume_dry_run \
 ao2_gate_run_step "$LOG_DIR" pulse_lengthy_gate_contract \
   npm run pulse:lengthy-gate:contract
 ao2_gate_run_step "$LOG_DIR" bash_syntax_check \
-  bash -n scripts/lib/pulse-gate-lib.sh scripts/pulse-shared-gate-lib-audit.sh scripts/shared-gate-library-migration.sh scripts/public-hardening-subset.sh scripts/operator-evidence-index.sh scripts/script-tracking-intent-audit.sh scripts/pulse-next-task-quality-filter.sh scripts/pulse-lengthy-gate-runner.sh
-ao2_gate_forbidden_string_scan "$LOG_DIR" scripts/lib/pulse-gate-lib.sh scripts/pulse-shared-gate-lib-audit.sh scripts/shared-gate-library-migration.sh scripts/public-hardening-subset.sh scripts/operator-evidence-index.sh scripts/script-tracking-intent-audit.sh scripts/pulse-next-task-quality-filter.sh scripts/pulse-lengthy-gate-runner.sh
+  bash -n scripts/lib/pulse-gate-lib.sh scripts/pulse-shared-gate-lib-audit.sh scripts/shared-gate-library-migration.sh scripts/public-hardening-subset.sh scripts/operator-evidence-index.sh scripts/script-tracking-intent-audit.sh scripts/script-tracking-decision-cleanup.sh scripts/pulse-next-task-quality-filter.sh scripts/pulse-lengthy-gate-runner.sh
+ao2_gate_forbidden_string_scan "$LOG_DIR" scripts/lib/pulse-gate-lib.sh scripts/pulse-shared-gate-lib-audit.sh scripts/shared-gate-library-migration.sh scripts/public-hardening-subset.sh scripts/operator-evidence-index.sh scripts/script-tracking-intent-audit.sh scripts/script-tracking-decision-cleanup.sh scripts/pulse-next-task-quality-filter.sh scripts/pulse-lengthy-gate-runner.sh
 
 python3 - "$OUT_ROOT" "$SUMMARY" "$LOG_DIR" <<'PY'
 import json
