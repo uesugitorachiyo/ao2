@@ -2357,6 +2357,16 @@ fn workbench_operator_packet_control_plane_smoke_is_release_wired() {
     assert!(smoke_script.contains("ao2.evidence-pack.v1"));
     assert!(smoke_script.contains("token_leak_detected"));
     assert!(smoke_script.contains("env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY"));
+    assert!(smoke_script.contains("python_command()"));
+    assert!(smoke_script.contains("command -v python3"));
+    assert!(smoke_script.contains("command -v python"));
+    assert!(smoke_script.contains("exe_suffix()"));
+    assert!(smoke_script.contains("MINGW*"));
+    assert!(smoke_script.contains("MSYS*"));
+    assert!(smoke_script.contains("CYGWIN*"));
+    assert!(smoke_script.contains("binary_path()"));
+    assert!(smoke_script.contains("AO2_BIN=\"$(binary_path"));
+    assert!(smoke_script.contains("CP_SERVER_BIN=\"$(binary_path"));
     assert!(observer_gate.contains("workbench_operator_packet_control_plane_smoke"));
     assert!(observer_gate.contains("AO2_WORKBENCH_OPERATOR_PACKET_CP_SMOKE_ROOT"));
     assert!(observer_gate.contains("smoke:workbench-operator-packet-control-plane"));
@@ -2728,7 +2738,7 @@ fn ci_workflow_runs_on_public_changes_while_release_gates_stay_manual() {
     assert!(ci.contains("workbench-operator-packet-control-plane-smoke:"));
     assert!(ci.contains("name: Workbench operator packet control-plane smoke ${{ matrix.os }}"));
     assert!(ci.contains("fail-fast: false"));
-    assert!(ci.contains("os: [ubuntu-latest, macos-latest]"));
+    assert!(ci.contains("os: [ubuntu-latest, macos-latest, windows-latest]"));
     assert!(ci.contains("runs-on: ${{ matrix.os }}"));
     assert!(ci.contains("Checkout AO2"));
     assert!(ci.contains("path: ao2"));
