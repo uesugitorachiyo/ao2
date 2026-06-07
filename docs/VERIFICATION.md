@@ -374,7 +374,10 @@ Result:
   detail, latest, raw packet, and signature endpoints, and emits the
   workbench operator-packet control-plane smoke summary
   `ao2.workbench-operator-packet-control-plane-smoke.v1` under
-  `target/workbench-operator-packet-control-plane-smoke/`
+  `target/workbench-operator-packet-control-plane-smoke/`. CI also runs this
+  as the Ubuntu `Workbench operator packet control-plane smoke` job with
+  `ao2-control-plane` checked out as a sibling repository and uploads the smoke
+  evidence artifact.
 - `npm run provider:phase2-contract-hardening`: verifies Codex and Claude
   provider contracts, replacement parity, no-factory-v3 guardrails, transcript
   parsing, sandbox patch digest boundaries, exact approval enforcement,

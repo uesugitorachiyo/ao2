@@ -2725,6 +2725,18 @@ fn ci_workflow_runs_on_public_changes_while_release_gates_stay_manual() {
     assert!(ci.contains("timeout-minutes: 15"));
     assert!(ci.contains("timeout_minutes: 20"));
     assert!(ci.contains("cargo deny check bans licenses sources advisories"));
+    assert!(ci.contains("workbench-operator-packet-control-plane-smoke:"));
+    assert!(ci.contains("name: Workbench operator packet control-plane smoke"));
+    assert!(ci.contains("Checkout AO2"));
+    assert!(ci.contains("path: ao2"));
+    assert!(ci.contains("repository: uesugitorachiyo/ao2-control-plane"));
+    assert!(ci.contains("path: ao2-control-plane"));
+    assert!(ci.contains("working-directory: ao2"));
+    assert!(ci.contains("AO2_CONTROL_PLANE_ROOT: ../ao2-control-plane"));
+    assert!(ci.contains("AO2_WORKBENCH_OPERATOR_PACKET_CP_PROFILE: debug"));
+    assert!(ci.contains("npm run smoke:workbench-operator-packet-control-plane"));
+    assert!(ci.contains("ao2-workbench-operator-packet-control-plane-smoke"));
+    assert!(ci.contains("target/workbench-operator-packet-control-plane-smoke"));
 
     for release_workflow in [&release_gate, &public_release] {
         assert!(release_workflow.contains("workflow_dispatch:"));
