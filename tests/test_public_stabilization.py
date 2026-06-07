@@ -1781,6 +1781,7 @@ def test_public_hardening_ci_workflow_is_tracked_and_public_safe():
     for command in [
         "AO2_PULSE_GENERATE_NEXT_REGISTER=0 npm run pulse:generate-next",
         "AO2_PULSE_LOCAL_MIRROR_SOURCE=target/pulse-next-recommended-tasks/generated-next npm run pulse:local-mirror",
+        "python3 -m pip install pytest",
         "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py -q",
         "npm run public:hardening",
         "npm run pulse:resume -- --dry-run",
