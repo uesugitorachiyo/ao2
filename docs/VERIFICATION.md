@@ -48,6 +48,9 @@ npm run pulse:stop-and-dedup-ledger # stop signal and duplicate digest ledger ev
 npm run pulse:auto-advance-integration-gate # composed auto-advance restart gate
 npm run pulse:lengthy-gate:contract # static contract for the manifest-driven lengthy gate runner
 npm run pulse:lengthy-gate -- --gate pulse-consolidation # run one promoted lengthy gate by manifest id
+npm run pulse:shared-gate-lib-audit # shared Pulse gate helper audit
+npm run public:hardening # CI-friendly public hardening subset
+npm run scripts:tracking-intent-audit # script tracking intent and promotion manifest
 npm run pulse:next-task-quality-filter # next task quality filter
 npm run pulse:quality-filter-negative-corpus # Pulse quality filter negative fixtures
 npm run pulse:quality-filter-required-gate # required Pulse quality gate boundary evidence
