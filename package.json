@@ -42,6 +42,7 @@
     "smoke:provider:claude-pilot": "node scripts/run-sh-script.js scripts/smoke-claude-provider-pilot.sh",
     "smoke:provider:antigravity-pilot": "node scripts/run-sh-script.js scripts/smoke-antigravity-provider-pilot.sh",
     "risky-pr:golden": "node scripts/run-sh-script.js scripts/risky-pr-golden-path.sh",
+    "risky-pr:product-readiness": "node scripts/run-sh-script.js scripts/risky-pr-product-readiness-gate.sh",
     "smoke:evidence-control-plane": "node scripts/run-sh-script.js scripts/smoke-evidence-pack-control-plane.sh",
     "release:readiness": "node scripts/run-sh-script.js scripts/release-readiness.sh",
     "release:readiness:static": "node scripts/run-sh-script.js scripts/release-readiness.sh --static-only",

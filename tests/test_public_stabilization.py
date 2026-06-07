@@ -1,6 +1,8 @@
 import json
+import os
 import re
 import stat
+import subprocess
 from pathlib import Path
 
 
@@ -177,6 +179,45 @@ def test_risky_pr_golden_path_script_is_exposed_and_checks_uat_surface():
         assert needle in text
     assert "OPENAI_API_KEY=" not in text
     assert "ANTHROPIC_API_KEY=" not in text
+
+
+def test_risky_pr_product_readiness_gate_reuses_one_golden_run_for_product_evidence():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+    assert (
+        package_json["scripts"]["risky-pr:product-readiness"]
+        == "node scripts/run-sh-script.js scripts/risky-pr-product-readiness-gate.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "risky-pr-product-readiness-gate.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.risky-pr-product-readiness-gate.v1",
+        "AO2_RISKY_PR_GOLDEN_ROOT=\"$RISKY_ROOT\"",
+        "npm run risky-pr:golden",
+        "ao2.risky-pr-golden-path.v1",
+        "ao2.evidence-pack.v1",
+        "local_run_record",
+        "static_report_export",
+        "evaluator_closure_evidence",
+        "manual_filesystem_archaeology_required",
+        "stores_credentials",
+    ]:
+        assert needle in text
+    assert text.count("npm run risky-pr:golden") == 1
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+    for needle in [
+        "npm run risky-pr:product-readiness",
+        "ao2.risky-pr-product-readiness-gate.v1",
+        "local run record",
+        "static report/export",
+        "evaluator closure",
+    ]:
+        assert needle in verification
 
 
 def test_release_readiness_script_is_local_only_and_checks_repo_guardrails():
@@ -368,12 +409,15 @@ def test_pulse_auto_advance_prompt_registration_contract():
     prompt = (
         "After each task batch, re-evaluate AO2 and ao2-control-plane at project level. "
         "Choose next tasks by highest long-term value, not similarity to last tasks. "
-        "Prefer public reliability, Ubuntu/macOS/Windows correctness, CI confidence, "
-        "evidence quality, security/safety boundaries, control-plane integration, "
-        "release readiness, and developer/operator usability. Avoid narrow recursion "
-        "or low-value daemon work unless it is the bottleneck. Generate next lengthy "
-        "tasks with rationale, required evidence, and stop conditions, then register "
-        "and continue through the AO2 event loop."
+        "Prefer the Risky PR Run MVP product loop, local run record, static "
+        "report/export, evaluator closure evidence, public reliability, "
+        "Ubuntu/macOS/Windows correctness, CI confidence, evidence quality, "
+        "security/safety boundaries, control-plane integration, release readiness, "
+        "and developer/operator usability. Do not create new shell wrappers unless "
+        "they directly unlock a product-slice or release-readiness bottleneck. "
+        "Avoid narrow recursion or low-value daemon work unless it is the bottleneck. "
+        "Generate next lengthy tasks with rationale, required evidence, and stop "
+        "conditions, then register and continue through the AO2 event loop."
     )
 
     assert (
@@ -684,6 +728,90 @@ def test_pulse_generate_next_uses_project_level_strategic_scoring():
         "ledger history",
     ]:
         assert needle in verification
+
+
+def test_pulse_generate_next_is_locked_to_product_mvp_readiness_not_script_recursion():
+    generator = read("scripts/pulse-generate-next.sh")
+
+    for needle in [
+        "product_mvp_slice",
+        "Risky PR Run MVP product loop",
+        "risky-pr:product-readiness",
+        "ao2.risky-pr-golden-path.v1",
+        "static report",
+        "evaluator closure",
+        "local run record",
+        "Do not create new shell wrappers",
+        "script_wrapper_recursion_block",
+    ]:
+        assert needle in generator
+    assert generator.count("npm run risky-pr:golden") == 0
+
+
+def test_pulse_next_task_quality_filter_rejects_script_wrapper_only_packets(tmp_path):
+    packet = tmp_path / "packet.md"
+    out_root = tmp_path / "quality"
+    packet.write_text(
+        "# Packet\n\n"
+        "## 1. Pulse wrapper consolidation matrix\n\n"
+        "Add another shell wrapper around existing Pulse gates.\n\n"
+        "## 2. Script tracking runbook lock\n\n"
+        "Refresh script index and runbook proof without product evidence.\n",
+        encoding="utf-8",
+    )
+    env = {
+        **os.environ,
+        "AO2_PULSE_NEXT_TASK_QUALITY_PACKET": str(packet),
+        "AO2_PULSE_NEXT_TASK_QUALITY_ROOT": str(out_root),
+    }
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:next-task-quality-filter"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "failed"
+    assert summary["script_wrapper_recursion_block"] is True
+    assert summary["product_slice_coverage"] == "missing"
+
+
+def test_pulse_next_task_quality_filter_allows_support_tasks_inside_product_packets(tmp_path):
+    packet = tmp_path / "packet.md"
+    out_root = tmp_path / "quality"
+    packet.write_text(
+        "# Packet\n\n"
+        "## 1. Risky PR static report/export\n\n"
+        "Build product evidence for the Risky PR Run MVP.\n\n"
+        "## 2. Pulse blocked registration resume guard\n\n"
+        "Keep registration safe while product evidence advances.\n",
+        encoding="utf-8",
+    )
+    env = {
+        **os.environ,
+        "AO2_PULSE_NEXT_TASK_QUALITY_PACKET": str(packet),
+        "AO2_PULSE_NEXT_TASK_QUALITY_ROOT": str(out_root),
+    }
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:next-task-quality-filter"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "passed"
+    assert summary["script_wrapper_recursion_block"] is False
+    assert summary["product_slice_coverage"] == "present"
 
 
 def test_artifact_index_consumer_canary_and_pulse_resume_contracts():

@@ -60,6 +60,39 @@ fn accept_one(listener: &TcpListener) -> TcpStream {
     }
 }
 
+fn read_request_headers(stream: &mut TcpStream) -> String {
+    stream
+        .set_read_timeout(Some(std::time::Duration::from_millis(250)))
+        .ok();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    let mut request = Vec::new();
+    loop {
+        let mut buffer = [0_u8; 1024];
+        match stream.read(&mut buffer) {
+            Ok(0) => break,
+            Ok(read) => {
+                request.extend_from_slice(&buffer[..read]);
+                if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) =>
+            {
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "timed out waiting for complete request headers"
+                );
+            }
+            Err(error) => panic!("read request failed: {error}"),
+        }
+    }
+    String::from_utf8_lossy(&request).into_owned()
+}
+
 #[test]
 fn cp_release_snapshot_captures_all_four_endpoints() {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
@@ -226,12 +259,7 @@ fn cp_release_snapshot_sends_bearer_authorization_header() {
     let server = std::thread::spawn(move || {
         for _ in 0..4 {
             let mut stream = accept_one(&listener);
-            stream
-                .set_read_timeout(Some(std::time::Duration::from_secs(5)))
-                .ok();
-            let mut buffer = [0_u8; 4096];
-            let read = stream.read(&mut buffer).unwrap_or(0);
-            let request = String::from_utf8_lossy(&buffer[..read]);
+            let request = read_request_headers(&mut stream);
             assert!(
                 request.contains(&format!("Authorization: Bearer {server_token}")),
                 "request must carry Bearer token, got headers:\n{request}"
