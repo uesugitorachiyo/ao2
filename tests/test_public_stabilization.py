@@ -2007,6 +2007,49 @@ def test_script_tracking_decision_cleanup_is_promoted_as_public_safe_gate():
     assert "target/script-tracking-decision-cleanup/latest/summary.json" in verification
 
 
+def test_script_tracking_review_pack_is_promoted_as_public_safe_gate():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+    public_hardening = read("scripts/public-hardening-subset.sh")
+    assert (
+        package_json["scripts"]["scripts:tracking-review-pack"]
+        == "node scripts/run-sh-script.js scripts/script-tracking-review-pack.sh"
+    )
+
+    script_path = REPO_ROOT / "scripts" / "script-tracking-review-pack.sh"
+    assert script_path.is_file()
+    assert script_path.stat().st_mode & stat.S_IXUSR
+    text = script_path.read_text(encoding="utf-8")
+
+    for needle in [
+        "ao2.script-tracking-review-pack.v1",
+        "ao2.script-tracking-review-pack.payload.v1",
+        "scripts:tracking-decision-cleanup",
+        "tracked_script_candidates",
+        "local_only_artifacts",
+        "pre_commit_review",
+        "tracking_review_pack",
+        "scripts/lib/pulse-gate-lib.sh",
+    ]:
+        assert needle in text
+
+    for forbidden in [
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "/Users/torachiyouesugi/Documents/private",
+        "target/long-lived-control-plane/api-token",
+        "gh release create",
+        "git push origin",
+        "npm publish",
+    ]:
+        assert forbidden not in text
+
+    assert "scripts/script-tracking-review-pack.sh" in public_hardening
+    assert "npm run scripts:tracking-review-pack" in verification
+    assert "ao2.script-tracking-review-pack.v1" in verification
+    assert "target/script-tracking-review-pack/latest/summary.json" in verification
+
+
 def test_cross_os_release_attestation_is_ci_safe_and_separates_optional_native_proof():
     package_json = json.loads(read("package.json"))
     assert (
