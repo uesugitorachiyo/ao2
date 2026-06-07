@@ -69,6 +69,7 @@ npm run workbench:no-archaeology-audit # cockpit/workbench inspectability audit
 npm run control-plane:observer-hardening # read-only observer + restore hardening
 npm run provider:phase2-contract-hardening # provider contract Phase 2 hardening gate
 npm run release:train-drill # side-effect-free public release train rehearsal
+npm run release:cross-os-attestation # CI-safe cross-OS release artifact attestation
 npm run next:lengthy:gate # aggregate local gate for the next lengthy task set
 npm run control-plane:cross-repo-observer # cross-repo AO2/control-plane observer integration
 npm run release:install-update-fixture # signed fixture install/update verification
@@ -200,7 +201,10 @@ Result:
 - `npm run artifacts:health`: reads the latest `artifact-index.json`, writes
   `ao2.artifact-evidence-health.v1` to
   `target/artifact-health/latest/summary.json`, and groups failing, missing,
-  stale, empty, and healthy evidence bundles for local triage
+  stale, allowed missing/stale, empty, and healthy evidence bundles for local
+  triage. Roots listed in `AO2_ARTIFACT_HEALTH_ALLOWED_MISSING_ROOTS` are
+  reported under allowed attention when missing or stale, but they do not count
+  toward `AO2_ARTIFACT_HEALTH_FAIL_ON_ATTENTION=1` failures.
   Policy knobs:
   `AO2_ARTIFACT_HEALTH_REQUIRED_ROOTS`,
   `AO2_ARTIFACT_HEALTH_ALLOWED_MISSING_ROOTS`,
@@ -316,6 +320,16 @@ Result:
   with `AO2_PHASE1_DASHBOARD_SNAPSHOT=1`
 - four cross-OS archives at v0.4.80 (macOS aarch64, Linux aarch64, Linux
   x86_64, Windows x86_64) all SHA256 + RSA signature verified
+- `npm run release:cross-os-attestation` emits
+  `ao2.cross-os-release-attestation.v1` at
+  `target/cross-os-release-artifact-attestation/latest/summary.json`; by
+  default it runs CI-safe required checks and records native three-OS smoke plus
+  public release download verification as optional evidence. Set
+  `AO2_CROSS_OS_ATTESTATION_ENABLE_THREE_OS=1` or
+  `AO2_CROSS_OS_ATTESTATION_ENABLE_DOWNLOAD=1` to execute those optional lanes.
+  Set `AO2_CROSS_OS_ATTESTATION_REQUIRE_NATIVE=1` or
+  `AO2_CROSS_OS_ATTESTATION_REQUIRE_DOWNLOAD=1` to make missing optional proof a
+  blocking failure.
 
 ## Phase 1 Promotion Token Boundary
 

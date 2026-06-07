@@ -41,6 +41,8 @@ payload = {
     "empty_bundles": [],
     "healthy_bundles": [],
     "allowed_missing_bundles": [],
+    "allowed_stale_bundles": [],
+    "allowed_attention_bundles": [],
     "policy": {
         "required_roots": required_roots,
         "allowed_missing_roots": sorted(allowed_missing_roots),
@@ -100,12 +102,17 @@ else:
             elif health == "missing":
                 if bundle_root in allowed_missing_roots or root_key in allowed_missing_roots:
                     payload["allowed_missing_bundles"].append(item)
+                    payload["allowed_attention_bundles"].append(item)
                 else:
                     payload["missing_bundles"].append(item)
             elif health == "empty":
                 payload["empty_bundles"].append(item)
             elif health == "stale":
-                payload["stale_bundles"].append(item)
+                if bundle_root in allowed_missing_roots or root_key in allowed_missing_roots:
+                    payload["allowed_stale_bundles"].append(item)
+                    payload["allowed_attention_bundles"].append(item)
+                else:
+                    payload["stale_bundles"].append(item)
             else:
                 payload["failing_bundles"].append(item)
     for required in required_roots:
@@ -142,7 +149,7 @@ lines = [
     f"- Fail on attention: `{fail_on_attention}`",
     "",
 ]
-for key in ["policy_violations", "failing_bundles", "missing_bundles", "stale_bundles", "empty_bundles", "allowed_missing_bundles", "healthy_bundles"]:
+for key in ["policy_violations", "failing_bundles", "missing_bundles", "stale_bundles", "empty_bundles", "allowed_missing_bundles", "allowed_stale_bundles", "allowed_attention_bundles", "healthy_bundles"]:
     lines.append(f"## {key}")
     items = payload[key]
     if not items:

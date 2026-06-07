@@ -796,6 +796,7 @@ def test_real_artifact_consumer_dashboard_pulse_execute_and_manual_canary_contra
         "missing_required_schemas",
         "ao2.release-artifact-consumer-smoke.v1",
         "gh run download",
+        "rm -rf \"$OUT_ROOT/clean-workspace\"",
     ]:
         assert needle in consumer
 
@@ -863,6 +864,7 @@ def test_artifact_health_local_canary_bundle_and_pulse_execute_simulation_contra
         "failing_bundles",
         "missing_bundles",
         "stale_bundles",
+        "allowed_stale_bundles",
         "empty_bundles",
         "target/artifact-health/latest",
         "stores_credentials",
@@ -953,6 +955,8 @@ def test_artifact_health_policy_knobs_contract():
         "AO2_ARTIFACT_HEALTH_STALE_AFTER_SECONDS",
         "required_roots",
         "allowed_missing_roots",
+        "allowed_attention_bundles",
+        "allowed_stale_bundles",
         "policy_violations",
         "fail_on_attention",
         "stale_threshold_override_seconds",
@@ -1159,9 +1163,16 @@ def test_release_evidence_closure_contract():
         "control_plane_restore_negative",
         "closure.html",
         "evidence must exist before evaluator closure accepts a run",
+        "ao2/target/release-evidence-closure",
+        "AO2_ARTIFACT_HEALTH_ALLOWED_MISSING_ROOTS",
         "stores_credentials",
     ]:
         assert needle in text
+    assert (
+        'AO2_ARTIFACT_HEALTH_REQUIRED_ROOTS="ao2/target/ci-artifacts '
+        'ao2/.ao2-local/pulse/latest ao2-control-plane/target/ci-artifacts '
+        'ao2-control-plane/target/dr-restore-drill"'
+    ) in text
     assert "OPENAI_API_KEY" not in text
     assert "ANTHROPIC_API_KEY" not in text
 
@@ -1871,3 +1882,49 @@ def test_promoted_pulse_consolidation_scripts_are_public_safe_and_clean_checkout
     assert "scripts/pulse-consolidation-lengthy-gate.sh" not in public_hardening
     assert "npm run pulse:lengthy-gate -- --gate pulse-consolidation" in verification
     assert "ao2.pulse-lengthy-gate-runner.v1" in verification
+
+
+def test_cross_os_release_attestation_is_ci_safe_and_separates_optional_native_proof():
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["release:cross-os-attestation"]
+        == "node scripts/run-sh-script.js scripts/cross-os-release-artifact-attestation.sh"
+    )
+
+    script_path = REPO_ROOT / "scripts" / "cross-os-release-artifact-attestation.sh"
+    assert script_path.is_file()
+    assert script_path.stat().st_mode & stat.S_IXUSR
+
+    text = script_path.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.cross-os-release-attestation.v1",
+        "required_ci_checks",
+        "optional_native_checks",
+        "platform_matrix",
+        "ci_safe_required",
+        "native_execution_optional",
+        "download_verification_optional",
+        "AO2_CROSS_OS_ATTESTATION_ENABLE_THREE_OS",
+        "AO2_CROSS_OS_ATTESTATION_ENABLE_DOWNLOAD",
+        "AO2_CROSS_OS_ATTESTATION_REQUIRE_NATIVE",
+        "AO2_CROSS_OS_ATTESTATION_REQUIRE_DOWNLOAD",
+        "macos-aarch64",
+        "linux-aarch64",
+        "linux-x86_64",
+        "windows-x86_64",
+        "tag_push_publish_deploy",
+        "release_publish",
+        "stores_credentials",
+    ]:
+        assert needle in text
+
+    for forbidden in [
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "/Users/torachiyouesugi/Documents/private",
+        "target/long-lived-control-plane/api-token",
+        "gh release create",
+        "git push origin",
+        "npm publish",
+    ]:
+        assert forbidden not in text
