@@ -26,6 +26,10 @@ run_step evidence_control_plane_smoke \
   env AO2_EVIDENCE_CP_SMOKE_ROOT="$OUT_ROOT/evidence-control-plane-smoke" \
     npm run smoke:evidence-control-plane
 
+run_step operator_packet_control_plane_smoke \
+  env AO2_OPERATOR_PACKET_CP_SMOKE_ROOT="$OUT_ROOT/operator-packet-control-plane-smoke" \
+    npm run smoke:operator-packet-control-plane
+
 run_step negative_restore_drill \
   "$CP_ROOT/scripts/cp-dr-restore-drill.sh" \
     --negative-only \
@@ -66,6 +70,7 @@ cp_restore_root = Path(sys.argv[3]).resolve()
 log_dir = out_root / "logs"
 names = [
     "evidence_control_plane_smoke",
+    "operator_packet_control_plane_smoke",
     "negative_restore_drill",
     "long_lived_smoke",
     "artifact_index",
@@ -83,8 +88,14 @@ for name in names:
 
 smoke_summary = out_root / "evidence-control-plane-smoke" / "summary.json"
 smoke = json.loads(smoke_summary.read_text(encoding="utf-8")) if smoke_summary.exists() else {}
+operator_packet_summary = out_root / "operator-packet-control-plane-smoke" / "summary.json"
+operator_packet_smoke = json.loads(operator_packet_summary.read_text(encoding="utf-8")) if operator_packet_summary.exists() else {}
 observer_checks = {
     "dashboard_schema_stability": smoke.get("dashboard_schema_version") == "ao2.cp-evidence-pack-dashboard.v1",
+    "operator_packet_dashboard_schema_stability": operator_packet_smoke.get("contract_schemas", {}).get("dashboard") == "ao2.cp-operator-packet-dashboard.v1",
+    "operator_packet_read_only_observer": operator_packet_smoke.get("read_only_observer") is True,
+    "operator_packet_can_approve_runs": operator_packet_smoke.get("can_approve_runs") is False,
+    "operator_packet_can_mutate_ao2_evidence": operator_packet_smoke.get("can_mutate_ao2_evidence") is False,
     "read_only_observer": smoke.get("read_only_observer") is True,
     "can_approve_runs": smoke.get("can_approve_runs") is False,
     "can_mutate_ao2_evidence": smoke.get("can_mutate_ao2_evidence") is False,
@@ -100,6 +111,7 @@ payload = {
     "observer_checks": observer_checks,
     "component_summaries": {
         "evidence_control_plane_smoke": str(smoke_summary),
+        "operator_packet_control_plane_smoke": str(operator_packet_summary),
         "negative_restore_drill": str(cp_restore_root / "dr-restore-report.json"),
         "artifact_health": str(out_root / "artifact-health" / "summary.json"),
     },
