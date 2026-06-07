@@ -2095,6 +2095,51 @@ def test_script_tracking_review_to_commit_plan_is_promoted_as_public_safe_gate()
     assert "target/script-tracking-review-to-commit-plan/latest/summary.json" in verification
 
 
+def test_script_tracking_commit_ready_diff_is_promoted_as_public_safe_gate():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+    public_hardening = read("scripts/public-hardening-subset.sh")
+    assert (
+        package_json["scripts"]["scripts:tracking-commit-ready-diff"]
+        == "node scripts/run-sh-script.js scripts/script-tracking-commit-ready-diff.sh"
+    )
+
+    script_path = REPO_ROOT / "scripts" / "script-tracking-commit-ready-diff.sh"
+    assert script_path.is_file()
+    assert script_path.stat().st_mode & stat.S_IXUSR
+    text = script_path.read_text(encoding="utf-8")
+
+    for needle in [
+        "ao2.script-tracking-commit-ready-diff.v1",
+        "ao2.script-tracking-commit-ready-diff.manifest.v1",
+        "scripts:tracking-review-to-commit-plan",
+        "--untracked-files=no",
+        "--untracked-files=all",
+        "commit_ready_diff_manifest",
+        "tracked_file_diff",
+        "excluded_local_artifacts",
+        "no_commit_or_push",
+        "scripts/lib/pulse-gate-lib.sh",
+    ]:
+        assert needle in text
+
+    for forbidden in [
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "/Users/torachiyouesugi/Documents/private",
+        "target/long-lived-control-plane/api-token",
+        "gh release create",
+        "git push origin",
+        "npm publish",
+    ]:
+        assert forbidden not in text
+
+    assert "scripts/script-tracking-commit-ready-diff.sh" in public_hardening
+    assert "npm run scripts:tracking-commit-ready-diff" in verification
+    assert "ao2.script-tracking-commit-ready-diff.v1" in verification
+    assert "target/script-tracking-commit-ready-diff/latest/summary.json" in verification
+
+
 def test_cross_os_release_attestation_is_ci_safe_and_separates_optional_native_proof():
     package_json = json.loads(read("package.json"))
     assert (
