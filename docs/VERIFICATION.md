@@ -55,6 +55,7 @@ npm run public:hardening-workflow-file-dry-run # render side-effect-free public 
 npm run public:hardening-workflow-tracked-proposal # tracked workflow proposal evidence
 npm run public:hardening-ci-local-runner-parity # compare workflow commands to local runner commands
 npm run scripts:tracking-intent-audit # script tracking intent and promotion manifest
+npm run scripts:surface-audit # preserve and classify local RSI/Pulse scripts before promotion
 npm run pulse:next-task-quality-filter # next task quality filter
 npm run pulse:quality-filter-negative-corpus # Pulse quality filter negative fixtures
 npm run pulse:quality-filter-required-gate # required Pulse quality gate boundary evidence
@@ -135,6 +136,16 @@ gate. `npm run pulse:lengthy-gate:contract` validates the
 exposed in `package.json`, the runner blocks before execution and reports
 `missing_package_commands`. The runner is local-only, stores no credentials,
 does not delete files, and does not push.
+
+`npm run scripts:surface-audit` snapshots untracked local RSI/Pulse shell
+scripts into ignored evidence, classifies each script as promote candidate,
+local-only, consolidate, defer control-plane, or remove-later, and reports
+missing package command references without running those wrappers. The gate emits
+`ao2.script-surface-audit.v1` at
+`target/script-surface-audit/latest/summary.json`, plus
+`snapshot-manifest.json` and `classification-report.md`. This is preservation
+and decision support only: it does not auto-promote, delete, push, publish, or
+store credentials.
 
 
 The mirror also writes `.ao2-local/pulse/latest/resume.json` and
