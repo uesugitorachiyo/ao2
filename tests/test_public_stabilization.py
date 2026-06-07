@@ -1751,6 +1751,7 @@ def test_pulse_consolidation_manifest_gate_is_promoted_to_public_scripts():
 
 def test_public_hardening_ci_workflow_is_tracked_and_public_safe():
     package_json = json.loads(read("package.json"))
+    runner = read("scripts/run-sh-script.js")
     expected_scripts = {
         "public:hardening-ci-workflow": "node scripts/run-sh-script.js scripts/public-hardening-ci-workflow.sh",
         "public:hardening-workflow-file-dry-run": "node scripts/run-sh-script.js scripts/public-hardening-workflow-file-dry-run.sh",
@@ -1759,6 +1760,10 @@ def test_public_hardening_ci_workflow_is_tracked_and_public_safe():
     }
     for script_name, command in expected_scripts.items():
         assert package_json["scripts"][script_name] == command
+
+    assert 'commandExists("bash")' in runner
+    assert 'windowsShellCandidates("bash")' in runner
+    assert "spawnSync(shell, [script, ...scriptArgs]" in runner
 
     workflow = read(".github/workflows/ao2-public-hardening.yml")
     assert re.search(r"(?m)^\s*pull_request:\s*$", workflow)
