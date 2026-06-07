@@ -371,6 +371,7 @@ tasks = []
 for task_id, title, command, expected_evidence, why in selection["tasks"]:
     tasks.append({
         "id": f"{task_id}-g{generation}",
+        "kind": "evidence_gate",
         "title": title,
         "command": command,
         "expected_evidence": expected_evidence,
@@ -439,11 +440,25 @@ eval_loop = {
     "trust_boundary": {"local_only": True, "stores_credentials": False},
     "side_effects": {"repo_apply": False, "provider_execution": False},
 }
+task_manifest = {
+    "schema_version": "ao2.pulse-task-manifest.v1",
+    "generated_at_utc": utc_now(),
+    "status": "ready",
+    "selection": selection["id"],
+    "cursor": next_cursor,
+    "tasks": tasks,
+    "trust_boundary": {
+        "local_only": True,
+        "stores_credentials": False,
+        "side_effects": "local_process_execution_and_packet_materialization",
+    },
+}
 
 (packet_root / "packet.md").write_text(packet_md, encoding="utf-8")
 (packet_root / "board.md").write_text(board_md, encoding="utf-8")
 (packet_root / "executor-evidence.json").write_text(json.dumps(executor, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 (packet_root / "pulse-eval-loop.json").write_text(json.dumps(eval_loop, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+(packet_root / "pulse-task-manifest.json").write_text(json.dumps(task_manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 files = []
 for path in sorted(packet_root.iterdir()):

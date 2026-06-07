@@ -335,6 +335,105 @@ def test_ci_uploads_guard_and_release_readiness_artifacts():
         assert script.stat().st_mode & stat.S_IXUSR
 
 
+def test_ci_cargo_retry_wrapper_is_used_for_matrix_commands():
+    ci = read(".github/workflows/ci.yml")
+    script = REPO_ROOT / "scripts" / "ci-cargo-retry.sh"
+
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    assert 'scripts/ci-cargo-retry.sh "${{ matrix.phase }}" <<\'AO2_CI_COMMAND\'' in ci
+    assert "${{ matrix.command }}" in ci
+    assert "run: ${{ matrix.command }}" not in ci
+
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.ci-cargo-retry.v1",
+        "AO2_CI_CARGO_RETRY_MAX_ATTEMPTS",
+        "Connection reset by peer",
+        "Broken pipe",
+        "failed to get",
+        "download of",
+        "summary.json",
+    ]:
+        assert needle in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+
+def test_ci_cargo_retry_wrapper_retries_transient_cargo_network_failures(tmp_path):
+    attempts = tmp_path / "attempts"
+    flaky = tmp_path / "flaky.sh"
+    out_root = tmp_path / "retry-out"
+    flaky.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        "count=0\n"
+        "if [ -f \"$1\" ]; then count=$(cat \"$1\"); fi\n"
+        "count=$((count + 1))\n"
+        "printf '%s' \"$count\" > \"$1\"\n"
+        "if [ \"$count\" -lt 2 ]; then\n"
+        "  echo 'error: failed to get `wasm-bindgen` as a dependency' >&2\n"
+        "  echo 'Caused by: [56] Failure when receiving data from the peer (Recv failure: Connection reset by peer)' >&2\n"
+        "  exit 101\n"
+        "fi\n",
+        encoding="utf-8",
+    )
+    flaky.chmod(flaky.stat().st_mode | stat.S_IXUSR)
+
+    result = subprocess.run(
+        ["bash", "scripts/ci-cargo-retry.sh", "pytest-transient"],
+        cwd=REPO_ROOT,
+        input=f"bash {flaky} {attempts}\n",
+        text=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "AO2_CI_CARGO_RETRY_ROOT": str(out_root),
+            "AO2_CI_CARGO_RETRY_SLEEP_SECONDS": "0",
+        },
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert attempts.read_text(encoding="utf-8") == "2"
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.ci-cargo-retry.v1"
+    assert summary["status"] == "passed"
+    assert summary["attempts"] == 2
+    assert summary["retried"] is True
+
+
+def test_ci_cargo_retry_wrapper_does_not_retry_non_transient_failures(tmp_path):
+    attempts = tmp_path / "attempts"
+    out_root = tmp_path / "retry-out"
+
+    result = subprocess.run(
+        ["bash", "scripts/ci-cargo-retry.sh", "pytest-hard-failure"],
+        cwd=REPO_ROOT,
+        input=(
+            f"count=0; if [ -f {attempts} ]; then count=$(cat {attempts}); fi; "
+            f"count=$((count + 1)); printf '%s' \"$count\" > {attempts}; "
+            "echo 'test assertion failed' >&2; exit 101\n"
+        ),
+        text=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "AO2_CI_CARGO_RETRY_ROOT": str(out_root),
+            "AO2_CI_CARGO_RETRY_SLEEP_SECONDS": "0",
+        },
+        check=False,
+    )
+
+    assert result.returncode == 101
+    assert attempts.read_text(encoding="utf-8") == "1"
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "failed"
+    assert summary["attempts"] == 1
+    assert summary["retried"] is False
+    assert summary["transient_failure_detected"] is False
+
+
 def test_phase1_operator_support_bundle_smoke_contract():
     readback_script = read("scripts/smoke-phase1-control-plane-readback.sh")
     golden_script = read("scripts/smoke-phase1-operator-golden-path.sh")
@@ -663,6 +762,8 @@ def test_pulse_generate_next_auto_registration_contract():
         "release:cross-os-attestation",
         "ao2.cross-os-release-attestation.v1",
         "pulse-eval-loop.json",
+        "pulse-task-manifest.json",
+        "ao2.pulse-task-manifest.v1",
         "packet.md",
         "board.md",
         "executor-evidence.json",
@@ -690,6 +791,41 @@ def test_pulse_generate_next_auto_registration_contract():
         "target/pulse-generate-next/latest/summary.json",
     ]:
         assert needle in verification
+
+
+def test_pulse_generate_next_writes_structured_task_manifest(tmp_path):
+    out_root = tmp_path / "generate-next"
+    packet_root = tmp_path / "packet"
+    cursor = tmp_path / "cursor.json"
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:generate-next"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_GENERATE_NEXT_REGISTER": "0",
+            "AO2_PULSE_GENERATE_NEXT_ROOT": str(out_root),
+            "AO2_PULSE_GENERATE_NEXT_PACKET_ROOT": str(packet_root),
+            "AO2_PULSE_GENERATE_NEXT_CURSOR": str(cursor),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    manifest = json.loads((packet_root / "pulse-task-manifest.json").read_text(encoding="utf-8"))
+    assert manifest["schema_version"] == "ao2.pulse-task-manifest.v1"
+    assert manifest["trust_boundary"] == {
+        "local_only": True,
+        "stores_credentials": False,
+        "side_effects": "local_process_execution_and_packet_materialization",
+    }
+    assert manifest["tasks"]
+    assert all(task["kind"] == "evidence_gate" for task in manifest["tasks"])
+    assert all(task["command"].startswith("npm run ") or task["command"].startswith("PYTHONDONTWRITEBYTECODE=") for task in manifest["tasks"])
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert any(item["path"] == "pulse-task-manifest.json" for item in summary["files"])
 
 
 def test_pulse_generate_next_uses_project_level_strategic_scoring():
@@ -746,6 +882,159 @@ def test_pulse_generate_next_is_locked_to_product_mvp_readiness_not_script_recur
     ]:
         assert needle in generator
     assert generator.count("npm run risky-pr:golden") == 0
+
+
+def test_pulse_task_executor_contract_supports_product_code_tasks():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+    script = REPO_ROOT / "scripts" / "pulse-task-executor.sh"
+
+    assert (
+        package_json["scripts"]["pulse:task-executor"]
+        == "node scripts/run-sh-script.js scripts/pulse-task-executor.sh"
+    )
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.pulse-task-manifest.v1",
+        "ao2.pulse-task-executor.v1",
+        "product_code",
+        "evidence_gate",
+        "implementation-packets",
+        "trust_boundary",
+        "stores_credentials",
+        "local_only",
+    ]:
+        assert needle in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+    assert "git push origin" not in text
+    assert "gh release create" not in text
+
+    for needle in [
+        "npm run pulse:task-executor",
+        "ao2.pulse-task-executor.v1",
+        "ao2.pulse-task-manifest.v1",
+        "product-code implementation packets",
+    ]:
+        assert needle in verification
+
+
+def test_pulse_task_executor_materializes_product_code_packet_without_command(tmp_path):
+    out_root = tmp_path / "executor"
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.pulse-task-manifest.v1",
+                "trust_boundary": {
+                    "local_only": True,
+                    "stores_credentials": False,
+                    "side_effects": "local_process_execution_and_packet_materialization",
+                },
+                "tasks": [
+                    {
+                        "id": "risky-pr-report-surface",
+                        "kind": "product_code",
+                        "title": "Risky PR report surface",
+                        "objective": "Expose local run record and evaluator closure evidence in the report surface.",
+                        "files": ["crates/ao2-cli/src/main.rs", "tests/test_public_stabilization.py"],
+                        "acceptance": [
+                            "Report contains local run record evidence.",
+                            "Evaluator closure cannot pass without evidence.",
+                        ],
+                        "verification": [
+                            {
+                                "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py -q",
+                                "expected_evidence": "pytest.tests.test_public_stabilization",
+                            }
+                        ],
+                        "stop_conditions": ["Stop if task requires provider API keys."],
+                    },
+                    {
+                        "id": "node-evidence-gate",
+                        "kind": "evidence_gate",
+                        "title": "Node evidence gate",
+                        "command": "node -e \"console.log('ao2-task-executor-ok')\"",
+                        "expected_evidence": "node.stdout.ok",
+                    },
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:task-executor"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_TASK_EXECUTOR_MANIFEST": str(manifest),
+            "AO2_PULSE_TASK_EXECUTOR_ROOT": str(out_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.pulse-task-executor.v1"
+    assert summary["status"] == "passed"
+    assert summary["counts"]["product_code"] == 1
+    assert summary["counts"]["evidence_gate"] == 1
+    packet = out_root / "implementation-packets" / "risky-pr-report-surface.md"
+    assert packet.is_file()
+    packet_text = packet.read_text(encoding="utf-8")
+    assert "Risky PR report surface" in packet_text
+    assert "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest" in packet_text
+    gate_result = [item for item in summary["results"] if item["id"] == "node-evidence-gate"][0]
+    assert gate_result["status"] == "passed"
+    assert gate_result["expected_evidence"] == "node.stdout.ok"
+
+
+def test_pulse_task_executor_rejects_credential_storing_manifest(tmp_path):
+    out_root = tmp_path / "executor"
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.pulse-task-manifest.v1",
+                "trust_boundary": {"local_only": True, "stores_credentials": True},
+                "tasks": [
+                    {
+                        "id": "unsafe",
+                        "kind": "evidence_gate",
+                        "title": "Unsafe",
+                        "command": "node -e \"console.log('unsafe')\"",
+                        "expected_evidence": "unsafe",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:task-executor"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_TASK_EXECUTOR_MANIFEST": str(manifest),
+            "AO2_PULSE_TASK_EXECUTOR_ROOT": str(out_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "failed"
+    assert summary["reason"] == "credential_storing_manifest_rejected"
 
 
 def test_pulse_next_task_quality_filter_rejects_script_wrapper_only_packets(tmp_path):

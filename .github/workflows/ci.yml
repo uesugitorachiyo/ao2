@@ -460,7 +460,10 @@ jobs:
 
       - name: Run ${{ matrix.phase }}
         shell: bash
-        run: ${{ matrix.command }}
+        run: |
+          scripts/ci-cargo-retry.sh "${{ matrix.phase }}" <<'AO2_CI_COMMAND'
+          ${{ matrix.command }}
+          AO2_CI_COMMAND
 
       - name: Upload Python guard artifacts
         if: matrix.phase == 'python-guard-tests'

@@ -37,6 +37,7 @@ npm run pulse:auto-advance # run the registered local Pulse task packet once wit
 npm run pulse:auto-advance -- --forever # keep polling registered Pulse packets until STOP/failure/interruption
 npm run pulse:generate-next # generate and register the next local Pulse packet from daemon evidence
 npm run pulse:generate-next:contract # static contract for next-packet generation
+npm run pulse:task-executor # execute structured Pulse task manifests and materialize product-code implementation packets
 npm run pulse:daemon:start # install/load the local supervisor for Pulse auto-advance
 npm run pulse:daemon:status # report supervisor and Pulse heartbeat evidence
 npm run pulse:daemon:stop # stop the supervisor and write the local STOP file
@@ -130,6 +131,15 @@ conditions, and per-candidate `strategic_score` metadata. `npm run
 pulse:daemon:start` runs the forever loop through launchctl or a detached tmux
 fallback; `npm run pulse:daemon:status` emits `ao2.pulse-daemon.v1` at
 `target/pulse-daemon/latest/summary.json`.
+
+`npm run pulse:task-executor` reads an `ao2.pulse-task-manifest.v1` manifest
+from `.ao2-local/pulse/latest/pulse-task-manifest.json` by default and emits
+`ao2.pulse-task-executor.v1` evidence under
+`target/pulse-task-executor/latest/summary.json`. Evidence-gate and verification
+tasks may run local commands, while `product_code` tasks materialize
+product-code implementation packets under `implementation-packets/` without
+requiring a shell command. The executor rejects non-local manifests and any
+manifest that stores credentials.
 
 The Pulse lengthy-gate surface is manifest-driven so local RSI follow-up
 wrappers can be preserved before promotion without adding one public command per
