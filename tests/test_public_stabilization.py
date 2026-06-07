@@ -1768,8 +1768,12 @@ def test_public_hardening_ci_workflow_is_tracked_and_public_safe():
     assert "uses: actions/checkout@v6.0.3" in workflow
     assert "uses: actions/setup-node@v6.4.0" in workflow
     assert "node-version: \"22\"" in workflow
+    assert "package-lock.json" in workflow
+    assert "npm-shrinkwrap.json" in workflow
+    assert "npm install --ignore-scripts --no-audit --no-fund --package-lock=false" in workflow
+    if not (REPO_ROOT / "package-lock.json").exists():
+        assert "run: npm ci" not in workflow
     for command in [
-        "npm ci",
         "AO2_PULSE_GENERATE_NEXT_REGISTER=0 npm run pulse:generate-next",
         "AO2_PULSE_LOCAL_MIRROR_SOURCE=target/pulse-next-recommended-tasks/generated-next npm run pulse:local-mirror",
         "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py -q",
