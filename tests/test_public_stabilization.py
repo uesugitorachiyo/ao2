@@ -1853,6 +1853,59 @@ def test_no_archaeology_workbench_audit_contract():
         assert needle in verification
 
 
+def test_workbench_operator_evidence_packet_export_contract():
+    source = read("crates/ao2-cli/src/main.rs")
+    rust_tests = read("crates/ao2-cli/tests/cli_approval_replay.rs")
+    verification = read("docs/VERIFICATION.md")
+    ci = read(".github/workflows/ci.yml")
+
+    for needle in [
+        "operator-packet",
+        "ao2.operator-evidence-packet.v1",
+        "workbench_operator_evidence_packet_json",
+        "run_record",
+        "static_report",
+        "evidence_pack",
+        "evaluator_closure",
+        "provider_scorecard",
+        "operator_packet_run_id",
+        "operator_packet_closure_verdict",
+        "operator_packet_replay_status",
+        "operator_packet_provider_score",
+        "operator_packet_run_record_sha256",
+        "operator_packet_evidence_pack_sha256",
+    ]:
+        assert needle in source
+
+    for needle in [
+        "cli_workbench_evidence_export_writes_operator_packet_for_support_readback",
+        "kind=operator-packet&run_id=workbench-operator-packet",
+        "ao2.operator-evidence-packet.v1",
+        "support-verify",
+        "support-inspect",
+        "support-import",
+        "operator_packet_static_report_present",
+    ]:
+        assert needle in rust_tests
+
+    for needle in [
+        "operator evidence packet",
+        "ao2.operator-evidence-packet.v1",
+        "local run record",
+        "static report HTML",
+        "evidence pack",
+        "evaluator closure verdict",
+        "replay status",
+        "provider scorecard",
+        "support-bundle readback",
+    ]:
+        assert needle in verification
+
+    for os_name in ["ubuntu-latest", "macos-latest", "windows-latest"]:
+        assert os_name in ci
+    assert "cargo test -p ao2-cli --test cli_approval_replay cli_workbench_evidence" in ci
+
+
 def test_control_plane_observer_hardening_contract():
     package_json = json.loads(read("package.json"))
     verification = read("docs/VERIFICATION.md")

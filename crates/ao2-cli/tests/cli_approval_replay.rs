@@ -30799,6 +30799,188 @@ printf 'Changed files: discount_service/discounts.py\n'
 }
 
 #[test]
+fn cli_workbench_evidence_export_writes_operator_packet_for_support_readback() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("discount-service");
+    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    let signing_key = temp.path().join("operator-packet-support-signing-key.pem");
+    generate_native_signing_key(&signing_key, 2048);
+    let prompt_path = temp.path().join("operator-packet-prompt.sh");
+    fs::write(
+        &prompt_path,
+        r#"cat > discount_service/discounts.py <<'PY'
+def calculate_discount(price: float, discount_rate: float) -> float:
+    if price < 0:
+        raise ValueError("price must be non-negative")
+    if discount_rate < 0 or discount_rate > 1:
+        raise ValueError("discount_rate must be between 0 and 1")
+    return price * (1 - discount_rate)
+PY
+printf 'Summary: operator evidence packet fixed discount validation\n'
+printf 'Changed files: discount_service/discounts.py\n'
+"#,
+    )
+    .unwrap();
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ao2"))
+        .args([
+            "workbench",
+            "serve",
+            "--target",
+            repo.to_str().unwrap(),
+            "--port",
+            "0",
+            "--api-token",
+            "test-token",
+            "--enable-execution",
+            "--support-signing-key",
+            signing_key.to_str().unwrap(),
+            "--support-signer-id",
+            "operator-packet-lead",
+        ])
+        .env_remove("OPENAI_API_KEY")
+        .env_remove("ANTHROPIC_API_KEY")
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let port = read_server_port(&mut child);
+    start_queue_job(port, "workbench-operator-packet", &prompt_path);
+    wait_for_queue_job_status(port, "workbench-operator-packet", "accepted");
+
+    let export_body = "kind=operator-packet&run_id=workbench-operator-packet";
+    let evidence_export_request = format!(
+        "POST /api/runs/evidence/export?token=test-token HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        export_body.len(),
+        export_body
+    );
+    let evidence_export_response = http_request(port, &evidence_export_request);
+    assert!(
+        evidence_export_response.starts_with("HTTP/1.1 200 OK"),
+        "{evidence_export_response}"
+    );
+    let evidence_export: serde_json::Value =
+        serde_json::from_str(http_body(&evidence_export_response)).unwrap();
+    assert_eq!(evidence_export["export_kind"], "operator-packet");
+    let packet = &evidence_export["export"]["operator_packet"];
+    assert_eq!(packet["schema_version"], "ao2.operator-evidence-packet.v1");
+    assert_eq!(packet["run_id"], "workbench-operator-packet");
+    assert_eq!(packet["run_record"]["run_id"], "workbench-operator-packet");
+    assert_eq!(
+        packet["evidence_pack"]["schema_version"],
+        "ao2.evidence-pack.v1"
+    );
+    assert_eq!(packet["evaluator_closure"]["verdict"], "accepted");
+    assert_eq!(packet["replay"]["status"], "accepted");
+    assert_eq!(packet["provider_scorecard"]["present"], true);
+    assert!(packet["provider_scorecard"]["score"].as_u64().unwrap_or(0) >= 90);
+    assert!(
+        packet["artifacts"]["run_record"]["sha256"]
+            .as_str()
+            .unwrap()
+            .len()
+            == 64
+    );
+    assert!(
+        packet["artifacts"]["evidence_pack"]["sha256"]
+            .as_str()
+            .unwrap()
+            .len()
+            == 64
+    );
+    assert!(packet["artifacts"]["static_report"]["html"]
+        .as_str()
+        .unwrap()
+        .contains("Evaluator Closure Evidence"));
+
+    let support_response = http_request(
+        port,
+        "POST /api/queue/export?token=test-token HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+    );
+    assert!(support_response.starts_with("HTTP/1.1 200 OK"));
+    let support_export: serde_json::Value =
+        serde_json::from_str(http_body(&support_response)).unwrap();
+    let bundle_path = PathBuf::from(support_export["bundle_path"].as_str().unwrap());
+    let bundle_dir = bundle_path.parent().unwrap().to_path_buf();
+    let _ = child.kill();
+    let _ = child.wait();
+
+    let verify = ao2([
+        "workbench",
+        "support-verify",
+        "--bundle-dir",
+        bundle_dir.to_str().unwrap(),
+        "--json",
+    ]);
+    assert!(verify.status.success(), "{}", stderr(&verify));
+    let verify_json: serde_json::Value = serde_json::from_str(&stdout(&verify)).unwrap();
+    assert_eq!(verify_json["support_metadata"]["signature_verified"], true);
+    assert_eq!(
+        verify_json["evidence_exports"][0]["kind"],
+        "operator-packet"
+    );
+    assert_eq!(
+        verify_json["evidence_exports"][0]["operator_packet_run_id"],
+        "workbench-operator-packet"
+    );
+    assert_eq!(
+        verify_json["evidence_exports"][0]["operator_packet_schema_version"],
+        "ao2.operator-evidence-packet.v1"
+    );
+    assert_eq!(
+        verify_json["evidence_exports"][0]["operator_packet_closure_verdict"],
+        "accepted"
+    );
+    assert_eq!(
+        verify_json["evidence_exports"][0]["operator_packet_replay_status"],
+        "accepted"
+    );
+    assert_eq!(
+        verify_json["evidence_exports"][0]["operator_packet_provider_score_present"],
+        true
+    );
+    assert_eq!(
+        verify_json["evidence_exports"][0]["operator_packet_static_report_present"],
+        true
+    );
+
+    let inspect_text = ao2([
+        "workbench",
+        "support-inspect",
+        "--bundle-dir",
+        bundle_dir.to_str().unwrap(),
+    ]);
+    assert!(inspect_text.status.success(), "{}", stderr(&inspect_text));
+    let inspect_output = stdout(&inspect_text);
+    assert!(inspect_output.contains(
+        "evidence_export_1=operator-packet workbench-operator-packet closure=accepted replay=accepted"
+    ));
+
+    let import_dir = temp.path().join("workbench-support-cases");
+    let import = ao2([
+        "workbench",
+        "support-import",
+        "--bundle-dir",
+        bundle_dir.to_str().unwrap(),
+        "--out-dir",
+        import_dir.to_str().unwrap(),
+        "--json",
+    ]);
+    assert!(import.status.success(), "{}", stderr(&import));
+    let import_json: serde_json::Value = serde_json::from_str(&stdout(&import)).unwrap();
+    assert_eq!(
+        import_json["evidence_exports"][0]["kind"],
+        "operator-packet"
+    );
+    assert_eq!(
+        import_json["evidence_exports"][0]["operator_packet_run_id"],
+        "workbench-operator-packet"
+    );
+    let html = fs::read_to_string(import_json["index_path"].as_str().unwrap()).unwrap();
+    assert!(html.contains("operator-packet"));
+    assert!(html.contains("workbench-operator-packet"));
+}
+
+#[test]
 fn cli_workbench_evidence_export_writes_diff_bundle() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");

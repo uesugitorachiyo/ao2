@@ -32603,6 +32603,13 @@ fn workbench_evidence_export_json(
                 "changes": changes
             })
         }
+        "operator-packet" => {
+            let run_id = form_value_owned(form, "run_id").context("run_id is required")?;
+            let operator_packet = workbench_operator_evidence_packet_json(target, &run_id)?;
+            serde_json::json!({
+                "operator_packet": operator_packet
+            })
+        }
         "release-history" => {
             let release_download_dir = form_value_owned(form, "release_download_dir")
                 .map(PathBuf::from)
@@ -32655,6 +32662,58 @@ fn workbench_evidence_export_json(
         "export_kind": kind,
         "export_path": export_path,
         "export": export_body
+    }))
+}
+
+fn workbench_operator_evidence_packet_json(
+    target: &Path,
+    run_id: &str,
+) -> Result<serde_json::Value> {
+    let summary = workbench_run_evidence_summary_json(target, &format!("run_id={run_id}"))?;
+    let run_record_path = PathBuf::from(json_string(&summary, "run_record"));
+    let evidence_pack_path = PathBuf::from(json_string(&summary, "evidence_pack"));
+    let static_report_path = PathBuf::from(json_string(&summary, "static_report"));
+    let cockpit_path = PathBuf::from(json_string(&summary, "cockpit"));
+    let run_record = read_json_file::<serde_json::Value>(&run_record_path)?;
+    let evidence_pack = read_json_file::<serde_json::Value>(&evidence_pack_path)?;
+    let static_report_html = fs::read_to_string(&static_report_path)
+        .with_context(|| format!("read {}", static_report_path.display()))?;
+    let cockpit_html = fs::read_to_string(&cockpit_path).unwrap_or_default();
+    Ok(serde_json::json!({
+        "schema_version": "ao2.operator-evidence-packet.v1",
+        "run_id": run_id,
+        "target": target,
+        "generated_at_ms": now_unix_ms(),
+        "summary": summary,
+        "artifacts": {
+            "run_record": {
+                "path": run_record_path,
+                "sha256": sha256_file(&run_record_path)?
+            },
+            "evidence_pack": {
+                "path": evidence_pack_path,
+                "sha256": sha256_file(&evidence_pack_path)?
+            },
+            "static_report": {
+                "path": static_report_path,
+                "sha256": sha256_file(&static_report_path)?,
+                "html": static_report_html
+            },
+            "cockpit": {
+                "path": cockpit_path,
+                "sha256": sha256_file(&cockpit_path).unwrap_or_default(),
+                "html": cockpit_html
+            }
+        },
+        "run_record": run_record,
+        "evidence_pack": evidence_pack,
+        "evaluator_closure": {
+            "verdict": json_string(&summary, "verdict"),
+            "closures": json_array(&summary, "closures")
+        },
+        "replay": summary["replay"].clone(),
+        "provider_scorecard": summary["scorecard"].clone(),
+        "report_sections": summary["report_sections"].clone()
     }))
 }
 
@@ -51457,6 +51516,7 @@ fn workbench_support_evidence_export_summaries(
             let release_history = &body["release_history"];
             let release_comparison_verification = &body["release_comparison_verification"];
             let provider_pilot_acceptance = &body["provider_pilot_acceptance"];
+            let operator_packet = &body["operator_packet"];
             serde_json::json!({
                 "path": evidence_export.get("path").cloned().unwrap_or(serde_json::Value::Null),
                 "sha256": json_string(evidence_export, "sha256"),
@@ -51504,7 +51564,28 @@ fn workbench_support_evidence_export_summaries(
                 "provider_pilot_replay_status": json_string(&provider_pilot_acceptance["replay"], "status"),
                 "provider_pilot_digest_failure_count": json_array(&provider_pilot_acceptance["replay"], "digest_failures").len(),
                 "provider_pilot_evidence_pack": json_string(provider_pilot_acceptance, "evidence_pack"),
-                "provider_pilot_cockpit": json_string(provider_pilot_acceptance, "cockpit")
+                "provider_pilot_cockpit": json_string(provider_pilot_acceptance, "cockpit"),
+                "operator_packet_schema_version": json_string(operator_packet, "schema_version"),
+                "operator_packet_run_id": json_string(operator_packet, "run_id"),
+                "operator_packet_closure_verdict": json_string(&operator_packet["evaluator_closure"], "verdict"),
+                "operator_packet_replay_status": json_string(&operator_packet["replay"], "status"),
+                "operator_packet_provider_score_present": operator_packet["provider_scorecard"]["present"]
+                    .as_bool()
+                    .unwrap_or(false),
+                "operator_packet_provider_score": json_u64(&operator_packet["provider_scorecard"], "score"),
+                "operator_packet_static_report_present": !json_string(
+                    &operator_packet["artifacts"]["static_report"],
+                    "sha256"
+                )
+                .is_empty(),
+                "operator_packet_run_record_sha256": json_string(
+                    &operator_packet["artifacts"]["run_record"],
+                    "sha256"
+                ),
+                "operator_packet_evidence_pack_sha256": json_string(
+                    &operator_packet["artifacts"]["evidence_pack"],
+                    "sha256"
+                )
             })
         })
         .collect()
@@ -51545,6 +51626,15 @@ fn workbench_support_evidence_export_text(summary: &serde_json::Value) -> String
             json_u64(summary, "provider_pilot_score"),
             json_string(summary, "provider_pilot_replay_status"),
             json_u64(summary, "provider_pilot_digest_failure_count")
+        )
+    } else if !json_string(summary, "operator_packet_run_id").is_empty() {
+        format!(
+            "{} closure={} replay={} score={} sha256={}",
+            json_string(summary, "operator_packet_run_id"),
+            json_string(summary, "operator_packet_closure_verdict"),
+            json_string(summary, "operator_packet_replay_status"),
+            json_u64(summary, "operator_packet_provider_score"),
+            json_string(summary, "operator_packet_run_record_sha256")
         )
     } else {
         String::from("unknown")
@@ -51901,6 +51991,16 @@ fn workbench_support_evidence_export_subject(summary: &serde_json::Value) -> Str
             json_u64(summary, "provider_pilot_score"),
             json_string(summary, "provider_pilot_replay_status"),
             json_u64(summary, "provider_pilot_digest_failure_count")
+        );
+    }
+    let operator_packet_run_id = json_string(summary, "operator_packet_run_id");
+    if !operator_packet_run_id.is_empty() {
+        return format!(
+            "{} closure={} replay={} score={}",
+            operator_packet_run_id,
+            json_string(summary, "operator_packet_closure_verdict"),
+            json_string(summary, "operator_packet_replay_status"),
+            json_u64(summary, "operator_packet_provider_score")
         );
     }
     String::from("unknown")
