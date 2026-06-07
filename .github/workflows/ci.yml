@@ -542,7 +542,7 @@ jobs:
           node-version: "22"
 
       - name: Download Workbench operator packet smoke artifacts
-        uses: actions/download-artifact@v7.0.1
+        uses: actions/download-artifact@v8.0.1
         with:
           pattern: ao2-workbench-operator-packet-control-plane-smoke-*
           path: ao2/target/workbench-operator-packet-control-plane-smoke-ci-artifacts

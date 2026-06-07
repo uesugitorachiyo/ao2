@@ -2781,7 +2781,8 @@ fn ci_workflow_runs_on_public_changes_while_release_gates_stay_manual() {
     assert!(ci.contains("workbench-operator-packet-control-plane-smoke-index:"));
     assert!(ci.contains("name: Workbench operator packet control-plane smoke index"));
     assert!(ci.contains("needs: workbench-operator-packet-control-plane-smoke"));
-    assert!(ci.contains("actions/download-artifact@v7.0.1"));
+    assert!(ci.contains("actions/download-artifact@v8.0.1"));
+    assert!(!ci.contains("actions/download-artifact@v7.0.1"));
     assert!(ci.contains("pattern: ao2-workbench-operator-packet-control-plane-smoke-*"));
     assert!(ci.contains("AO2_WORKBENCH_OPERATOR_PACKET_CP_INDEX_REQUIRED_OS: ubuntu-latest,macos-latest,windows-latest"));
     assert!(ci.contains("npm run smoke:workbench-operator-packet-control-plane:index"));
