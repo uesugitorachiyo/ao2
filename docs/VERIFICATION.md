@@ -355,7 +355,10 @@ Result:
   evidence for a Risky PR run, then proves the operator can answer objective,
   denied action, approved digest, changed files, test evidence, rejection
   reason, correction, closure verdict, export path, and replay status from
-  evidence surfaces alone; emits `ao2.no-archaeology-workbench-audit.v1` at
+  evidence surfaces alone. It also verifies run-record/report/evaluator-closure
+  links, including `Local Run Record`, `Static Export Evidence`,
+  `Evaluator Closure Evidence`, and `Replay Evidence` report sections; emits
+  `ao2.no-archaeology-workbench-audit.v1` at
   `target/no-archaeology-workbench/latest/summary.json`
 - `npm run control-plane:observer-hardening`: composes signed evidence-pack
   ingest/readback, negative restore drill, long-lived control-plane smoke,
@@ -514,8 +517,8 @@ Workspace test coverage:
 - CLI local workbench exposes viewer-token protected `/api/runs/evidence`,
   composes replay status, digest counts, provider scorecard summary, provider
   transcript summaries, closure verdicts, optional obligation ledger verdicts,
-  and cockpit/evidence links, and renders a Run Evidence Summary control in the
-  Workbench UI;
+  run-record/report/evaluator-closure links, and cockpit/evidence links, and
+  renders a Run Evidence Summary control in the Workbench UI;
 - CLI local workbench exposes viewer-token protected
   `/api/runs/evidence/diff`, compares two run evidence summaries for
   status/verdict changes, digest failure delta, provider summary delta, score

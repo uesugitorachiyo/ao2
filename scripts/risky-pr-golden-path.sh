@@ -144,7 +144,18 @@ failed = [name for name, passed in checks.items() if not passed]
 if failed:
     fail(f"golden-path evidence checks failed: {failed}")
 
-for heading in ["Policy Decisions", "Approvals", "Artifacts", "Closure Reports", "Replay", "Run Markers"]:
+for heading in [
+    "Local Run Record",
+    "Static Export Evidence",
+    "Policy Decisions",
+    "Approvals",
+    "Artifacts",
+    "Evaluator Closure Evidence",
+    "Closure Reports",
+    "Replay Evidence",
+    "Replay",
+    "Run Markers",
+]:
     if heading not in report_html:
         fail(f"report missing section: {heading}")
 if run_id not in cockpit_html or "evidence" not in cockpit_html.lower():

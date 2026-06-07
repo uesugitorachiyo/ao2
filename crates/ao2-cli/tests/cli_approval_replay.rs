@@ -27624,7 +27624,25 @@ printf 'Changed files: discount_service/discounts.py\n'
         .as_str()
         .unwrap()
         .contains("evidence-pack.json"));
+    assert!(json["run_record"]
+        .as_str()
+        .unwrap()
+        .contains("run-record.json"));
+    assert!(
+        normalize_separators(json["static_report"].as_str().unwrap()).contains("report/index.html")
+    );
     assert!(normalize_separators(json["cockpit"].as_str().unwrap()).contains("cockpit/index.html"));
+    let report_sections = json["report_sections"].as_array().unwrap();
+    for section in [
+        "Local Run Record",
+        "Static Export Evidence",
+        "Evaluator Closure Evidence",
+        "Replay Evidence",
+    ] {
+        assert!(report_sections
+            .iter()
+            .any(|item| item.as_str() == Some(section)));
+    }
 }
 
 #[test]
