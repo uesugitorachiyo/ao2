@@ -8,7 +8,7 @@ SUMMARY="$OUT_ROOT/summary.json"
 LOG_DIR="$OUT_ROOT/logs"
 CURSOR_FILE="${AO2_PULSE_GENERATE_NEXT_CURSOR:-$ROOT/.ao2-local/pulse/pulse-generate-next-cursor.json}"
 REGISTER="${AO2_PULSE_GENERATE_NEXT_REGISTER:-1}"
-DEFAULT_AUTO_ADVANCE_PROMPT="After each task batch, re-evaluate AO2 and ao2-control-plane at project level. Choose next tasks by highest long-term value, not similarity to last tasks. Prefer public reliability, Ubuntu/macOS/Windows correctness, CI confidence, evidence quality, security/safety boundaries, control-plane integration, release readiness, and developer/operator usability. Avoid narrow recursion or low-value daemon work unless it is the bottleneck. Generate next lengthy tasks with rationale, required evidence, and stop conditions, then register and continue through the AO2 event loop."
+DEFAULT_AUTO_ADVANCE_PROMPT="After each task batch, re-evaluate AO2 and ao2-control-plane at project level. Choose next tasks by highest long-term value, not similarity to last tasks. Prefer the Risky PR Run MVP product loop, local run record, static report/export, evaluator closure evidence, public reliability, Ubuntu/macOS/Windows correctness, CI confidence, evidence quality, security/safety boundaries, control-plane integration, release readiness, and developer/operator usability. Do not create new shell wrappers unless they directly unlock a product-slice or release-readiness bottleneck. Avoid narrow recursion or low-value daemon work unless it is the bottleneck. Generate next lengthy tasks with rationale, required evidence, and stop conditions, then register and continue through the AO2 event loop."
 AUTO_ADVANCE_PROMPT="${AO2_PULSE_AUTO_ADVANCE_PROMPT:-$DEFAULT_AUTO_ADVANCE_PROMPT}"
 
 rm -rf "$OUT_ROOT" "$PACKET_ROOT"
@@ -31,6 +31,7 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 dimensions = [
+    "product_mvp_slice",
     "public_reliability",
     "cross_platform_correctness",
     "ci_confidence",
@@ -72,6 +73,30 @@ if previous_summary_path.is_file():
         previous_selection = None
 
 catalog = [
+    {
+        "id": "risky-pr-product-mvp",
+        "title": "Risky PR Run MVP product loop",
+        "keywords": ["risky-pr", "risky pr", "static report", "evaluator closure", "local run record", "mvp", "product loop"],
+        "scores": {
+            "product_mvp_slice": 8,
+            "public_reliability": 5,
+            "cross_platform_correctness": 4,
+            "ci_confidence": 5,
+            "evidence_quality": 6,
+            "security_safety_boundaries": 5,
+            "control_plane_integration": 3,
+            "release_readiness": 6,
+            "developer_operator_usability": 5,
+        },
+        "tasks": [
+            ("ao2-risky-pr-product-readiness-gate", "Risky PR product-readiness gate", "npm run risky-pr:product-readiness", "ao2.risky-pr-product-readiness-gate.v1", "Prove local run record, static report/export, and evaluator closure evidence from one risky-pr golden run."),
+            ("ao2-risky-pr-evaluator-closure-evidence", "Risky PR evaluator closure evidence hardening", "npm run release:evidence-closure", "ao2.release-evidence-closure.v1", "Keep evaluator closure aligned with the evidence-before-closure rule."),
+            ("ao2-risky-pr-ci-matrix-proof", "Risky PR CI matrix proof", "npm run release:readiness:static", "ao2.release-readiness-local.v1", "Use public CI-oriented readiness checks for product readiness instead of local-only script churn."),
+        ],
+        "rationale": "This is the highest-value product_mvp_slice: it advances AO2 toward a shippable local-first Risky PR Run workflow instead of only improving Pulse wrappers.",
+        "required_evidence": ["ao2.risky-pr-product-readiness-gate.v1", "ao2.risky-pr-golden-path.v1", "ao2.evidence-pack.v1", "ao2.release-evidence-closure.v1"],
+        "stop_conditions": ["Stop if risky-pr golden evidence is missing.", "Stop if generated work is only new shell wrappers for two consecutive iterations.", "Stop if evaluator closure can pass without evidence."],
+    },
     {
         "id": "generator-health",
         "title": "Pulse generator and daemon health",
@@ -321,8 +346,13 @@ project_level_reassessment = {
     },
     "selection_policy": (
         "Score candidates by project-level value, evidence gaps, release readiness, "
-        "and anti-recursion; avoid narrow recursion unless daemon evidence identifies it as the bottleneck."
+        "product_mvp_slice coverage, and anti-recursion; avoid narrow recursion unless daemon evidence identifies it as the bottleneck. "
+        "Do not create new shell wrappers unless they directly unlock a product-slice or release-readiness bottleneck."
     ),
+    "script_wrapper_recursion_block": {
+        "enabled": True,
+        "policy": "Do not create new shell wrappers unless they directly unlock product_mvp_slice or release-readiness evidence.",
+    },
 }
 
 strategic_scores = [

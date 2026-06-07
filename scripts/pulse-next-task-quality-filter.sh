@@ -21,13 +21,53 @@ out_root = Path(sys.argv[2]).resolve()
 summary_path = Path(sys.argv[3]).resolve()
 text = packet.read_text(encoding="utf-8") if packet.is_file() else ""
 task_titles = re.findall(r"^## \d+\. (.+)$", text, flags=re.MULTILINE)
+task_titles.extend(re.findall(r"^- `[^`]+`: ([^-]+?) - .+$", text, flags=re.MULTILINE))
+product_slice_keywords = [
+    "risky-pr",
+    "risky pr",
+    "product loop",
+    "local run record",
+    "static report",
+    "static report/export",
+    "evaluator closure",
+    "release readiness",
+    "cross-os",
+    "ubuntu",
+    "macos",
+    "windows",
+    "ci",
+    "control-plane",
+    "operator cockpit",
+    "evidence dashboard",
+    "workbench",
+    "provider contract",
+    "artifact",
+]
+script_wrapper_keywords = [
+    "shell wrapper",
+    "wrapper",
+    "script tracking",
+    "runbook",
+    "matrix",
+    "baseline",
+    "watchdog",
+    "lock",
+    "consolidation",
+    "manifest only",
+    "proof of proof",
+    "lengthy gate",
+]
+lowered_packet = text.lower()
+has_product_slice = any(keyword in lowered_packet for keyword in product_slice_keywords)
 quality_items = []
 for title in task_titles:
     lowered = title.lower()
     manifest_only_recursion = any(word in lowered for word in ["manifest only", "proof of proof"])
     consolidation_bias = any(word in lowered for word in ["consolidation", "index", "runbook", "matrix", "baseline", "watchdog", "lock"])
-    coverage_gain = "high" if consolidation_bias else "medium"
-    quality_score = 80 if consolidation_bias else 65
+    script_wrapper_bias = any(word in lowered for word in script_wrapper_keywords)
+    product_slice = any(word in lowered for word in product_slice_keywords)
+    coverage_gain = "high" if product_slice else ("medium" if consolidation_bias or script_wrapper_bias else "low")
+    quality_score = 85 if product_slice else (55 if script_wrapper_bias and has_product_slice else (45 if script_wrapper_bias else 65))
     if manifest_only_recursion:
         quality_score -= 30
     quality_items.append({
@@ -35,9 +75,20 @@ for title in task_titles:
         "coverage_gain": coverage_gain,
         "manifest_only_recursion": manifest_only_recursion,
         "consolidation_bias": consolidation_bias,
+        "script_wrapper_bias": script_wrapper_bias,
+        "product_slice": product_slice,
         "quality_score": quality_score,
     })
-status = "passed" if all(item["quality_score"] >= 50 for item in quality_items) else "failed"
+script_wrapper_recursion_block = bool(task_titles) and not has_product_slice and any(
+    item["script_wrapper_bias"] or item["consolidation_bias"] or item["manifest_only_recursion"]
+    for item in quality_items
+)
+status = "passed" if (
+    bool(task_titles)
+    and has_product_slice
+    and not script_wrapper_recursion_block
+    and all(item["quality_score"] >= 50 for item in quality_items)
+) else "failed"
 payload = {
     "schema_version": "ao2.pulse-next-task-quality-filter.v1",
     "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -46,7 +97,9 @@ payload = {
     "packet": str(packet),
     "coverage_gain": "measured_per_task",
     "manifest_only_recursion": any(item["manifest_only_recursion"] for item in quality_items),
-    "consolidation_bias": True,
+    "consolidation_bias": any(item["consolidation_bias"] for item in quality_items),
+    "script_wrapper_recursion_block": script_wrapper_recursion_block,
+    "product_slice_coverage": "present" if has_product_slice else "missing",
     "quality_score": min([item["quality_score"] for item in quality_items] or [0]),
     "tasks": quality_items,
     "trust_boundary": {"local_only": True, "stores_credentials": False},

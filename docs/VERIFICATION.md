@@ -19,6 +19,7 @@ npm run smoke:three-os
 npm run verify:replacement   # 4-step replacement-parity composite (Phase 2 readiness)
 npm run verify:no-factory-v3 # factory-v3 green-path regression guard
 npm run risky-pr:golden      # local Risky PR Run golden path with report/cockpit assertions
+npm run risky-pr:product-readiness # one-run product readiness gate for local run record/report/closure evidence
 npm run smoke:evidence-control-plane # signed evidence-pack publish/readback contract smoke
 npm run smoke:phase1-operator-golden # signed Phase 1 publish/readback/dashboard smoke
 npm run release:readiness    # local release-readiness guardrails for AO2 + control-plane
@@ -235,6 +236,10 @@ Result:
   policy denial, exact approval, evaluator rejection, correction, accepted
   closure, replay, evidence-pack export, report rendering, and cockpit index;
   emits `ao2.risky-pr-golden-path.v1`
+- `npm run risky-pr:product-readiness`: runs the Risky PR golden path once,
+  then verifies local run record, static report/export, and evaluator closure
+  evidence from that single run; emits
+  `ao2.risky-pr-product-readiness-gate.v1`
 - `npm run smoke:evidence-control-plane`: builds AO2 and ao2-control-plane,
   publishes a signed `ao2.evidence-pack.v1`, reads dashboard/detail/latest
   observer endpoints, pins the `ao2.cp-evidence-pack-dashboard.v1`,
