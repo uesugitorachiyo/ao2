@@ -31358,6 +31358,7 @@ fn run_summary_json(target: &Path, run_id: &str) -> Result<serde_json::Value> {
     let replay_status = replay_status_value.as_str().unwrap_or("unknown");
     let run_record = run_dir.join("run-record.json");
     let report = run_dir.join("report").join("index.html");
+    let report_index = report_index_path(&report);
     let cockpit = run_dir.join("cockpit").join("index.html");
     let updated_at = fs::metadata(&evidence_pack_path)
         .and_then(|metadata| metadata.modified())
@@ -31380,6 +31381,7 @@ fn run_summary_json(target: &Path, run_id: &str) -> Result<serde_json::Value> {
         "run_record": run_record,
         "evidence_pack": evidence_pack_path,
         "report": report,
+        "report_index": report_index,
         "cockpit": cockpit,
         "provider_score": provider_score,
         "obligation_ledger": obligation_ledger,
@@ -49733,12 +49735,114 @@ fn report(target: PathBuf, run_id: String, out: Option<PathBuf>, open: bool) -> 
         fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
     }
     fs::write(&report_path, html).with_context(|| format!("write {}", report_path.display()))?;
+    let report_index = render_report_index_for_run(&target, &run_id, &report_path)?;
+    let report_index_path = report_index_path(&report_path);
+    fs::write(
+        &report_index_path,
+        serde_json::to_string_pretty(&report_index)? + "\n",
+    )
+    .with_context(|| format!("write {}", report_index_path.display()))?;
     println!("report={}", report_path.display());
     if open {
         open_report_target(&report_path)?;
         println!("open_target={}", report_path.display());
     }
     Ok(())
+}
+
+fn report_index_path(report_path: &Path) -> PathBuf {
+    let stem = report_path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("index");
+    report_path.with_file_name(format!("{stem}.report.json"))
+}
+
+fn render_report_index_for_run(
+    target: &Path,
+    run_id: &str,
+    report_path: &Path,
+) -> Result<serde_json::Value> {
+    let run_dir = run_dir(target, run_id);
+    let run_record_path = run_dir.join("run-record.json");
+    let evidence_pack_path = run_dir.join("evidence-pack").join("evidence-pack.json");
+    let evidence_pack: serde_json::Value = read_json_file(&evidence_pack_path)?;
+    let replay = replay_run(ReplayOptions {
+        target_repo: target.to_path_buf(),
+        run_id: run_id.to_string(),
+    })?;
+
+    let policy_decisions = json_array(&evidence_pack, "policy_decisions");
+    let policy_non_allow = policy_decisions
+        .iter()
+        .filter(|decision| json_string(decision, "decision") != "allow")
+        .count();
+    let approvals = json_array(&evidence_pack, "approvals");
+    let approved = approvals
+        .iter()
+        .filter(|approval| json_string(approval, "status") == "approved")
+        .count();
+    let artifacts = json_array(&evidence_pack, "artifacts");
+    let closures = json_array(&evidence_pack, "closures");
+    let closure_verdict = closures
+        .last()
+        .map(|closure| json_string(closure, "verdict"))
+        .filter(|verdict| !verdict.is_empty())
+        .unwrap_or_else(|| json_string(&evidence_pack, "verdict"));
+    let artifact_types = artifacts
+        .iter()
+        .map(|artifact| json_string(artifact, "artifact_type"))
+        .collect::<Vec<_>>();
+    let test_evidence = artifact_types
+        .iter()
+        .any(|artifact_type| artifact_type.to_ascii_lowercase().contains("test"));
+
+    Ok(serde_json::json!({
+        "schema_version": "ao2.risky-pr-static-report-index.v1",
+        "run_id": run_id,
+        "status": json_string(&evidence_pack, "verdict"),
+        "workflow_id": json_string(&evidence_pack, "workflow_id"),
+        "objective": json_string(&evidence_pack, "objective"),
+        "closure_verdict": closure_verdict,
+        "html_report": report_path,
+        "paths": {
+            "run_record": run_record_path,
+            "evidence_pack": evidence_pack_path,
+            "html_report": report_path,
+        },
+        "policy_decisions": {
+            "count": policy_decisions.len(),
+            "denied": policy_non_allow,
+        },
+        "approvals": {
+            "count": approvals.len(),
+            "approved": approved,
+        },
+        "artifacts": {
+            "count": artifacts.len(),
+            "types": artifact_types,
+        },
+        "closures": {
+            "count": closures.len(),
+        },
+        "replay": {
+            "status": replay.status,
+            "event_count": replay.event_count,
+            "artifact_count": replay.artifact_count,
+            "digest_failure_count": replay.digest_failures.len(),
+            "event_types": replay.event_types,
+        },
+        "operator_answers": {
+            "objective": !json_string(&evidence_pack, "objective").is_empty(),
+            "denied_actions": policy_non_allow > 0,
+            "approved_actions": approved > 0,
+            "changed_files": artifacts.iter().any(|artifact| json_string(artifact, "artifact_type").contains("patch")),
+            "test_evidence": test_evidence,
+            "closure_verdict": !json_string(&evidence_pack, "verdict").is_empty(),
+            "export_path": evidence_pack_path.is_file(),
+            "replay_status": replay.digest_failures.is_empty(),
+        },
+    }))
 }
 
 fn render_report_for_run(target: &Path, run_id: &str) -> Result<(String, PathBuf)> {

@@ -256,8 +256,9 @@ Result:
   closure, replay, evidence-pack export, report rendering, and cockpit index;
   emits `ao2.risky-pr-golden-path.v1`. The generated static report exposes
   `Local Run Record`, `Static Export Evidence`, `Evaluator Closure Evidence`,
-  and `Replay Evidence` sections so operators can inspect closure evidence
-  without filesystem archaeology.
+  and `Replay Evidence` sections, and the sibling
+  `ao2.risky-pr-static-report-index.v1` JSON sidecar maps operator questions
+  to report/export/replay evidence without filesystem archaeology.
 - `npm run risky-pr:product-readiness`: runs the Risky PR golden path once,
   then verifies local run record, static report/export, and evaluator closure
   evidence from that single run; emits
