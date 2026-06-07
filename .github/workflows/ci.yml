@@ -483,6 +483,44 @@ jobs:
             target/release/ao2.exe
           if-no-files-found: ignore
 
+  workbench-operator-packet-control-plane-smoke:
+    name: Workbench operator packet control-plane smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout AO2
+        uses: actions/checkout@v6.0.3
+        with:
+          path: ao2
+
+      - name: Checkout control plane
+        uses: actions/checkout@v6.0.3
+        with:
+          repository: uesugitorachiyo/ao2-control-plane
+          path: ao2-control-plane
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+
+      - name: Run Workbench operator packet smoke
+        working-directory: ao2
+        env:
+          AO2_CONTROL_PLANE_ROOT: ../ao2-control-plane
+          AO2_WORKBENCH_OPERATOR_PACKET_CP_PROFILE: debug
+        run: npm run smoke:workbench-operator-packet-control-plane
+
+      - name: Upload Workbench operator packet smoke artifacts
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-workbench-operator-packet-control-plane-smoke
+          path: ao2/target/workbench-operator-packet-control-plane-smoke
+          if-no-files-found: error
+
   release-readiness-artifacts:
     name: Release readiness artifacts
     runs-on: ubuntu-latest
