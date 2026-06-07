@@ -126,6 +126,7 @@
     "scripts:tracking-decision-cleanup": "node scripts/run-sh-script.js scripts/script-tracking-decision-cleanup.sh",
     "scripts:tracking-review-pack": "node scripts/run-sh-script.js scripts/script-tracking-review-pack.sh",
     "scripts:tracking-review-to-commit-plan": "node scripts/run-sh-script.js scripts/script-tracking-review-to-commit-plan.sh",
+    "scripts:tracking-commit-ready-diff": "node scripts/run-sh-script.js scripts/script-tracking-commit-ready-diff.sh",
     "scripts:surface-audit": "node scripts/run-sh-script.js scripts/script-surface-audit.sh",
     "release:artifact-publish-simulation": "node scripts/run-sh-script.js scripts/release-artifact-publish-simulation.sh",
     "release:asset-publication-readiness": "node scripts/run-sh-script.js scripts/release-asset-publication-readiness.sh",
