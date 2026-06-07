@@ -361,11 +361,20 @@ Result:
   `ao2.no-archaeology-workbench-audit.v1` at
   `target/no-archaeology-workbench/latest/summary.json`
 - `npm run control-plane:observer-hardening`: composes signed evidence-pack
-  ingest/readback, negative restore drill, long-lived control-plane smoke,
-  artifact index, and fail-on-attention artifact health while verifying the
-  control plane remains a read-only observer; emits
+  ingest/readback, synthetic signed operator-packet readback, a real Workbench
+  operator-packet control-plane smoke, negative restore drill, long-lived
+  control-plane smoke, artifact index, and fail-on-attention artifact health
+  while verifying the control plane remains a read-only observer; emits
   `ao2.control-plane-observer-hardening.v1` at
   `target/control-plane-observer-hardening/latest/summary.json`
+- `npm run smoke:workbench-operator-packet-control-plane`: runs a local
+  governed fixture, serves the Workbench, posts `kind=operator-packet` to
+  `/api/runs/evidence/publish`, publishes the signed
+  `ao2.operator-evidence-packet.v1` to ao2-control-plane, reads back dashboard,
+  detail, latest, raw packet, and signature endpoints, and emits the
+  workbench operator-packet control-plane smoke summary
+  `ao2.workbench-operator-packet-control-plane-smoke.v1` under
+  `target/workbench-operator-packet-control-plane-smoke/`
 - `npm run provider:phase2-contract-hardening`: verifies Codex and Claude
   provider contracts, replacement parity, no-factory-v3 guardrails, transcript
   parsing, sandbox patch digest boundaries, exact approval enforcement,

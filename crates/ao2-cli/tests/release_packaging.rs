@@ -2331,6 +2331,41 @@ fn install_guide_documents_release_comparison_bundles() {
 }
 
 #[test]
+fn workbench_operator_packet_control_plane_smoke_is_release_wired() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let package_json = fs::read_to_string(root.join("package.json")).expect("package json exists");
+    let smoke_script =
+        fs::read_to_string(root.join("scripts/smoke-workbench-operator-packet-control-plane.sh"))
+            .expect("workbench operator packet smoke script exists");
+    let observer_gate =
+        fs::read_to_string(root.join("scripts/control-plane-observer-hardening.sh"))
+            .expect("observer hardening script exists");
+    let verification =
+        fs::read_to_string(root.join("docs/VERIFICATION.md")).expect("verification docs exist");
+    let install = fs::read_to_string(root.join("docs/INSTALL.md")).expect("install docs exist");
+
+    assert!(package_json.contains("\"smoke:workbench-operator-packet-control-plane\""));
+    assert!(package_json.contains("scripts/smoke-workbench-operator-packet-control-plane.sh"));
+    assert!(smoke_script.contains("ao2.workbench-operator-packet-control-plane-smoke.v1"));
+    assert!(smoke_script.contains("workbench serve"));
+    assert!(smoke_script.contains("kind=operator-packet"));
+    assert!(smoke_script.contains("/api/runs/evidence/publish"));
+    assert!(smoke_script.contains("/api/v1/operator-packet/signed"));
+    assert!(smoke_script.contains("/api/v1/operator-packet/dashboard.json"));
+    assert!(smoke_script.contains("/api/v1/operator-packet/run/$RUN_ID/latest"));
+    assert!(smoke_script.contains("ao2.operator-evidence-packet.v1"));
+    assert!(smoke_script.contains("ao2.evidence-pack.v1"));
+    assert!(smoke_script.contains("token_leak_detected"));
+    assert!(smoke_script.contains("env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY"));
+    assert!(observer_gate.contains("workbench_operator_packet_control_plane_smoke"));
+    assert!(observer_gate.contains("AO2_WORKBENCH_OPERATOR_PACKET_CP_SMOKE_ROOT"));
+    assert!(observer_gate.contains("smoke:workbench-operator-packet-control-plane"));
+    assert!(verification.contains("workbench operator-packet control-plane smoke"));
+    assert!(verification.contains("ao2.workbench-operator-packet-control-plane-smoke.v1"));
+    assert!(install.contains("smoke:workbench-operator-packet-control-plane"));
+}
+
+#[test]
 fn codex_provider_smoke_script_is_guarded_and_evidence_driven() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let script = fs::read_to_string(root.join("scripts/smoke-codex-provider.sh"))

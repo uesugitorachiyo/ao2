@@ -45,6 +45,7 @@
     "risky-pr:product-readiness": "node scripts/run-sh-script.js scripts/risky-pr-product-readiness-gate.sh",
     "smoke:evidence-control-plane": "node scripts/run-sh-script.js scripts/smoke-evidence-pack-control-plane.sh",
     "smoke:operator-packet-control-plane": "node scripts/run-sh-script.js scripts/smoke-operator-packet-control-plane.sh",
+    "smoke:workbench-operator-packet-control-plane": "node scripts/run-sh-script.js scripts/smoke-workbench-operator-packet-control-plane.sh",
     "release:readiness": "node scripts/run-sh-script.js scripts/release-readiness.sh",
     "release:readiness:static": "node scripts/run-sh-script.js scripts/release-readiness.sh --static-only",
     "release:readiness:full": "node scripts/run-sh-script.js scripts/release-readiness.sh --full",

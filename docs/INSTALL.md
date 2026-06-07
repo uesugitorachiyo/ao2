@@ -856,6 +856,12 @@ post `kind=operator-packet&run_id=<run-id>&control_plane_url=<url>&api_token=<to
 to `/api/runs/evidence/publish`. The server signs the generated
 `ao2.operator-evidence-packet.v1` with `--support-signing-key` and posts it to
 the read-only `/api/v1/operator-packet/signed` control-plane endpoint.
+For a local end-to-end proof, run
+`npm run smoke:workbench-operator-packet-control-plane`; during development you
+can set `AO2_WORKBENCH_OPERATOR_PACKET_CP_PROFILE=debug` to use debug binaries.
+The smoke stores its ignored evidence under
+`target/workbench-operator-packet-control-plane-smoke/` and emits
+`ao2.workbench-operator-packet-control-plane-smoke.v1`.
 
 The Release Evidence Retention controls call
 `POST /api/release-retention/prune` with `dry_run=1` for preview and
