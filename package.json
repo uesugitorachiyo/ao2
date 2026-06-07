@@ -123,6 +123,7 @@
     "public:hardening-workflow-tracked-proposal": "node scripts/run-sh-script.js scripts/public-hardening-workflow-tracked-proposal.sh",
     "public:hardening-ci-local-runner-parity": "node scripts/run-sh-script.js scripts/public-hardening-ci-local-runner-parity.sh",
     "scripts:tracking-intent-audit": "node scripts/run-sh-script.js scripts/script-tracking-intent-audit.sh",
+    "scripts:tracking-decision-cleanup": "node scripts/run-sh-script.js scripts/script-tracking-decision-cleanup.sh",
     "scripts:surface-audit": "node scripts/run-sh-script.js scripts/script-surface-audit.sh",
     "release:artifact-publish-simulation": "node scripts/run-sh-script.js scripts/release-artifact-publish-simulation.sh",
     "release:asset-publication-readiness": "node scripts/run-sh-script.js scripts/release-asset-publication-readiness.sh",
