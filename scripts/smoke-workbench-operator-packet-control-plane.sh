@@ -31,8 +31,53 @@ cargo_build_profile() {
   fi
 }
 
+python_command() {
+  if [ -n "${PYTHON:-}" ]; then
+    printf "%s\n" "$PYTHON"
+    return
+  fi
+  if command -v python3 >/dev/null 2>&1; then
+    command -v python3
+    return
+  fi
+  if command -v python >/dev/null 2>&1; then
+    command -v python
+    return
+  fi
+  echo "missing python interpreter; set PYTHON=/path/to/python" >&2
+  return 1
+}
+
+exe_suffix() {
+  case "$(uname -s 2>/dev/null || true)" in
+    MINGW* | MSYS* | CYGWIN*)
+      printf ".exe"
+      ;;
+    *)
+      printf ""
+      ;;
+  esac
+}
+
+binary_path() {
+  local base="$1"
+  if [ -f "$base" ]; then
+    printf "%s\n" "$base"
+    return
+  fi
+  if [ -n "$EXE_SUFFIX" ] && [ -f "$base$EXE_SUFFIX" ]; then
+    printf "%s\n" "$base$EXE_SUFFIX"
+    return
+  fi
+  if [ -n "$EXE_SUFFIX" ]; then
+    printf "%s\n" "$base$EXE_SUFFIX"
+  else
+    printf "%s\n" "$base"
+  fi
+}
+
 choose_port() {
-  python3 - <<'PY'
+  "$PYTHON_BIN" - <<'PY'
 import socket
 with socket.socket() as s:
     s.bind(("127.0.0.1", 0))
@@ -46,6 +91,9 @@ require_file() {
     exit 1
   fi
 }
+
+PYTHON_BIN="$(python_command)"
+EXE_SUFFIX="$(exe_suffix)"
 
 if [ -z "$CP_PORT" ]; then
   CP_PORT="$(choose_port)"
@@ -67,7 +115,7 @@ RAW_JSON="$OUT_ROOT/raw.json"
 SIGNATURE_JSON="$OUT_ROOT/signature.json"
 SUMMARY_JSON="$OUT_ROOT/summary.json"
 
-python3 - "$TOKEN_FILE" <<'PY'
+"$PYTHON_BIN" - "$TOKEN_FILE" <<'PY'
 import secrets
 import stat
 import sys
@@ -87,9 +135,11 @@ echo "profile=$PROFILE"
 
 echo "=== build ao2 ==="
 cargo_build_profile -p ao2-cli
+AO2_BIN="$(binary_path "$ROOT/target/$TARGET_SUBDIR/ao2")"
 
 echo "=== build ao2-control-plane ==="
 (cd "$CP_ROOT" && cargo_build_profile -p ao2-cp-server)
+CP_SERVER_BIN="$(binary_path "$CP_ROOT/target/$TARGET_SUBDIR/ao2-cp-server")"
 
 echo "=== start ephemeral control plane ==="
 mkdir -p "$CP_DATA_DIR"
@@ -97,7 +147,7 @@ env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY \
   AO2_CP_API_TOKEN="$cp_token" \
   AO2_CP_BIND="127.0.0.1:$CP_PORT" \
   AO2_CP_DATA_DIR="$CP_DATA_DIR" \
-  "$CP_ROOT/target/$TARGET_SUBDIR/ao2-cp-server" \
+  "$CP_SERVER_BIN" \
   > "$OUT_ROOT/ao2-cp-server.log" \
   2> "$OUT_ROOT/ao2-cp-server.err" &
 CP_PID=$!
@@ -126,7 +176,7 @@ rm -rf "$FIXTURE_ROOT"
 mkdir -p "$FIXTURE_ROOT"
 cp -R "$ROOT/fixtures/discount-service" "$REPO"
 env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY \
-  "$ROOT/target/$TARGET_SUBDIR/ao2" \
+  "$AO2_BIN" \
   run "$ROOT/examples/risky-pr-run/risky-pr.yaml" \
   --target "$REPO" \
   --run-id "$RUN_ID" \
@@ -137,14 +187,14 @@ require_file "$REPO/.ao2/runs/$RUN_ID/evidence-pack/evidence-pack.json"
 
 echo "=== start workbench ==="
 env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY \
-  "$ROOT/target/$TARGET_SUBDIR/ao2" \
+  "$AO2_BIN" \
   workbench support-keygen \
   --out "$SIGNING_KEY" \
   --bits 2048 \
   > "$OUT_ROOT/support-keygen.txt"
 
 env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY \
-  "$ROOT/target/$TARGET_SUBDIR/ao2" \
+  "$AO2_BIN" \
   workbench serve \
   --target "$REPO" \
   --port 0 \
@@ -186,7 +236,7 @@ curl -fsS -X POST "http://127.0.0.1:$WORKBENCH_PORT/api/runs/evidence/publish?to
 wait "$WB_PID"
 WB_PID=""
 
-SHA="$(python3 - "$PUBLISH_JSON" <<'PY'
+SHA="$("$PYTHON_BIN" - "$PUBLISH_JSON" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -203,7 +253,7 @@ curl -fsS -H "$auth_header" "$BASE_URL/api/v1/operator-packet/run/$RUN_ID/latest
 curl -fsS -H "$auth_header" "$BASE_URL/api/v1/operator-packet/$SHA" > "$RAW_JSON"
 curl -fsS -H "$auth_header" "$BASE_URL/api/v1/operator-packet/$SHA/signature" > "$SIGNATURE_JSON"
 
-python3 - "$SUMMARY_JSON" "$PUBLISH_JSON" "$DASHBOARD_JSON" "$DETAIL_JSON" "$LATEST_JSON" "$RAW_JSON" "$SIGNATURE_JSON" "$RUN_ID" "$BASE_URL" "$SHA" "$SIGNER_ID" <<'PY'
+"$PYTHON_BIN" - "$SUMMARY_JSON" "$PUBLISH_JSON" "$DASHBOARD_JSON" "$DETAIL_JSON" "$LATEST_JSON" "$RAW_JSON" "$SIGNATURE_JSON" "$RUN_ID" "$BASE_URL" "$SHA" "$SIGNER_ID" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -303,7 +353,7 @@ payload = {
 Path(summary).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
 
-python3 - "$cp_token" "$TOKEN" "$SUMMARY_JSON" "$PUBLISH_JSON" "$DASHBOARD_JSON" "$DETAIL_JSON" "$LATEST_JSON" "$RAW_JSON" "$SIGNATURE_JSON" <<'PY'
+"$PYTHON_BIN" - "$cp_token" "$TOKEN" "$SUMMARY_JSON" "$PUBLISH_JSON" "$DASHBOARD_JSON" "$DETAIL_JSON" "$LATEST_JSON" "$RAW_JSON" "$SIGNATURE_JSON" <<'PY'
 import sys
 from pathlib import Path
 
