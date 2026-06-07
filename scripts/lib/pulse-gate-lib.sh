@@ -54,7 +54,11 @@ ao2_gate_forbidden_string_scan() {
   local pattern="${provider_one}|${provider_two}|${push_cmd} ${origin_word}|${release_cmd} ${create_word}|${private_root}"
   mkdir -p "$log_dir"
   set +e
-  rg "$pattern" "$@" >"$log" 2>&1
+  if command -v rg >/dev/null 2>&1; then
+    rg "$pattern" "$@" >"$log" 2>&1
+  else
+    grep -R -n -E "$pattern" "$@" >"$log" 2>&1
+  fi
   local code=$?
   set -e
   if [ "$code" = "1" ]; then

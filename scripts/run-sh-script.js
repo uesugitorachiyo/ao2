@@ -19,21 +19,31 @@ function commandExists(command) {
   return result.status === 0;
 }
 
-function windowsShCandidates() {
+function windowsShellCandidates(executable) {
   return [
-    "C:\\Program Files\\Git\\bin\\sh.exe",
-    "C:\\Program Files\\Git\\usr\\bin\\sh.exe",
-    "C:\\Program Files (x86)\\Git\\bin\\sh.exe",
-    "C:\\Program Files (x86)\\Git\\usr\\bin\\sh.exe",
+    `C:\\Program Files\\Git\\bin\\${executable}.exe`,
+    `C:\\Program Files\\Git\\usr\\bin\\${executable}.exe`,
+    `C:\\Program Files (x86)\\Git\\bin\\${executable}.exe`,
+    `C:\\Program Files (x86)\\Git\\usr\\bin\\${executable}.exe`,
   ];
 }
 
 function findShell() {
+  if (commandExists("bash")) {
+    return "bash";
+  }
+  if (process.platform === "win32") {
+    for (const candidate of windowsShellCandidates("bash")) {
+      if (fs.existsSync(candidate)) {
+        return candidate;
+      }
+    }
+  }
   if (commandExists("sh")) {
     return "sh";
   }
   if (process.platform === "win32") {
-    for (const candidate of windowsShCandidates()) {
+    for (const candidate of windowsShellCandidates("sh")) {
       if (fs.existsSync(candidate)) {
         return candidate;
       }
