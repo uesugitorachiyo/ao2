@@ -151,6 +151,14 @@ product-code implementation packets under `implementation-packets/` without
 requiring a shell command. product_code tasks require verification evidence:
 the executor rejects packets that do not name both a verification command and
 expected evidence. A product_code task cannot close from packet materialization alone.
+When a manifest sets `product_code_execution.enabled=true`, product-code tasks can opt into `pulse:code-agent-runner`
+instead of packet-only materialization.
+`product_code_execution.mode=dry_run` validates the generated
+`ao2.pulse-code-agent-task.v1` packet through the runner and records the runner
+summary path in task-executor evidence. `product_code_execution.mode=execute`
+uses the same guarded runner execution path and still requires
+`AO2_PULSE_CODE_AGENT_EXECUTE=1`, allowed-file checks, unrelated-dirty-file
+checks, and declared verification evidence before the task can pass.
 The executor rejects non-local manifests and any manifest that stores
 credentials.
 
