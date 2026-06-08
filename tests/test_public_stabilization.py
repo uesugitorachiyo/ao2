@@ -2493,7 +2493,7 @@ def test_public_hardening_ci_workflow_is_tracked_and_public_safe():
         assert "run: npm ci" not in workflow
     for command in [
         "AO2_PULSE_GENERATE_NEXT_REGISTER=0 npm run pulse:generate-next",
-        "AO2_PULSE_LOCAL_MIRROR_SOURCE=target/pulse-next-recommended-tasks/generated-next npm run pulse:local-mirror",
+        "AO2_PULSE_LOCAL_MIRROR_SOURCE=target/pulse-next-recommended-tasks npm run pulse:local-mirror",
         "python3 -m pip install pytest",
         "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py -q",
         "npm run public:hardening",
@@ -2527,6 +2527,9 @@ def test_promoted_public_hardening_ci_scripts_are_clean_checkout_safe():
         text = script.read_text(encoding="utf-8")
         assert "scripts/lib/pulse-gate-lib.sh" in text
         assert "ao2.public-hardening" in text
+        if script_path == "scripts/public-hardening-ci-workflow.sh":
+            assert 'AO2_PULSE_LOCAL_MIRROR_DEST="$OUT_ROOT/pulse-local-mirror"' in text
+            assert '"pulse_local_mirror_seed": str(out_root / "pulse-local-mirror" / "pulse-local-mirror-summary.json")' in text
         for forbidden in [
             "OPENAI_API_KEY",
             "ANTHROPIC_API_KEY",

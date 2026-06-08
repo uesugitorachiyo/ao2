@@ -44,7 +44,7 @@ jobs:
           node-version: "22"
       - run: npm ci
       - run: AO2_PULSE_GENERATE_NEXT_REGISTER=0 npm run pulse:generate-next
-      - run: AO2_PULSE_LOCAL_MIRROR_SOURCE=target/pulse-next-recommended-tasks/generated-next npm run pulse:local-mirror
+      - run: AO2_PULSE_LOCAL_MIRROR_SOURCE=target/pulse-next-recommended-tasks npm run pulse:local-mirror
       - run: PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py -q
       - run: npm run public:hardening
       - run: npm run pulse:resume -- --dry-run
