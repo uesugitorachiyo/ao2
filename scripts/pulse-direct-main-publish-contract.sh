@@ -2,14 +2,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT_ROOT="${AO2_PULSE_AUTO_ADVANCE_RUNNER_CONTRACT_ROOT:-$ROOT/target/pulse-auto-advance-runner-contract/latest}"
+OUT_ROOT="${AO2_PULSE_DIRECT_MAIN_PUBLISH_CONTRACT_ROOT:-$ROOT/target/pulse-direct-main-publish-contract/latest}"
 SUMMARY="$OUT_ROOT/summary.json"
 LOG_DIR="$OUT_ROOT/logs"
 
 rm -rf "$OUT_ROOT"
 mkdir -p "$LOG_DIR"
 
-bash -n "$ROOT/scripts/pulse-auto-advance.sh" >"$LOG_DIR/bash-n.log" 2>&1
+bash -n "$ROOT/scripts/pulse-direct-main-publish.sh" >"$LOG_DIR/bash-n.log" 2>&1
 
 python3 - "$ROOT" "$OUT_ROOT" "$SUMMARY" "$LOG_DIR" <<'PY'
 import json
@@ -21,29 +21,28 @@ root = Path(sys.argv[1]).resolve()
 out_root = Path(sys.argv[2]).resolve()
 summary = Path(sys.argv[3]).resolve()
 log_dir = Path(sys.argv[4]).resolve()
-runner = (root / "scripts" / "pulse-auto-advance.sh").read_text(encoding="utf-8")
+text = (root / "scripts" / "pulse-direct-main-publish.sh").read_text(encoding="utf-8")
 needles = [
-    "ao2.pulse-auto-advance-run.v1",
-    "recommended_tasks",
-    "operator_prompt_sha256",
-    "pulse-auto-advance-ledger.jsonl",
-    "AO2_PULSE_AUTO_ADVANCE_STOP_FILE",
-    "duplicate_eval_loop_digest",
-    "continue_until_stopped",
-    "AO2_PULSE_AUTO_ADVANCE_DIRECT_MAIN_PUBLISH",
-    "pulse:direct-main-publish",
-    "direct_main_publish",
+    "ao2.pulse-direct-main-publish.v1",
+    "AO2_PULSE_DIRECT_MAIN_PUBLISH_REPO_ROOT",
+    "AO2_PULSE_DIRECT_MAIN_PUBLISH_VERIFY_COMMAND",
+    "AO2_PULSE_DIRECT_MAIN_PUBLISH_PUSH",
+    "git fetch",
+    "git commit",
+    "git push",
+    "merge-base",
+    "stores_credentials",
 ]
-checks = [{"name": needle, "status": "passed" if needle in runner else "failed"} for needle in needles]
+checks = [{"name": needle, "status": "passed" if needle in text else "failed"} for needle in needles]
 checks.append({"name": "bash_syntax", "status": "passed", "log": str(log_dir / "bash-n.log")})
 status = "passed" if all(item["status"] == "passed" for item in checks) else "failed"
 payload = {
-    "schema_version": "ao2.pulse-auto-advance-runner-contract.v1",
+    "schema_version": "ao2.pulse-direct-main-publish-contract.v1",
     "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     "status": status,
     "artifact_root": str(out_root),
-    "command": "pulse:auto-advance",
-    "syntax_command": "bash -n scripts/pulse-auto-advance.sh",
+    "command": "pulse:direct-main-publish",
+    "syntax_command": "bash -n scripts/pulse-direct-main-publish.sh",
     "checks": checks,
     "trust_boundary": {"local_only": True, "stores_credentials": False},
 }

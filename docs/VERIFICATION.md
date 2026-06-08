@@ -143,6 +143,21 @@ lets overnight Pulse runs keep collecting local evidence while an open PR waits
 for review or merge, without creating another PR or product-code implementation
 packet.
 
+`npm run pulse:direct-main-publish` is the opt-in direct-main publishing gate
+used by unattended Pulse runs that should commit and push from the CLI instead
+of opening a PR. Start auto-advance with
+`AO2_PULSE_AUTO_ADVANCE_DIRECT_MAIN_PUBLISH=1` to enable it after each
+successful task batch. The publisher emits
+`ao2.pulse-direct-main-publish.v1` under
+`target/pulse-direct-main-publish/latest/summary.json`, requires the current
+branch to be `main`, fetches `origin/main`, requires local `HEAD` to equal the
+remote before publishing, rejects disallowed local artifact/credential paths,
+runs `AO2_PULSE_DIRECT_MAIN_PUBLISH_VERIFY_COMMAND` (default:
+`PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py
+-q`), commits the validated changed paths, verifies the remote is still an
+ancestor, and pushes `HEAD:main`. If there are no tracked or untracked source
+changes, it exits successfully with `status=skipped` and does not commit.
+
 `npm run pulse:generate-next` emits `ao2.pulse-generate-next.v1` at
 `target/pulse-generate-next/latest/summary.json` and writes a fresh
 `packet.md`, `board.md`, `executor-evidence.json`, `pulse-eval-loop.json`, and

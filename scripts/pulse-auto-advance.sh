@@ -19,6 +19,7 @@ PR_CI_GATE="${AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE:-1}"
 PR_CI_GATE_STATE="${AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_STATE:-$ROOT/.ao2-local/pulse/pr-ci-gate.json}"
 PR_CI_GATE_UPDATE="${AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_UPDATE:-1}"
 LOCAL_ONLY_WHILE_PR_BLOCKED="${AO2_PULSE_AUTO_ADVANCE_LOCAL_ONLY_WHILE_PR_BLOCKED:-0}"
+DIRECT_MAIN_PUBLISH="${AO2_PULSE_AUTO_ADVANCE_DIRECT_MAIN_PUBLISH:-0}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -61,7 +62,7 @@ fi
 rm -rf "$OUT_ROOT"
 mkdir -p "$LOG_DIR" "$(dirname "$LEDGER")"
 
-python3 - "$ROOT" "$RESUME_JSON" "$OUT_ROOT" "$SUMMARY" "$LOG_DIR" "$LEDGER" "$STOP_FILE" "$MAX_ITERATIONS" "$ALLOW_DUPLICATE" "$FOREVER" "$SLEEP_SECONDS" "$GENERATE_NEXT" "$GENERATE_NEXT_SLEEP_SECONDS" "$PR_CI_GATE" "$PR_CI_GATE_STATE" "$PR_CI_GATE_UPDATE" "$LOCAL_ONLY_WHILE_PR_BLOCKED" <<'PY'
+python3 - "$ROOT" "$RESUME_JSON" "$OUT_ROOT" "$SUMMARY" "$LOG_DIR" "$LEDGER" "$STOP_FILE" "$MAX_ITERATIONS" "$ALLOW_DUPLICATE" "$FOREVER" "$SLEEP_SECONDS" "$GENERATE_NEXT" "$GENERATE_NEXT_SLEEP_SECONDS" "$PR_CI_GATE" "$PR_CI_GATE_STATE" "$PR_CI_GATE_UPDATE" "$LOCAL_ONLY_WHILE_PR_BLOCKED" "$DIRECT_MAIN_PUBLISH" <<'PY'
 import hashlib
 import json
 import os
@@ -88,6 +89,7 @@ pr_ci_gate_enabled = sys.argv[14] == "1"
 pr_ci_gate_state = Path(sys.argv[15]).resolve()
 pr_ci_gate_update_enabled = sys.argv[16] == "1"
 local_only_while_pr_blocked_enabled = sys.argv[17] == "1"
+direct_main_publish_enabled = sys.argv[18] == "1"
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -119,6 +121,10 @@ payload = {
     },
     "local_only_while_pr_blocked": {
         "enabled": local_only_while_pr_blocked_enabled,
+        "status": "not_checked",
+    },
+    "direct_main_publish": {
+        "enabled": direct_main_publish_enabled,
         "status": "not_checked",
     },
     "results": [],
@@ -369,6 +375,41 @@ def pulse_generate_next(reason: str) -> bool:
     write_summary(payload)
     return result.returncode == 0
 
+def pulse_direct_main_publish(reason: str) -> bool:
+    if not direct_main_publish_enabled:
+        payload["direct_main_publish"] = {
+            "enabled": False,
+            "status": "skipped",
+            "reason": "direct_main_publish_disabled",
+        }
+        return True
+    log_path = log_dir / f"pulse_direct_main_publish-{int(time.time())}.log"
+    env = dict(os.environ)
+    env["AO2_PULSE_DIRECT_MAIN_PUBLISH_REASON"] = reason
+    env.setdefault("AO2_PULSE_DIRECT_MAIN_PUBLISH_ROOT", str(out_root / "direct-main-publish"))
+    with log_path.open("w", encoding="utf-8") as log:
+        log.write("$ npm run pulse:direct-main-publish\n")
+        log.write(f"reason={reason}\n")
+        log.flush()
+        result = subprocess.run("npm run pulse:direct-main-publish", cwd=root, shell=True, env=env, stdout=log, stderr=subprocess.STDOUT)
+    payload["direct_main_publish"] = {
+        "enabled": True,
+        "command": "pulse:direct-main-publish",
+        "status": "passed" if result.returncode == 0 else "failed",
+        "exit_code": int(result.returncode),
+        "log": str(log_path),
+        "summary": str(out_root / "direct-main-publish" / "summary.json"),
+        "reason": reason,
+    }
+    if result.returncode != 0:
+        payload["status"] = "failed"
+        payload["reason"] = "direct_main_publish_failed"
+        payload["generated_at_utc"] = utc_now()
+        write_summary(payload)
+        return False
+    write_summary(payload)
+    return True
+
 if stop_file.exists():
     payload["status"] = "stopped"
     payload["reason"] = "stop_file_present"
@@ -532,6 +573,8 @@ while True:
     }
     with ledger.open("a", encoding="utf-8") as fh:
         fh.write(json.dumps(ledger_entry, sort_keys=True) + "\n")
+    if not pulse_direct_main_publish("completed_iteration"):
+        break
     if not forever:
         payload["status"] = "passed"
         break

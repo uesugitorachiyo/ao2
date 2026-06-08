@@ -639,6 +639,8 @@ def test_pulse_auto_advance_runner_restart_contract():
     verification = read("docs/VERIFICATION.md")
     expected_scripts = {
         "pulse:auto-advance": "scripts/pulse-auto-advance.sh",
+        "pulse:direct-main-publish": "scripts/pulse-direct-main-publish.sh",
+        "pulse:direct-main-publish:contract": "scripts/pulse-direct-main-publish-contract.sh",
         "pulse:resume-workspace-cli-fallback": "scripts/pulse-resume-workspace-cli-fallback.sh",
         "pulse:terminal-eval-loop-schema-compatibility": "scripts/pulse-terminal-eval-loop-schema-compatibility.sh",
         "pulse:auto-advance-runner-contract": "scripts/pulse-auto-advance-runner-contract.sh",
@@ -686,10 +688,27 @@ def test_pulse_auto_advance_runner_restart_contract():
         "pr_ci_gate",
         "pulse:pr-ci-gate:update",
         "AO2_PULSE_PR_CI_GATE_UPDATE_STATE",
+        "AO2_PULSE_AUTO_ADVANCE_DIRECT_MAIN_PUBLISH",
+        "pulse:direct-main-publish",
+        "direct_main_publish",
     ]:
         assert needle in runner
 
     script_needles = {
+        "scripts/pulse-direct-main-publish.sh": [
+            "ao2.pulse-direct-main-publish.v1",
+            "AO2_PULSE_DIRECT_MAIN_PUBLISH_REPO_ROOT",
+            "AO2_PULSE_DIRECT_MAIN_PUBLISH_VERIFY_COMMAND",
+            "AO2_PULSE_DIRECT_MAIN_PUBLISH_PUSH",
+            "git push",
+            "stores_credentials",
+        ],
+        "scripts/pulse-direct-main-publish-contract.sh": [
+            "ao2.pulse-direct-main-publish-contract.v1",
+            "bash -n scripts/pulse-direct-main-publish.sh",
+            "AO2_PULSE_DIRECT_MAIN_PUBLISH_VERIFY_COMMAND",
+            "stores_credentials",
+        ],
         "scripts/pulse-pr-ci-gate-update.sh": [
             "ao2.pulse-pr-ci-gate-update.v1",
             "ao2.pulse-pr-ci-gate.v1",
@@ -717,6 +736,7 @@ def test_pulse_auto_advance_runner_restart_contract():
             "pulse:auto-advance",
             "bash -n scripts/pulse-auto-advance.sh",
             "recommended_tasks",
+            "AO2_PULSE_AUTO_ADVANCE_DIRECT_MAIN_PUBLISH",
         ],
         "scripts/pulse-stop-and-dedup-ledger.sh": [
             "ao2.pulse-stop-and-dedup-ledger.v1",
@@ -741,6 +761,8 @@ def test_pulse_auto_advance_runner_restart_contract():
     for needle in [
         "npm run pulse:auto-advance",
         "npm run pulse:auto-advance -- --forever",
+        "npm run pulse:direct-main-publish",
+        "AO2_PULSE_AUTO_ADVANCE_DIRECT_MAIN_PUBLISH=1",
         "npm run pulse:resume-workspace-cli-fallback",
         "npm run pulse:terminal-eval-loop-schema-compatibility",
         "npm run pulse:auto-advance-runner-contract",
@@ -755,6 +777,85 @@ def test_pulse_auto_advance_runner_restart_contract():
         "target/pulse-auto-advance/latest/summary.json",
     ]:
         assert needle in verification
+
+
+def test_pulse_direct_main_publish_commits_and_pushes_temp_repo(tmp_path):
+    repo = tmp_path / "repo"
+    remote = tmp_path / "origin.git"
+    out_root = tmp_path / "publish"
+    subprocess.run(["git", "init", "-b", "main", str(repo)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "pulse@example.invalid"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "Pulse Test"], cwd=repo, check=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=repo, check=True)
+    (repo / "README.md").write_text("initial\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-m", "initial"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "push", "-u", "origin", "main"], cwd=repo, check=True, capture_output=True, text=True)
+    (repo / "README.md").write_text("initial\npulse advancement\n", encoding="utf-8")
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:direct-main-publish"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_DIRECT_MAIN_PUBLISH_REPO_ROOT": str(repo),
+            "AO2_PULSE_DIRECT_MAIN_PUBLISH_ROOT": str(out_root),
+            "AO2_PULSE_DIRECT_MAIN_PUBLISH_VERIFY_COMMAND": "python3 -c 'print(\"verify ok\")'",
+            "AO2_PULSE_DIRECT_MAIN_PUBLISH_MESSAGE": "Pulse direct main publish test",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.pulse-direct-main-publish.v1"
+    assert summary["status"] == "passed"
+    assert summary["reason"] == "committed_and_pushed"
+    assert summary["branch"] == "main"
+    assert summary["changed_paths"] == ["README.md"]
+    assert summary["verification"]["status"] == "passed"
+    assert summary["commit"]["sha"]
+    remote_head = subprocess.check_output(["git", "--git-dir", str(remote), "rev-parse", "main"], text=True).strip()
+    assert remote_head == summary["commit"]["sha"]
+
+
+def test_pulse_direct_main_publish_skips_when_no_changes(tmp_path):
+    repo = tmp_path / "repo"
+    remote = tmp_path / "origin.git"
+    out_root = tmp_path / "publish"
+    subprocess.run(["git", "init", "-b", "main", str(repo)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "pulse@example.invalid"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "Pulse Test"], cwd=repo, check=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=repo, check=True)
+    (repo / "README.md").write_text("initial\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-m", "initial"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "push", "-u", "origin", "main"], cwd=repo, check=True, capture_output=True, text=True)
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:direct-main-publish"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_DIRECT_MAIN_PUBLISH_REPO_ROOT": str(repo),
+            "AO2_PULSE_DIRECT_MAIN_PUBLISH_ROOT": str(out_root),
+            "AO2_PULSE_DIRECT_MAIN_PUBLISH_VERIFY_COMMAND": "python3 -c 'print(\"verify ok\")'",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "skipped"
+    assert summary["reason"] == "no_tracked_or_untracked_changes"
+    assert summary["changed_paths"] == []
+    assert "verification" not in summary
 
 
 def test_pulse_pr_ci_gate_update_materializes_waiting_state_from_fixture(tmp_path):
@@ -1226,6 +1327,97 @@ def test_pulse_auto_advance_can_generate_local_only_packet_when_pr_ci_gate_waits
     assert summary["generated_local_only_packet"] is True
     assert summary["register_next_packet"] is True
     assert captured["local_only"] == "1"
+
+
+def test_pulse_auto_advance_invokes_direct_main_publish_when_enabled(tmp_path):
+    pulse_dir = tmp_path / "pulse"
+    out_root = tmp_path / "auto-advance"
+    ledger = tmp_path / "ledger.jsonl"
+    stop_file = tmp_path / "STOP"
+    bin_dir = tmp_path / "bin"
+    capture = tmp_path / "direct-main-publish.json"
+    pulse_dir.mkdir()
+    bin_dir.mkdir()
+
+    fake_npm = bin_dir / "npm"
+    fake_npm.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        "if [ \"${1:-}\" = \"run\" ] && [ \"${2:-}\" = \"pulse:direct-main-publish\" ]; then\n"
+        "  python3 - <<'PY'\n"
+        "import json, os, pathlib\n"
+        "pathlib.Path(os.environ['AO2_TEST_DIRECT_MAIN_PUBLISH_CAPTURE']).write_text(json.dumps({\n"
+        "  'direct_main_publish': True,\n"
+        "  'reason': os.environ.get('AO2_PULSE_DIRECT_MAIN_PUBLISH_REASON'),\n"
+        "}) + '\\n', encoding='utf-8')\n"
+        "PY\n"
+        "  exit 0\n"
+        "fi\n"
+        "echo unexpected npm invocation: \"$@\" >&2\n"
+        "exit 97\n",
+        encoding="utf-8",
+    )
+    fake_npm.chmod(0o755)
+    real_npm = subprocess.check_output(["bash", "-lc", "command -v npm"], text=True).strip()
+
+    eval_loop = {
+        "schema_version": "ao2.pulse-eval-loop.v1",
+        "status": "ready",
+        "recommended_tasks": [
+            {
+                "id": "local-task",
+                "kind": "evidence_gate",
+                "title": "Local task",
+                "command": "python3 -c 'print(\"local task passed\")'",
+            }
+        ],
+        "trust_boundary": {"local_only": True, "stores_credentials": False},
+    }
+    eval_loop_path = pulse_dir / "pulse-eval-loop.json"
+    prompt_path = pulse_dir / "operator-prompt.txt"
+    eval_loop_path.write_text(json.dumps(eval_loop, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    prompt_path.write_text("advance and direct-main publish\n", encoding="utf-8")
+    resume = {
+        "schema_version": "ao2.pulse-local-mirror-resume.v1",
+        "status": "ready",
+        "pulse_eval_loop_path": "pulse-eval-loop.json",
+        "pulse_eval_loop_sha256": __import__("hashlib").sha256(eval_loop_path.read_bytes()).hexdigest(),
+        "operator_prompt_path": "operator-prompt.txt",
+        "operator_prompt_sha256": __import__("hashlib").sha256(prompt_path.read_bytes()).hexdigest(),
+        "auto_advance": {"continue_until_stopped": True, "stores_credentials": False},
+        "trust_boundary": {"local_only": True, "stores_credentials": False},
+    }
+    resume_path = pulse_dir / "resume.json"
+    resume_path.write_text(json.dumps(resume, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    result = subprocess.run(
+        [real_npm, "run", "pulse:auto-advance"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+            "AO2_TEST_DIRECT_MAIN_PUBLISH_CAPTURE": str(capture),
+            "AO2_PULSE_RESUME_JSON": str(resume_path),
+            "AO2_PULSE_AUTO_ADVANCE_ROOT": str(out_root),
+            "AO2_PULSE_AUTO_ADVANCE_LEDGER": str(ledger),
+            "AO2_PULSE_AUTO_ADVANCE_STOP_FILE": str(stop_file),
+            "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT": "0",
+            "AO2_PULSE_AUTO_ADVANCE_DIRECT_MAIN_PUBLISH": "1",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    captured = json.loads(capture.read_text(encoding="utf-8"))
+    assert summary["status"] == "passed"
+    assert summary["direct_main_publish"]["enabled"] is True
+    assert summary["direct_main_publish"]["status"] == "passed"
+    assert summary["direct_main_publish"]["command"] == "pulse:direct-main-publish"
+    assert captured == {"direct_main_publish": True, "reason": "completed_iteration"}
 
 
 def test_pulse_auto_advance_forever_refreshes_pr_ci_gate_before_generate_next(tmp_path):
