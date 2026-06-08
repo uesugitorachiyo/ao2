@@ -323,10 +323,13 @@ Result:
   policy denial, exact approval, evaluator rejection, correction, accepted
   closure, replay, evidence-pack export, report rendering, and cockpit index;
   emits `ao2.risky-pr-golden-path.v1`. The generated static report exposes
-  `Local Run Record`, `Static Export Evidence`, `Evaluator Closure Evidence`,
+  `Local Run Record`, `Static Export Evidence`, `Objective`, `Run Health`,
+  `Policy Decisions`, `Approvals`, `Artifacts`, `Evaluator Closure Evidence`,
   and `Replay Evidence` sections, and the sibling
   `ao2.risky-pr-static-report-index.v1` JSON sidecar maps operator questions
-  to report/export/replay evidence without filesystem archaeology. The report
+  to report/export/replay evidence without filesystem archaeology. The sidecar
+  records the required report sections, the sections present in the rendered
+  HTML, and a fail-closed `report_contract_complete` result. The report
   and index expose denied `request_digest` and approved `action_digest` values
   under the `approval_boundary` summary so operators can inspect the exact
   approval boundary without opening raw evidence JSON.

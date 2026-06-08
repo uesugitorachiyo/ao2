@@ -49780,6 +49780,38 @@ fn report_index_path(report_path: &Path) -> PathBuf {
     report_path.with_file_name(format!("{stem}.report.json"))
 }
 
+const RISKY_PR_REQUIRED_REPORT_SECTIONS: &[&str] = &[
+    "Objective",
+    "Run Health",
+    "Policy Decisions",
+    "Approvals",
+    "Artifacts",
+    "Evaluator Closure Evidence",
+    "Replay Evidence",
+    "Static Export Evidence",
+    "Local Run Record",
+];
+
+fn risky_pr_report_contract(report_html: &str) -> serde_json::Value {
+    let present_sections = RISKY_PR_REQUIRED_REPORT_SECTIONS
+        .iter()
+        .copied()
+        .filter(|section| report_html.contains(section))
+        .collect::<Vec<_>>();
+    let missing_sections = RISKY_PR_REQUIRED_REPORT_SECTIONS
+        .iter()
+        .copied()
+        .filter(|section| !present_sections.contains(section))
+        .collect::<Vec<_>>();
+    let complete = missing_sections.is_empty();
+    serde_json::json!({
+        "required_sections": RISKY_PR_REQUIRED_REPORT_SECTIONS,
+        "present_sections": present_sections,
+        "missing_sections": missing_sections,
+        "complete": complete,
+    })
+}
+
 fn render_report_index_for_run(
     target: &Path,
     run_id: &str,
@@ -49789,6 +49821,10 @@ fn render_report_index_for_run(
     let run_record_path = run_dir.join("run-record.json");
     let evidence_pack_path = run_dir.join("evidence-pack").join("evidence-pack.json");
     let evidence_pack: serde_json::Value = read_json_file(&evidence_pack_path)?;
+    let report_html = fs::read_to_string(report_path)
+        .with_context(|| format!("read rendered report {}", report_path.display()))?;
+    let report_contract = risky_pr_report_contract(&report_html);
+    let report_contract_complete = json_bool(&report_contract, "complete");
     let replay = replay_run(ReplayOptions {
         target_repo: target.to_path_buf(),
         run_id: run_id.to_string(),
@@ -49889,6 +49925,7 @@ fn render_report_index_for_run(
             "count": artifacts.len(),
             "types": artifact_types,
         },
+        "report_contract": report_contract,
         "closures": {
             "count": closures.len(),
         },
@@ -49908,6 +49945,7 @@ fn render_report_index_for_run(
             "closure_verdict": !json_string(&evidence_pack, "verdict").is_empty(),
             "export_path": evidence_pack_path.is_file(),
             "replay_status": replay.digest_failures.is_empty(),
+            "report_contract": report_contract_complete,
         },
     }))
 }

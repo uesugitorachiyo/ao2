@@ -2391,6 +2391,9 @@ fn risky_pr_golden_path_requires_static_report_index() {
     assert!(script.contains("approval_boundary"));
     assert!(script.contains("denied_request_digests"));
     assert!(script.contains("approved_action_digests"));
+    assert!(script.contains("required_report_sections"));
+    assert!(script.contains("present_report_sections"));
+    assert!(script.contains("report_contract_complete"));
     assert!(script.contains("Request Digest"));
     assert!(script.contains("Action Digest"));
     assert!(script.contains("\"denied_actions\""));
@@ -2398,8 +2401,11 @@ fn risky_pr_golden_path_requires_static_report_index() {
     assert!(script.contains("\"test_evidence\""));
     assert!(script.contains("\"closure_verdict\""));
     assert!(script.contains("\"replay_status\""));
+    assert!(script.contains("\"report_contract\""));
+    assert!(script.contains("report index missing required section"));
     assert!(verification.contains("ao2.risky-pr-static-report-index.v1"));
     assert!(verification.contains("without filesystem archaeology"));
+    assert!(verification.contains("required report sections"));
 }
 
 #[test]

@@ -2425,11 +2425,12 @@ fn run_health(ctx: &RunContext) -> serde_json::Value {
 }
 
 fn unresolved_concerns(ctx: &RunContext) -> Vec<String> {
+    let Some(report) = ctx.closure_reports.last() else {
+        return Vec::new();
+    };
     let mut concerns = BTreeSet::new();
-    for report in &ctx.closure_reports {
-        for concern in &report.unresolved_concerns {
-            concerns.insert(concern.clone());
-        }
+    for concern in &report.unresolved_concerns {
+        concerns.insert(concern.clone());
     }
     concerns.into_iter().collect()
 }
@@ -2564,6 +2565,27 @@ fn run_markers(ctx: &RunContext) -> Vec<&'static str> {
     markers
 }
 
+fn escape_html(value: impl AsRef<str>) -> String {
+    value
+        .as_ref()
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+fn html_list(items: Vec<String>, empty_message: &str) -> String {
+    if items.is_empty() {
+        return format!("<li>{}</li>", escape_html(empty_message));
+    }
+    items
+        .into_iter()
+        .map(|item| format!("<li>{}</li>", escape_html(item)))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 fn render_static_report(ctx: &RunContext, evidence_pack_path: &Path) -> Result<PathBuf> {
     let dir = ctx.run_dir.join("report");
     fs::create_dir_all(&dir)?;
@@ -2576,15 +2598,89 @@ fn render_static_report(ctx: &RunContext, evidence_pack_path: &Path) -> Result<P
         .map(|report| {
             format!(
                 "<li><strong>{}</strong> at {} evidence=[{}] blockers=[{}] unresolved=[{}]</li>",
-                report.verdict,
+                escape_html(&report.verdict),
                 report.created_at,
-                report.evidence_refs.join(", "),
-                report.blockers.join(", "),
-                report.unresolved_concerns.join(", ")
+                escape_html(report.evidence_refs.join(", ")),
+                escape_html(report.blockers.join(", ")),
+                escape_html(report.unresolved_concerns.join(", "))
             )
         })
         .collect::<Vec<_>>()
         .join("\n");
+    let acceptance = ctx
+        .closure_reports
+        .last()
+        .map(|report| report.acceptance_criteria_results.clone())
+        .filter(|criteria| !criteria.is_empty())
+        .or_else(|| {
+            if ctx.acceptance.is_empty() {
+                None
+            } else {
+                Some(ctx.acceptance.clone())
+            }
+        })
+        .unwrap_or_else(|| {
+            vec![
+                "verifier command passes".to_string(),
+                "patch stays scoped to the workflow objective".to_string(),
+                "replay has zero digest failures".to_string(),
+            ]
+        });
+    let policy_items = ctx
+        .policy_decisions
+        .iter()
+        .map(|decision| {
+            format!(
+                "{}: {} {} on {} reason={} digest={} policy={} approval_ticket={}",
+                decision.decision_id,
+                decision.decision,
+                decision.action,
+                decision.resource,
+                decision.reason,
+                decision.request_digest,
+                decision.policy_version,
+                decision.approval_ticket_id.as_deref().unwrap_or("none")
+            )
+        })
+        .collect::<Vec<_>>();
+    let approval_items = ctx
+        .approvals
+        .iter()
+        .map(|ticket| {
+            format!(
+                "{}: {} action={} digest={} risk={} scope={} approver={}",
+                ticket.ticket_id,
+                ticket.status,
+                ticket.requested_action,
+                ticket.action_digest,
+                ticket.risk_class,
+                ticket.scope,
+                ticket.approver.as_deref().unwrap_or("none")
+            )
+        })
+        .collect::<Vec<_>>();
+    let artifact_items = ctx
+        .artifacts
+        .iter()
+        .map(|artifact| {
+            format!(
+                "{}: {} uri={} media_type={} digest={} producer={}",
+                artifact.artifact_id,
+                artifact.artifact_type,
+                artifact.uri,
+                artifact.media_type,
+                artifact.digest,
+                artifact.producer
+            )
+        })
+        .collect::<Vec<_>>();
+    let health = run_health(ctx);
+    let health_verdict = health["verdict"].as_str().unwrap_or("blocked");
+    let repair_status = health["repair_status"].as_str().unwrap_or("unknown");
+    let attention_required = health["attention_required"].as_bool().unwrap_or(true);
+    let next_action = health["next_action"]
+        .as_str()
+        .unwrap_or("Review the evidence pack before resuming.");
     let denied = ctx
         .policy_decisions
         .iter()
@@ -2598,7 +2694,22 @@ fn render_static_report(ctx: &RunContext, evidence_pack_path: &Path) -> Result<P
 <h1>AO2 Risky PR Run</h1>
 <p><strong>Run:</strong> {run_id}</p>
 <p><strong>Workflow:</strong> {workflow}</p>
+<p><strong>Objective:</strong> {objective}</p>
+<p><strong>Verifier Command:</strong> {verifier}</p>
 <p><strong>Final verdict:</strong> {verdict}</p>
+<h2>Roles</h2>
+<ul>
+{roles}
+</ul>
+<h2>Acceptance Criteria</h2>
+<ul>
+{acceptance}
+</ul>
+<h2>Run Health</h2>
+<p><strong>Health verdict:</strong> {health_verdict}</p>
+<p><strong>Repair status:</strong> {repair_status}</p>
+<p><strong>Attention required:</strong> {attention_required}</p>
+<p><strong>Next Operator Action:</strong> {next_action}</p>
 <h2>Timeline</h2>
 <ul>
 <li>Workflow compiled.</li>
@@ -2611,6 +2722,18 @@ fn render_static_report(ctx: &RunContext, evidence_pack_path: &Path) -> Result<P
 <h2>Governance</h2>
 <p>Denied or approval-required actions: {denied}</p>
 <p>Approvals granted: {approvals}</p>
+<h2>Policy Decisions</h2>
+<ul>
+{policy_decisions}
+</ul>
+<h2>Approval Tickets</h2>
+<ul>
+{approval_tickets}
+</ul>
+<h2>Artifacts</h2>
+<ul>
+{artifacts}
+</ul>
 <h2>Evidence</h2>
 <p>Evidence pack: {evidence}</p>
 <h2>Local Run Record</h2>
@@ -2627,20 +2750,32 @@ fn render_static_report(ctx: &RunContext, evidence_pack_path: &Path) -> Result<P
 </body>
 </html>
 "#,
-        run_id = ctx.run_id,
-        workflow = ctx.workflow_id,
-        verdict = ctx
-            .closure_reports
-            .last()
-            .map(|report| report.verdict.as_str())
-            .unwrap_or("blocked"),
+        run_id = escape_html(&ctx.run_id),
+        workflow = escape_html(&ctx.workflow_id),
+        objective = escape_html(&ctx.objective),
+        verifier = escape_html(&ctx.verifier_command),
+        verdict = escape_html(
+            ctx.closure_reports
+                .last()
+                .map(|report| report.verdict.as_str())
+                .unwrap_or("blocked"),
+        ),
+        roles = html_list(ctx.roles.clone(), "no roles declared"),
+        acceptance = html_list(acceptance, "no acceptance criteria recorded"),
+        health_verdict = escape_html(health_verdict),
+        repair_status = escape_html(repair_status),
+        attention_required = attention_required,
+        next_action = escape_html(next_action),
         denied = denied,
         approvals = ctx.approvals.len(),
-        evidence = evidence_pack_path.display(),
-        run_record = run_record_path.display(),
-        report = path.display(),
+        policy_decisions = html_list(policy_items, "no policy decisions recorded"),
+        approval_tickets = html_list(approval_items, "no approval tickets recorded"),
+        artifacts = html_list(artifact_items, "no artifacts recorded"),
+        evidence = escape_html(evidence_pack_path.display().to_string()),
+        run_record = escape_html(run_record_path.display().to_string()),
+        report = escape_html(path.display().to_string()),
         closure_items = closure_items,
-        replay = replay_path.display()
+        replay = escape_html(replay_path.display().to_string())
     );
     atomic_write(&path, content)?;
     Ok(path)
