@@ -1850,6 +1850,7 @@ def test_pulse_task_executor_rejects_product_code_without_verification_evidence(
 
 def test_pulse_task_executor_isolates_pulse_local_mirror_dest_for_executable_tasks(tmp_path):
     out_root = tmp_path / "executor"
+    parent_mirror = tmp_path / "parent-mirror"
     marker = tmp_path / "marker.json"
     manifest = tmp_path / "manifest.json"
     manifest.write_text(
@@ -1886,6 +1887,7 @@ def test_pulse_task_executor_isolates_pulse_local_mirror_dest_for_executable_tas
         cwd=REPO_ROOT,
         env={
             **os.environ,
+            "AO2_PULSE_LOCAL_MIRROR_DEST": str(parent_mirror),
             "AO2_PULSE_TASK_EXECUTOR_MANIFEST": str(manifest),
             "AO2_PULSE_TASK_EXECUTOR_ROOT": str(out_root),
         },
@@ -1900,6 +1902,7 @@ def test_pulse_task_executor_isolates_pulse_local_mirror_dest_for_executable_tas
     assert summary["results"][0]["status"] == "passed"
     marker_payload = json.loads(marker.read_text(encoding="utf-8"))
     assert marker_payload["dest"] == str((out_root / "task-executor-local-mirror").resolve())
+    assert marker_payload["dest"] != str(parent_mirror.resolve())
 
 
 def test_pulse_code_agent_runner_contract_is_public_safe():

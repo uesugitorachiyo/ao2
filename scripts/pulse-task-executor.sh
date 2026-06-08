@@ -236,7 +236,7 @@ def run_executable_task(task: dict, index: int) -> dict:
     command = require_string(task.get("command"), "executable_task_command_missing")
     log_path = log_dir / f"{index:02d}-{slug(task_id)}.log"
     env = dict(os.environ)
-    env.setdefault("AO2_PULSE_LOCAL_MIRROR_DEST", str((out_root / "task-executor-local-mirror").resolve()))
+    env["AO2_PULSE_LOCAL_MIRROR_DEST"] = str((out_root / "task-executor-local-mirror").resolve())
     with log_path.open("w", encoding="utf-8") as log:
         log.write(f"$ {command}\n")
         log.write(f"AO2_PULSE_LOCAL_MIRROR_DEST={env['AO2_PULSE_LOCAL_MIRROR_DEST']}\n")
