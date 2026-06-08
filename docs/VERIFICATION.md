@@ -378,8 +378,13 @@ Result:
 - `npm run pulse:real-execute-containment`: creates a deterministic local
   resume fixture, executes it through `npm run pulse:resume -- --resume-json
   <fixture> --execute`, permits writes only under
-  `target/pulse-real-execute-containment/latest/allowed-output`, and emits
-  `ao2.pulse-real-execute-containment.v1` at
+  `target/pulse-real-execute-containment/latest/allowed-output`, then runs a
+  product-code execute fixture through `pulse:generate-next`,
+  `pulse:task-executor`, and `pulse:code-agent-runner` in a temporary git repo
+  below the evidence root. The fixture requires `AO2_PULSE_CODE_AGENT_EXECUTE=1`,
+  changes only `allowed.txt`, records `product_code_execute_fixture`,
+  `pulse_generate_next_summary`, `pulse_task_executor_summary`, and
+  `code_agent_summary`, and emits `ao2.pulse-real-execute-containment.v1` at
   `target/pulse-real-execute-containment/latest/summary.json`
 - `npm run phase1:promotion-golden`: runs the signed Phase 1 operator golden
   smoke, records readback/dashboard evidence, scans logs/artifacts for bearer

@@ -1882,6 +1882,38 @@ def test_pulse_code_agent_runner_execute_mode_rejects_unrelated_changes(tmp_path
     assert summary.get("verification_results", []) == []
 
 
+def test_pulse_real_execute_containment_runs_product_code_executor_sandbox(tmp_path):
+    out_root = tmp_path / "target" / "pulse-real-execute-containment" / "latest"
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:real-execute-containment"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_REAL_EXECUTE_ROOT": str(out_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.pulse-real-execute-containment.v1"
+    assert summary["status"] == "passed"
+    assert Path(summary["pulse_generate_next_summary"]).is_file()
+    assert summary["product_code_execute_fixture"]["status"] == "passed"
+    assert summary["product_code_execute_fixture"]["sandbox_repo"].startswith(str(out_root))
+    assert summary["product_code_execute_fixture"]["changed_files"] == [{"path": "allowed.txt", "status": " M"}]
+    executor = json.loads(Path(summary["pulse_task_executor_summary"]).read_text(encoding="utf-8"))
+    assert executor["status"] == "passed"
+    assert executor["results"][0]["status"] == "code_agent_execute_passed"
+    runner = json.loads(Path(summary["product_code_execute_fixture"]["code_agent_summary"]).read_text(encoding="utf-8"))
+    assert runner["mode"] == "execute"
+    assert runner["execution"]["invoked_code_agent"] is True
+    assert runner["verification_results"][0]["status"] == "passed"
+
+
 def test_pulse_next_task_quality_filter_rejects_script_wrapper_only_packets(tmp_path):
     packet = tmp_path / "packet.md"
     out_root = tmp_path / "quality"
@@ -2385,6 +2417,15 @@ def test_pulse_real_execute_containment_contract():
         "target/pulse-real-execute-containment/latest",
         "allowed-output",
         "pulse:resume -- --resume-json",
+        "pulse:generate-next",
+        "pulse:task-executor",
+        "AO2_PULSE_CODE_AGENT_EXECUTE=1",
+        "product_code_execution",
+        "product_code_execute_fixture",
+        "pulse_generate_next_summary",
+        "pulse_task_executor_summary",
+        "code_agent_summary",
+        "allowed.txt",
         "--execute",
         "sha256_matches",
         "resume_command_digest",
@@ -2397,6 +2438,9 @@ def test_pulse_real_execute_containment_contract():
     for needle in [
         "npm run pulse:real-execute-containment",
         "ao2.pulse-real-execute-containment.v1",
+        "product-code execute fixture",
+        "pulse:task-executor",
+        "pulse:code-agent-runner",
         "target/pulse-real-execute-containment/latest/summary.json",
     ]:
         assert needle in verification
