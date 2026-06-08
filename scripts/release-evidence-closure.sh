@@ -40,6 +40,10 @@ run_step ci_artifact_download_contract \
 run_step local_canary \
   "${canary_env[@]}" npm run local:canary
 
+run_step risky_pr_golden \
+  env AO2_RISKY_PR_GOLDEN_ROOT="$OUT_ROOT/risky-pr-golden" \
+    npm run risky-pr:golden
+
 run_step phase1_promotion_golden \
   env AO2_PHASE1_PROMOTION_GOLDEN_ROOT="$OUT_ROOT/phase1-promotion-golden" \
     npm run phase1:promotion-golden
@@ -86,6 +90,7 @@ log_dir = out_root / "logs"
 steps = [
     ("ci_artifact_download_contract", "target/ci-artifacts/latest/summary.json"),
     ("local_canary", "target/release-evidence-closure/latest/local-canary/local-canary-summary.json"),
+    ("risky_pr_golden", "target/release-evidence-closure/latest/risky-pr-golden/summary.json"),
     ("phase1_promotion_golden", "target/release-evidence-closure/latest/phase1-promotion-golden/summary.json"),
     ("pulse_execute_safety_corpus", "target/release-evidence-closure/latest/pulse-execute-safety-corpus/summary.json"),
     ("pulse_real_execute_containment", "target/release-evidence-closure/latest/pulse-real-execute-containment/summary.json"),
@@ -106,14 +111,82 @@ for name, evidence in steps:
         "evidence": evidence,
     })
 
+digest_errors = []
+risky_summary_path = out_root / "risky-pr-golden" / "summary.json"
+risky_summary = {}
+report_index = {}
+report_index_path = None
+
+try:
+    risky_summary = json.loads(risky_summary_path.read_text(encoding="utf-8"))
+except FileNotFoundError:
+    digest_errors.append(f"missing risky-pr golden summary: {risky_summary_path}")
+except json.JSONDecodeError as exc:
+    digest_errors.append(f"malformed risky-pr golden summary: {exc}")
+
+if risky_summary:
+    if risky_summary.get("status") != "passed":
+        digest_errors.append("risky-pr golden summary status is not passed")
+    if risky_summary.get("digest_failure_count") != 0:
+        digest_errors.append("risky-pr golden summary has replay digest failures")
+    report_index_value = risky_summary.get("report_index")
+    if not report_index_value:
+        digest_errors.append("risky-pr golden summary missing report_index")
+    else:
+        report_index_path = Path(report_index_value)
+        try:
+            report_index = json.loads(report_index_path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            digest_errors.append(f"missing risky-pr report index: {report_index_path}")
+        except json.JSONDecodeError as exc:
+            digest_errors.append(f"malformed risky-pr report index: {exc}")
+
+approval_boundary = report_index.get("approval_boundary") or {}
+denied_request_digests = approval_boundary.get("denied_request_digests") or []
+approved_action_digests = approval_boundary.get("approved_action_digests") or []
+operator_answers = report_index.get("operator_answers") or {}
+evidence_before_closure = all(operator_answers.get(key) is True for key in [
+    "test_evidence",
+    "closure_verdict",
+    "replay_status",
+])
+
+if report_index:
+    if report_index.get("schema_version") != "ao2.risky-pr-static-report-index.v1":
+        digest_errors.append("risky-pr report index schema changed")
+    if report_index.get("closure_verdict") != "accepted":
+        digest_errors.append("risky-pr report index closure verdict is not accepted")
+    if (report_index.get("replay") or {}).get("status") != "accepted":
+        digest_errors.append("risky-pr report index replay status is not accepted")
+    if not denied_request_digests:
+        digest_errors.append("risky-pr report index missing denied request digests")
+    if not approved_action_digests:
+        digest_errors.append("risky-pr report index missing approved action digests")
+    if denied_request_digests and approved_action_digests and denied_request_digests[0] == approved_action_digests[0]:
+        digest_errors.append("risky-pr denied request digest and approved action digest must differ")
+    if not evidence_before_closure:
+        digest_errors.append("risky-pr operator answers missing evidence_before_closure fields")
+
+digest_closure = {
+    "status": "passed" if not digest_errors else "failed",
+    "risky_pr_summary": str(risky_summary_path),
+    "report_index": str(report_index_path) if report_index_path else None,
+    "denied_request_digest_count": len(denied_request_digests),
+    "approved_action_digest_count": len(approved_action_digests),
+    "digest_failure_count": risky_summary.get("digest_failure_count"),
+    "evidence_before_closure": evidence_before_closure,
+    "errors": digest_errors,
+}
+
 payload = {
     "schema_version": "ao2.release-evidence-closure.v1",
     "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    "status": "accepted" if all(item["exit_code"] == 0 for item in checks) else "rejected",
+    "status": "accepted" if all(item["exit_code"] == 0 for item in checks) and not digest_errors else "rejected",
     "artifact_root": str(out_root),
     "closure_html": str(html_path),
     "evidence_rule": "evidence must exist before evaluator closure accepts a run",
     "checks": checks,
+    "digest_closure": digest_closure,
     "trust_boundary": {
         "local_only": True,
         "stores_credentials": False,
@@ -144,6 +217,11 @@ html_path.write_text(
     f"<p>Schema: <code>{payload['schema_version']}</code></p>"
     f"<p>Status: <code>{payload['status']}</code></p>"
     "<p>Evidence must exist before evaluator closure accepts a run.</p>"
+    f"<p>Digest closure: <code>{digest_closure['status']}</code>; "
+    f"denied request digests: <code>{digest_closure['denied_request_digest_count']}</code>; "
+    f"approved action digests: <code>{digest_closure['approved_action_digest_count']}</code>; "
+    f"replay digest failures: <code>{html.escape(str(digest_closure['digest_failure_count']))}</code>; "
+    f"evidence before closure: <code>{str(digest_closure['evidence_before_closure']).lower()}</code>.</p>"
     "<table><thead><tr><th>Check</th><th>Status</th><th>Exit</th><th>Evidence</th></tr></thead>"
     f"<tbody>{rows}</tbody></table>"
     "</body></html>\n",

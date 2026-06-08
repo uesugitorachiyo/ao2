@@ -358,12 +358,17 @@ Result:
   `ao2.phase1-promotion-golden-path.v1` at
   `target/phase1-promotion-golden/latest/summary.json`
 - `npm run release:evidence-closure`: runs CI artifact download, local canary,
-  Phase 1 promotion golden evidence, Pulse execute safety, bounded real Pulse
-  execute, control-plane negative restore evidence, artifact index, and
-  fail-on-attention artifact health, then writes
+  the Risky PR golden path, Phase 1 promotion golden evidence, Pulse execute
+  safety, bounded real Pulse execute, control-plane negative restore evidence,
+  artifact index, and fail-on-attention artifact health, then writes
   `ao2.release-evidence-closure.v1` at
   `target/release-evidence-closure/latest/summary.json` plus
-  `target/release-evidence-closure/latest/closure.html`
+  `target/release-evidence-closure/latest/closure.html`. The closure rejects
+  release acceptance when Risky PR digest-boundary evidence is missing from the
+  static report `approval_boundary`, when denied request or approved action
+  digest summaries are absent, when replay has digest failures, or when the
+  operator-visible report cannot prove test evidence, replay status, and
+  closure verdict before release closure.
 - `npm run mvp:acceptance-matrix-gate`: runs the provider-free Risky PR golden
   path and maps PRD `AC-01` through `AC-12` plus SDD `UAT-01` through
   `UAT-12` to concrete evidence without manual filesystem archaeology; emits

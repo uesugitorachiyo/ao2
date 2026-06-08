@@ -2446,6 +2446,29 @@ fn exact_digest_approval_gate_is_release_wired() {
 }
 
 #[test]
+fn release_evidence_closure_requires_digest_boundary() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let package_json = fs::read_to_string(root.join("package.json")).expect("package json exists");
+    let script = fs::read_to_string(root.join("scripts/release-evidence-closure.sh"))
+        .expect("release evidence closure script exists");
+    let verification =
+        fs::read_to_string(root.join("docs/VERIFICATION.md")).expect("verification docs exist");
+
+    assert!(package_json.contains("\"release:evidence-closure\""));
+    assert!(script.contains("AO2_RISKY_PR_GOLDEN_ROOT"));
+    assert!(script.contains("risky-pr:golden"));
+    assert!(script.contains("approval_boundary"));
+    assert!(script.contains("denied_request_digests"));
+    assert!(script.contains("approved_action_digests"));
+    assert!(script.contains("digest_failure_count"));
+    assert!(script.contains("evidence_before_closure"));
+    assert!(script.contains("ao2.release-evidence-closure.v1"));
+    assert!(verification.contains("release:evidence-closure"));
+    assert!(verification.contains("approval_boundary"));
+    assert!(verification.contains("digest-boundary evidence"));
+}
+
+#[test]
 fn workbench_operator_packet_control_plane_smoke_index_is_release_wired() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let package_json = fs::read_to_string(root.join("package.json")).expect("package json exists");
