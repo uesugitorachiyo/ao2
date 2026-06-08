@@ -953,8 +953,12 @@ Result:
 `ao2 release support-bundle-build` assembles the public
 `ao2.cp-release-support-bundle.v1` contract from explicit release assembly,
 readiness, handoff, cockpit, evaluator decision, storage support, replay, and
+`ao2.report-contract-verification.v1` report-contract verification, and
 operator evidence JSON files. It writes `release-support-bundle.json` and
-`SHA256SUMS`, then verifies the generated bundle before returning success.
+`SHA256SUMS`, then verifies the generated bundle before returning success. The
+strict verifier fails closed when the static report contract is missing,
+incomplete, or failed, so release support bundles prove the operator-facing
+HTML remained inspectable before handoff.
 
 Regression coverage:
 

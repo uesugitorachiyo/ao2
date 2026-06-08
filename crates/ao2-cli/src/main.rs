@@ -2469,6 +2469,8 @@ enum ReleaseCommand {
         storage_support: PathBuf,
         #[arg(long)]
         replay: PathBuf,
+        #[arg(long = "report-contract-verification")]
+        report_contract_verification: PathBuf,
         #[arg(long = "operator-evidence")]
         operator_evidence: PathBuf,
         #[arg(long = "out-dir")]
@@ -64901,6 +64903,7 @@ fn release(command: ReleaseCommand) -> Result<()> {
             evaluator_decision,
             storage_support,
             replay,
+            report_contract_verification,
             operator_evidence,
             out_dir,
             json,
@@ -64912,6 +64915,7 @@ fn release(command: ReleaseCommand) -> Result<()> {
             evaluator_decision,
             storage_support,
             replay,
+            report_contract_verification,
             operator_evidence,
             out_dir,
             json,
@@ -67126,6 +67130,7 @@ fn release_support_bundle_build(
     evaluator_decision: PathBuf,
     storage_support: PathBuf,
     replay: PathBuf,
+    report_contract_verification: PathBuf,
     operator_evidence: PathBuf,
     out_dir: PathBuf,
     json: bool,
@@ -67138,6 +67143,7 @@ fn release_support_bundle_build(
         &evaluator_decision,
         &storage_support,
         &replay,
+        &report_contract_verification,
         &operator_evidence,
         &out_dir,
     )?;
@@ -67164,6 +67170,7 @@ fn release_support_bundle_build_json(
     evaluator_decision: &Path,
     storage_support: &Path,
     replay: &Path,
+    report_contract_verification: &Path,
     operator_evidence: &Path,
     out_dir: &Path,
 ) -> Result<serde_json::Value> {
@@ -67179,6 +67186,7 @@ fn release_support_bundle_build_json(
         "evaluator_decision": release_support_bundle_read_surface("evaluator_decision", evaluator_decision)?,
         "storage_support": release_support_bundle_read_surface("storage_support", storage_support)?,
         "replay": release_support_bundle_read_surface("replay", replay)?,
+        "report_contract_verification": release_support_bundle_read_surface("report_contract_verification", report_contract_verification)?,
         "operator_evidence": release_support_bundle_read_surface("operator_evidence", operator_evidence)?,
         "producer": {
             "package": env!("CARGO_PKG_NAME"),
@@ -67275,6 +67283,7 @@ fn release_support_bundle_verification_json(
         "cockpit",
         "evaluator_decision",
         "storage_support",
+        "report_contract_verification",
     ];
     let mut surfaces = Vec::new();
     for surface in required_surfaces {
@@ -67331,6 +67340,10 @@ fn release_support_bundle_verification_json(
     let operator_evidence = bundle
         .get("operator_evidence")
         .unwrap_or(&serde_json::Value::Null);
+    let report_contract_verification = bundle
+        .get("report_contract_verification")
+        .unwrap_or(&serde_json::Value::Null);
+    let report_contract_verification_present = report_contract_verification.is_object();
     let operator_evidence_present = operator_evidence.is_object();
     let readiness_operator = readiness
         .pointer("/operator_decision")
@@ -67363,6 +67376,51 @@ fn release_support_bundle_verification_json(
             "code": "missing_operator_evidence",
             "message": "release support bundle must include operator evidence"
         }));
+    }
+
+    let report_contract_missing_sections =
+        json_array(report_contract_verification, "missing_sections");
+    let report_contract_failures = json_array(report_contract_verification, "failures");
+    let report_contract_complete = json_bool(report_contract_verification, "complete");
+    let report_contract_status = json_string(report_contract_verification, "status");
+    if !report_contract_verification_present {
+        failures.push(serde_json::json!({
+            "code": "missing_report_contract_verification",
+            "message": "release support bundle must include report contract verification evidence"
+        }));
+    } else {
+        if json_string(report_contract_verification, "schema_version")
+            != "ao2.report-contract-verification.v1"
+        {
+            failures.push(serde_json::json!({
+                "code": "invalid_report_contract_verification_schema",
+                "message": "report contract verification must use schema ao2.report-contract-verification.v1",
+                "observed": json_string(report_contract_verification, "schema_version")
+            }));
+        }
+        if json_string(report_contract_verification, "contract_schema_version")
+            != "ao2.report-contract.v1"
+        {
+            failures.push(serde_json::json!({
+                "code": "invalid_report_contract_schema",
+                "message": "report contract verification must reference ao2.report-contract.v1",
+                "observed": json_string(report_contract_verification, "contract_schema_version")
+            }));
+        }
+        if report_contract_status != "passed"
+            || !report_contract_complete
+            || !report_contract_missing_sections.is_empty()
+            || !report_contract_failures.is_empty()
+        {
+            failures.push(serde_json::json!({
+                "code": "report_contract_verification_failed",
+                "message": "release support bundle report contract verification must pass with no missing sections",
+                "status": report_contract_status,
+                "complete": report_contract_complete,
+                "missing_section_count": report_contract_missing_sections.len(),
+                "failure_count": report_contract_failures.len()
+            }));
+        }
     }
 
     let evaluator_required = json_bool(readiness_operator, "factory_v3_evaluator_closer_required")
@@ -67477,6 +67535,15 @@ fn release_support_bundle_verification_json(
             "present": operator_evidence_present,
             "factory_v3_evaluator_closer_required": evaluator_required,
             "control_plane_approves_release": control_plane_approves_release
+        },
+        "report_contract_verification": {
+            "present": report_contract_verification_present,
+            "schema_version": json_string(report_contract_verification, "schema_version"),
+            "contract_schema_version": json_string(report_contract_verification, "contract_schema_version"),
+            "status": report_contract_status,
+            "complete": report_contract_complete,
+            "missing_section_count": report_contract_missing_sections.len(),
+            "failure_count": report_contract_failures.len()
         },
         "failure_count": failures.len(),
         "failures": failures,

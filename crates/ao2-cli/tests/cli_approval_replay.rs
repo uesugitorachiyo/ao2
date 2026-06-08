@@ -47140,7 +47140,7 @@ fn cli_release_support_bundle_verify_accepts_minimal_cp_bundle_fixture() {
         "ao2.release-support-bundle-verification.v1"
     );
     assert_eq!(json["status"], "passed");
-    assert_eq!(json["surface_count"], 6);
+    assert_eq!(json["surface_count"], 7);
     assert_eq!(json["checksum_verified"], true);
     assert_eq!(json["failure_count"], 0);
     assert_eq!(
@@ -47229,6 +47229,14 @@ fn write_minimal_release_support_bundle(path: &Path, extra: serde_json::Value) {
         },
         "storage_support": {"schema_version": "ao2.cp-storage-support.v1", "status": "ready"},
         "replay": {"status": "accepted", "digest_failures": []},
+        "report_contract_verification": {
+            "schema_version": "ao2.report-contract-verification.v1",
+            "contract_schema_version": "ao2.report-contract.v1",
+            "status": "passed",
+            "complete": true,
+            "missing_sections": [],
+            "failures": []
+        },
         "operator_evidence": {
             "factory_v3_evaluator_closer_required": true,
             "release_acceptance_owner": "factory-v3 evaluator-closer",

@@ -57,6 +57,7 @@ fn write_bundle(path: &Path, mut overlay: serde_json::Value) {
         },
         "storage_support": {"schema_version": "ao2.cp-storage-support.v1", "status": "ready"},
         "replay": {"status": "accepted", "digest_failures": []},
+        "report_contract_verification": passed_report_contract_verification(),
         "operator_evidence": {
             "factory_v3_evaluator_closer_required": true,
             "release_acceptance_owner": "factory-v3 evaluator-closer",
@@ -68,6 +69,17 @@ fn write_bundle(path: &Path, mut overlay: serde_json::Value) {
         merge_json(&mut bundle, &mut overlay);
     }
     fs::write(path, serde_json::to_string_pretty(&bundle).unwrap()).unwrap();
+}
+
+fn passed_report_contract_verification() -> serde_json::Value {
+    serde_json::json!({
+        "schema_version": "ao2.report-contract-verification.v1",
+        "contract_schema_version": "ao2.report-contract.v1",
+        "status": "passed",
+        "complete": true,
+        "missing_sections": [],
+        "failures": [],
+    })
 }
 
 fn merge_json(base: &mut serde_json::Value, overlay: &mut serde_json::Value) {
@@ -100,6 +112,61 @@ fn verify_bundle(bundle: &Path) -> std::process::Output {
 
 fn write_json(path: &Path, value: serde_json::Value) {
     fs::write(path, serde_json::to_string_pretty(&value).unwrap()).unwrap();
+}
+
+#[test]
+fn release_support_bundle_verify_rejects_missing_or_failed_report_contract_verification() {
+    let temp = tempfile::tempdir().unwrap();
+    let missing_bundle_path = temp.path().join("missing-report-verification.json");
+    write_bundle(
+        &missing_bundle_path,
+        serde_json::json!({
+            "report_contract_verification": null
+        }),
+    );
+
+    let missing = verify_bundle(&missing_bundle_path);
+    assert!(
+        !missing.status.success(),
+        "support verifier should fail when report contract verification evidence is missing"
+    );
+    let json: serde_json::Value = serde_json::from_str(&stdout(&missing)).unwrap();
+    let failures = json["failures"].as_array().unwrap();
+    assert!(
+        failures
+            .iter()
+            .any(|failure| { failure["code"] == "missing_report_contract_verification" }),
+        "expected missing_report_contract_verification, got {failures:?}"
+    );
+
+    let failed_bundle_path = temp.path().join("failed-report-verification.json");
+    write_bundle(
+        &failed_bundle_path,
+        serde_json::json!({
+            "report_contract_verification": {
+                "schema_version": "ao2.report-contract-verification.v1",
+                "contract_schema_version": "ao2.report-contract.v1",
+                "status": "failed",
+                "complete": false,
+                "missing_sections": ["Replay Evidence"],
+                "failures": ["missing required report section: Replay Evidence"]
+            }
+        }),
+    );
+
+    let failed = verify_bundle(&failed_bundle_path);
+    assert!(
+        !failed.status.success(),
+        "support verifier should fail when report contract verification failed"
+    );
+    let json: serde_json::Value = serde_json::from_str(&stdout(&failed)).unwrap();
+    let failures = json["failures"].as_array().unwrap();
+    assert!(
+        failures
+            .iter()
+            .any(|failure| failure["code"] == "report_contract_verification_failed"),
+        "expected report_contract_verification_failed, got {failures:?}"
+    );
 }
 
 #[test]
@@ -299,6 +366,7 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
     let evaluator_decision = evidence_dir.join("evaluator-decision.json");
     let storage_support = evidence_dir.join("storage-support.json");
     let replay = evidence_dir.join("replay.json");
+    let report_contract_verification = evidence_dir.join("report-contract-verification.json");
     let operator_evidence = evidence_dir.join("operator-evidence.json");
 
     write_json(
@@ -358,6 +426,10 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
         serde_json::json!({"status": "accepted", "digest_failures": []}),
     );
     write_json(
+        &report_contract_verification,
+        passed_report_contract_verification(),
+    );
+    write_json(
         &operator_evidence,
         serde_json::json!({
             "factory_v3_evaluator_closer_required": true,
@@ -385,6 +457,8 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
         storage_support.to_str().unwrap(),
         "--replay",
         replay.to_str().unwrap(),
+        "--report-contract-verification",
+        report_contract_verification.to_str().unwrap(),
         "--operator-evidence",
         operator_evidence.to_str().unwrap(),
         "--out-dir",
@@ -407,6 +481,12 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
     );
     assert!(bundle_path.is_file());
     assert!(checksums_path.is_file());
+    let bundle_json: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&bundle_path).unwrap()).unwrap();
+    assert_eq!(
+        bundle_json["report_contract_verification"]["schema_version"],
+        "ao2.report-contract-verification.v1"
+    );
 
     let verify = ao2([
         "release",
