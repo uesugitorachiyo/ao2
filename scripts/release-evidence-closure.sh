@@ -8,6 +8,7 @@ SUMMARY="$OUT_ROOT/summary.json"
 HTML="$OUT_ROOT/closure.html"
 LOG_DIR="$OUT_ROOT/logs"
 FIXTURE_DIR="${AO2_RELEASE_EVIDENCE_CLOSURE_FIXTURE_DIR:-}"
+FIXTURE="${AO2_RELEASE_EVIDENCE_CLOSURE_FIXTURE:-}"
 CP_RESTORE_ROOT="${AO2_RELEASE_EVIDENCE_CLOSURE_CP_RESTORE_ROOT:-$CP_ROOT/target/dr-restore-drill/release-evidence-closure}"
 
 rm -rf "$OUT_ROOT"
@@ -22,6 +23,37 @@ run_step() {
   local code=$?
   set -e
   printf "%s\n" "$code" >"$log.exit-code"
+}
+
+apply_release_evidence_closure_fixture() {
+  case "$FIXTURE" in
+    "")
+      return 0
+      ;;
+    missing_digest_boundary)
+      if [ "$(cat "$LOG_DIR/risky_pr_golden.log.exit-code")" != "0" ]; then
+        return 0
+      fi
+      python3 - "$OUT_ROOT/risky-pr-golden/summary.json" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+summary_path = Path(sys.argv[1])
+summary = json.loads(summary_path.read_text(encoding="utf-8"))
+report_index_path = Path(summary["report_index"])
+report_index = json.loads(report_index_path.read_text(encoding="utf-8"))
+report_index.pop("approval_boundary", None)
+report_index_path.write_text(json.dumps(report_index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+      printf "release_evidence_closure_fixture=missing_digest_boundary\n" \
+        >"$LOG_DIR/release_evidence_closure_fixture.log"
+      ;;
+    *)
+      printf "unknown AO2_RELEASE_EVIDENCE_CLOSURE_FIXTURE: %s\n" "$FIXTURE" >&2
+      exit 2
+      ;;
+  esac
 }
 
 ci_env=(env AO2_CI_ARTIFACT_DOWNLOAD_ROOT="$ROOT/target/ci-artifacts/latest")
@@ -43,6 +75,8 @@ run_step local_canary \
 run_step risky_pr_golden \
   env AO2_RISKY_PR_GOLDEN_ROOT="$OUT_ROOT/risky-pr-golden" \
     npm run risky-pr:golden
+
+apply_release_evidence_closure_fixture
 
 run_step phase1_promotion_golden \
   env AO2_PHASE1_PROMOTION_GOLDEN_ROOT="$OUT_ROOT/phase1-promotion-golden" \
@@ -158,6 +192,8 @@ if report_index:
         digest_errors.append("risky-pr report index closure verdict is not accepted")
     if (report_index.get("replay") or {}).get("status") != "accepted":
         digest_errors.append("risky-pr report index replay status is not accepted")
+    if "approval_boundary" not in report_index:
+        digest_errors.append("risky-pr report index missing approval_boundary")
     if not denied_request_digests:
         digest_errors.append("risky-pr report index missing denied request digests")
     if not approved_action_digests:

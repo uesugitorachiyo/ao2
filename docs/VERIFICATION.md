@@ -368,7 +368,10 @@ Result:
   static report `approval_boundary`, when denied request or approved action
   digest summaries are absent, when replay has digest failures, or when the
   operator-visible report cannot prove test evidence, replay status, and
-  closure verdict before release closure.
+  closure verdict before release closure. The release packaging regression
+  suite also covers `AO2_RELEASE_EVIDENCE_CLOSURE_FIXTURE=missing_digest_boundary`,
+  which removes the generated `approval_boundary` before validation and proves
+  the release closure path stays fail-closed for corrupted digest evidence.
 - `npm run mvp:acceptance-matrix-gate`: runs the provider-free Risky PR golden
   path and maps PRD `AC-01` through `AC-12` plus SDD `UAT-01` through
   `UAT-12` to concrete evidence without manual filesystem archaeology; emits

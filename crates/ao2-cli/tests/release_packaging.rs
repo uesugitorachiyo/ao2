@@ -2469,6 +2469,24 @@ fn release_evidence_closure_requires_digest_boundary() {
 }
 
 #[test]
+fn release_evidence_closure_rejects_missing_digest_boundary_fixture() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let script = fs::read_to_string(root.join("scripts/release-evidence-closure.sh"))
+        .expect("release evidence closure script exists");
+    let verification =
+        fs::read_to_string(root.join("docs/VERIFICATION.md")).expect("verification docs exist");
+
+    assert!(script.contains("AO2_RELEASE_EVIDENCE_CLOSURE_FIXTURE"));
+    assert!(script.contains("missing_digest_boundary"));
+    assert!(script.contains("pop(\"approval_boundary\", None)"));
+    assert!(script.contains("risky-pr report index missing approval_boundary"));
+    assert!(script.contains("release_evidence_closure_fixture=missing_digest_boundary"));
+    assert!(script.contains("payload[\"status\"] != \"accepted\""));
+    assert!(verification.contains("missing_digest_boundary"));
+    assert!(verification.contains("fail-closed"));
+}
+
+#[test]
 fn workbench_operator_packet_control_plane_smoke_index_is_release_wired() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let package_json = fs::read_to_string(root.join("package.json")).expect("package json exists");
