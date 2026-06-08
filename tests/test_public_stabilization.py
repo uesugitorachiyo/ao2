@@ -68,6 +68,39 @@ def test_ci_matrix_entries_do_not_repeat_top_level_keys():
     assert not duplicates
 
 
+def test_ci_non_approval_shards_are_split_for_mac_and_windows():
+    ci = read(".github/workflows/ci.yml")
+    shard_tests = {
+        "test-cli-contract-gate-signing": [
+            "contract_gate_support_signing",
+            "contract_obligation_gate_signing_survey",
+            "contract_verify_obligation_gate_signing",
+        ],
+        "test-cli-factory-control": [
+            "cp_release_snapshot",
+            "factory_bridge",
+            "factory_cancel_authority",
+            "factory_cancel_transition",
+        ],
+        "test-cli-release-readiness": [
+            "release_evaluator_decision",
+            "release_gate_obligation_gate_signing",
+            "release_handoff_checklist",
+        ],
+        "test-cli-release-packaging-sdd": [
+            "release_packaging",
+            "sdd_subcommand",
+        ],
+    }
+
+    assert "phase: test-cli-non-approval" not in ci
+    for os_name in ["macos-latest", "windows-latest"]:
+        for phase, tests in shard_tests.items():
+            assert f"os: {os_name}\n            phase: {phase}" in ci
+            for test_name in tests:
+                assert f"--test {test_name}" in ci
+
+
 def test_github_owned_actions_use_node24_runtime_majors():
     workflows = [
         ".github/workflows/ci.yml",

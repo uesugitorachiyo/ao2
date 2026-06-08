@@ -2845,7 +2845,17 @@ fn ci_workflow_runs_on_public_changes_while_release_gates_stay_manual() {
             "missing {non_approval_phase}"
         );
     }
-    assert!(ci.contains("phase: test-cli-non-approval"));
+    for split_non_approval_phase in [
+        "phase: test-cli-contract-gate-signing",
+        "phase: test-cli-factory-control",
+        "phase: test-cli-release-readiness",
+        "phase: test-cli-release-packaging-sdd",
+    ] {
+        assert!(
+            ci.contains(split_non_approval_phase),
+            "missing {split_non_approval_phase}"
+        );
+    }
     assert!(ci.contains("phase: test-workspace-non-cli"));
     assert!(ci.contains("cargo fmt --all -- --check"));
     assert!(ci.contains("cargo test --workspace --exclude ao2-cli"));
