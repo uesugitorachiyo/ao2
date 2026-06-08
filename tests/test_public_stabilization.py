@@ -1463,11 +1463,16 @@ def test_pulse_code_agent_runner_contract_is_public_safe():
         "ao2.pulse-code-agent-runner.v1",
         "ao2.pulse-code-agent-task.v1",
         "dry_run",
+        "execute",
+        "AO2_PULSE_CODE_AGENT_EXECUTE",
+        "codex exec",
         "allowed_files",
         "verification",
+        "verification_results",
         "acceptance",
         "stop_conditions",
         "git status --porcelain",
+        "post_execution_dirty_files",
     ]:
         assert needle in text
     for forbidden in [
@@ -1484,6 +1489,7 @@ def test_pulse_code_agent_runner_contract_is_public_safe():
         "ao2.pulse-code-agent-runner.v1",
         "ao2.pulse-code-agent-task.v1",
         "dry-run validates implementation-task packets",
+        "execute mode requires `AO2_PULSE_CODE_AGENT_EXECUTE=1`",
         "does not push, open PRs, publish releases, or store credentials",
     ]:
         assert needle in verification
@@ -1582,6 +1588,146 @@ def test_pulse_code_agent_runner_dry_run_validates_product_code_task(tmp_path):
     assert summary["execution"]["pushes"] is False
     assert summary["execution"]["opens_pr"] is False
     assert summary["verification"][0]["expected_evidence"] == "cargo.ao2-cp-server.release_support_bundle"
+
+
+def test_pulse_code_agent_runner_execute_mode_runs_agent_and_verification(tmp_path):
+    out_root = tmp_path / "code-agent-runner"
+    repo_root = tmp_path / "ao2-feature"
+    repo_root.mkdir()
+    (repo_root / "src.txt").write_text("before\n", encoding="utf-8")
+    subprocess.run(["git", "init"], cwd=repo_root, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "config", "user.email", "ao2@example.invalid"], cwd=repo_root, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "config", "user.name", "AO2 Test"], cwd=repo_root, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "add", "."], cwd=repo_root, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "commit", "-m", "seed"], cwd=repo_root, capture_output=True, text=True, check=True)
+
+    task = tmp_path / "task.json"
+    task.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.pulse-code-agent-task.v1",
+                "id": "local-agent-write",
+                "title": "Local agent write",
+                "objective": "Update the allowed file and prove verification runs.",
+                "repo": "ao2-feature",
+                "repo_path": str(repo_root),
+                "branch": "codex/local-agent-write",
+                "allowed_files": ["src.txt"],
+                "acceptance": ["src.txt contains after."],
+                "verification": [
+                    {
+                        "command": "python3 -c \"from pathlib import Path; assert Path('src.txt').read_text() == 'after\\n'\"",
+                        "expected_evidence": "local.file.updated",
+                    }
+                ],
+                "code_agent": {
+                    "command": "python3 -c \"from pathlib import Path; Path('src.txt').write_text('after\\\\n', encoding='utf-8')\""
+                },
+                "stop_conditions": ["Stop if unrelated dirty files are present."],
+                "trust_boundary": {
+                    "local_only": True,
+                    "stores_credentials": False,
+                    "side_effects": "local_code_agent_execution",
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:code-agent-runner", "--", "--task", str(task), "--execute"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_CODE_AGENT_EXECUTE": "1",
+            "AO2_PULSE_CODE_AGENT_RUNNER_ROOT": str(out_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.pulse-code-agent-runner.v1"
+    assert summary["status"] == "passed"
+    assert summary["mode"] == "execute"
+    assert summary["execution"]["would_invoke_code_agent"] is True
+    assert summary["execution"]["invoked_code_agent"] is True
+    assert summary["execution"]["exit_code"] == 0
+    assert summary["execution"]["pushes"] is False
+    assert summary["execution"]["opens_pr"] is False
+    assert summary["workspace"]["post_execution_dirty_files"] == [{"path": "src.txt", "status": " M"}]
+    assert summary["workspace"]["unrelated_dirty_files_after_execution"] == []
+    assert summary["verification_results"][0]["status"] == "passed"
+    assert (out_root / "code-agent-prompt.md").is_file()
+
+
+def test_pulse_code_agent_runner_execute_mode_rejects_unrelated_changes(tmp_path):
+    out_root = tmp_path / "code-agent-runner"
+    repo_root = tmp_path / "ao2-feature"
+    repo_root.mkdir()
+    (repo_root / "src.txt").write_text("before\n", encoding="utf-8")
+    subprocess.run(["git", "init"], cwd=repo_root, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "config", "user.email", "ao2@example.invalid"], cwd=repo_root, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "config", "user.name", "AO2 Test"], cwd=repo_root, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "add", "."], cwd=repo_root, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "commit", "-m", "seed"], cwd=repo_root, capture_output=True, text=True, check=True)
+
+    task = tmp_path / "task.json"
+    task.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.pulse-code-agent-task.v1",
+                "id": "local-agent-unrelated-write",
+                "title": "Local agent unrelated write",
+                "objective": "Reject changes outside allowed files.",
+                "repo": "ao2-feature",
+                "repo_path": str(repo_root),
+                "branch": "codex/local-agent-unrelated-write",
+                "allowed_files": ["src.txt"],
+                "acceptance": ["Only src.txt may change."],
+                "verification": [
+                    {
+                        "command": "python3 -c \"print('should-not-run')\"",
+                        "expected_evidence": "verification.not.reached",
+                    }
+                ],
+                "code_agent": {
+                    "command": "python3 -c \"from pathlib import Path; Path('other.txt').write_text('bad', encoding='utf-8')\""
+                },
+                "stop_conditions": ["Stop if unrelated dirty files are present."],
+                "trust_boundary": {
+                    "local_only": True,
+                    "stores_credentials": False,
+                    "side_effects": "local_code_agent_execution",
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:code-agent-runner", "--", "--task", str(task), "--execute"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_CODE_AGENT_EXECUTE": "1",
+            "AO2_PULSE_CODE_AGENT_RUNNER_ROOT": str(out_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "failed"
+    assert summary["reason"] == "unrelated_dirty_files_after_execution"
+    assert summary["workspace"]["unrelated_dirty_files_after_execution"] == [{"path": "other.txt", "status": "??"}]
+    assert summary.get("verification_results", []) == []
 
 
 def test_pulse_next_task_quality_filter_rejects_script_wrapper_only_packets(tmp_path):
