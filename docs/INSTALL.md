@@ -850,6 +850,35 @@ support bundle with `kind=release-comparison-verification&bundle_dir=<bundle-dir
 on `/api/runs/evidence/export`. The export verifies the bundle first and rejects
 unverified comparison artifacts.
 
+Build a release-line control-plane support bundle from explicit evidence
+surfaces, then verify the generated bundle and checksum manifest:
+
+```sh
+ao2 release support-bundle-build \
+  --release-assembly /path/to/release-assembly.json \
+  --readiness /path/to/readiness.json \
+  --handoff /path/to/handoff.json \
+  --cockpit /path/to/cockpit.json \
+  --evaluator-decision /path/to/evaluator-decision.json \
+  --storage-support /path/to/storage-support.json \
+  --replay /path/to/replay.json \
+  --operator-evidence /path/to/operator-evidence.json \
+  --out-dir /path/to/release-support-bundle \
+  --json
+
+ao2 release support-bundle-verify \
+  --bundle /path/to/release-support-bundle/release-support-bundle.json \
+  --checksums /path/to/release-support-bundle/SHA256SUMS \
+  --json
+```
+
+The build command writes `release-support-bundle.json` and `SHA256SUMS`, then
+runs the same strict verifier before reporting success. Verification fails
+closed if replay was not accepted, digest failures are present, operator
+evidence is missing, the factory-v3 evaluator-closer is not the release
+acceptance owner, or the control plane appears as a release approver instead of
+a read-only observer.
+
 The Workbench signed evidence publish form can also send a real run-derived
 operator packet to ao2-control-plane. Choose `Operator Packet` in the form, or
 post `kind=operator-packet&run_id=<run-id>&control_plane_url=<url>&api_token=<token>`
