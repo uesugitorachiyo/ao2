@@ -1,5 +1,7 @@
 # AO2
 
+[Watch the AO2 overview video](https://youtu.be/p222b0iCpbg)
+
 AO2 is a local-first governed software-delivery system for running agent work
 with policy checks, exact-digest approvals, replayable evidence, evaluator
 closure, and release-readiness gates.
