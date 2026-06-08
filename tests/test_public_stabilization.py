@@ -1312,6 +1312,144 @@ def test_pulse_task_executor_rejects_product_code_without_verification_evidence(
     assert summary["results"][0]["reason"] == "product_code_verification_evidence_missing"
 
 
+def test_pulse_code_agent_runner_contract_is_public_safe():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+    script = REPO_ROOT / "scripts" / "pulse-code-agent-runner.sh"
+
+    assert (
+        package_json["scripts"]["pulse:code-agent-runner"]
+        == "node scripts/run-sh-script.js scripts/pulse-code-agent-runner.sh"
+    )
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.pulse-code-agent-runner.v1",
+        "ao2.pulse-code-agent-task.v1",
+        "dry_run",
+        "allowed_files",
+        "verification",
+        "acceptance",
+        "stop_conditions",
+        "git status --porcelain",
+    ]:
+        assert needle in text
+    for forbidden in [
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "git push origin",
+        "gh pr create",
+        "gh release create",
+    ]:
+        assert forbidden not in text
+
+    for needle in [
+        "npm run pulse:code-agent-runner",
+        "ao2.pulse-code-agent-runner.v1",
+        "ao2.pulse-code-agent-task.v1",
+        "dry-run validates implementation-task packets",
+        "does not push, open PRs, publish releases, or store credentials",
+    ]:
+        assert needle in verification
+
+
+def test_pulse_code_agent_runner_dry_run_validates_product_code_task(tmp_path):
+    out_root = tmp_path / "code-agent-runner"
+    repo_root = tmp_path / "ao2-control-plane"
+    (repo_root / "crates/ao2-cp-server/src/handlers").mkdir(parents=True)
+    (repo_root / "crates/ao2-cp-server/tests").mkdir(parents=True)
+    (repo_root / "docs").mkdir()
+    (repo_root / "crates/ao2-cp-server/src/handlers/release_publication.rs").write_text(
+        "// release publication handler\n",
+        encoding="utf-8",
+    )
+    (repo_root / "crates/ao2-cp-server/tests/release_publication.rs").write_text(
+        "// release publication tests\n",
+        encoding="utf-8",
+    )
+    (repo_root / "docs/VERIFICATION.md").write_text("# Verification\n", encoding="utf-8")
+    subprocess.run(["git", "init"], cwd=repo_root, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "config", "user.email", "ao2@example.invalid"], cwd=repo_root, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "config", "user.name", "AO2 Test"], cwd=repo_root, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "add", "."], cwd=repo_root, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "commit", "-m", "seed"], cwd=repo_root, capture_output=True, text=True, check=True)
+
+    task = tmp_path / "task.json"
+    task.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.pulse-code-agent-task.v1",
+                "id": "control-plane-support-bundle-alignment",
+                "title": "Control-plane support bundle alignment",
+                "objective": "Add replay and operator_evidence surfaces to the control-plane release support bundle.",
+                "repo": "ao2-control-plane",
+                "repo_path": str(repo_root),
+                "branch": "codex/control-plane-support-bundle-alignment",
+                "allowed_files": [
+                    "crates/ao2-cp-server/src/handlers/release_publication.rs",
+                    "crates/ao2-cp-server/tests/release_publication.rs",
+                    "docs/VERIFICATION.md",
+                ],
+                "acceptance": [
+                    "Support bundle includes replay and operator_evidence top-level surfaces.",
+                    "AO2 release support-bundle-verify accepts the exported fixture.",
+                ],
+                "verification": [
+                    {
+                        "command": "cargo test -p ao2-cp-server release_support_bundle",
+                        "expected_evidence": "cargo.ao2-cp-server.release_support_bundle",
+                    },
+                    {
+                        "command": "ao2 release support-bundle-verify --bundle target/release-support-bundle.json",
+                        "expected_evidence": "ao2.release-support-bundle-verify.v1",
+                    },
+                ],
+                "stop_conditions": [
+                    "Stop if any provider API-key path is introduced.",
+                    "Stop if unrelated dirty files are present.",
+                ],
+                "trust_boundary": {
+                    "local_only": True,
+                    "stores_credentials": False,
+                    "side_effects": "dry_run_validation_only",
+                },
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:code-agent-runner", "--", "--task", str(task), "--dry-run"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_CODE_AGENT_RUNNER_ROOT": str(out_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.pulse-code-agent-runner.v1"
+    assert summary["status"] == "passed"
+    assert summary["mode"] == "dry_run"
+    assert summary["task"]["id"] == "control-plane-support-bundle-alignment"
+    assert summary["task"]["repo"] == "ao2-control-plane"
+    assert summary["workspace"]["repo_path"] == str(repo_root)
+    assert summary["workspace"]["git_status_checked"] is True
+    assert summary["workspace"]["unrelated_dirty_files"] == []
+    assert summary["execution"]["would_invoke_code_agent"] is True
+    assert summary["execution"]["invoked_code_agent"] is False
+    assert summary["execution"]["pushes"] is False
+    assert summary["execution"]["opens_pr"] is False
+    assert summary["verification"][0]["expected_evidence"] == "cargo.ao2-cp-server.release_support_bundle"
+
+
 def test_pulse_next_task_quality_filter_rejects_script_wrapper_only_packets(tmp_path):
     packet = tmp_path / "packet.md"
     out_root = tmp_path / "quality"
