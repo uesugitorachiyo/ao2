@@ -29,6 +29,7 @@ needles = [
     "packet.md",
     "board.md",
     "executor-evidence.json",
+    'PACKET_ROOT="${AO2_PULSE_GENERATE_NEXT_PACKET_ROOT:-$ROOT/target/pulse-next-recommended-tasks}"',
     "AO2_PULSE_GENERATE_NEXT_REGISTER",
     "pulse:register-auto-advance",
     "cursor",

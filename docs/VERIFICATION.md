@@ -126,7 +126,9 @@ packets instead of command-only shell tasks. With `--forever`, it writes
 `npm run pulse:generate-next` emits `ao2.pulse-generate-next.v1` at
 `target/pulse-generate-next/latest/summary.json` and writes a fresh
 `packet.md`, `board.md`, `executor-evidence.json`, `pulse-eval-loop.json`, and
-`pulse-task-manifest.json` / `ao2.pulse-next-lengthy-tasks.v1` packet. For the
+`pulse-task-manifest.json` / `ao2.pulse-next-lengthy-tasks.v1` packet under
+`target/pulse-next-recommended-tasks`, which is also the default
+`pulse:local-mirror` source used by release-readiness gates. For the
 Risky PR product MVP selection, the manifest includes a product-code
 implementation packet for the report/evaluator closure UX before the supporting
 evidence gates. Generated packets use strategic scoring instead of blind

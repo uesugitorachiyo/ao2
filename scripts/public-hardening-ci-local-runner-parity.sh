@@ -32,7 +32,7 @@ workflow_text = workflow.read_text(encoding="utf-8") if workflow.is_file() else 
 workflow_command_set = re.findall(r"- run: (.+)", workflow_text)
 local_command_set = [
     "AO2_PULSE_GENERATE_NEXT_REGISTER=0 npm run pulse:generate-next",
-    "AO2_PULSE_LOCAL_MIRROR_SOURCE=target/pulse-next-recommended-tasks/generated-next npm run pulse:local-mirror",
+    "AO2_PULSE_LOCAL_MIRROR_SOURCE=target/pulse-next-recommended-tasks npm run pulse:local-mirror",
     "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py -q",
     "npm run public:hardening",
     "npm run pulse:resume -- --dry-run",

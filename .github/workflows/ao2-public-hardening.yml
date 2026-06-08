@@ -36,7 +36,7 @@ jobs:
         run: AO2_PULSE_GENERATE_NEXT_REGISTER=0 npm run pulse:generate-next
 
       - name: Mirror local Pulse packet
-        run: AO2_PULSE_LOCAL_MIRROR_SOURCE=target/pulse-next-recommended-tasks/generated-next npm run pulse:local-mirror
+        run: AO2_PULSE_LOCAL_MIRROR_SOURCE=target/pulse-next-recommended-tasks npm run pulse:local-mirror
 
       - name: Install Python test dependencies
         run: python3 -m pip install pytest

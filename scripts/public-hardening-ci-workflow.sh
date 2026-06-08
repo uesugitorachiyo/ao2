@@ -14,12 +14,13 @@ mkdir -p "$LOG_DIR"
 
 ao2_gate_run_step "$LOG_DIR" pulse_generate_next_seed \
   env AO2_PULSE_GENERATE_NEXT_ROOT="$OUT_ROOT/pulse-generate-next" \
-    AO2_PULSE_GENERATE_NEXT_PACKET_ROOT="$OUT_ROOT/pulse-next-recommended-tasks/generated-next" \
+    AO2_PULSE_GENERATE_NEXT_PACKET_ROOT="$OUT_ROOT/pulse-next-recommended-tasks" \
     AO2_PULSE_GENERATE_NEXT_CURSOR="$OUT_ROOT/pulse-generate-next-cursor.json" \
     AO2_PULSE_GENERATE_NEXT_REGISTER=0 \
     npm run pulse:generate-next
 ao2_gate_run_step "$LOG_DIR" pulse_local_mirror_seed \
-  env AO2_PULSE_LOCAL_MIRROR_SOURCE="$OUT_ROOT/pulse-next-recommended-tasks/generated-next" \
+  env AO2_PULSE_LOCAL_MIRROR_SOURCE="$OUT_ROOT/pulse-next-recommended-tasks" \
+    AO2_PULSE_LOCAL_MIRROR_DEST="$OUT_ROOT/pulse-local-mirror" \
     npm run pulse:local-mirror
 ao2_gate_run_step "$LOG_DIR" public_hardening \
   env AO2_PUBLIC_HARDENING_ROOT="$OUT_ROOT/public-hardening-subset" \
@@ -65,7 +66,7 @@ payload = {
     "required_checks": required_checks,
     "component_summaries": {
         "pulse_generate_next_seed": str(out_root / "pulse-generate-next" / "summary.json"),
-        "pulse_local_mirror_seed": str(Path(".ao2-local/pulse/latest/pulse-local-mirror-summary.json")),
+        "pulse_local_mirror_seed": str(out_root / "pulse-local-mirror" / "pulse-local-mirror-summary.json"),
         "public_hardening": str(out_root / "public-hardening-subset" / "summary.json"),
     },
     "trust_boundary": {"local_only": True, "stores_credentials": False},

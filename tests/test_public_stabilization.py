@@ -942,6 +942,60 @@ def test_pulse_generate_next_writes_structured_task_manifest(tmp_path):
     assert any(item["path"] == "pulse-task-manifest.json" for item in summary["files"])
 
 
+def test_pulse_generate_next_default_packet_root_matches_local_mirror_source(tmp_path):
+    generator = read("scripts/pulse-generate-next.sh")
+    assert 'PACKET_ROOT="${AO2_PULSE_GENERATE_NEXT_PACKET_ROOT:-$ROOT/target/pulse-next-recommended-tasks}"' in generator
+
+    out_root = tmp_path / "generate-next"
+    packet_root = tmp_path / "pulse-next-recommended-tasks"
+    cursor = tmp_path / "cursor.json"
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:generate-next"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_GENERATE_NEXT_REGISTER": "0",
+            "AO2_PULSE_GENERATE_NEXT_ROOT": str(out_root),
+            "AO2_PULSE_GENERATE_NEXT_PACKET_ROOT": str(packet_root),
+            "AO2_PULSE_GENERATE_NEXT_CURSOR": str(cursor),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    for filename in [
+        "packet.md",
+        "board.md",
+        "executor-evidence.json",
+        "pulse-eval-loop.json",
+        "pulse-task-manifest.json",
+        "summary.json",
+    ]:
+        assert (packet_root / filename).is_file(), filename
+
+    mirror_root = tmp_path / "pulse-local-mirror"
+    mirror = subprocess.run(
+        ["npm", "run", "pulse:local-mirror"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_LOCAL_MIRROR_SOURCE": str(packet_root),
+            "AO2_PULSE_LOCAL_MIRROR_DEST": str(mirror_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert mirror.returncode == 0, mirror.stderr + mirror.stdout
+    mirror_summary = json.loads((mirror_root / "pulse-local-mirror-summary.json").read_text(encoding="utf-8"))
+    assert mirror_summary["status"] == "passed"
+    assert mirror_summary["missing_required_files"] == []
+
+
 def test_pulse_generate_next_uses_project_level_strategic_scoring():
     generator = read("scripts/pulse-generate-next.sh")
     verification = read("docs/VERIFICATION.md")
@@ -2439,7 +2493,7 @@ def test_public_hardening_ci_workflow_is_tracked_and_public_safe():
         assert "run: npm ci" not in workflow
     for command in [
         "AO2_PULSE_GENERATE_NEXT_REGISTER=0 npm run pulse:generate-next",
-        "AO2_PULSE_LOCAL_MIRROR_SOURCE=target/pulse-next-recommended-tasks/generated-next npm run pulse:local-mirror",
+        "AO2_PULSE_LOCAL_MIRROR_SOURCE=target/pulse-next-recommended-tasks npm run pulse:local-mirror",
         "python3 -m pip install pytest",
         "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py -q",
         "npm run public:hardening",
@@ -2473,6 +2527,9 @@ def test_promoted_public_hardening_ci_scripts_are_clean_checkout_safe():
         text = script.read_text(encoding="utf-8")
         assert "scripts/lib/pulse-gate-lib.sh" in text
         assert "ao2.public-hardening" in text
+        if script_path == "scripts/public-hardening-ci-workflow.sh":
+            assert 'AO2_PULSE_LOCAL_MIRROR_DEST="$OUT_ROOT/pulse-local-mirror"' in text
+            assert '"pulse_local_mirror_seed": str(out_root / "pulse-local-mirror" / "pulse-local-mirror-summary.json")' in text
         for forbidden in [
             "OPENAI_API_KEY",
             "ANTHROPIC_API_KEY",
