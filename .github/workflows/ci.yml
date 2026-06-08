@@ -513,6 +513,20 @@ jobs:
             target/release/ao2.exe
           if-no-files-found: ignore
 
+  non_approval_required_check_compat:
+    name: Verify ${{ matrix.os }} / test-cli-non-approval
+    runs-on: ${{ matrix.os }}
+    needs: verify
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - name: Report legacy required check compatibility
+        shell: bash
+        run: echo "Split non-approval shards passed; reporting legacy required check name."
+
   workbench-operator-packet-control-plane-smoke:
     name: Workbench operator packet control-plane smoke ${{ matrix.os }}
     runs-on: ${{ matrix.os }}

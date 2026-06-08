@@ -101,6 +101,18 @@ def test_ci_non_approval_shards_are_split_for_mac_and_windows():
                 assert f"--test {test_name}" in ci
 
 
+def test_ci_reports_legacy_non_approval_required_check_names():
+    ci = read(".github/workflows/ci.yml")
+
+    assert "phase: test-cli-non-approval" not in ci
+    assert "non_approval_required_check_compat:" in ci
+    assert "needs: verify" in ci
+    assert "name: Verify ${{ matrix.os }} / test-cli-non-approval" in ci
+    for os_name in ["macos-latest", "windows-latest"]:
+        assert f"os: {os_name}" in ci
+    assert "Split non-approval shards passed; reporting legacy required check name." in ci
+
+
 def test_github_owned_actions_use_node24_runtime_majors():
     workflows = [
         ".github/workflows/ci.yml",
