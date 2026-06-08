@@ -121,7 +121,14 @@ sibling `pulse-task-manifest.json`, auto-advance delegates execution to
 `npm run pulse:task-executor` so `product_code` tasks become implementation
 packets instead of command-only shell tasks. With `--forever`, it writes
 `ao2.pulse-auto-advance-heartbeat.v1` while waiting and calls
-`npm run pulse:generate-next` after each successful packet.
+`npm run pulse:generate-next` after each successful packet. Before generating
+the next packet, auto-advance reads the local PR/CI gate state from
+`AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_STATE`, defaulting to
+`.ao2-local/pulse/pr-ci-gate.json`. When that `ao2.pulse-pr-ci-gate.v1`
+state reports an open or draft PR, pending or failed `required_checks`, or a
+non-green gate status, auto-advance emits `waiting_for_pr_merge_or_ci` with a
+`pr_ci_gate` summary and skips `pulse:generate-next` so RSI does not create
+more work before the current PR is merged and green.
 
 `npm run pulse:generate-next` emits `ao2.pulse-generate-next.v1` at
 `target/pulse-generate-next/latest/summary.json` and writes a fresh
