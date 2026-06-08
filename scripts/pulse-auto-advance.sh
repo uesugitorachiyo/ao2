@@ -18,6 +18,7 @@ GENERATE_NEXT_SLEEP_SECONDS="${AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT_SLEEP_SECOND
 PR_CI_GATE="${AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE:-1}"
 PR_CI_GATE_STATE="${AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_STATE:-$ROOT/.ao2-local/pulse/pr-ci-gate.json}"
 PR_CI_GATE_UPDATE="${AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_UPDATE:-1}"
+LOCAL_ONLY_WHILE_PR_BLOCKED="${AO2_PULSE_AUTO_ADVANCE_LOCAL_ONLY_WHILE_PR_BLOCKED:-0}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -60,7 +61,7 @@ fi
 rm -rf "$OUT_ROOT"
 mkdir -p "$LOG_DIR" "$(dirname "$LEDGER")"
 
-python3 - "$ROOT" "$RESUME_JSON" "$OUT_ROOT" "$SUMMARY" "$LOG_DIR" "$LEDGER" "$STOP_FILE" "$MAX_ITERATIONS" "$ALLOW_DUPLICATE" "$FOREVER" "$SLEEP_SECONDS" "$GENERATE_NEXT" "$GENERATE_NEXT_SLEEP_SECONDS" "$PR_CI_GATE" "$PR_CI_GATE_STATE" "$PR_CI_GATE_UPDATE" <<'PY'
+python3 - "$ROOT" "$RESUME_JSON" "$OUT_ROOT" "$SUMMARY" "$LOG_DIR" "$LEDGER" "$STOP_FILE" "$MAX_ITERATIONS" "$ALLOW_DUPLICATE" "$FOREVER" "$SLEEP_SECONDS" "$GENERATE_NEXT" "$GENERATE_NEXT_SLEEP_SECONDS" "$PR_CI_GATE" "$PR_CI_GATE_STATE" "$PR_CI_GATE_UPDATE" "$LOCAL_ONLY_WHILE_PR_BLOCKED" <<'PY'
 import hashlib
 import json
 import os
@@ -86,6 +87,7 @@ generate_next_sleep_seconds = float(sys.argv[13])
 pr_ci_gate_enabled = sys.argv[14] == "1"
 pr_ci_gate_state = Path(sys.argv[15]).resolve()
 pr_ci_gate_update_enabled = sys.argv[16] == "1"
+local_only_while_pr_blocked_enabled = sys.argv[17] == "1"
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -113,6 +115,10 @@ payload = {
         "enabled": pr_ci_gate_enabled,
         "update_enabled": pr_ci_gate_update_enabled,
         "state_path": str(pr_ci_gate_state),
+        "status": "not_checked",
+    },
+    "local_only_while_pr_blocked": {
+        "enabled": local_only_while_pr_blocked_enabled,
         "status": "not_checked",
     },
     "results": [],
@@ -293,6 +299,40 @@ def pulse_generate_next(reason: str) -> bool:
     gate = load_pr_ci_gate(reason)
     payload["pr_ci_gate"] = gate
     if gate["status"] != "passed":
+        if local_only_while_pr_blocked_enabled:
+            log_path = log_dir / f"pulse_generate_next-local-only-{int(time.time())}.log"
+            env = dict(os.environ)
+            env["AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY"] = "1"
+            with log_path.open("w", encoding="utf-8") as log:
+                log.write("$ AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY=1 npm run pulse:generate-next\n")
+                log.write(f"reason={reason}\n")
+                log.write("mode=local_only_while_pr_blocked\n")
+                log.flush()
+                result = subprocess.run("npm run pulse:generate-next", cwd=root, shell=True, env=env, stdout=log, stderr=subprocess.STDOUT)
+            payload["pulse_generate_next"] = {
+                "command": "pulse:generate-next",
+                "status": "passed" if result.returncode == 0 else "failed",
+                "exit_code": int(result.returncode),
+                "log": str(log_path),
+                "reason": reason,
+                "gate_status": gate["status"],
+                "local_only_while_pr_blocked": True,
+                "sleep_seconds": generate_next_sleep_seconds,
+            }
+            payload["local_only_while_pr_blocked"] = {
+                "enabled": True,
+                "status": "passed" if result.returncode == 0 else "failed",
+                "reason": "pr_ci_gate_blocked_normal_generation",
+                "gate_status": gate["status"],
+            }
+            payload["generated_next_packet"] = result.returncode == 0
+            payload["generated_local_only_packet"] = result.returncode == 0
+            payload["register_next_packet"] = result.returncode == 0
+            payload["status"] = "waiting" if result.returncode == 0 else "failed"
+            payload["reason"] = "generated_local_only_packet" if result.returncode == 0 else "generate_next_failed"
+            payload["generated_at_utc"] = utc_now()
+            write_summary(payload)
+            return result.returncode == 0
         payload["pulse_generate_next"] = {
             "command": "pulse:generate-next",
             "status": "skipped",
@@ -300,6 +340,7 @@ def pulse_generate_next(reason: str) -> bool:
             "gate_status": gate["status"],
         }
         payload["generated_next_packet"] = False
+        payload["generated_local_only_packet"] = False
         payload["register_next_packet"] = False
         payload["status"] = "waiting"
         payload["reason"] = "waiting_for_pr_merge_or_ci"

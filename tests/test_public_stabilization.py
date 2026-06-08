@@ -1103,6 +1103,131 @@ def test_pulse_auto_advance_forever_pauses_generate_next_when_pr_ci_gate_waits(t
     assert not list((out_root / "logs").glob("pulse_generate_next-*.log"))
 
 
+def test_pulse_auto_advance_can_generate_local_only_packet_when_pr_ci_gate_waits(tmp_path):
+    pulse_dir = tmp_path / "pulse"
+    out_root = tmp_path / "auto-advance"
+    ledger = tmp_path / "ledger.jsonl"
+    stop_file = tmp_path / "STOP"
+    gate_state = tmp_path / "pr-ci-gate.json"
+    bin_dir = tmp_path / "bin"
+    env_capture = tmp_path / "generate-next-env.json"
+    pulse_dir.mkdir()
+    bin_dir.mkdir()
+
+    fake_npm = bin_dir / "npm"
+    fake_npm.write_text(
+        "#!/usr/bin/env bash\n"
+        "set -euo pipefail\n"
+        "python3 - <<'PY'\n"
+        "import json, os, pathlib\n"
+        "pathlib.Path(os.environ['AO2_TEST_GENERATE_NEXT_ENV_CAPTURE']).write_text(json.dumps({\n"
+        "    'local_only': os.environ.get('AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY'),\n"
+        "}) + '\\n', encoding='utf-8')\n"
+        "pathlib.Path(os.environ['AO2_PULSE_AUTO_ADVANCE_STOP_FILE']).write_text('stop after local-only generation\\n', encoding='utf-8')\n"
+        "PY\n",
+        encoding="utf-8",
+    )
+    fake_npm.chmod(0o755)
+    real_npm = subprocess.check_output(["bash", "-lc", "command -v npm"], text=True).strip()
+
+    eval_loop = {
+        "schema_version": "ao2.pulse-eval-loop.v1",
+        "status": "ready",
+        "recommended_tasks": [
+            {
+                "id": "already-completed",
+                "kind": "evidence_gate",
+                "title": "Already completed",
+                "command": "python3 -c 'print(\"already completed\")'",
+            }
+        ],
+        "trust_boundary": {"local_only": True, "stores_credentials": False},
+    }
+    eval_loop_path = pulse_dir / "pulse-eval-loop.json"
+    prompt_path = pulse_dir / "operator-prompt.txt"
+    eval_loop_path.write_text(json.dumps(eval_loop, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    prompt_path.write_text("advance local-only evidence while PR waits\n", encoding="utf-8")
+    eval_loop_sha256 = __import__("hashlib").sha256(eval_loop_path.read_bytes()).hexdigest()
+    resume = {
+        "schema_version": "ao2.pulse-local-mirror-resume.v1",
+        "status": "ready",
+        "pulse_eval_loop_path": "pulse-eval-loop.json",
+        "pulse_eval_loop_sha256": eval_loop_sha256,
+        "operator_prompt_path": "operator-prompt.txt",
+        "operator_prompt_sha256": __import__("hashlib").sha256(prompt_path.read_bytes()).hexdigest(),
+        "auto_advance": {"continue_until_stopped": True, "stores_credentials": False},
+        "trust_boundary": {"local_only": True, "stores_credentials": False},
+    }
+    resume_path = pulse_dir / "resume.json"
+    resume_path.write_text(json.dumps(resume, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    ledger.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.pulse-auto-advance-ledger-entry.v1",
+                "pulse_eval_loop_sha256": eval_loop_sha256,
+                "status": "passed",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    gate_state.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.pulse-pr-ci-gate.v1",
+                "status": "waiting",
+                "reason": "waiting_for_pr_merge_or_ci",
+                "branch": "codex/example",
+                "pr": {"number": 99, "state": "OPEN", "is_draft": False},
+                "required_checks": [
+                    {
+                        "name": "Verify ubuntu-latest / test-cli-non-approval",
+                        "status": "PENDING",
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        [real_npm, "run", "pulse:auto-advance", "--", "--forever", "--sleep-seconds", "0"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+            "AO2_TEST_GENERATE_NEXT_ENV_CAPTURE": str(env_capture),
+            "AO2_PULSE_RESUME_JSON": str(resume_path),
+            "AO2_PULSE_AUTO_ADVANCE_ROOT": str(out_root),
+            "AO2_PULSE_AUTO_ADVANCE_LEDGER": str(ledger),
+            "AO2_PULSE_AUTO_ADVANCE_STOP_FILE": str(stop_file),
+            "AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_STATE": str(gate_state),
+            "AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_UPDATE": "0",
+            "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT": "1",
+            "AO2_PULSE_AUTO_ADVANCE_LOCAL_ONLY_WHILE_PR_BLOCKED": "1",
+            "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT_SLEEP_SECONDS": "0",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    captured = json.loads(env_capture.read_text(encoding="utf-8"))
+    assert summary["status"] == "stopped"
+    assert summary["pulse_generate_next"]["status"] == "passed"
+    assert summary["pulse_generate_next"]["local_only_while_pr_blocked"] is True
+    assert summary["generated_local_only_packet"] is True
+    assert summary["register_next_packet"] is True
+    assert captured["local_only"] == "1"
+
+
 def test_pulse_auto_advance_forever_refreshes_pr_ci_gate_before_generate_next(tmp_path):
     pulse_dir = tmp_path / "pulse"
     out_root = tmp_path / "auto-advance"
@@ -1299,6 +1424,8 @@ def test_pulse_generate_next_auto_registration_contract():
     for needle in [
         "ao2.pulse-generate-next.v1",
         "ao2.pulse-next-lengthy-tasks.v1",
+        "AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY",
+        "local_only_while_pr_blocked",
         "product_code",
         "Risky PR report/evaluator closure UX implementation",
         "cross-platform-compatibility",
@@ -1322,6 +1449,10 @@ def test_pulse_generate_next_auto_registration_contract():
     runner = read("scripts/pulse-auto-advance.sh")
     for needle in [
         "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT",
+        "AO2_PULSE_AUTO_ADVANCE_LOCAL_ONLY_WHILE_PR_BLOCKED",
+        "AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY",
+        "generated_local_only_packet",
+        "local_only_while_pr_blocked",
         "pulse_generate_next",
         "pulse:generate-next",
         "register_next_packet",
@@ -1333,6 +1464,8 @@ def test_pulse_generate_next_auto_registration_contract():
         "npm run pulse:generate-next",
         "npm run pulse:generate-next:contract",
         "ao2.pulse-generate-next.v1",
+        "AO2_PULSE_AUTO_ADVANCE_LOCAL_ONLY_WHILE_PR_BLOCKED=1",
+        "local-only while PR-blocked mode",
         "target/pulse-generate-next/latest/summary.json",
     ]:
         assert needle in verification
@@ -1381,6 +1514,44 @@ def test_pulse_generate_next_writes_structured_task_manifest(tmp_path):
             assert task["verification"]
     summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
     assert any(item["path"] == "pulse-task-manifest.json" for item in summary["files"])
+
+
+def test_pulse_generate_next_local_only_mode_omits_product_code_tasks(tmp_path):
+    out_root = tmp_path / "generate-next"
+    packet_root = tmp_path / "packet"
+    cursor = tmp_path / "cursor.json"
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:generate-next"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_GENERATE_NEXT_REGISTER": "0",
+            "AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY": "1",
+            "AO2_PULSE_GENERATE_NEXT_ROOT": str(out_root),
+            "AO2_PULSE_GENERATE_NEXT_PACKET_ROOT": str(packet_root),
+            "AO2_PULSE_GENERATE_NEXT_CURSOR": str(cursor),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    manifest = json.loads((packet_root / "pulse-task-manifest.json").read_text(encoding="utf-8"))
+    eval_loop = json.loads((packet_root / "pulse-eval-loop.json").read_text(encoding="utf-8"))
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+
+    assert manifest["generation_mode"] == "local_only_while_pr_blocked"
+    assert manifest["product_code_execution"] == {"enabled": False, "mode": "disabled"}
+    assert manifest["local_only_while_pr_blocked"] is True
+    assert manifest["tasks"]
+    assert all(task["kind"] == "evidence_gate" for task in manifest["tasks"])
+    assert all("command" in task for task in manifest["tasks"])
+    assert eval_loop["generation_mode"] == "local_only_while_pr_blocked"
+    assert eval_loop["local_only_while_pr_blocked"] is True
+    assert summary["generation_mode"] == "local_only_while_pr_blocked"
+    assert summary["local_only_while_pr_blocked"] is True
 
 
 def test_pulse_generate_next_default_packet_root_matches_local_mirror_source(tmp_path):

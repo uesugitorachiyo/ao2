@@ -133,7 +133,15 @@ updater emits `ao2.pulse-pr-ci-gate-update.v1` under
 or draft PR, pending or failed `required_checks`, or a non-green gate status,
 auto-advance emits `waiting_for_pr_merge_or_ci` with a `pr_ci_gate` summary and
 skips `pulse:generate-next` so RSI does not create more work before the current
-PR is merged and green.
+PR is merged and green. For local-only while PR-blocked mode, start the runner
+or daemon with `AO2_PULSE_AUTO_ADVANCE_LOCAL_ONLY_WHILE_PR_BLOCKED=1`. In that
+opt-in mode the PR gate still blocks normal product-code advancement, but
+auto-advance may call `npm run pulse:generate-next` with
+`AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY=1` and register a
+`generated_local_only_packet` containing evidence/readiness tasks only. This
+lets overnight Pulse runs keep collecting local evidence while an open PR waits
+for review or merge, without creating another PR or product-code implementation
+packet.
 
 `npm run pulse:generate-next` emits `ao2.pulse-generate-next.v1` at
 `target/pulse-generate-next/latest/summary.json` and writes a fresh
