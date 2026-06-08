@@ -20,6 +20,7 @@ npm run verify:replacement   # 4-step replacement-parity composite (Phase 2 read
 npm run verify:no-factory-v3 # factory-v3 green-path regression guard
 npm run risky-pr:golden      # local Risky PR Run golden path with report/cockpit assertions
 npm run risky-pr:product-readiness # one-run product readiness gate for local run record/report/closure evidence
+npm run evaluator:closure-corpus # evaluator closure negative/positive evidence corpus
 npm run smoke:evidence-control-plane # signed evidence-pack publish/readback contract smoke
 npm run smoke:phase1-operator-golden # signed Phase 1 publish/readback/dashboard smoke
 npm run release:readiness    # local release-readiness guardrails for AO2 + control-plane
@@ -263,6 +264,12 @@ Result:
   then verifies local run record, static report/export, and evaluator closure
   evidence from that single run; emits
   `ao2.risky-pr-product-readiness-gate.v1`
+- `npm run evaluator:closure-corpus`: runs the Risky PR golden path, mutates
+  evidence fixtures for `missing_test_evidence`, `unresolved_high_concern`,
+  `invalid_artifact_digest`, and `unapproved_risky_action`, and verifies the
+  accepted corrected run as `accepted_after_correction`. It emits
+  `ao2.evaluator-closure-corpus.v1` and proves accepted closure stays bound to
+  concrete evidence, valid artifact digests, and exact approval.
 - `npm run smoke:evidence-control-plane`: builds AO2 and ao2-control-plane,
   publishes a signed `ao2.evidence-pack.v1`, reads dashboard/detail/latest
   observer endpoints, pins the `ao2.cp-evidence-pack-dashboard.v1`,

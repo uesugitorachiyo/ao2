@@ -43,6 +43,7 @@
     "smoke:provider:antigravity-pilot": "node scripts/run-sh-script.js scripts/smoke-antigravity-provider-pilot.sh",
     "risky-pr:golden": "node scripts/run-sh-script.js scripts/risky-pr-golden-path.sh",
     "risky-pr:product-readiness": "node scripts/run-sh-script.js scripts/risky-pr-product-readiness-gate.sh",
+    "evaluator:closure-corpus": "node scripts/run-sh-script.js scripts/evaluator-closure-corpus.sh",
     "smoke:evidence-control-plane": "node scripts/run-sh-script.js scripts/smoke-evidence-pack-control-plane.sh",
     "smoke:operator-packet-control-plane": "node scripts/run-sh-script.js scripts/smoke-operator-packet-control-plane.sh",
     "smoke:workbench-operator-packet-control-plane": "node scripts/run-sh-script.js scripts/smoke-workbench-operator-packet-control-plane.sh",

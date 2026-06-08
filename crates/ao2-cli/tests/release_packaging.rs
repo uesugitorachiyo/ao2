@@ -2398,6 +2398,28 @@ fn risky_pr_golden_path_requires_static_report_index() {
 }
 
 #[test]
+fn evaluator_closure_corpus_is_release_wired() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let package_json = fs::read_to_string(root.join("package.json")).expect("package json exists");
+    let script = fs::read_to_string(root.join("scripts/evaluator-closure-corpus.sh"))
+        .expect("evaluator closure corpus script exists");
+    let verification =
+        fs::read_to_string(root.join("docs/VERIFICATION.md")).expect("verification docs exist");
+
+    assert!(package_json.contains("\"evaluator:closure-corpus\""));
+    assert!(package_json.contains("scripts/evaluator-closure-corpus.sh"));
+    assert!(script.contains("ao2.evaluator-closure-corpus.v1"));
+    assert!(script.contains("missing_test_evidence"));
+    assert!(script.contains("unresolved_high_concern"));
+    assert!(script.contains("invalid_artifact_digest"));
+    assert!(script.contains("unapproved_risky_action"));
+    assert!(script.contains("accepted_after_correction"));
+    assert!(script.contains("env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY"));
+    assert!(verification.contains("evaluator:closure-corpus"));
+    assert!(verification.contains("ao2.evaluator-closure-corpus.v1"));
+}
+
+#[test]
 fn workbench_operator_packet_control_plane_smoke_index_is_release_wired() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let package_json = fs::read_to_string(root.join("package.json")).expect("package json exists");
