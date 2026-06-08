@@ -2470,7 +2470,15 @@ enum ReleaseCommand {
         #[arg(long)]
         replay: PathBuf,
         #[arg(long = "report-contract-verification")]
-        report_contract_verification: PathBuf,
+        report_contract_verification: Option<PathBuf>,
+        #[arg(long = "report-target")]
+        report_target: Option<PathBuf>,
+        #[arg(long = "report-run-id")]
+        report_run_id: Option<String>,
+        #[arg(long = "report")]
+        report: Option<PathBuf>,
+        #[arg(long = "report-index")]
+        report_index: Option<PathBuf>,
         #[arg(long = "operator-evidence")]
         operator_evidence: PathBuf,
         #[arg(long = "out-dir")]
@@ -64904,6 +64912,10 @@ fn release(command: ReleaseCommand) -> Result<()> {
             storage_support,
             replay,
             report_contract_verification,
+            report_target,
+            report_run_id,
+            report,
+            report_index,
             operator_evidence,
             out_dir,
             json,
@@ -64916,6 +64928,10 @@ fn release(command: ReleaseCommand) -> Result<()> {
             storage_support,
             replay,
             report_contract_verification,
+            report_target,
+            report_run_id,
+            report,
+            report_index,
             operator_evidence,
             out_dir,
             json,
@@ -67130,7 +67146,11 @@ fn release_support_bundle_build(
     evaluator_decision: PathBuf,
     storage_support: PathBuf,
     replay: PathBuf,
-    report_contract_verification: PathBuf,
+    report_contract_verification: Option<PathBuf>,
+    report_target: Option<PathBuf>,
+    report_run_id: Option<String>,
+    report: Option<PathBuf>,
+    report_index: Option<PathBuf>,
     operator_evidence: PathBuf,
     out_dir: PathBuf,
     json: bool,
@@ -67143,7 +67163,11 @@ fn release_support_bundle_build(
         &evaluator_decision,
         &storage_support,
         &replay,
-        &report_contract_verification,
+        report_contract_verification.as_deref(),
+        report_target.as_deref(),
+        report_run_id.as_deref(),
+        report,
+        report_index,
         &operator_evidence,
         &out_dir,
     )?;
@@ -67157,6 +67181,10 @@ fn release_support_bundle_build(
         println!("bundle={}", json_string(&result, "bundle"));
         println!("checksums={}", json_string(&result, "checksums"));
         println!("bundle_sha256={}", json_string(&result, "bundle_sha256"));
+        println!(
+            "report_contract_verification_source={}",
+            json_string(&result, "report_contract_verification_source")
+        );
     }
     Ok(())
 }
@@ -67170,13 +67198,25 @@ fn release_support_bundle_build_json(
     evaluator_decision: &Path,
     storage_support: &Path,
     replay: &Path,
-    report_contract_verification: &Path,
+    report_contract_verification: Option<&Path>,
+    report_target: Option<&Path>,
+    report_run_id: Option<&str>,
+    report: Option<PathBuf>,
+    report_index: Option<PathBuf>,
     operator_evidence: &Path,
     out_dir: &Path,
 ) -> Result<serde_json::Value> {
     fs::create_dir_all(out_dir).with_context(|| format!("create {}", out_dir.display()))?;
     let bundle_path = out_dir.join("release-support-bundle.json");
     let checksums_path = out_dir.join("SHA256SUMS");
+    let (report_contract_verification, report_contract_verification_source) =
+        release_support_bundle_report_contract_verification(
+            report_contract_verification,
+            report_target,
+            report_run_id,
+            report,
+            report_index,
+        )?;
     let bundle = serde_json::json!({
         "schema_version": "ao2.cp-release-support-bundle.v1",
         "release_assembly": release_support_bundle_read_surface("release_assembly", release_assembly)?,
@@ -67186,7 +67226,7 @@ fn release_support_bundle_build_json(
         "evaluator_decision": release_support_bundle_read_surface("evaluator_decision", evaluator_decision)?,
         "storage_support": release_support_bundle_read_surface("storage_support", storage_support)?,
         "replay": release_support_bundle_read_surface("replay", replay)?,
-        "report_contract_verification": release_support_bundle_read_surface("report_contract_verification", report_contract_verification)?,
+        "report_contract_verification": report_contract_verification,
         "operator_evidence": release_support_bundle_read_surface("operator_evidence", operator_evidence)?,
         "producer": {
             "package": env!("CARGO_PKG_NAME"),
@@ -67213,8 +67253,48 @@ fn release_support_bundle_build_json(
         "bundle": bundle_path.display().to_string(),
         "checksums": checksums_path.display().to_string(),
         "bundle_sha256": bundle_sha256,
+        "report_contract_verification_source": report_contract_verification_source,
         "verification": verification
     }))
+}
+
+fn release_support_bundle_report_contract_verification(
+    report_contract_verification: Option<&Path>,
+    report_target: Option<&Path>,
+    report_run_id: Option<&str>,
+    report: Option<PathBuf>,
+    report_index: Option<PathBuf>,
+) -> Result<(serde_json::Value, &'static str)> {
+    let has_report_inputs = report_target.is_some()
+        || report_run_id.is_some()
+        || report.is_some()
+        || report_index.is_some();
+    if let Some(path) = report_contract_verification {
+        if has_report_inputs {
+            anyhow::bail!(
+                "use either --report-contract-verification or --report-target/--report-run-id report inputs, not both"
+            );
+        }
+        let verification =
+            release_support_bundle_read_surface("report_contract_verification", path)?;
+        return Ok((verification, "explicit_path"));
+    }
+
+    let target = report_target.ok_or_else(|| {
+        anyhow::anyhow!(
+            "support bundle build requires --report-contract-verification or --report-target with --report-run-id"
+        )
+    })?;
+    let run_id = report_run_id.ok_or_else(|| {
+        anyhow::anyhow!(
+            "support bundle build requires --report-contract-verification or --report-target with --report-run-id"
+        )
+    })?;
+    let verification = report_contract_verification_json(target, run_id, report, report_index)?;
+    if json_string(&verification, "status") != "passed" {
+        anyhow::bail!("generated report contract verification did not pass");
+    }
+    Ok((verification, "generated_report_verify"))
 }
 
 fn release_support_bundle_read_surface(name: &str, path: &Path) -> Result<serde_json::Value> {

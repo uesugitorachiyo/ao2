@@ -1,6 +1,6 @@
 use sha2::{Digest, Sha256};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn ao2<const N: usize>(args: [&str; N]) -> std::process::Output {
@@ -112,6 +112,134 @@ fn verify_bundle(bundle: &Path) -> std::process::Output {
 
 fn write_json(path: &Path, value: serde_json::Value) {
     fs::write(path, serde_json::to_string_pretty(&value).unwrap()).unwrap();
+}
+
+struct SupportBundleEvidencePaths {
+    release_assembly: PathBuf,
+    readiness: PathBuf,
+    handoff: PathBuf,
+    cockpit: PathBuf,
+    evaluator_decision: PathBuf,
+    storage_support: PathBuf,
+    replay: PathBuf,
+    report_contract_verification: PathBuf,
+    operator_evidence: PathBuf,
+}
+
+fn write_support_bundle_evidence(evidence_dir: &Path) -> SupportBundleEvidencePaths {
+    fs::create_dir_all(evidence_dir).unwrap();
+    let paths = SupportBundleEvidencePaths {
+        release_assembly: evidence_dir.join("release-assembly.json"),
+        readiness: evidence_dir.join("readiness.json"),
+        handoff: evidence_dir.join("handoff.json"),
+        cockpit: evidence_dir.join("cockpit.json"),
+        evaluator_decision: evidence_dir.join("evaluator-decision.json"),
+        storage_support: evidence_dir.join("storage-support.json"),
+        replay: evidence_dir.join("replay.json"),
+        report_contract_verification: evidence_dir.join("report-contract-verification.json"),
+        operator_evidence: evidence_dir.join("operator-evidence.json"),
+    };
+
+    write_json(
+        &paths.release_assembly,
+        serde_json::json!({
+            "schema_version": "ao2.cp-release-assembly.v1",
+            "status": "assembled",
+            "control_plane_approves_release": false
+        }),
+    );
+    write_json(
+        &paths.readiness,
+        serde_json::json!({
+            "schema_version": "ao2.cp-release-readiness.v1",
+            "status": "ready",
+            "operator_decision": {
+                "control_plane_approves_release": false,
+                "factory_v3_evaluator_closer_required": true
+            }
+        }),
+    );
+    write_json(
+        &paths.handoff,
+        serde_json::json!({
+            "schema_version": "factory-v3/ao2-release-handoff-checklist/v1",
+            "status": "ready_for_evaluator_closer",
+            "trust_boundary": {
+                "control_plane_role": "read_only_observer",
+                "control_plane_approves_release": false,
+                "release_acceptance_owner": "factory-v3 evaluator-closer"
+            }
+        }),
+    );
+    write_json(
+        &paths.cockpit,
+        serde_json::json!({"schema_version": "ao2.cp-release-cockpit.v1", "status": "ready"}),
+    );
+    write_json(
+        &paths.evaluator_decision,
+        serde_json::json!({
+            "schema_version": "factory-v3/ao2-release-evaluator-decision/v1",
+            "status": "accepted",
+            "decision": "accept_phase1_release_candidate",
+            "trust_boundary": {
+                "control_plane_role": "read_only_observer",
+                "control_plane_approves_release": false,
+                "release_acceptance_owner": "factory-v3 evaluator-closer"
+            }
+        }),
+    );
+    write_json(
+        &paths.storage_support,
+        serde_json::json!({"schema_version": "ao2.cp-storage-support.v1", "status": "ready"}),
+    );
+    write_json(
+        &paths.replay,
+        serde_json::json!({"status": "accepted", "digest_failures": []}),
+    );
+    write_json(
+        &paths.report_contract_verification,
+        passed_report_contract_verification(),
+    );
+    write_json(
+        &paths.operator_evidence,
+        serde_json::json!({
+            "factory_v3_evaluator_closer_required": true,
+            "release_acceptance_owner": "factory-v3 evaluator-closer",
+            "control_plane_role": "read_only_observer",
+            "control_plane_approves_release": false
+        }),
+    );
+
+    paths
+}
+
+fn write_minimal_static_report(report_path: &Path, index_path: &Path, run_id: &str) {
+    fs::write(
+        report_path,
+        r#"<!doctype html>
+<html>
+<body>
+<h2>Objective</h2>
+<h2>Run Health</h2>
+<h2>Policy Decisions</h2>
+<h2>Approvals</h2>
+<h2>Artifacts</h2>
+<h2>Evaluator Closure Evidence</h2>
+<h2>Replay Evidence</h2>
+<h2>Static Export Evidence</h2>
+<h2>Local Run Record</h2>
+</body>
+</html>
+"#,
+    )
+    .unwrap();
+    write_json(
+        index_path,
+        serde_json::json!({
+            "schema_version": "ao2.risky-pr-static-report-index.v1",
+            "run_id": run_id
+        }),
+    );
 }
 
 #[test]
@@ -502,4 +630,81 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
     assert_eq!(verify_json["status"], "passed");
     assert_eq!(verify_json["checksum_verified"], true);
     assert_eq!(verify_json["failure_count"], 0);
+}
+
+#[test]
+fn release_support_bundle_build_generates_report_contract_verification_from_report_inputs() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = write_support_bundle_evidence(&temp.path().join("evidence"));
+    let report_path = temp.path().join("report.html");
+    let report_index_path = temp.path().join("report.index.json");
+    let run_id = "release-auto-report";
+    write_minimal_static_report(&report_path, &report_index_path, run_id);
+
+    let out_dir = temp.path().join("support-bundle");
+    let build = ao2([
+        "release",
+        "support-bundle-build",
+        "--release-assembly",
+        paths.release_assembly.to_str().unwrap(),
+        "--readiness",
+        paths.readiness.to_str().unwrap(),
+        "--handoff",
+        paths.handoff.to_str().unwrap(),
+        "--cockpit",
+        paths.cockpit.to_str().unwrap(),
+        "--evaluator-decision",
+        paths.evaluator_decision.to_str().unwrap(),
+        "--storage-support",
+        paths.storage_support.to_str().unwrap(),
+        "--replay",
+        paths.replay.to_str().unwrap(),
+        "--report-target",
+        temp.path().to_str().unwrap(),
+        "--report-run-id",
+        run_id,
+        "--report",
+        report_path.to_str().unwrap(),
+        "--report-index",
+        report_index_path.to_str().unwrap(),
+        "--operator-evidence",
+        paths.operator_evidence.to_str().unwrap(),
+        "--out-dir",
+        out_dir.to_str().unwrap(),
+        "--json",
+    ]);
+    assert!(build.status.success(), "{}", stderr(&build));
+
+    let build_json: serde_json::Value = serde_json::from_str(&stdout(&build)).unwrap();
+    assert_eq!(
+        build_json["report_contract_verification_source"],
+        "generated_report_verify"
+    );
+
+    let bundle_path = out_dir.join("release-support-bundle.json");
+    let bundle_json: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&bundle_path).unwrap()).unwrap();
+    assert_eq!(
+        bundle_json["report_contract_verification"]["schema_version"],
+        "ao2.report-contract-verification.v1"
+    );
+    assert_eq!(
+        bundle_json["report_contract_verification"]["status"],
+        "passed"
+    );
+    assert_eq!(
+        bundle_json["report_contract_verification"]["run_id"],
+        run_id
+    );
+
+    let verify = ao2([
+        "release",
+        "support-bundle-verify",
+        "--bundle",
+        bundle_path.to_str().unwrap(),
+        "--checksums",
+        out_dir.join("SHA256SUMS").to_str().unwrap(),
+        "--json",
+    ]);
+    assert!(verify.status.success(), "{}", stderr(&verify));
 }
