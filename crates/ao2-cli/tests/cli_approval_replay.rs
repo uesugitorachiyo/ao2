@@ -292,6 +292,109 @@ fn cli_can_pause_approve_resume_and_replay() {
 }
 
 #[test]
+fn cli_report_writes_static_report_index_sidecar() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("discount-service");
+    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+
+    let run = ao2([
+        "run",
+        "../../examples/risky-pr-run/risky-pr.yaml",
+        "--target",
+        repo.to_str().unwrap(),
+        "--run-id",
+        "report-index-run",
+        "--pause-for-approval",
+    ]);
+    assert!(run.status.success(), "{}", stderr(&run));
+    let run_stdout = stdout(&run);
+    let ticket_id = value_for(&run_stdout, "approval_ticket_id=");
+
+    let approve = ao2([
+        "approve",
+        ticket_id,
+        "--target",
+        repo.to_str().unwrap(),
+        "--approver",
+        "human:report-index-test",
+    ]);
+    assert!(approve.status.success(), "{}", stderr(&approve));
+
+    let resume = ao2([
+        "run",
+        "--resume",
+        "report-index-run",
+        "--target",
+        repo.to_str().unwrap(),
+    ]);
+    assert!(resume.status.success(), "{}", stderr(&resume));
+
+    let report_path = repo
+        .join(".ao2")
+        .join("runs")
+        .join("report-index-run")
+        .join("report")
+        .join("index.html");
+    let report = ao2([
+        "report",
+        "report-index-run",
+        "--target",
+        repo.to_str().unwrap(),
+        "--out",
+        report_path.to_str().unwrap(),
+    ]);
+    assert!(report.status.success(), "{}", stderr(&report));
+    assert!(report_path.is_file());
+
+    let index_path = report_path.with_file_name("index.report.json");
+    let index_text = fs::read_to_string(&index_path).expect("report index sidecar written");
+    let index: serde_json::Value = serde_json::from_str(&index_text).expect("report index json");
+    assert_eq!(
+        index["schema_version"],
+        "ao2.risky-pr-static-report-index.v1"
+    );
+    assert_eq!(index["run_id"], "report-index-run");
+    assert_eq!(index["status"], "accepted");
+    assert_eq!(index["closure_verdict"], "accepted");
+    assert_eq!(index["replay"]["status"], "accepted");
+    assert_eq!(index["operator_answers"]["objective"], true);
+    assert_eq!(index["operator_answers"]["denied_actions"], true);
+    assert_eq!(index["operator_answers"]["approved_actions"], true);
+    assert_eq!(index["operator_answers"]["test_evidence"], true);
+    assert_eq!(index["operator_answers"]["closure_verdict"], true);
+    assert!(index["paths"]["run_record"]
+        .as_str()
+        .unwrap()
+        .ends_with("run-record.json"));
+    assert!(index["paths"]["evidence_pack"]
+        .as_str()
+        .unwrap()
+        .ends_with("evidence-pack.json"));
+    assert!(index["policy_decisions"]["denied"].as_u64().unwrap() >= 1);
+    assert!(index["approvals"]["approved"].as_u64().unwrap() >= 1);
+    assert!(index["artifacts"]["count"].as_u64().unwrap() >= 1);
+    assert!(index["html_report"]
+        .as_str()
+        .unwrap()
+        .ends_with("index.html"));
+
+    let show = ao2([
+        "runs",
+        "show",
+        "report-index-run",
+        "--target",
+        repo.to_str().unwrap(),
+        "--json",
+    ]);
+    assert!(show.status.success(), "{}", stderr(&show));
+    let show_json: serde_json::Value = serde_json::from_str(&stdout(&show)).unwrap();
+    assert_eq!(
+        show_json["run"]["report_index"],
+        index_path.display().to_string()
+    );
+}
+
+#[test]
 fn cli_adapter_doctor_reports_scripted_provider() {
     let doctor = ao2(["adapter", "doctor", "--provider", "scripted"]);
     assert!(doctor.status.success(), "{}", stderr(&doctor));

@@ -63,6 +63,7 @@ env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY \
   "$AO2_BIN" export "$RUN_ID" --target "$TARGET" > "$OUT_ROOT/export.txt"
 
 REPORT="$OUT_ROOT/cockpit/index.html"
+REPORT_INDEX="$OUT_ROOT/cockpit/index.report.json"
 COCKPIT_INDEX="$OUT_ROOT/cockpit/runs.html"
 env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY \
   "$AO2_BIN" report "$RUN_ID" --target "$TARGET" --out "$REPORT" > "$OUT_ROOT/report.txt"
@@ -73,14 +74,15 @@ EVIDENCE_PACK="$TARGET/.ao2/runs/$RUN_ID/evidence-pack/evidence-pack.json"
 SUMMARY="$OUT_ROOT/summary.json"
 require_file "$EVIDENCE_PACK"
 require_file "$REPORT"
+require_file "$REPORT_INDEX"
 require_file "$COCKPIT_INDEX"
 
-python3 - "$SUMMARY" "$RUN_ID" "$TARGET" "$EVIDENCE_PACK" "$REPORT" "$COCKPIT_INDEX" "$OUT_ROOT/replay.json" <<'PY'
+python3 - "$SUMMARY" "$RUN_ID" "$TARGET" "$EVIDENCE_PACK" "$REPORT" "$REPORT_INDEX" "$COCKPIT_INDEX" "$OUT_ROOT/replay.json" <<'PY'
 import json
 import sys
 from pathlib import Path
 
-summary_path, run_id, target, evidence_path, report_path, cockpit_index_path, replay_path = sys.argv[1:]
+summary_path, run_id, target, evidence_path, report_path, report_index_path, cockpit_index_path, replay_path = sys.argv[1:]
 
 def load_json(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
@@ -104,6 +106,7 @@ def fail(message):
 
 pack = load_json(evidence_path)
 replay = load_json(replay_path)
+report_index = load_json(report_index_path)
 report_html = Path(report_path).read_text(encoding="utf-8", errors="replace")
 cockpit_html = Path(cockpit_index_path).read_text(encoding="utf-8", errors="replace")
 
@@ -117,6 +120,27 @@ if replay.get("status") != "accepted":
     fail("replay status is not accepted")
 if replay.get("digest_failures") not in ([], None):
     fail("replay has digest failures")
+if report_index.get("schema_version") != "ao2.risky-pr-static-report-index.v1":
+    fail("report index schema changed")
+if report_index.get("run_id") != run_id:
+    fail("report index run_id mismatch")
+if report_index.get("status") != "accepted":
+    fail("report index status is not accepted")
+if report_index.get("closure_verdict") != "accepted":
+    fail("report index closure verdict is not accepted")
+if (report_index.get("replay") or {}).get("status") != "accepted":
+    fail("report index replay status is not accepted")
+for key in [
+    "objective",
+    "denied_actions",
+    "approved_actions",
+    "test_evidence",
+    "closure_verdict",
+    "export_path",
+    "replay_status",
+]:
+    if (report_index.get("operator_answers") or {}).get(key) is not True:
+        fail(f"report index operator answer missing: {key}")
 
 required_markers = {"policy_denied_git_push", "review_missing_tests"}
 observed_markers = set()
@@ -172,6 +196,7 @@ summary = {
     "digest_failure_count": len(replay.get("digest_failures") or []),
     "evidence_pack": evidence_path,
     "report": report_path,
+    "report_index": report_index_path,
     "cockpit_index": cockpit_index_path,
     **checks,
 }

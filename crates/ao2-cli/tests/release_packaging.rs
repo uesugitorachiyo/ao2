@@ -2376,6 +2376,28 @@ fn workbench_operator_packet_control_plane_smoke_is_release_wired() {
 }
 
 #[test]
+fn risky_pr_golden_path_requires_static_report_index() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let package_json = fs::read_to_string(root.join("package.json")).expect("package json exists");
+    let script = fs::read_to_string(root.join("scripts/risky-pr-golden-path.sh"))
+        .expect("risky pr golden path script exists");
+    let verification =
+        fs::read_to_string(root.join("docs/VERIFICATION.md")).expect("verification docs exist");
+
+    assert!(package_json.contains("\"risky-pr:golden\""));
+    assert!(script.contains("REPORT_INDEX=\"$OUT_ROOT/cockpit/index.report.json\""));
+    assert!(script.contains("ao2.risky-pr-static-report-index.v1"));
+    assert!(script.contains("operator_answers"));
+    assert!(script.contains("\"denied_actions\""));
+    assert!(script.contains("\"approved_actions\""));
+    assert!(script.contains("\"test_evidence\""));
+    assert!(script.contains("\"closure_verdict\""));
+    assert!(script.contains("\"replay_status\""));
+    assert!(verification.contains("ao2.risky-pr-static-report-index.v1"));
+    assert!(verification.contains("without filesystem archaeology"));
+}
+
+#[test]
 fn workbench_operator_packet_control_plane_smoke_index_is_release_wired() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let package_json = fs::read_to_string(root.join("package.json")).expect("package json exists");
