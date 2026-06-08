@@ -130,6 +130,15 @@ if report_index.get("closure_verdict") != "accepted":
     fail("report index closure verdict is not accepted")
 if (report_index.get("replay") or {}).get("status") != "accepted":
     fail("report index replay status is not accepted")
+approval_boundary = report_index.get("approval_boundary") or {}
+denied_request_digests = approval_boundary.get("denied_request_digests") or []
+approved_action_digests = approval_boundary.get("approved_action_digests") or []
+if not denied_request_digests:
+    fail("report index missing denied request digest visibility")
+if not approved_action_digests:
+    fail("report index missing approved action digest visibility")
+if denied_request_digests[0] == approved_action_digests[0]:
+    fail("report index denied and approved digests must differ")
 for key in [
     "objective",
     "denied_actions",
@@ -182,6 +191,9 @@ for heading in [
 ]:
     if heading not in report_html:
         fail(f"report missing section: {heading}")
+for heading in ["Request Digest", "Action Digest"]:
+    if heading not in report_html:
+        fail(f"report missing digest column: {heading}")
 if run_id not in cockpit_html or "evidence" not in cockpit_html.lower():
     fail("cockpit index does not link the golden run evidence")
 

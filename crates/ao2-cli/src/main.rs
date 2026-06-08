@@ -49777,11 +49777,50 @@ fn render_report_index_for_run(
         .iter()
         .filter(|decision| json_string(decision, "decision") != "allow")
         .count();
+    let denied_request_digests = policy_decisions
+        .iter()
+        .filter(|decision| json_string(decision, "decision") != "allow")
+        .filter_map(|decision| {
+            let digest = json_string(decision, "request_digest");
+            (!digest.is_empty()).then_some(digest)
+        })
+        .collect::<Vec<_>>();
+    let denied_actions = policy_decisions
+        .iter()
+        .filter(|decision| json_string(decision, "decision") != "allow")
+        .map(|decision| {
+            serde_json::json!({
+                "action": json_string(decision, "action"),
+                "resource": json_string(decision, "resource"),
+                "request_digest": json_string(decision, "request_digest"),
+            })
+        })
+        .collect::<Vec<_>>();
     let approvals = json_array(&evidence_pack, "approvals");
     let approved = approvals
         .iter()
         .filter(|approval| json_string(approval, "status") == "approved")
         .count();
+    let approved_action_digests = approvals
+        .iter()
+        .filter(|approval| json_string(approval, "status") == "approved")
+        .filter_map(|approval| {
+            let digest = json_string(approval, "action_digest");
+            (!digest.is_empty()).then_some(digest)
+        })
+        .collect::<Vec<_>>();
+    let approved_actions = approvals
+        .iter()
+        .filter(|approval| json_string(approval, "status") == "approved")
+        .map(|approval| {
+            serde_json::json!({
+                "ticket_id": json_string(approval, "ticket_id"),
+                "requested_action": json_string(approval, "requested_action"),
+                "scope": json_string(approval, "scope"),
+                "action_digest": json_string(approval, "action_digest"),
+            })
+        })
+        .collect::<Vec<_>>();
     let artifacts = json_array(&evidence_pack, "artifacts");
     let closures = json_array(&evidence_pack, "closures");
     let closure_verdict = closures
@@ -49817,6 +49856,12 @@ fn render_report_index_for_run(
         "approvals": {
             "count": approvals.len(),
             "approved": approved,
+        },
+        "approval_boundary": {
+            "denied_request_digests": denied_request_digests,
+            "approved_action_digests": approved_action_digests,
+            "denied_actions": denied_actions,
+            "approved_actions": approved_actions,
         },
         "artifacts": {
             "count": artifacts.len(),
@@ -63236,14 +63281,15 @@ fn render_run_health(html: &mut String, pack: &serde_json::Value) -> Result<()> 
 }
 
 fn render_policy_decisions(html: &mut String, pack: &serde_json::Value) -> Result<()> {
-    html.push_str("<section>\n<h2>Policy Decisions</h2>\n<table><thead><tr><th>Action</th><th>Decision</th><th>Resource</th><th>Reason</th></tr></thead><tbody>\n");
+    html.push_str("<section>\n<h2>Policy Decisions</h2>\n<table><thead><tr><th>Action</th><th>Decision</th><th>Resource</th><th>Request Digest</th><th>Reason</th></tr></thead><tbody>\n");
     for decision in json_array(pack, "policy_decisions") {
         writeln!(
             html,
-            "<tr><td><code>{}</code></td><td>{}</td><td>{}</td><td>{}</td></tr>",
+            "<tr><td><code>{}</code></td><td>{}</td><td>{}</td><td><code>{}</code></td><td>{}</td></tr>",
             escape_html(&json_string(decision, "action")),
             escape_html(&json_string(decision, "decision")),
             escape_html(&json_string(decision, "resource")),
+            escape_html(&json_string(decision, "request_digest")),
             escape_html(&json_string(decision, "reason"))
         )?;
     }
@@ -63252,15 +63298,16 @@ fn render_policy_decisions(html: &mut String, pack: &serde_json::Value) -> Resul
 }
 
 fn render_approvals(html: &mut String, pack: &serde_json::Value) -> Result<()> {
-    html.push_str("<section>\n<h2>Approvals</h2>\n<table><thead><tr><th>Ticket</th><th>Status</th><th>Action</th><th>Scope</th><th>Approver</th></tr></thead><tbody>\n");
+    html.push_str("<section>\n<h2>Approvals</h2>\n<table><thead><tr><th>Ticket</th><th>Status</th><th>Action</th><th>Scope</th><th>Action Digest</th><th>Approver</th></tr></thead><tbody>\n");
     for approval in json_array(pack, "approvals") {
         writeln!(
             html,
-            "<tr><td><code>{}</code></td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
+            "<tr><td><code>{}</code></td><td>{}</td><td>{}</td><td>{}</td><td><code>{}</code></td><td>{}</td></tr>",
             escape_html(&json_string(approval, "ticket_id")),
             escape_html(&json_string(approval, "status")),
             escape_html(&json_string(approval, "requested_action")),
             escape_html(&json_string(approval, "scope")),
+            escape_html(&json_string(approval, "action_digest")),
             escape_html(&json_string(approval, "approver"))
         )?;
     }

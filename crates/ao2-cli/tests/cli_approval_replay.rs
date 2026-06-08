@@ -345,6 +345,9 @@ fn cli_report_writes_static_report_index_sidecar() {
     ]);
     assert!(report.status.success(), "{}", stderr(&report));
     assert!(report_path.is_file());
+    let report_html = fs::read_to_string(&report_path).expect("report html written");
+    assert!(report_html.contains("Request Digest"));
+    assert!(report_html.contains("Action Digest"));
 
     let index_path = report_path.with_file_name("index.report.json");
     let index_text = fs::read_to_string(&index_path).expect("report index sidecar written");
@@ -372,6 +375,15 @@ fn cli_report_writes_static_report_index_sidecar() {
         .ends_with("evidence-pack.json"));
     assert!(index["policy_decisions"]["denied"].as_u64().unwrap() >= 1);
     assert!(index["approvals"]["approved"].as_u64().unwrap() >= 1);
+    let denied_digest = index["approval_boundary"]["denied_request_digests"][0]
+        .as_str()
+        .expect("denied request digest visible");
+    let approved_digest = index["approval_boundary"]["approved_action_digests"][0]
+        .as_str()
+        .expect("approved action digest visible");
+    assert_eq!(denied_digest.len(), 64);
+    assert_eq!(approved_digest.len(), 64);
+    assert_ne!(denied_digest, approved_digest);
     assert!(index["artifacts"]["count"].as_u64().unwrap() >= 1);
     assert!(index["html_report"]
         .as_str()
