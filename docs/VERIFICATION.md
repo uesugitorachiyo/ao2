@@ -260,7 +260,10 @@ Result:
   `Local Run Record`, `Static Export Evidence`, `Evaluator Closure Evidence`,
   and `Replay Evidence` sections, and the sibling
   `ao2.risky-pr-static-report-index.v1` JSON sidecar maps operator questions
-  to report/export/replay evidence without filesystem archaeology.
+  to report/export/replay evidence without filesystem archaeology. The report
+  and index expose denied `request_digest` and approved `action_digest` values
+  under the `approval_boundary` summary so operators can inspect the exact
+  approval boundary without opening raw evidence JSON.
 - `npm run risky-pr:product-readiness`: runs the Risky PR golden path once,
   then verifies local run record, static report/export, and evaluator closure
   evidence from that single run; emits

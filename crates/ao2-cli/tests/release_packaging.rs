@@ -2388,6 +2388,11 @@ fn risky_pr_golden_path_requires_static_report_index() {
     assert!(script.contains("REPORT_INDEX=\"$OUT_ROOT/cockpit/index.report.json\""));
     assert!(script.contains("ao2.risky-pr-static-report-index.v1"));
     assert!(script.contains("operator_answers"));
+    assert!(script.contains("approval_boundary"));
+    assert!(script.contains("denied_request_digests"));
+    assert!(script.contains("approved_action_digests"));
+    assert!(script.contains("Request Digest"));
+    assert!(script.contains("Action Digest"));
     assert!(script.contains("\"denied_actions\""));
     assert!(script.contains("\"approved_actions\""));
     assert!(script.contains("\"test_evidence\""));
