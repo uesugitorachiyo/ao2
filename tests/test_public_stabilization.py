@@ -677,6 +677,12 @@ def test_pulse_auto_advance_runner_restart_contract():
         "MAX_ITERATIONS=0",
         "sleep_seconds",
         "max_iterations",
+        "AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_STATE",
+        ".ao2-local/pulse/pr-ci-gate.json",
+        "ao2.pulse-pr-ci-gate.v1",
+        "waiting_for_pr_merge_or_ci",
+        "required_checks",
+        "pr_ci_gate",
     ]:
         assert needle in runner
 
@@ -728,6 +734,9 @@ def test_pulse_auto_advance_runner_restart_contract():
         "npm run pulse:stop-and-dedup-ledger",
         "npm run pulse:auto-advance-integration-gate",
         "ao2.pulse-auto-advance-run.v1",
+        "AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_STATE",
+        "ao2.pulse-pr-ci-gate.v1",
+        "waiting_for_pr_merge_or_ci",
         "target/pulse-auto-advance/latest/summary.json",
     ]:
         assert needle in verification
@@ -904,6 +913,110 @@ def test_pulse_auto_advance_keeps_structured_manifest_mode_if_manifest_is_rewrit
     assert summary["task_execution_mode"] == "structured_manifest"
     assert summary["results"][0]["status"] == "passed"
     assert not manifest_path.exists()
+
+
+def test_pulse_auto_advance_forever_pauses_generate_next_when_pr_ci_gate_waits(tmp_path):
+    pulse_dir = tmp_path / "pulse"
+    out_root = tmp_path / "auto-advance"
+    ledger = tmp_path / "ledger.jsonl"
+    stop_file = tmp_path / "STOP"
+    gate_state = tmp_path / "pr-ci-gate.json"
+    pulse_dir.mkdir()
+
+    eval_loop = {
+        "schema_version": "ao2.pulse-eval-loop.v1",
+        "status": "ready",
+        "recommended_tasks": [
+            {
+                "id": "next-product-readiness-task",
+                "kind": "evidence_gate",
+                "title": "Next product readiness task",
+                "command": "python3 -c 'print(\"would run only after PR/CI clears\")'",
+            }
+        ],
+        "trust_boundary": {"local_only": True, "stores_credentials": False},
+    }
+    eval_loop_path = pulse_dir / "pulse-eval-loop.json"
+    prompt_path = pulse_dir / "operator-prompt.txt"
+    eval_loop_path.write_text(json.dumps(eval_loop, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    prompt_path.write_text("advance production readiness after PR/CI is green\n", encoding="utf-8")
+    eval_loop_sha256 = __import__("hashlib").sha256(eval_loop_path.read_bytes()).hexdigest()
+    resume = {
+        "schema_version": "ao2.pulse-local-mirror-resume.v1",
+        "status": "ready",
+        "pulse_eval_loop_path": "pulse-eval-loop.json",
+        "pulse_eval_loop_sha256": eval_loop_sha256,
+        "operator_prompt_path": "operator-prompt.txt",
+        "operator_prompt_sha256": __import__("hashlib").sha256(prompt_path.read_bytes()).hexdigest(),
+        "auto_advance": {"continue_until_stopped": True, "stores_credentials": False},
+        "trust_boundary": {"local_only": True, "stores_credentials": False},
+    }
+    resume_path = pulse_dir / "resume.json"
+    resume_path.write_text(json.dumps(resume, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    ledger.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.pulse-auto-advance-ledger-entry.v1",
+                "pulse_eval_loop_sha256": eval_loop_sha256,
+                "status": "passed",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    gate_state.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.pulse-pr-ci-gate.v1",
+                "status": "waiting",
+                "reason": "waiting_for_pr_merge_or_ci",
+                "branch": "codex/example",
+                "pr": {"number": 99, "state": "OPEN", "is_draft": False},
+                "required_checks": [
+                    {
+                        "name": "Verify ubuntu-latest / test-cli-non-approval",
+                        "status": "PENDING",
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:auto-advance", "--", "--forever", "--sleep-seconds", "0"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_RESUME_JSON": str(resume_path),
+            "AO2_PULSE_AUTO_ADVANCE_ROOT": str(out_root),
+            "AO2_PULSE_AUTO_ADVANCE_LEDGER": str(ledger),
+            "AO2_PULSE_AUTO_ADVANCE_STOP_FILE": str(stop_file),
+            "AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_STATE": str(gate_state),
+            "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT": "1",
+            "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT_SLEEP_SECONDS": "0",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "waiting"
+    assert summary["reason"] == "waiting_for_pr_merge_or_ci"
+    assert summary["generated_next_packet"] is False
+    assert summary["register_next_packet"] is False
+    assert summary["pulse_generate_next"]["status"] == "skipped"
+    assert summary["pr_ci_gate"]["schema_version"] == "ao2.pulse-pr-ci-gate.v1"
+    assert summary["pr_ci_gate"]["status"] == "waiting"
+    assert summary["pr_ci_gate"]["required_checks"][0]["status"] == "PENDING"
+    assert not list((out_root / "logs").glob("pulse_generate_next-*.log"))
 
 
 def test_pulse_daemon_supervisor_contract():
