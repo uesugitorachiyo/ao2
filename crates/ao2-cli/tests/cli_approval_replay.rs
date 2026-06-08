@@ -365,6 +365,44 @@ fn cli_report_writes_static_report_index_sidecar() {
     assert_eq!(index["operator_answers"]["approved_actions"], true);
     assert_eq!(index["operator_answers"]["test_evidence"], true);
     assert_eq!(index["operator_answers"]["closure_verdict"], true);
+    assert_eq!(index["operator_answers"]["report_contract"], true);
+    let required_sections = index["report_contract"]["required_sections"]
+        .as_array()
+        .expect("required report sections are indexed");
+    for section in [
+        "Objective",
+        "Run Health",
+        "Policy Decisions",
+        "Approvals",
+        "Artifacts",
+        "Evaluator Closure Evidence",
+        "Replay Evidence",
+        "Static Export Evidence",
+        "Local Run Record",
+    ] {
+        assert!(
+            required_sections
+                .iter()
+                .any(|item| item.as_str() == Some(section)),
+            "required section missing from contract: {section}"
+        );
+        assert!(
+            index["report_contract"]["present_sections"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|item| item.as_str() == Some(section)),
+            "required section missing from rendered report: {section}"
+        );
+    }
+    assert_eq!(index["report_contract"]["complete"], true);
+    assert_eq!(
+        index["report_contract"]["missing_sections"]
+            .as_array()
+            .unwrap()
+            .len(),
+        0
+    );
     assert!(index["paths"]["run_record"]
         .as_str()
         .unwrap()

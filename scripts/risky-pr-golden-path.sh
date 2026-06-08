@@ -147,9 +147,25 @@ for key in [
     "closure_verdict",
     "export_path",
     "replay_status",
+    "report_contract",
 ]:
     if (report_index.get("operator_answers") or {}).get(key) is not True:
         fail(f"report index operator answer missing: {key}")
+
+report_contract = report_index.get("report_contract") or {}
+required_report_sections = report_contract.get("required_sections") or []
+present_report_sections = set(report_contract.get("present_sections") or [])
+missing_report_sections = report_contract.get("missing_sections") or []
+report_contract_complete = report_contract.get("complete") is True
+if not required_report_sections:
+    fail("report index missing required_report_sections")
+if missing_report_sections:
+    fail(f"report index missing required section: {missing_report_sections[0]}")
+for section in required_report_sections:
+    if section not in present_report_sections:
+        fail(f"report index missing required section: {section}")
+if not report_contract_complete:
+    fail("report index report_contract_complete is false")
 
 required_markers = {"policy_denied_git_push", "review_missing_tests"}
 observed_markers = set()
@@ -209,6 +225,9 @@ summary = {
     "evidence_pack": evidence_path,
     "report": report_path,
     "report_index": report_index_path,
+    "required_report_sections": required_report_sections,
+    "present_report_sections": sorted(present_report_sections),
+    "report_contract_complete": report_contract_complete,
     "cockpit_index": cockpit_index_path,
     **checks,
 }
