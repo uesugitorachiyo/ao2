@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import shlex
 import stat
 import subprocess
 from pathlib import Path
@@ -822,6 +823,71 @@ def test_pulse_direct_main_publish_commits_and_pushes_temp_repo(tmp_path):
     assert remote_head == summary["commit"]["sha"]
 
 
+def test_pulse_direct_main_publish_forces_recursive_pulse_env_off_during_verification(tmp_path):
+    repo = tmp_path / "repo"
+    remote = tmp_path / "origin.git"
+    out_root = tmp_path / "publish"
+    env_capture = tmp_path / "verification-env.json"
+    verify_script = tmp_path / "verify_env.py"
+    subprocess.run(["git", "init", "-b", "main", str(repo)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "init", "--bare", str(remote)], check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "pulse@example.invalid"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "Pulse Test"], cwd=repo, check=True)
+    subprocess.run(["git", "remote", "add", "origin", str(remote)], cwd=repo, check=True)
+    (repo / "README.md").write_text("initial\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-m", "initial"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "push", "-u", "origin", "main"], cwd=repo, check=True, capture_output=True, text=True)
+    (repo / "README.md").write_text("initial\npulse advancement\n", encoding="utf-8")
+    verify_script.write_text(
+        "import json, os, pathlib, sys\n"
+        f"path = pathlib.Path({str(env_capture)!r})\n"
+        "keys = [\n"
+        "    'AO2_PULSE_AUTO_ADVANCE_DIRECT_MAIN_PUBLISH',\n"
+        "    'AO2_PULSE_AUTO_ADVANCE_LOCAL_ONLY_WHILE_PR_BLOCKED',\n"
+        "    'AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT',\n"
+        "    'AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY',\n"
+        "]\n"
+        "observed = {key: os.environ.get(key) for key in keys}\n"
+        "path.write_text(json.dumps(observed, sort_keys=True) + '\\n', encoding='utf-8')\n"
+        "if any(value != '0' for value in observed.values()):\n"
+        "    print(json.dumps(observed, sort_keys=True), file=sys.stderr)\n"
+        "    raise SystemExit(44)\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:direct-main-publish"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_DIRECT_MAIN_PUBLISH_REPO_ROOT": str(repo),
+            "AO2_PULSE_DIRECT_MAIN_PUBLISH_ROOT": str(out_root),
+            "AO2_PULSE_DIRECT_MAIN_PUBLISH_VERIFY_COMMAND": f"python3 {shlex.quote(str(verify_script))}",
+            "AO2_PULSE_DIRECT_MAIN_PUBLISH_MESSAGE": "Pulse direct main publish env isolation test",
+            "AO2_PULSE_AUTO_ADVANCE_DIRECT_MAIN_PUBLISH": "1",
+            "AO2_PULSE_AUTO_ADVANCE_LOCAL_ONLY_WHILE_PR_BLOCKED": "1",
+            "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT": "1",
+            "AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY": "1",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    captured = json.loads(env_capture.read_text(encoding="utf-8"))
+    assert captured == {
+        "AO2_PULSE_AUTO_ADVANCE_DIRECT_MAIN_PUBLISH": "0",
+        "AO2_PULSE_AUTO_ADVANCE_LOCAL_ONLY_WHILE_PR_BLOCKED": "0",
+        "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT": "0",
+        "AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY": "0",
+    }
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "passed"
+    assert set(summary["verification"]["recursive_pulse_env_forced_off"]) == set(captured)
+
+
 def test_pulse_direct_main_publish_skips_when_no_changes(tmp_path):
     repo = tmp_path / "repo"
     remote = tmp_path / "origin.git"
@@ -999,6 +1065,8 @@ def test_pulse_auto_advance_delegates_structured_manifest_to_task_executor(tmp_p
             "AO2_PULSE_AUTO_ADVANCE_LEDGER": str(ledger),
             "AO2_PULSE_AUTO_ADVANCE_STOP_FILE": str(stop_file),
             "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT": "0",
+            "AO2_PULSE_AUTO_ADVANCE_LOCAL_ONLY_WHILE_PR_BLOCKED": "0",
+            "AO2_PULSE_AUTO_ADVANCE_DIRECT_MAIN_PUBLISH": "0",
         },
         capture_output=True,
         text=True,
@@ -1084,6 +1152,8 @@ def test_pulse_auto_advance_keeps_structured_manifest_mode_if_manifest_is_rewrit
             "AO2_PULSE_AUTO_ADVANCE_LEDGER": str(ledger),
             "AO2_PULSE_AUTO_ADVANCE_STOP_FILE": str(stop_file),
             "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT": "0",
+            "AO2_PULSE_AUTO_ADVANCE_LOCAL_ONLY_WHILE_PR_BLOCKED": "0",
+            "AO2_PULSE_AUTO_ADVANCE_DIRECT_MAIN_PUBLISH": "0",
         },
         capture_output=True,
         text=True,
@@ -1183,6 +1253,8 @@ def test_pulse_auto_advance_forever_pauses_generate_next_when_pr_ci_gate_waits(t
             "AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_STATE": str(gate_state),
             "AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_UPDATE": "0",
             "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT": "1",
+            "AO2_PULSE_AUTO_ADVANCE_LOCAL_ONLY_WHILE_PR_BLOCKED": "0",
+            "AO2_PULSE_AUTO_ADVANCE_DIRECT_MAIN_PUBLISH": "0",
             "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT_SLEEP_SECONDS": "0",
         },
         capture_output=True,
@@ -1310,6 +1382,7 @@ def test_pulse_auto_advance_can_generate_local_only_packet_when_pr_ci_gate_waits
             "AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_UPDATE": "0",
             "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT": "1",
             "AO2_PULSE_AUTO_ADVANCE_LOCAL_ONLY_WHILE_PR_BLOCKED": "1",
+            "AO2_PULSE_AUTO_ADVANCE_DIRECT_MAIN_PUBLISH": "0",
             "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT_SLEEP_SECONDS": "0",
         },
         capture_output=True,
@@ -1402,6 +1475,7 @@ def test_pulse_auto_advance_invokes_direct_main_publish_when_enabled(tmp_path):
             "AO2_PULSE_AUTO_ADVANCE_LEDGER": str(ledger),
             "AO2_PULSE_AUTO_ADVANCE_STOP_FILE": str(stop_file),
             "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT": "0",
+            "AO2_PULSE_AUTO_ADVANCE_LOCAL_ONLY_WHILE_PR_BLOCKED": "0",
             "AO2_PULSE_AUTO_ADVANCE_DIRECT_MAIN_PUBLISH": "1",
         },
         capture_output=True,
@@ -1506,6 +1580,8 @@ def test_pulse_auto_advance_forever_refreshes_pr_ci_gate_before_generate_next(tm
             "AO2_PULSE_AUTO_ADVANCE_STOP_FILE": str(stop_file),
             "AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_STATE": str(gate_state),
             "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT": "1",
+            "AO2_PULSE_AUTO_ADVANCE_LOCAL_ONLY_WHILE_PR_BLOCKED": "0",
+            "AO2_PULSE_AUTO_ADVANCE_DIRECT_MAIN_PUBLISH": "0",
             "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT_SLEEP_SECONDS": "0",
             "AO2_PULSE_PR_CI_GATE_UPDATE_SOURCE_JSON": str(source_json),
         },
@@ -1674,6 +1750,7 @@ def test_pulse_generate_next_writes_structured_task_manifest(tmp_path):
         env={
             **os.environ,
             "AO2_PULSE_GENERATE_NEXT_REGISTER": "0",
+            "AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY": "0",
             "AO2_PULSE_GENERATE_NEXT_ROOT": str(out_root),
             "AO2_PULSE_GENERATE_NEXT_PACKET_ROOT": str(packet_root),
             "AO2_PULSE_GENERATE_NEXT_CURSOR": str(cursor),
@@ -1760,6 +1837,7 @@ def test_pulse_generate_next_default_packet_root_matches_local_mirror_source(tmp
         env={
             **os.environ,
             "AO2_PULSE_GENERATE_NEXT_REGISTER": "0",
+            "AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY": "0",
             "AO2_PULSE_GENERATE_NEXT_ROOT": str(out_root),
             "AO2_PULSE_GENERATE_NEXT_PACKET_ROOT": str(packet_root),
             "AO2_PULSE_GENERATE_NEXT_CURSOR": str(cursor),

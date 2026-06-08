@@ -154,9 +154,11 @@ branch to be `main`, fetches `origin/main`, requires local `HEAD` to equal the
 remote before publishing, rejects disallowed local artifact/credential paths,
 runs `AO2_PULSE_DIRECT_MAIN_PUBLISH_VERIFY_COMMAND` (default:
 `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py
--q`), commits the validated changed paths, verifies the remote is still an
-ancestor, and pushes `HEAD:main`. If there are no tracked or untracked source
-changes, it exits successfully with `status=skipped` and does not commit.
+-q`) with recursive Pulse auto-advance, local-only generation, and direct-main
+publish environment flags forced off, commits the validated changed paths,
+verifies the remote is still an ancestor, and pushes `HEAD:main`. If there are
+no tracked or untracked source changes, it exits successfully with
+`status=skipped` and does not commit.
 
 `npm run pulse:generate-next` emits `ao2.pulse-generate-next.v1` at
 `target/pulse-generate-next/latest/summary.json` and writes a fresh

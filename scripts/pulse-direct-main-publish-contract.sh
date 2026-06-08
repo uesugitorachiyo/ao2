@@ -27,6 +27,8 @@ needles = [
     "AO2_PULSE_DIRECT_MAIN_PUBLISH_REPO_ROOT",
     "AO2_PULSE_DIRECT_MAIN_PUBLISH_VERIFY_COMMAND",
     "AO2_PULSE_DIRECT_MAIN_PUBLISH_PUSH",
+    "RECURSIVE_PULSE_ENV_FLAGS",
+    "recursive_pulse_env_forced_off",
     "git fetch",
     "git commit",
     "git push",

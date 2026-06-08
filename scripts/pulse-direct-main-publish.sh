@@ -60,15 +60,52 @@ payload = {
 def write_summary() -> None:
     summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
-def run(name: str, args: list[str], *, check: bool = True, shell: bool = False) -> subprocess.CompletedProcess[str]:
+RECURSIVE_PULSE_ENV_FLAGS = [
+    "AO2_PULSE_AUTO_ADVANCE_DIRECT_MAIN_PUBLISH",
+    "AO2_PULSE_AUTO_ADVANCE_LOCAL_ONLY_WHILE_PR_BLOCKED",
+    "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT",
+    "AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY",
+]
+
+def verification_env() -> dict[str, str]:
+    env = dict(os.environ)
+    for name in RECURSIVE_PULSE_ENV_FLAGS:
+        env[name] = "0"
+    return env
+
+def run(
+    name: str,
+    args: list[str],
+    *,
+    check: bool = True,
+    shell: bool = False,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     log_path = log_dir / f"{name}.log"
     with log_path.open("w", encoding="utf-8") as log:
         if shell:
             log.write(f"$ {args[0]}\n")
-            result = subprocess.run(args[0], cwd=repo, shell=True, text=True, stdout=log, stderr=subprocess.STDOUT, check=False)
+            result = subprocess.run(
+                args[0],
+                cwd=repo,
+                shell=True,
+                text=True,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                check=False,
+                env=env,
+            )
         else:
             log.write("$ " + " ".join(args) + "\n")
-            result = subprocess.run(args, cwd=repo, text=True, stdout=log, stderr=subprocess.STDOUT, check=False)
+            result = subprocess.run(
+                args,
+                cwd=repo,
+                text=True,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                check=False,
+                env=env,
+            )
     payload["checks"].append({
         "name": name,
         "command": args[0] if shell else " ".join(args),
@@ -153,12 +190,13 @@ for rel in changed_paths:
 if secret_hits:
     fail("secret_pattern_detected", secret_hits=secret_hits)
 
-verification = run("verification", [verify_command], shell=True)
+verification = run("verification", [verify_command], shell=True, env=verification_env())
 payload["verification"] = {
     "command": verify_command,
     "status": "passed" if verification.returncode == 0 else "failed",
     "exit_code": int(verification.returncode),
     "log": str(log_dir / "verification.log"),
+    "recursive_pulse_env_forced_off": RECURSIVE_PULSE_ENV_FLAGS,
 }
 
 run("git_add", ["git", "add", "--", *changed_paths])
