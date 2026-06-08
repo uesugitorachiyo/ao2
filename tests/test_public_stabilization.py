@@ -1004,6 +1004,7 @@ def test_pulse_generate_next_auto_registration_contract():
         "pulse-eval-loop.json",
         "pulse-task-manifest.json",
         "ao2.pulse-task-manifest.v1",
+        "product_code_execution",
         "packet.md",
         "board.md",
         "executor-evidence.json",
@@ -1056,6 +1057,7 @@ def test_pulse_generate_next_writes_structured_task_manifest(tmp_path):
     assert result.returncode == 0, result.stderr + result.stdout
     manifest = json.loads((packet_root / "pulse-task-manifest.json").read_text(encoding="utf-8"))
     assert manifest["schema_version"] == "ao2.pulse-task-manifest.v1"
+    assert manifest["product_code_execution"] == {"enabled": True, "mode": "dry_run"}
     assert manifest["trust_boundary"] == {
         "local_only": True,
         "stores_credentials": False,
