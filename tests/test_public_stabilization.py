@@ -942,6 +942,60 @@ def test_pulse_generate_next_writes_structured_task_manifest(tmp_path):
     assert any(item["path"] == "pulse-task-manifest.json" for item in summary["files"])
 
 
+def test_pulse_generate_next_default_packet_root_matches_local_mirror_source(tmp_path):
+    generator = read("scripts/pulse-generate-next.sh")
+    assert 'PACKET_ROOT="${AO2_PULSE_GENERATE_NEXT_PACKET_ROOT:-$ROOT/target/pulse-next-recommended-tasks}"' in generator
+
+    out_root = tmp_path / "generate-next"
+    packet_root = tmp_path / "pulse-next-recommended-tasks"
+    cursor = tmp_path / "cursor.json"
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:generate-next"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_GENERATE_NEXT_REGISTER": "0",
+            "AO2_PULSE_GENERATE_NEXT_ROOT": str(out_root),
+            "AO2_PULSE_GENERATE_NEXT_PACKET_ROOT": str(packet_root),
+            "AO2_PULSE_GENERATE_NEXT_CURSOR": str(cursor),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    for filename in [
+        "packet.md",
+        "board.md",
+        "executor-evidence.json",
+        "pulse-eval-loop.json",
+        "pulse-task-manifest.json",
+        "summary.json",
+    ]:
+        assert (packet_root / filename).is_file(), filename
+
+    mirror_root = tmp_path / "pulse-local-mirror"
+    mirror = subprocess.run(
+        ["npm", "run", "pulse:local-mirror"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_LOCAL_MIRROR_SOURCE": str(packet_root),
+            "AO2_PULSE_LOCAL_MIRROR_DEST": str(mirror_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert mirror.returncode == 0, mirror.stderr + mirror.stdout
+    mirror_summary = json.loads((mirror_root / "pulse-local-mirror-summary.json").read_text(encoding="utf-8"))
+    assert mirror_summary["status"] == "passed"
+    assert mirror_summary["missing_required_files"] == []
+
+
 def test_pulse_generate_next_uses_project_level_strategic_scoring():
     generator = read("scripts/pulse-generate-next.sh")
     verification = read("docs/VERIFICATION.md")

@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_ROOT="${AO2_PULSE_GENERATE_NEXT_ROOT:-$ROOT/target/pulse-generate-next/latest}"
-PACKET_ROOT="${AO2_PULSE_GENERATE_NEXT_PACKET_ROOT:-$ROOT/target/pulse-next-recommended-tasks/generated-next}"
+PACKET_ROOT="${AO2_PULSE_GENERATE_NEXT_PACKET_ROOT:-$ROOT/target/pulse-next-recommended-tasks}"
 SUMMARY="$OUT_ROOT/summary.json"
 LOG_DIR="$OUT_ROOT/logs"
 CURSOR_FILE="${AO2_PULSE_GENERATE_NEXT_CURSOR:-$ROOT/.ao2-local/pulse/pulse-generate-next-cursor.json}"
