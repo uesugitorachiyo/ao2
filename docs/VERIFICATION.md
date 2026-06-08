@@ -329,10 +329,13 @@ Result:
   `ao2.risky-pr-static-report-index.v1` JSON sidecar maps operator questions
   to report/export/replay evidence without filesystem archaeology. The sidecar
   records the required report sections, the sections present in the rendered
-  HTML, and a fail-closed `report_contract_complete` result. The report
-  and index expose denied `request_digest` and approved `action_digest` values
-  under the `approval_boundary` summary so operators can inspect the exact
-  approval boundary without opening raw evidence JSON.
+  HTML, and a fail-closed `report_contract_complete` result. The golden path
+  also runs `ao2 report verify`, which emits
+  `ao2.report-contract-verification.v1` against the reusable
+  `ao2.report-contract.v1` schema. The report and index expose denied
+  `request_digest` and approved `action_digest` values under the
+  `approval_boundary` summary so operators can inspect the exact approval
+  boundary without opening raw evidence JSON.
 - `npm run risky-pr:product-readiness`: runs the Risky PR golden path once,
   then verifies local run record, static report/export, and evaluator closure
   evidence from that single run; emits

@@ -444,6 +444,129 @@ fn cli_report_writes_static_report_index_sidecar() {
     );
 }
 
+struct CompletedReportFixture {
+    _temp: tempfile::TempDir,
+    repo: PathBuf,
+    report_path: PathBuf,
+}
+
+fn completed_report_fixture(run_id: &str) -> CompletedReportFixture {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("discount-service");
+    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+
+    let run = ao2([
+        "run",
+        "../../examples/risky-pr-run/risky-pr.yaml",
+        "--target",
+        repo.to_str().unwrap(),
+        "--run-id",
+        run_id,
+        "--pause-for-approval",
+    ]);
+    assert!(run.status.success(), "{}", stderr(&run));
+    let run_stdout = stdout(&run);
+    let ticket_id = value_for(&run_stdout, "approval_ticket_id=");
+
+    let approve = ao2([
+        "approve",
+        ticket_id,
+        "--target",
+        repo.to_str().unwrap(),
+        "--approver",
+        "human:report-verify-test",
+    ]);
+    assert!(approve.status.success(), "{}", stderr(&approve));
+
+    let resume = ao2([
+        "run",
+        "--resume",
+        run_id,
+        "--target",
+        repo.to_str().unwrap(),
+    ]);
+    assert!(resume.status.success(), "{}", stderr(&resume));
+
+    let report_path = repo
+        .join(".ao2")
+        .join("runs")
+        .join(run_id)
+        .join("report")
+        .join("index.html");
+    let report = ao2([
+        "report",
+        run_id,
+        "--target",
+        repo.to_str().unwrap(),
+        "--out",
+        report_path.to_str().unwrap(),
+    ]);
+    assert!(report.status.success(), "{}", stderr(&report));
+
+    CompletedReportFixture {
+        _temp: temp,
+        repo,
+        report_path,
+    }
+}
+
+#[test]
+fn cli_report_verify_accepts_complete_report_contract() {
+    let fixture = completed_report_fixture("report-verify-complete");
+
+    let verify = ao2([
+        "report",
+        "verify",
+        "--target",
+        fixture.repo.to_str().unwrap(),
+        "--run-id",
+        "report-verify-complete",
+    ]);
+    assert!(verify.status.success(), "{}", stderr(&verify));
+    let json: serde_json::Value = serde_json::from_str(&stdout(&verify)).unwrap();
+    assert_eq!(
+        json["schema_version"],
+        "ao2.report-contract-verification.v1"
+    );
+    assert_eq!(json["contract_schema_version"], "ao2.report-contract.v1");
+    assert_eq!(json["status"], "passed");
+    assert_eq!(json["complete"], true);
+    assert!(json["required_sections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|section| section.as_str() == Some("Run Health")));
+}
+
+#[test]
+fn cli_report_verify_rejects_missing_required_section() {
+    let fixture = completed_report_fixture("report-verify-missing-section");
+    let html = fs::read_to_string(&fixture.report_path).unwrap();
+    fs::write(
+        &fixture.report_path,
+        html.replace("Run Health", "Run Status"),
+    )
+    .unwrap();
+
+    let verify = ao2([
+        "report",
+        "verify",
+        "--target",
+        fixture.repo.to_str().unwrap(),
+        "--run-id",
+        "report-verify-missing-section",
+    ]);
+    assert!(!verify.status.success());
+    let json: serde_json::Value = serde_json::from_str(&stdout(&verify)).unwrap();
+    assert_eq!(json["status"], "failed");
+    assert_eq!(json["complete"], false);
+    assert!(json["missing_sections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|section| section.as_str() == Some("Run Health")));
+}
+
 #[test]
 fn cli_adapter_doctor_reports_scripted_provider() {
     let doctor = ao2(["adapter", "doctor", "--provider", "scripted"]);

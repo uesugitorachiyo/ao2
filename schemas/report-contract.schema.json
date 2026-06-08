@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ao2.local/schemas/report-contract.schema.json",
+  "title": "AO2 Report Contract",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "required_sections",
+    "present_sections",
+    "missing_sections",
+    "complete"
+  ],
+  "properties": {
+    "schema_version": { "const": "ao2.report-contract.v1" },
+    "required_sections": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "present_sections": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "missing_sections": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "complete": { "type": "boolean" }
+  }
+}
