@@ -154,6 +154,15 @@ expected evidence. A product_code task cannot close from packet materialization 
 The executor rejects non-local manifests and any manifest that stores
 credentials.
 
+`npm run pulse:code-agent-runner -- --task <task.json> --dry-run` validates an
+`ao2.pulse-code-agent-task.v1` implementation-task packet and emits
+`ao2.pulse-code-agent-runner.v1` evidence under
+`target/pulse-code-agent-runner/latest/summary.json`. The command's
+dry-run validates implementation-task packets by checking local-only trust boundaries, allowed
+files, acceptance criteria, required verification commands and expected
+evidence, target git worktree status, and unrelated dirty files. This MVP is a
+guarded bridge for future code-agent execution: it does not push, open PRs, publish releases, or store credentials.
+
 The Pulse lengthy-gate surface is manifest-driven so local RSI follow-up
 wrappers can be preserved before promotion without adding one public command per
 wrapper. `scripts/pulse-lengthy-gates-manifest.json` records the preserved
