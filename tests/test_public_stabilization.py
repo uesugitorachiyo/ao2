@@ -86,6 +86,7 @@ def test_ci_non_approval_shards_are_split_for_mac_and_windows():
             "release_evaluator_decision",
             "release_gate_obligation_gate_signing",
             "release_handoff_checklist",
+            "release_support_bundle_verification",
         ],
         "test-cli-release-packaging-sdd": [
             "release_packaging",
@@ -101,15 +102,24 @@ def test_ci_non_approval_shards_are_split_for_mac_and_windows():
                 assert f"--test {test_name}" in ci
 
 
+def test_ci_release_support_verifier_runs_on_ubuntu():
+    ci = read(".github/workflows/ci.yml")
+
+    assert "os: ubuntu-latest\n            phase: test-cli-release-support" in ci
+    assert "--test release_support_bundle_verification" in ci
+
+
 def test_ci_reports_legacy_non_approval_required_check_names():
     ci = read(".github/workflows/ci.yml")
 
     assert "phase: test-cli-non-approval" not in ci
     assert "non_approval_required_check_compat:" in ci
     assert "needs: verify" in ci
+    assert "if: ${{ always() }}" in ci
     assert "name: Verify ${{ matrix.os }} / test-cli-non-approval" in ci
     for os_name in ["macos-latest", "windows-latest"]:
         assert f"os: {os_name}" in ci
+    assert 'Split non-approval shards did not pass: ${{ needs.verify.result }}' in ci
     assert "Split non-approval shards passed; reporting legacy required check name." in ci
 
 

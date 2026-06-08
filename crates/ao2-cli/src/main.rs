@@ -66999,6 +66999,115 @@ fn release_support_bundle_verification_json(
         }));
     }
 
+    let replay = bundle.get("replay").unwrap_or(&serde_json::Value::Null);
+    let replay_present = replay.is_object();
+    let replay_status = json_string(replay, "status");
+    let replay_digest_failures = json_array(replay, "digest_failures");
+    if !replay_present {
+        failures.push(serde_json::json!({
+            "code": "missing_replay_evidence",
+            "message": "release support bundle must include replay evidence"
+        }));
+    } else {
+        if replay_status != "accepted" {
+            failures.push(serde_json::json!({
+                "code": "replay_not_accepted",
+                "message": "release support bundle replay status must be accepted",
+                "observed": replay_status
+            }));
+        }
+        if !replay_digest_failures.is_empty() {
+            failures.push(serde_json::json!({
+                "code": "replay_digest_failures",
+                "message": "release support bundle replay must not report digest failures",
+                "digest_failure_count": replay_digest_failures.len()
+            }));
+        }
+    }
+
+    let release_assembly = bundle
+        .get("release_assembly")
+        .unwrap_or(&serde_json::Value::Null);
+    let readiness = bundle.get("readiness").unwrap_or(&serde_json::Value::Null);
+    let handoff = bundle.get("handoff").unwrap_or(&serde_json::Value::Null);
+    let evaluator_decision = bundle
+        .get("evaluator_decision")
+        .unwrap_or(&serde_json::Value::Null);
+    let operator_evidence = bundle
+        .get("operator_evidence")
+        .unwrap_or(&serde_json::Value::Null);
+    let operator_evidence_present = operator_evidence.is_object();
+    let readiness_operator = readiness
+        .pointer("/operator_decision")
+        .unwrap_or(&serde_json::Value::Null);
+    let handoff_trust = handoff
+        .pointer("/trust_boundary")
+        .unwrap_or(&serde_json::Value::Null);
+    let evaluator_trust = evaluator_decision
+        .pointer("/trust_boundary")
+        .unwrap_or(&serde_json::Value::Null);
+
+    let control_plane_approves_release = [
+        json_bool(release_assembly, "control_plane_approves_release"),
+        json_bool(readiness_operator, "control_plane_approves_release"),
+        json_bool(handoff_trust, "control_plane_approves_release"),
+        json_bool(evaluator_trust, "control_plane_approves_release"),
+        json_bool(operator_evidence, "control_plane_approves_release"),
+    ]
+    .into_iter()
+    .any(|approves| approves);
+    if control_plane_approves_release {
+        failures.push(serde_json::json!({
+            "code": "control_plane_approved_release",
+            "message": "control plane must remain a read-only observer and must not approve release"
+        }));
+    }
+
+    if !operator_evidence_present {
+        failures.push(serde_json::json!({
+            "code": "missing_operator_evidence",
+            "message": "release support bundle must include operator evidence"
+        }));
+    }
+
+    let evaluator_required = json_bool(readiness_operator, "factory_v3_evaluator_closer_required")
+        || json_bool(operator_evidence, "factory_v3_evaluator_closer_required");
+    if !evaluator_required {
+        failures.push(serde_json::json!({
+            "code": "operator_evaluator_closer_not_required",
+            "message": "operator evidence must require factory-v3 evaluator-closer ownership"
+        }));
+    }
+
+    let owner_values = [
+        json_string(handoff_trust, "release_acceptance_owner"),
+        json_string(evaluator_trust, "release_acceptance_owner"),
+        json_string(operator_evidence, "release_acceptance_owner"),
+    ];
+    if owner_values
+        .iter()
+        .any(|owner| owner != "factory-v3 evaluator-closer")
+    {
+        failures.push(serde_json::json!({
+            "code": "release_acceptance_owner_mismatch",
+            "message": "release acceptance owner must be factory-v3 evaluator-closer",
+            "observed": owner_values
+        }));
+    }
+
+    let role_values = [
+        json_string(handoff_trust, "control_plane_role"),
+        json_string(evaluator_trust, "control_plane_role"),
+        json_string(operator_evidence, "control_plane_role"),
+    ];
+    if role_values.iter().any(|role| role != "read_only_observer") {
+        failures.push(serde_json::json!({
+            "code": "control_plane_role_mismatch",
+            "message": "control plane role must be read_only_observer",
+            "observed": role_values
+        }));
+    }
+
     release_support_bundle_secret_marker_failures("$", &bundle, &mut failures);
 
     let bundle_sha256 = if bundle_path.is_file() {
@@ -67064,6 +67173,16 @@ fn release_support_bundle_verification_json(
             surface.get("present").and_then(serde_json::Value::as_bool).unwrap_or(false)
         }).count(),
         "surfaces": surfaces,
+        "replay": {
+            "present": replay_present,
+            "status": replay_status,
+            "digest_failure_count": replay_digest_failures.len()
+        },
+        "operator_evidence": {
+            "present": operator_evidence_present,
+            "factory_v3_evaluator_closer_required": evaluator_required,
+            "control_plane_approves_release": control_plane_approves_release
+        },
         "failure_count": failures.len(),
         "failures": failures,
         "trust_boundary": {

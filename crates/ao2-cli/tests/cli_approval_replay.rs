@@ -47034,12 +47034,46 @@ fn cli_release_support_bundle_verify_rejects_secret_markers() {
 fn write_minimal_release_support_bundle(path: &Path, extra: serde_json::Value) {
     let mut bundle = serde_json::json!({
         "schema_version": "ao2.cp-release-support-bundle.v1",
-        "release_assembly": {"schema_version": "ao2.cp-release-assembly.v1", "status": "assembled"},
-        "readiness": {"schema_version": "ao2.cp-release-readiness.v1", "status": "ready"},
-        "handoff": {"schema_version": "factory-v3/ao2-release-handoff-checklist/v1", "status": "ready_for_evaluator_closer"},
+        "release_assembly": {
+            "schema_version": "ao2.cp-release-assembly.v1",
+            "status": "assembled",
+            "control_plane_approves_release": false
+        },
+        "readiness": {
+            "schema_version": "ao2.cp-release-readiness.v1",
+            "status": "ready",
+            "operator_decision": {
+                "control_plane_approves_release": false,
+                "factory_v3_evaluator_closer_required": true
+            }
+        },
+        "handoff": {
+            "schema_version": "factory-v3/ao2-release-handoff-checklist/v1",
+            "status": "ready_for_evaluator_closer",
+            "trust_boundary": {
+                "control_plane_role": "read_only_observer",
+                "control_plane_approves_release": false,
+                "release_acceptance_owner": "factory-v3 evaluator-closer"
+            }
+        },
         "cockpit": {"schema_version": "ao2.cp-release-cockpit.v1", "status": "ready"},
-        "evaluator_decision": {"schema_version": "factory-v3/ao2-release-evaluator-decision/v1", "decision": "accept_phase1_release_candidate"},
-        "storage_support": {"schema_version": "ao2.cp-storage-support.v1", "status": "ready"}
+        "evaluator_decision": {
+            "schema_version": "factory-v3/ao2-release-evaluator-decision/v1",
+            "decision": "accept_phase1_release_candidate",
+            "trust_boundary": {
+                "control_plane_role": "read_only_observer",
+                "control_plane_approves_release": false,
+                "release_acceptance_owner": "factory-v3 evaluator-closer"
+            }
+        },
+        "storage_support": {"schema_version": "ao2.cp-storage-support.v1", "status": "ready"},
+        "replay": {"status": "accepted", "digest_failures": []},
+        "operator_evidence": {
+            "factory_v3_evaluator_closer_required": true,
+            "release_acceptance_owner": "factory-v3 evaluator-closer",
+            "control_plane_role": "read_only_observer",
+            "control_plane_approves_release": false
+        }
     });
     if !extra.is_null() {
         bundle["diagnostics"] = extra;
