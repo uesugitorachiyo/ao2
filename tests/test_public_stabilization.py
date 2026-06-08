@@ -826,6 +826,86 @@ def test_pulse_auto_advance_delegates_structured_manifest_to_task_executor(tmp_p
     assert (executor_summary.parent / "implementation-packets" / "risky-pr-report-surface.md").is_file()
 
 
+def test_pulse_auto_advance_keeps_structured_manifest_mode_if_manifest_is_rewritten(tmp_path):
+    pulse_dir = tmp_path / "pulse"
+    out_root = tmp_path / "auto-advance"
+    ledger = tmp_path / "ledger.jsonl"
+    stop_file = tmp_path / "STOP"
+    pulse_dir.mkdir()
+
+    eval_loop = {
+        "schema_version": "ao2.pulse-eval-loop.v1",
+        "status": "ready",
+        "recommended_tasks": [
+            {
+                "id": "manifest-rewrite",
+                "kind": "evidence_gate",
+                "title": "Manifest rewrite simulation",
+            }
+        ],
+        "trust_boundary": {"local_only": True, "stores_credentials": False},
+    }
+    manifest = {
+        "schema_version": "ao2.pulse-task-manifest.v1",
+        "trust_boundary": {
+            "local_only": True,
+            "stores_credentials": False,
+            "side_effects": "local_process_execution_and_packet_materialization",
+        },
+        "tasks": [
+            {
+                "id": "manifest-rewrite",
+                "kind": "evidence_gate",
+                "title": "Manifest rewrite simulation",
+                "command": "python3 -c \"import os, pathlib; pathlib.Path(os.environ['AO2_PULSE_TASK_EXECUTOR_MANIFEST']).unlink()\"",
+                "expected_evidence": "manifest.removed.after.executor.start",
+            }
+        ],
+    }
+    eval_loop_path = pulse_dir / "pulse-eval-loop.json"
+    manifest_path = pulse_dir / "pulse-task-manifest.json"
+    prompt_path = pulse_dir / "operator-prompt.txt"
+    eval_loop_path.write_text(json.dumps(eval_loop, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    manifest_path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    prompt_path.write_text("advance product-code tasks\n", encoding="utf-8")
+    resume = {
+        "schema_version": "ao2.pulse-local-mirror-resume.v1",
+        "status": "ready",
+        "pulse_eval_loop_path": "pulse-eval-loop.json",
+        "pulse_eval_loop_sha256": __import__("hashlib").sha256(eval_loop_path.read_bytes()).hexdigest(),
+        "operator_prompt_path": "operator-prompt.txt",
+        "operator_prompt_sha256": __import__("hashlib").sha256(prompt_path.read_bytes()).hexdigest(),
+        "auto_advance": {"continue_until_stopped": True, "stores_credentials": False},
+        "trust_boundary": {"local_only": True, "stores_credentials": False},
+    }
+    resume_path = pulse_dir / "resume.json"
+    resume_path.write_text(json.dumps(resume, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:auto-advance"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_RESUME_JSON": str(resume_path),
+            "AO2_PULSE_AUTO_ADVANCE_ROOT": str(out_root),
+            "AO2_PULSE_AUTO_ADVANCE_LEDGER": str(ledger),
+            "AO2_PULSE_AUTO_ADVANCE_STOP_FILE": str(stop_file),
+            "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT": "0",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "passed"
+    assert summary["completed_iterations"] == 1
+    assert summary["task_execution_mode"] == "structured_manifest"
+    assert summary["results"][0]["status"] == "passed"
+    assert not manifest_path.exists()
+
+
 def test_pulse_daemon_supervisor_contract():
     package_json = json.loads(read("package.json"))
     verification = read("docs/VERIFICATION.md")
@@ -1310,6 +1390,60 @@ def test_pulse_task_executor_rejects_product_code_without_verification_evidence(
     assert summary["results"][0]["id"] == "risky-pr-report-surface"
     assert summary["results"][0]["status"] == "failed"
     assert summary["results"][0]["reason"] == "product_code_verification_evidence_missing"
+
+
+def test_pulse_task_executor_isolates_pulse_local_mirror_dest_for_executable_tasks(tmp_path):
+    out_root = tmp_path / "executor"
+    marker = tmp_path / "marker.json"
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.pulse-task-manifest.v1",
+                "trust_boundary": {
+                    "local_only": True,
+                    "stores_credentials": False,
+                    "side_effects": "local_process_execution_and_packet_materialization",
+                },
+                "tasks": [
+                    {
+                        "id": "mirror-dest-isolation",
+                        "kind": "evidence_gate",
+                        "title": "Mirror destination isolation",
+                        "command": (
+                            "python3 -c \"import json, os, pathlib; "
+                            "dest = pathlib.Path(os.environ['AO2_PULSE_LOCAL_MIRROR_DEST']); "
+                            "assert 'task-executor-local-mirror' in dest.parts; "
+                            f"pathlib.Path({str(marker)!r}).write_text(json.dumps({{'dest': str(dest)}}), encoding='utf-8')\""
+                        ),
+                        "expected_evidence": "ao2.pulse-task-executor.local-mirror-dest-isolated",
+                    }
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:task-executor"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_TASK_EXECUTOR_MANIFEST": str(manifest),
+            "AO2_PULSE_TASK_EXECUTOR_ROOT": str(out_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "passed"
+    assert summary["results"][0]["status"] == "passed"
+    marker_payload = json.loads(marker.read_text(encoding="utf-8"))
+    assert marker_payload["dest"] == str((out_root / "task-executor-local-mirror").resolve())
 
 
 def test_pulse_code_agent_runner_contract_is_public_safe():
