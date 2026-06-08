@@ -334,6 +334,9 @@ The canonical schema version is `ao2.report-contract.v1`. Report producers use
 this contract to prove an operator can inspect the objective, run health,
 governance decisions, approvals, artifacts, closure evidence, replay evidence,
 static export paths, and local run record without opening raw evidence JSON.
+`ao2 report verify` emits `ao2.report-contract-verification.v1`, and release
+support bundles must include that verification as first-class evidence before
+the bundle verifier accepts the release handoff.
 
 ## Minimum Interfaces
 

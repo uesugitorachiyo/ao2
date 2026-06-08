@@ -862,6 +862,7 @@ ao2 release support-bundle-build \
   --evaluator-decision /path/to/evaluator-decision.json \
   --storage-support /path/to/storage-support.json \
   --replay /path/to/replay.json \
+  --report-contract-verification /path/to/report-contract-verification.json \
   --operator-evidence /path/to/operator-evidence.json \
   --out-dir /path/to/release-support-bundle \
   --json
@@ -874,10 +875,10 @@ ao2 release support-bundle-verify \
 
 The build command writes `release-support-bundle.json` and `SHA256SUMS`, then
 runs the same strict verifier before reporting success. Verification fails
-closed if replay was not accepted, digest failures are present, operator
-evidence is missing, the factory-v3 evaluator-closer is not the release
-acceptance owner, or the control plane appears as a release approver instead of
-a read-only observer.
+closed if replay was not accepted, digest failures are present, report contract
+verification is missing or failed, operator evidence is missing, the factory-v3
+evaluator-closer is not the release acceptance owner, or the control plane
+appears as a release approver instead of a read-only observer.
 
 The Workbench signed evidence publish form can also send a real run-derived
 operator packet to ao2-control-plane. Choose `Operator Packet` in the form, or
