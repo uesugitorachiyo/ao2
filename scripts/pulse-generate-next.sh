@@ -484,6 +484,7 @@ task_manifest = {
     "status": "ready",
     "selection": selection["id"],
     "cursor": next_cursor,
+    "product_code_execution": {"enabled": True, "mode": "dry_run"},
     "tasks": tasks,
     "trust_boundary": {
         "local_only": True,

@@ -131,7 +131,10 @@ packets instead of command-only shell tasks. With `--forever`, it writes
 `pulse:local-mirror` source used by release-readiness gates. For the
 Risky PR product MVP selection, the manifest includes a product-code
 implementation packet for the report/evaluator closure UX before the supporting
-evidence gates. Generated packets use strategic scoring instead of blind
+evidence gates. Generated product-code manifests include
+`product_code_execution.enabled=true` with `mode=dry_run` so the next executor
+pass validates code-agent runner packet compatibility without granting write
+execution. Generated packets use strategic scoring instead of blind
 rotation: each cycle performs project-level reassessment
 against `docs/PRD.md`, `docs/SDD-risky-pr-run.md`,
 `docs/SCHEMAS-AND-INTERFACES.md`, and `docs/IMPLEMENTATION-SLICES.md`, samples

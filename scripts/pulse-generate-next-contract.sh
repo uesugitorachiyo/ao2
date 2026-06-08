@@ -25,6 +25,7 @@ text = (root / "scripts" / "pulse-generate-next.sh").read_text(encoding="utf-8")
 needles = [
     "ao2.pulse-generate-next.v1",
     "ao2.pulse-next-lengthy-tasks.v1",
+    "product_code_execution",
     "pulse-eval-loop.json",
     "packet.md",
     "board.md",
