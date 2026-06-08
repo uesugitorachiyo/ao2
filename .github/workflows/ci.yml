@@ -171,6 +171,7 @@ jobs:
               --test cp_release_snapshot
               --test release_evaluator_decision
               --test release_handoff_checklist
+              --test release_support_bundle_verification
           - os: ubuntu-latest
             phase: test-cli-release-packaging
             timeout_minutes: 20
@@ -323,6 +324,7 @@ jobs:
               --test release_evaluator_decision
               --test release_gate_obligation_gate_signing
               --test release_handoff_checklist
+              --test release_support_bundle_verification
           - os: macos-latest
             phase: test-cli-release-packaging-sdd
             timeout_minutes: 15
@@ -463,6 +465,7 @@ jobs:
               --test release_evaluator_decision
               --test release_gate_obligation_gate_signing
               --test release_handoff_checklist
+              --test release_support_bundle_verification
           - os: windows-latest
             phase: test-cli-release-packaging-sdd
             timeout_minutes: 15
@@ -517,6 +520,7 @@ jobs:
     name: Verify ${{ matrix.os }} / test-cli-non-approval
     runs-on: ${{ matrix.os }}
     needs: verify
+    if: ${{ always() }}
     timeout-minutes: 5
     strategy:
       fail-fast: false
@@ -525,7 +529,12 @@ jobs:
     steps:
       - name: Report legacy required check compatibility
         shell: bash
-        run: echo "Split non-approval shards passed; reporting legacy required check name."
+        run: |
+          if [ "${{ needs.verify.result }}" != "success" ]; then
+            echo "Split non-approval shards did not pass: ${{ needs.verify.result }}"
+            exit 1
+          fi
+          echo "Split non-approval shards passed; reporting legacy required check name."
 
   workbench-operator-packet-control-plane-smoke:
     name: Workbench operator packet control-plane smoke ${{ matrix.os }}
