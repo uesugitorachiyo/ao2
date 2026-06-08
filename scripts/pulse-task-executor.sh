@@ -13,6 +13,7 @@ mkdir -p "$LOG_DIR" "$PACKET_DIR"
 
 python3 - "$ROOT" "$MANIFEST" "$OUT_ROOT" "$SUMMARY" "$LOG_DIR" "$PACKET_DIR" <<'PY'
 import json
+import os
 import re
 import subprocess
 import sys
@@ -162,10 +163,13 @@ def run_executable_task(task: dict, index: int) -> dict:
     kind = require_string(task.get("kind"), "executable_task_kind_missing")
     command = require_string(task.get("command"), "executable_task_command_missing")
     log_path = log_dir / f"{index:02d}-{slug(task_id)}.log"
+    env = dict(os.environ)
+    env.setdefault("AO2_PULSE_LOCAL_MIRROR_DEST", str((out_root / "task-executor-local-mirror").resolve()))
     with log_path.open("w", encoding="utf-8") as log:
         log.write(f"$ {command}\n")
+        log.write(f"AO2_PULSE_LOCAL_MIRROR_DEST={env['AO2_PULSE_LOCAL_MIRROR_DEST']}\n")
         log.flush()
-        result = subprocess.run(command, cwd=root, shell=True, stdout=log, stderr=subprocess.STDOUT)
+        result = subprocess.run(command, cwd=root, shell=True, env=env, stdout=log, stderr=subprocess.STDOUT)
     status = "passed" if result.returncode == 0 else "failed"
     return {
         "id": task_id,
@@ -174,6 +178,7 @@ def run_executable_task(task: dict, index: int) -> dict:
         "status": status,
         "exit_code": int(result.returncode),
         "command": command,
+        "isolated_pulse_local_mirror_dest": env["AO2_PULSE_LOCAL_MIRROR_DEST"],
         "expected_evidence": task.get("expected_evidence"),
         "log": str(log_path),
     }
