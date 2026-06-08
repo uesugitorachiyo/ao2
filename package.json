@@ -104,6 +104,7 @@
     "pulse:auto-advance": "node scripts/run-sh-script.js scripts/pulse-auto-advance.sh",
     "pulse:auto-advance-integration-gate": "node scripts/run-sh-script.js scripts/pulse-auto-advance-integration-gate.sh",
     "pulse:auto-advance-runner-contract": "node scripts/run-sh-script.js scripts/pulse-auto-advance-runner-contract.sh",
+    "pulse:pr-ci-gate:update": "node scripts/run-sh-script.js scripts/pulse-pr-ci-gate-update.sh",
     "pulse:daemon:contract": "node scripts/run-sh-script.js scripts/pulse-daemon-contract.sh",
     "pulse:daemon:restart": "node scripts/run-sh-script.js scripts/pulse-daemon.sh restart",
     "pulse:daemon:start": "node scripts/run-sh-script.js scripts/pulse-daemon.sh start",
