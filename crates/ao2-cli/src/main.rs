@@ -2438,6 +2438,28 @@ enum ReleaseCommand {
         #[arg(long)]
         json: bool,
     },
+    SupportBundleBuild {
+        #[arg(long = "release-assembly")]
+        release_assembly: PathBuf,
+        #[arg(long)]
+        readiness: PathBuf,
+        #[arg(long)]
+        handoff: PathBuf,
+        #[arg(long)]
+        cockpit: PathBuf,
+        #[arg(long = "evaluator-decision")]
+        evaluator_decision: PathBuf,
+        #[arg(long = "storage-support")]
+        storage_support: PathBuf,
+        #[arg(long)]
+        replay: PathBuf,
+        #[arg(long = "operator-evidence")]
+        operator_evidence: PathBuf,
+        #[arg(long = "out-dir")]
+        out_dir: PathBuf,
+        #[arg(long)]
+        json: bool,
+    },
     SupportBundleVerify {
         #[arg(long)]
         bundle: PathBuf,
@@ -64727,6 +64749,29 @@ fn release(command: ReleaseCommand) -> Result<()> {
         ReleaseCommand::CompareVerify { bundle_dir, json } => {
             release_compare_verify(bundle_dir, json)
         }
+        ReleaseCommand::SupportBundleBuild {
+            release_assembly,
+            readiness,
+            handoff,
+            cockpit,
+            evaluator_decision,
+            storage_support,
+            replay,
+            operator_evidence,
+            out_dir,
+            json,
+        } => release_support_bundle_build(
+            release_assembly,
+            readiness,
+            handoff,
+            cockpit,
+            evaluator_decision,
+            storage_support,
+            replay,
+            operator_evidence,
+            out_dir,
+            json,
+        ),
         ReleaseCommand::SupportBundleVerify {
             bundle,
             checksums,
@@ -66926,6 +66971,112 @@ fn release_comparison_metadata_verification_json(bundle_dir: &Path) -> Result<se
         "signature_algorithm": json_string(&metadata, "signature_algorithm"),
         "metadata": metadata
     }))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn release_support_bundle_build(
+    release_assembly: PathBuf,
+    readiness: PathBuf,
+    handoff: PathBuf,
+    cockpit: PathBuf,
+    evaluator_decision: PathBuf,
+    storage_support: PathBuf,
+    replay: PathBuf,
+    operator_evidence: PathBuf,
+    out_dir: PathBuf,
+    json: bool,
+) -> Result<()> {
+    let result = release_support_bundle_build_json(
+        &release_assembly,
+        &readiness,
+        &handoff,
+        &cockpit,
+        &evaluator_decision,
+        &storage_support,
+        &replay,
+        &operator_evidence,
+        &out_dir,
+    )?;
+    if json {
+        println!("{}", serde_json::to_string_pretty(&result)?);
+    } else {
+        println!(
+            "release_support_bundle_build={}",
+            json_string(&result, "status")
+        );
+        println!("bundle={}", json_string(&result, "bundle"));
+        println!("checksums={}", json_string(&result, "checksums"));
+        println!("bundle_sha256={}", json_string(&result, "bundle_sha256"));
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn release_support_bundle_build_json(
+    release_assembly: &Path,
+    readiness: &Path,
+    handoff: &Path,
+    cockpit: &Path,
+    evaluator_decision: &Path,
+    storage_support: &Path,
+    replay: &Path,
+    operator_evidence: &Path,
+    out_dir: &Path,
+) -> Result<serde_json::Value> {
+    fs::create_dir_all(out_dir).with_context(|| format!("create {}", out_dir.display()))?;
+    let bundle_path = out_dir.join("release-support-bundle.json");
+    let checksums_path = out_dir.join("SHA256SUMS");
+    let bundle = serde_json::json!({
+        "schema_version": "ao2.cp-release-support-bundle.v1",
+        "release_assembly": release_support_bundle_read_surface("release_assembly", release_assembly)?,
+        "readiness": release_support_bundle_read_surface("readiness", readiness)?,
+        "handoff": release_support_bundle_read_surface("handoff", handoff)?,
+        "cockpit": release_support_bundle_read_surface("cockpit", cockpit)?,
+        "evaluator_decision": release_support_bundle_read_surface("evaluator_decision", evaluator_decision)?,
+        "storage_support": release_support_bundle_read_surface("storage_support", storage_support)?,
+        "replay": release_support_bundle_read_surface("replay", replay)?,
+        "operator_evidence": release_support_bundle_read_surface("operator_evidence", operator_evidence)?,
+        "producer": {
+            "package": env!("CARGO_PKG_NAME"),
+            "version": env!("CARGO_PKG_VERSION"),
+            "target": runtime_target_label()
+        }
+    });
+    atomic_write_text(&bundle_path, &serde_json::to_string_pretty(&bundle)?)?;
+    let bundle_sha256 = sha256_file(&bundle_path)?;
+    atomic_write_text(
+        &checksums_path,
+        &format!("{bundle_sha256}  release-support-bundle.json\n"),
+    )?;
+
+    let verification =
+        release_support_bundle_verification_json(&bundle_path, Some(checksums_path.as_path()))?;
+    if json_string(&verification, "status") != "passed" {
+        anyhow::bail!("built release support bundle did not pass verification");
+    }
+
+    Ok(serde_json::json!({
+        "schema_version": "ao2.release-support-bundle-build.v1",
+        "status": "built",
+        "bundle": bundle_path.display().to_string(),
+        "checksums": checksums_path.display().to_string(),
+        "bundle_sha256": bundle_sha256,
+        "verification": verification
+    }))
+}
+
+fn release_support_bundle_read_surface(name: &str, path: &Path) -> Result<serde_json::Value> {
+    let content = fs::read_to_string(path)
+        .with_context(|| format!("read release support bundle {name}: {}", path.display()))?;
+    let value: serde_json::Value = serde_json::from_str(&content)
+        .with_context(|| format!("parse release support bundle {name}: {}", path.display()))?;
+    if !value.is_object() {
+        anyhow::bail!(
+            "release support bundle {name} must be a JSON object: {}",
+            path.display()
+        );
+    }
+    Ok(value)
 }
 
 fn release_support_bundle_verify(

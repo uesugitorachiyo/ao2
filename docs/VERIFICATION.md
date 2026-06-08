@@ -873,6 +873,24 @@ Result:
 - digest failures: none.
 - adapter transcript artifact: present.
 
+## Release Support Bundle Assembly
+
+`ao2 release support-bundle-build` assembles the public
+`ao2.cp-release-support-bundle.v1` contract from explicit release assembly,
+readiness, handoff, cockpit, evaluator decision, storage support, replay, and
+operator evidence JSON files. It writes `release-support-bundle.json` and
+`SHA256SUMS`, then verifies the generated bundle before returning success.
+
+Regression coverage:
+
+```sh
+cargo test -p ao2-cli --test release_support_bundle_verification
+```
+
+The same test target runs in CI release-readiness shards on Ubuntu, macOS, and
+Windows, so bundle assembly and strict support-bundle verification stay covered
+across the supported release platforms.
+
 ## Adapter Doctor Smoke Test
 
 ```sh
