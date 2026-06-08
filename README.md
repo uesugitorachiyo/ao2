@@ -16,6 +16,25 @@ AO2 owns execution and evidence production. The optional
 [`ao2-control-plane`](https://github.com/uesugitorachiyo/ao2-control-plane)
 repo is a separate self-hosted read-only observer for signed AO2 evidence.
 
+## Why AO2?
+
+Most agent systems focus on doing work. AO2 focuses on making the work
+reviewable after the fact.
+
+AO2 is built around local evidence:
+
+- what objective was run;
+- which policy and readiness gates executed;
+- what commands, patches, and artifacts were produced;
+- which evaluator concerns were rejected or accepted;
+- what evidence supports a completed run;
+- what can be replayed, audited, exported, or published to an observer.
+
+That makes AO2 useful for autonomous or overnight work because the operator does
+not have to trust terminal scrollback or a vague "done" message. The run leaves
+behind structured records that can be inspected locally and, when desired,
+published to a read-only control plane.
+
 ## Status
 
 This public export is prepared from AO2 `0.4.80`. It is intentionally
@@ -83,6 +102,38 @@ powershell -ExecutionPolicy Bypass -File .\scripts\smoke-windows-release.ps1 `
 The main CI workflow in `.github/workflows/ci.yml` runs on pull request and
 `main` push, and can also be dispatched manually. Release workflows such as
 `release-gate.yml` and `public-release-build.yml` remain manual operator gates.
+
+## Pulse Auto-Advance Evidence
+
+Pulse auto-advance can continue local AO2 work without opening a pull request.
+Even in no-PR mode, it is not silent: it writes local evidence for each
+iteration so an operator can answer "what happened while I was away?"
+
+The primary local evidence surfaces are:
+
+- `target/pulse-auto-advance/latest/summary.json` - current run status,
+  completed iteration count, task results, direct-main publish status, and
+  next-packet generation status.
+- `target/pulse-auto-advance/latest/task-executor/iteration-XX/summary.json` -
+  per-iteration task executor summaries.
+- `target/pulse-auto-advance/latest/logs/` - per-command logs for task
+  execution, PR/CI gate refresh, direct-main publishing, and next-task
+  generation.
+- `.ao2-local/pulse/latest/` - the latest generated packet, board,
+  eval-loop, operator prompt, resume metadata, and structured task manifest.
+- `.ao2-local/pulse/pulse-auto-advance-ledger.jsonl` - append-only local
+  ledger entries keyed by eval-loop digest.
+- `.ao2-local/pulse/pr-ci-gate.json` - local PR/CI gate state when the loop is
+  waiting on review, merge, or CI.
+
+When direct-main publishing is enabled, Pulse also records
+`target/pulse-auto-advance/latest/direct-main-publish/summary.json`. If there
+are no source changes to commit, the publisher can exit successfully with
+`status=skipped`; the local Pulse evidence still records the iteration, logs,
+and generated next-task packet.
+
+This keeps the MVP local-first: PRs and GitHub CI are useful review surfaces,
+but they are not required for AO2 to leave an auditable local record.
 
 ## Documentation
 
