@@ -21,6 +21,7 @@ npm run verify:no-factory-v3 # factory-v3 green-path regression guard
 npm run risky-pr:golden      # local Risky PR Run golden path with report/cockpit assertions
 npm run risky-pr:product-readiness # one-run product readiness gate for local run record/report/closure evidence
 npm run evaluator:closure-corpus # evaluator closure negative/positive evidence corpus
+npm run approval:exact-digest-gate # exact-digest approval denial/approval/replay/report gate
 npm run smoke:evidence-control-plane # signed evidence-pack publish/readback contract smoke
 npm run smoke:phase1-operator-golden # signed Phase 1 publish/readback/dashboard smoke
 npm run release:readiness    # local release-readiness guardrails for AO2 + control-plane
@@ -270,6 +271,12 @@ Result:
   accepted corrected run as `accepted_after_correction`. It emits
   `ao2.evaluator-closure-corpus.v1` and proves accepted closure stays bound to
   concrete evidence, valid artifact digests, and exact approval.
+- `npm run approval:exact-digest-gate`: runs the Risky PR golden path, verifies
+  the broad `git push` action remains denied, the narrow filesystem write is
+  approved only for the exact action digest, a modified approval digest is
+  rejected by gate evidence, replay has zero digest failures, and the static
+  report/index expose the denial, approval, and replay boundary. It emits
+  `ao2.exact-digest-approval-gate.v1`.
 - `npm run smoke:evidence-control-plane`: builds AO2 and ao2-control-plane,
   publishes a signed `ao2.evidence-pack.v1`, reads dashboard/detail/latest
   observer endpoints, pins the `ao2.cp-evidence-pack-dashboard.v1`,
