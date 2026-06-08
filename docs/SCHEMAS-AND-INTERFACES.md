@@ -320,6 +320,21 @@ Closure rule:
   `--support-signing-key`, the annotation evidence export is signed and
   verified before the API response returns.
 
+### `report-contract.schema.json`
+
+Required fields:
+
+- `schema_version`
+- `required_sections`
+- `present_sections`
+- `missing_sections`
+- `complete`
+
+The canonical schema version is `ao2.report-contract.v1`. Report producers use
+this contract to prove an operator can inspect the objective, run health,
+governance decisions, approvals, artifacts, closure evidence, replay evidence,
+static export paths, and local run record without opening raw evidence JSON.
+
 ## Minimum Interfaces
 
 ```ts

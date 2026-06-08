@@ -32,6 +32,7 @@ const REQUIRED_SCHEMAS: &[&str] = &[
     "closure.schema.json",
     "evidence-pack.schema.json",
     "obligation-ledger.schema.json",
+    "report-contract.schema.json",
 ];
 
 #[test]

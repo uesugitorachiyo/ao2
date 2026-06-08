@@ -134,7 +134,9 @@ enum Command {
         target: PathBuf,
     },
     Report {
-        run_id: String,
+        #[command(subcommand)]
+        command: Option<ReportCommand>,
+        run_id: Option<String>,
         #[arg(long, default_value = ".")]
         target: PathBuf,
         #[arg(long)]
@@ -260,6 +262,20 @@ enum CpCommand {
         write_json: Option<PathBuf>,
         #[arg(long)]
         json: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ReportCommand {
+    Verify {
+        #[arg(long)]
+        run_id: String,
+        #[arg(long, default_value = ".")]
+        target: PathBuf,
+        #[arg(long)]
+        report: Option<PathBuf>,
+        #[arg(long)]
+        index: Option<PathBuf>,
     },
 }
 
@@ -3856,11 +3872,25 @@ fn real_main() -> Result<()> {
         Command::Template { command } => template(command),
         Command::Replay { run_id, target } => replay(target, run_id),
         Command::Report {
+            command,
             run_id,
             target,
             out,
             open,
-        } => report(target, run_id, out, open),
+        } => match command {
+            Some(ReportCommand::Verify {
+                run_id,
+                target,
+                report,
+                index,
+            }) => report_verify(target, run_id, report, index),
+            None => report(
+                target,
+                run_id.context("report run_id is required unless a report subcommand is used")?,
+                out,
+                open,
+            ),
+        },
         Command::Runs { command } => runs(command),
         Command::Cockpit { command } => cockpit(command),
         Command::Pulse { command } => pulse(command),
@@ -49772,6 +49802,20 @@ fn report(target: PathBuf, run_id: String, out: Option<PathBuf>, open: bool) -> 
     Ok(())
 }
 
+fn report_verify(
+    target: PathBuf,
+    run_id: String,
+    report: Option<PathBuf>,
+    index: Option<PathBuf>,
+) -> Result<()> {
+    let verification = report_contract_verification_json(&target, &run_id, report, index)?;
+    println!("{}", serde_json::to_string_pretty(&verification)?);
+    if json_string(&verification, "status") != "passed" {
+        anyhow::bail!("report contract verification failed");
+    }
+    Ok(())
+}
+
 fn report_index_path(report_path: &Path) -> PathBuf {
     let stem = report_path
         .file_stem()
@@ -49793,23 +49837,85 @@ const RISKY_PR_REQUIRED_REPORT_SECTIONS: &[&str] = &[
 ];
 
 fn risky_pr_report_contract(report_html: &str) -> serde_json::Value {
-    let present_sections = RISKY_PR_REQUIRED_REPORT_SECTIONS
+    report_contract_json(report_html, RISKY_PR_REQUIRED_REPORT_SECTIONS)
+}
+
+fn report_contract_json(report_html: &str, required_sections: &[&str]) -> serde_json::Value {
+    let present_sections = required_sections
         .iter()
         .copied()
         .filter(|section| report_html.contains(section))
         .collect::<Vec<_>>();
-    let missing_sections = RISKY_PR_REQUIRED_REPORT_SECTIONS
+    let missing_sections = required_sections
         .iter()
         .copied()
         .filter(|section| !present_sections.contains(section))
         .collect::<Vec<_>>();
     let complete = missing_sections.is_empty();
     serde_json::json!({
-        "required_sections": RISKY_PR_REQUIRED_REPORT_SECTIONS,
+        "schema_version": "ao2.report-contract.v1",
+        "required_sections": required_sections,
         "present_sections": present_sections,
         "missing_sections": missing_sections,
         "complete": complete,
     })
+}
+
+fn report_contract_verification_json(
+    target: &Path,
+    run_id: &str,
+    report: Option<PathBuf>,
+    index: Option<PathBuf>,
+) -> Result<serde_json::Value> {
+    let run_dir = run_dir(target, run_id);
+    let report_path = report.unwrap_or_else(|| default_report_verify_path(&run_dir));
+    let index_path = index.unwrap_or_else(|| report_index_path(&report_path));
+    let report_html = fs::read_to_string(&report_path)
+        .with_context(|| format!("read report {}", report_path.display()))?;
+    let index_json = read_json_file::<serde_json::Value>(&index_path)
+        .with_context(|| format!("read report index {}", index_path.display()))?;
+    let contract = report_contract_json(&report_html, RISKY_PR_REQUIRED_REPORT_SECTIONS);
+    let missing_sections = json_array(&contract, "missing_sections")
+        .iter()
+        .map(json_value_text)
+        .collect::<Vec<_>>();
+    let mut failures = Vec::new();
+    if json_string(&index_json, "schema_version") != "ao2.risky-pr-static-report-index.v1" {
+        failures.push(
+            "report index schema_version is not ao2.risky-pr-static-report-index.v1".to_string(),
+        );
+    }
+    if json_string(&index_json, "run_id") != run_id {
+        failures.push("report index run_id does not match requested run_id".to_string());
+    }
+    for section in &missing_sections {
+        failures.push(format!("missing required report section: {section}"));
+    }
+    let complete = failures.is_empty();
+
+    Ok(serde_json::json!({
+        "schema_version": "ao2.report-contract-verification.v1",
+        "contract_schema_version": "ao2.report-contract.v1",
+        "status": if complete { "passed" } else { "failed" },
+        "run_id": run_id,
+        "target": target,
+        "report": report_path,
+        "index": index_path,
+        "complete": complete,
+        "required_sections": RISKY_PR_REQUIRED_REPORT_SECTIONS,
+        "present_sections": contract["present_sections"],
+        "missing_sections": missing_sections,
+        "report_contract": contract,
+        "failures": failures,
+    }))
+}
+
+fn default_report_verify_path(run_dir: &Path) -> PathBuf {
+    let report = run_dir.join("report").join("index.html");
+    if report.is_file() {
+        return report;
+    }
+    run_dir.join("cockpit").join("index.html")
 }
 
 fn render_report_index_for_run(

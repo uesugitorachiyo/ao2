@@ -2394,6 +2394,8 @@ fn risky_pr_golden_path_requires_static_report_index() {
     assert!(script.contains("required_report_sections"));
     assert!(script.contains("present_report_sections"));
     assert!(script.contains("report_contract_complete"));
+    assert!(script.contains("report verify"));
+    assert!(script.contains("ao2.report-contract-verification.v1"));
     assert!(script.contains("Request Digest"));
     assert!(script.contains("Action Digest"));
     assert!(script.contains("\"denied_actions\""));

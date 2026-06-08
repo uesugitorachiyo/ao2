@@ -68,6 +68,8 @@ COCKPIT_INDEX="$OUT_ROOT/cockpit/runs.html"
 env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY \
   "$AO2_BIN" report "$RUN_ID" --target "$TARGET" --out "$REPORT" > "$OUT_ROOT/report.txt"
 env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY \
+  "$AO2_BIN" report verify --target "$TARGET" --run-id "$RUN_ID" --report "$REPORT" --index "$REPORT_INDEX" > "$OUT_ROOT/report-verify.json"
+env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY \
   "$AO2_BIN" cockpit index --target "$TARGET" --out "$COCKPIT_INDEX" > "$OUT_ROOT/cockpit-index.txt"
 
 EVIDENCE_PACK="$TARGET/.ao2/runs/$RUN_ID/evidence-pack/evidence-pack.json"
@@ -75,14 +77,15 @@ SUMMARY="$OUT_ROOT/summary.json"
 require_file "$EVIDENCE_PACK"
 require_file "$REPORT"
 require_file "$REPORT_INDEX"
+require_file "$OUT_ROOT/report-verify.json"
 require_file "$COCKPIT_INDEX"
 
-python3 - "$SUMMARY" "$RUN_ID" "$TARGET" "$EVIDENCE_PACK" "$REPORT" "$REPORT_INDEX" "$COCKPIT_INDEX" "$OUT_ROOT/replay.json" <<'PY'
+python3 - "$SUMMARY" "$RUN_ID" "$TARGET" "$EVIDENCE_PACK" "$REPORT" "$REPORT_INDEX" "$COCKPIT_INDEX" "$OUT_ROOT/replay.json" "$OUT_ROOT/report-verify.json" <<'PY'
 import json
 import sys
 from pathlib import Path
 
-summary_path, run_id, target, evidence_path, report_path, report_index_path, cockpit_index_path, replay_path = sys.argv[1:]
+summary_path, run_id, target, evidence_path, report_path, report_index_path, cockpit_index_path, replay_path, report_verify_path = sys.argv[1:]
 
 def load_json(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
@@ -107,6 +110,7 @@ def fail(message):
 pack = load_json(evidence_path)
 replay = load_json(replay_path)
 report_index = load_json(report_index_path)
+report_verify = load_json(report_verify_path)
 report_html = Path(report_path).read_text(encoding="utf-8", errors="replace")
 cockpit_html = Path(cockpit_index_path).read_text(encoding="utf-8", errors="replace")
 
@@ -130,6 +134,12 @@ if report_index.get("closure_verdict") != "accepted":
     fail("report index closure verdict is not accepted")
 if (report_index.get("replay") or {}).get("status") != "accepted":
     fail("report index replay status is not accepted")
+if report_verify.get("schema_version") != "ao2.report-contract-verification.v1":
+    fail("report verify schema changed")
+if report_verify.get("contract_schema_version") != "ao2.report-contract.v1":
+    fail("report verify contract schema changed")
+if report_verify.get("status") != "passed":
+    fail("report verify did not pass")
 approval_boundary = report_index.get("approval_boundary") or {}
 denied_request_digests = approval_boundary.get("denied_request_digests") or []
 approved_action_digests = approval_boundary.get("approved_action_digests") or []
@@ -225,6 +235,7 @@ summary = {
     "evidence_pack": evidence_path,
     "report": report_path,
     "report_index": report_index_path,
+    "report_verify": report_verify_path,
     "required_report_sections": required_report_sections,
     "present_report_sections": sorted(present_report_sections),
     "report_contract_complete": report_contract_complete,
