@@ -2420,6 +2420,27 @@ fn evaluator_closure_corpus_is_release_wired() {
 }
 
 #[test]
+fn exact_digest_approval_gate_is_release_wired() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let package_json = fs::read_to_string(root.join("package.json")).expect("package json exists");
+    let script = fs::read_to_string(root.join("scripts/exact-digest-approval-gate.sh"))
+        .expect("exact digest approval gate script exists");
+    let verification =
+        fs::read_to_string(root.join("docs/VERIFICATION.md")).expect("verification docs exist");
+
+    assert!(package_json.contains("\"approval:exact-digest-gate\""));
+    assert!(package_json.contains("scripts/exact-digest-approval-gate.sh"));
+    assert!(script.contains("ao2.exact-digest-approval-gate.v1"));
+    assert!(script.contains("broad_action_denied"));
+    assert!(script.contains("exact_action_approved"));
+    assert!(script.contains("modified_digest_rejected"));
+    assert!(script.contains("report_exposes_digest_boundary"));
+    assert!(script.contains("env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY"));
+    assert!(verification.contains("approval:exact-digest-gate"));
+    assert!(verification.contains("ao2.exact-digest-approval-gate.v1"));
+}
+
+#[test]
 fn workbench_operator_packet_control_plane_smoke_index_is_release_wired() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let package_json = fs::read_to_string(root.join("package.json")).expect("package json exists");
