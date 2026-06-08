@@ -162,6 +162,13 @@ dry-run validates implementation-task packets by checking local-only trust bound
 files, acceptance criteria, required verification commands and expected
 evidence, target git worktree status, and unrelated dirty files. This MVP is a
 guarded bridge for future code-agent execution: it does not push, open PRs, publish releases, or store credentials.
+`npm run pulse:code-agent-runner -- --task <task.json> --execute` enables the
+same runner in guarded local execution mode; execute mode requires `AO2_PULSE_CODE_AGENT_EXECUTE=1`.
+The runner writes a prompt artifact,
+invokes the task's local code-agent command or `codex exec`, strips provider API
+key environment variables, rejects unrelated dirty files after execution, and
+requires all declared verification commands to pass before emitting
+`status=passed`.
 
 The Pulse lengthy-gate surface is manifest-driven so local RSI follow-up
 wrappers can be preserved before promotion without adding one public command per
