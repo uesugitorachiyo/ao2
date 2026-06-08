@@ -644,6 +644,7 @@ def test_pulse_auto_advance_runner_restart_contract():
         "pulse:auto-advance-runner-contract": "scripts/pulse-auto-advance-runner-contract.sh",
         "pulse:stop-and-dedup-ledger": "scripts/pulse-stop-and-dedup-ledger.sh",
         "pulse:auto-advance-integration-gate": "scripts/pulse-auto-advance-integration-gate.sh",
+        "pulse:pr-ci-gate:update": "scripts/pulse-pr-ci-gate-update.sh",
     }
 
     for command, script_path in expected_scripts.items():
@@ -683,10 +684,21 @@ def test_pulse_auto_advance_runner_restart_contract():
         "waiting_for_pr_merge_or_ci",
         "required_checks",
         "pr_ci_gate",
+        "pulse:pr-ci-gate:update",
+        "AO2_PULSE_PR_CI_GATE_UPDATE_STATE",
     ]:
         assert needle in runner
 
     script_needles = {
+        "scripts/pulse-pr-ci-gate-update.sh": [
+            "ao2.pulse-pr-ci-gate-update.v1",
+            "ao2.pulse-pr-ci-gate.v1",
+            "AO2_PULSE_PR_CI_GATE_UPDATE_STATE",
+            ".ao2-local/pulse/pr-ci-gate.json",
+            "gh pr view",
+            "required_checks",
+            "stores_credentials",
+        ],
         "scripts/pulse-resume-workspace-cli-fallback.sh": [
             "ao2.pulse-resume-workspace-cli-fallback.v1",
             "cargo run -q -p ao2-cli -- pulse eval-loop run --help",
@@ -714,6 +726,7 @@ def test_pulse_auto_advance_runner_restart_contract():
         ],
         "scripts/pulse-auto-advance-integration-gate.sh": [
             "ao2.pulse-auto-advance-integration-gate.v1",
+            "pulse:pr-ci-gate:update",
             "pulse:resume-workspace-cli-fallback",
             "pulse:terminal-eval-loop-schema-compatibility",
             "pulse:auto-advance-runner-contract",
@@ -737,9 +750,79 @@ def test_pulse_auto_advance_runner_restart_contract():
         "AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_STATE",
         "ao2.pulse-pr-ci-gate.v1",
         "waiting_for_pr_merge_or_ci",
+        "npm run pulse:pr-ci-gate:update",
+        "ao2.pulse-pr-ci-gate-update.v1",
         "target/pulse-auto-advance/latest/summary.json",
     ]:
         assert needle in verification
+
+
+def test_pulse_pr_ci_gate_update_materializes_waiting_state_from_fixture(tmp_path):
+    out_root = tmp_path / "pr-ci-gate-update"
+    state_path = tmp_path / "pr-ci-gate.json"
+    source_json = tmp_path / "gh-pr-view.json"
+    source_json.write_text(
+        json.dumps(
+            {
+                "number": 55,
+                "state": "OPEN",
+                "isDraft": False,
+                "headRefName": "codex/pulse-pr-ci-gate-updater",
+                "mergeStateStatus": "BLOCKED",
+                "url": "https://github.com/uesugitorachiyo/ao2/pull/55",
+                "statusCheckRollup": [
+                    {
+                        "name": "Verify ubuntu-latest / fmt",
+                        "state": "SUCCESS",
+                        "conclusion": "SUCCESS",
+                    },
+                    {
+                        "name": "Verify windows-latest / test-cli-non-approval",
+                        "state": "PENDING",
+                        "conclusion": None,
+                    },
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:pr-ci-gate:update"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_PR_CI_GATE_UPDATE_ROOT": str(out_root),
+            "AO2_PULSE_PR_CI_GATE_UPDATE_STATE": str(state_path),
+            "AO2_PULSE_PR_CI_GATE_UPDATE_SOURCE_JSON": str(source_json),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.pulse-pr-ci-gate-update.v1"
+    assert summary["status"] == "waiting"
+    assert summary["state_path"] == str(state_path)
+    assert state["schema_version"] == "ao2.pulse-pr-ci-gate.v1"
+    assert state["status"] == "waiting"
+    assert state["reason"] == "waiting_for_pr_merge_or_ci"
+    assert state["branch"] == "codex/pulse-pr-ci-gate-updater"
+    assert state["pr"] == {
+        "number": 55,
+        "state": "OPEN",
+        "is_draft": False,
+        "url": "https://github.com/uesugitorachiyo/ao2/pull/55",
+    }
+    assert state["required_checks"][0]["status"] == "SUCCESS"
+    assert state["required_checks"][1]["status"] == "PENDING"
+    assert state["trust_boundary"] == {"local_only": True, "stores_credentials": False}
 
 
 def test_pulse_auto_advance_delegates_structured_manifest_to_task_executor(tmp_path):
@@ -997,6 +1080,7 @@ def test_pulse_auto_advance_forever_pauses_generate_next_when_pr_ci_gate_waits(t
             "AO2_PULSE_AUTO_ADVANCE_LEDGER": str(ledger),
             "AO2_PULSE_AUTO_ADVANCE_STOP_FILE": str(stop_file),
             "AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_STATE": str(gate_state),
+            "AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_UPDATE": "0",
             "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT": "1",
             "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT_SLEEP_SECONDS": "0",
         },
@@ -1016,6 +1100,113 @@ def test_pulse_auto_advance_forever_pauses_generate_next_when_pr_ci_gate_waits(t
     assert summary["pr_ci_gate"]["schema_version"] == "ao2.pulse-pr-ci-gate.v1"
     assert summary["pr_ci_gate"]["status"] == "waiting"
     assert summary["pr_ci_gate"]["required_checks"][0]["status"] == "PENDING"
+    assert not list((out_root / "logs").glob("pulse_generate_next-*.log"))
+
+
+def test_pulse_auto_advance_forever_refreshes_pr_ci_gate_before_generate_next(tmp_path):
+    pulse_dir = tmp_path / "pulse"
+    out_root = tmp_path / "auto-advance"
+    ledger = tmp_path / "ledger.jsonl"
+    stop_file = tmp_path / "STOP"
+    gate_state = tmp_path / "pr-ci-gate.json"
+    source_json = tmp_path / "gh-pr-view.json"
+    pulse_dir.mkdir()
+
+    eval_loop = {
+        "schema_version": "ao2.pulse-eval-loop.v1",
+        "status": "ready",
+        "recommended_tasks": [
+            {
+                "id": "next-product-readiness-task",
+                "kind": "evidence_gate",
+                "title": "Next product readiness task",
+                "command": "python3 -c 'print(\"advance after gate update\")'",
+            }
+        ],
+        "trust_boundary": {"local_only": True, "stores_credentials": False},
+    }
+    eval_loop_path = pulse_dir / "pulse-eval-loop.json"
+    prompt_path = pulse_dir / "operator-prompt.txt"
+    eval_loop_path.write_text(json.dumps(eval_loop, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    prompt_path.write_text("advance production readiness after refreshed PR/CI gate\n", encoding="utf-8")
+    eval_loop_sha256 = __import__("hashlib").sha256(eval_loop_path.read_bytes()).hexdigest()
+    resume = {
+        "schema_version": "ao2.pulse-local-mirror-resume.v1",
+        "status": "ready",
+        "pulse_eval_loop_path": "pulse-eval-loop.json",
+        "pulse_eval_loop_sha256": eval_loop_sha256,
+        "operator_prompt_path": "operator-prompt.txt",
+        "operator_prompt_sha256": __import__("hashlib").sha256(prompt_path.read_bytes()).hexdigest(),
+        "auto_advance": {"continue_until_stopped": True, "stores_credentials": False},
+        "trust_boundary": {"local_only": True, "stores_credentials": False},
+    }
+    resume_path = pulse_dir / "resume.json"
+    resume_path.write_text(json.dumps(resume, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    ledger.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.pulse-auto-advance-ledger-entry.v1",
+                "pulse_eval_loop_sha256": eval_loop_sha256,
+                "status": "passed",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    source_json.write_text(
+        json.dumps(
+            {
+                "number": 56,
+                "state": "OPEN",
+                "isDraft": False,
+                "headRefName": "codex/pulse-pr-ci-gate-updater",
+                "mergeStateStatus": "BLOCKED",
+                "url": "https://github.com/uesugitorachiyo/ao2/pull/56",
+                "statusCheckRollup": [
+                    {
+                        "name": "Verify macos-latest / test-cli-release-readiness",
+                        "state": "IN_PROGRESS",
+                        "conclusion": None,
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:auto-advance", "--", "--forever", "--sleep-seconds", "0"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_RESUME_JSON": str(resume_path),
+            "AO2_PULSE_AUTO_ADVANCE_ROOT": str(out_root),
+            "AO2_PULSE_AUTO_ADVANCE_LEDGER": str(ledger),
+            "AO2_PULSE_AUTO_ADVANCE_STOP_FILE": str(stop_file),
+            "AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_STATE": str(gate_state),
+            "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT": "1",
+            "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT_SLEEP_SECONDS": "0",
+            "AO2_PULSE_PR_CI_GATE_UPDATE_SOURCE_JSON": str(source_json),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    state = json.loads(gate_state.read_text(encoding="utf-8"))
+    assert summary["status"] == "waiting"
+    assert summary["reason"] == "waiting_for_pr_merge_or_ci"
+    assert summary["pr_ci_gate_update"]["status"] == "passed"
+    assert summary["pr_ci_gate"]["status"] == "waiting"
+    assert state["pr"]["number"] == 56
+    assert state["required_checks"][0]["status"] == "PENDING"
     assert not list((out_root / "logs").glob("pulse_generate_next-*.log"))
 
 

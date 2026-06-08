@@ -12,6 +12,7 @@ mkdir -p "$LOG_DIR"
 # shellcheck source=scripts/lib/pulse-gate-lib.sh
 . "$ROOT/scripts/lib/pulse-gate-lib.sh"
 
+ao2_gate_run_step "$LOG_DIR" pulse_pr_ci_gate_update npm run pulse:pr-ci-gate:update
 ao2_gate_run_step "$LOG_DIR" pulse_resume_workspace_cli_fallback npm run pulse:resume-workspace-cli-fallback
 ao2_gate_run_step "$LOG_DIR" pulse_terminal_eval_loop_schema_compatibility npm run pulse:terminal-eval-loop-schema-compatibility
 ao2_gate_run_step "$LOG_DIR" pulse_auto_advance_runner_contract npm run pulse:auto-advance-runner-contract
@@ -27,6 +28,7 @@ out_root = Path(sys.argv[1]).resolve()
 summary = Path(sys.argv[2]).resolve()
 log_dir = Path(sys.argv[3]).resolve()
 components = [
+    ("pulse_pr_ci_gate_update", "pulse:pr-ci-gate:update", "ao2.pulse-pr-ci-gate-update.v1"),
     ("pulse_resume_workspace_cli_fallback", "pulse:resume-workspace-cli-fallback", "ao2.pulse-resume-workspace-cli-fallback.v1"),
     ("pulse_terminal_eval_loop_schema_compatibility", "pulse:terminal-eval-loop-schema-compatibility", "ao2.pulse-terminal-eval-loop-schema-compatibility.v1"),
     ("pulse_auto_advance_runner_contract", "pulse:auto-advance-runner-contract", "ao2.pulse-auto-advance-runner-contract.v1"),

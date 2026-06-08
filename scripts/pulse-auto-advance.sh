@@ -17,6 +17,7 @@ GENERATE_NEXT="${AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT:-1}"
 GENERATE_NEXT_SLEEP_SECONDS="${AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT_SLEEP_SECONDS:-$SLEEP_SECONDS}"
 PR_CI_GATE="${AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE:-1}"
 PR_CI_GATE_STATE="${AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_STATE:-$ROOT/.ao2-local/pulse/pr-ci-gate.json}"
+PR_CI_GATE_UPDATE="${AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_UPDATE:-1}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -59,7 +60,7 @@ fi
 rm -rf "$OUT_ROOT"
 mkdir -p "$LOG_DIR" "$(dirname "$LEDGER")"
 
-python3 - "$ROOT" "$RESUME_JSON" "$OUT_ROOT" "$SUMMARY" "$LOG_DIR" "$LEDGER" "$STOP_FILE" "$MAX_ITERATIONS" "$ALLOW_DUPLICATE" "$FOREVER" "$SLEEP_SECONDS" "$GENERATE_NEXT" "$GENERATE_NEXT_SLEEP_SECONDS" "$PR_CI_GATE" "$PR_CI_GATE_STATE" <<'PY'
+python3 - "$ROOT" "$RESUME_JSON" "$OUT_ROOT" "$SUMMARY" "$LOG_DIR" "$LEDGER" "$STOP_FILE" "$MAX_ITERATIONS" "$ALLOW_DUPLICATE" "$FOREVER" "$SLEEP_SECONDS" "$GENERATE_NEXT" "$GENERATE_NEXT_SLEEP_SECONDS" "$PR_CI_GATE" "$PR_CI_GATE_STATE" "$PR_CI_GATE_UPDATE" <<'PY'
 import hashlib
 import json
 import os
@@ -84,6 +85,7 @@ GENERATE_NEXT = sys.argv[12]
 generate_next_sleep_seconds = float(sys.argv[13])
 pr_ci_gate_enabled = sys.argv[14] == "1"
 pr_ci_gate_state = Path(sys.argv[15]).resolve()
+pr_ci_gate_update_enabled = sys.argv[16] == "1"
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -109,6 +111,7 @@ payload = {
     "pr_ci_gate": {
         "schema_version": "ao2.pulse-pr-ci-gate.v1",
         "enabled": pr_ci_gate_enabled,
+        "update_enabled": pr_ci_gate_update_enabled,
         "state_path": str(pr_ci_gate_state),
         "status": "not_checked",
     },
@@ -230,8 +233,62 @@ def write_heartbeat(reason: str, resume: dict | None = None, digest: str | None 
         payload["observed_eval_loop_sha256"] = digest
     write_summary(payload)
 
+def refresh_pr_ci_gate(reason: str) -> bool:
+    if not pr_ci_gate_enabled or not pr_ci_gate_update_enabled:
+        payload["pr_ci_gate_update"] = {
+            "command": "pulse:pr-ci-gate:update",
+            "status": "skipped",
+            "reason": "gate_update_disabled",
+        }
+        return True
+    log_path = log_dir / f"pulse_pr_ci_gate_update-{int(time.time())}.log"
+    env = dict(os.environ)
+    env["AO2_PULSE_PR_CI_GATE_UPDATE_STATE"] = str(pr_ci_gate_state)
+    env.setdefault("AO2_PULSE_PR_CI_GATE_UPDATE_ROOT", str(out_root / "pr-ci-gate-update"))
+    with log_path.open("w", encoding="utf-8") as log:
+        log.write("$ npm run pulse:pr-ci-gate:update\n")
+        log.write(f"reason={reason}\n")
+        log.write(f"AO2_PULSE_PR_CI_GATE_UPDATE_STATE={pr_ci_gate_state}\n")
+        log.flush()
+        result = subprocess.run("npm run pulse:pr-ci-gate:update", cwd=root, shell=True, env=env, stdout=log, stderr=subprocess.STDOUT)
+    payload["pr_ci_gate_update"] = {
+        "command": "pulse:pr-ci-gate:update",
+        "status": "passed" if result.returncode == 0 else "failed",
+        "exit_code": int(result.returncode),
+        "log": str(log_path),
+        "state_path": str(pr_ci_gate_state),
+        "reason": reason,
+    }
+    if result.returncode != 0:
+        payload["pr_ci_gate"] = {
+            "schema_version": "ao2.pulse-pr-ci-gate.v1",
+            "enabled": pr_ci_gate_enabled,
+            "update_enabled": pr_ci_gate_update_enabled,
+            "state_path": str(pr_ci_gate_state),
+            "status": "waiting",
+            "reason": "waiting_for_pr_merge_or_ci",
+            "detail": "pr_ci_gate_update_failed",
+            "required_checks": [],
+        }
+        payload["pulse_generate_next"] = {
+            "command": "pulse:generate-next",
+            "status": "skipped",
+            "reason": "waiting_for_pr_merge_or_ci",
+            "gate_status": "waiting",
+        }
+        payload["generated_next_packet"] = False
+        payload["register_next_packet"] = False
+        payload["status"] = "waiting"
+        payload["reason"] = "waiting_for_pr_merge_or_ci"
+        payload["generated_at_utc"] = utc_now()
+        write_summary(payload)
+        return False
+    return True
+
 def pulse_generate_next(reason: str) -> bool:
     if not forever or GENERATE_NEXT != "1":
+        return False
+    if not refresh_pr_ci_gate(reason):
         return False
     gate = load_pr_ci_gate(reason)
     payload["pr_ci_gate"] = gate
