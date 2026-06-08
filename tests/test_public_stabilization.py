@@ -1204,6 +1204,8 @@ def test_pulse_task_executor_contract_supports_product_code_tasks():
         "ao2.pulse-task-manifest.v1",
         "ao2.pulse-task-executor.v1",
         "product_code",
+        "product_code_execution",
+        "pulse:code-agent-runner",
         "evidence_gate",
         "implementation-packets",
         "trust_boundary",
@@ -1221,6 +1223,7 @@ def test_pulse_task_executor_contract_supports_product_code_tasks():
         "ao2.pulse-task-executor.v1",
         "ao2.pulse-task-manifest.v1",
         "product-code implementation packets",
+        "product-code tasks can opt into `pulse:code-agent-runner`",
         "product_code tasks require verification evidence",
         "product_code task cannot close from packet materialization alone",
     ]:
@@ -1299,6 +1302,153 @@ def test_pulse_task_executor_materializes_product_code_packet_without_command(tm
     gate_result = [item for item in summary["results"] if item["id"] == "node-evidence-gate"][0]
     assert gate_result["status"] == "passed"
     assert gate_result["expected_evidence"] == "node.stdout.ok"
+
+
+def test_pulse_task_executor_dry_runs_product_code_through_code_agent_runner(tmp_path):
+    out_root = tmp_path / "executor"
+    repo_root = tmp_path / "ao2-feature"
+    repo_root.mkdir()
+    (repo_root / "src.txt").write_text("before\n", encoding="utf-8")
+    subprocess.run(["git", "init"], cwd=repo_root, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "config", "user.email", "ao2@example.invalid"], cwd=repo_root, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "config", "user.name", "AO2 Test"], cwd=repo_root, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "add", "."], cwd=repo_root, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "commit", "-m", "seed"], cwd=repo_root, capture_output=True, text=True, check=True)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.pulse-task-manifest.v1",
+                "trust_boundary": {
+                    "local_only": True,
+                    "stores_credentials": False,
+                    "side_effects": "local_process_execution_and_packet_materialization",
+                },
+                "product_code_execution": {"enabled": True, "mode": "dry_run"},
+                "tasks": [
+                    {
+                        "id": "local-agent-write",
+                        "kind": "product_code",
+                        "title": "Local agent write",
+                        "objective": "Validate product-code runner packet.",
+                        "repo": "ao2-feature",
+                        "repo_path": str(repo_root),
+                        "branch": "codex/local-agent-write",
+                        "files": ["src.txt"],
+                        "acceptance": ["src.txt can be updated by guarded runner."],
+                        "verification": [
+                            {
+                                "command": "python3 -c \"from pathlib import Path; assert Path('src.txt').exists()\"",
+                                "expected_evidence": "local.file.exists",
+                            }
+                        ],
+                        "stop_conditions": ["Stop if unrelated dirty files are present."],
+                    }
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:task-executor"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_TASK_EXECUTOR_MANIFEST": str(manifest),
+            "AO2_PULSE_TASK_EXECUTOR_ROOT": str(out_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "passed"
+    product = summary["results"][0]
+    assert product["status"] == "code_agent_dry_run_passed"
+    assert product["code_agent_summary"]
+    runner = json.loads(Path(product["code_agent_summary"]).read_text(encoding="utf-8"))
+    assert runner["schema_version"] == "ao2.pulse-code-agent-runner.v1"
+    assert runner["mode"] == "dry_run"
+    assert runner["task"]["allowed_files"] == ["src.txt"]
+
+
+def test_pulse_task_executor_executes_product_code_through_code_agent_runner_when_enabled(tmp_path):
+    out_root = tmp_path / "executor"
+    repo_root = tmp_path / "ao2-feature"
+    repo_root.mkdir()
+    (repo_root / "src.txt").write_text("before\n", encoding="utf-8")
+    subprocess.run(["git", "init"], cwd=repo_root, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "config", "user.email", "ao2@example.invalid"], cwd=repo_root, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "config", "user.name", "AO2 Test"], cwd=repo_root, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "add", "."], cwd=repo_root, capture_output=True, text=True, check=True)
+    subprocess.run(["git", "commit", "-m", "seed"], cwd=repo_root, capture_output=True, text=True, check=True)
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.pulse-task-manifest.v1",
+                "trust_boundary": {
+                    "local_only": True,
+                    "stores_credentials": False,
+                    "side_effects": "local_process_execution_and_packet_materialization",
+                },
+                "product_code_execution": {"enabled": True, "mode": "execute"},
+                "tasks": [
+                    {
+                        "id": "local-agent-write",
+                        "kind": "product_code",
+                        "title": "Local agent write",
+                        "objective": "Execute product-code runner packet.",
+                        "repo": "ao2-feature",
+                        "repo_path": str(repo_root),
+                        "branch": "codex/local-agent-write",
+                        "files": ["src.txt"],
+                        "acceptance": ["src.txt contains after."],
+                        "verification": [
+                            {
+                                "command": "python3 -c \"from pathlib import Path; assert Path('src.txt').read_text() == 'after\\n'\"",
+                                "expected_evidence": "local.file.updated",
+                            }
+                        ],
+                        "code_agent": {
+                            "command": "python3 -c \"from pathlib import Path; Path('src.txt').write_text('after\\\\n', encoding='utf-8')\""
+                        },
+                        "stop_conditions": ["Stop if unrelated dirty files are present."],
+                    }
+                ],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:task-executor"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_CODE_AGENT_EXECUTE": "1",
+            "AO2_PULSE_TASK_EXECUTOR_MANIFEST": str(manifest),
+            "AO2_PULSE_TASK_EXECUTOR_ROOT": str(out_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "passed"
+    product = summary["results"][0]
+    assert product["status"] == "code_agent_execute_passed"
+    runner = json.loads(Path(product["code_agent_summary"]).read_text(encoding="utf-8"))
+    assert runner["mode"] == "execute"
+    assert runner["execution"]["invoked_code_agent"] is True
+    assert runner["verification_results"][0]["status"] == "passed"
 
 
 def test_pulse_task_executor_rejects_credential_storing_manifest(tmp_path):

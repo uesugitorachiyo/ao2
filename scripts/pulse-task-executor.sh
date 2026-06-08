@@ -15,6 +15,7 @@ python3 - "$ROOT" "$MANIFEST" "$OUT_ROOT" "$SUMMARY" "$LOG_DIR" "$PACKET_DIR" <<
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -76,6 +77,10 @@ def require_string_list(value: object, reason: str) -> list[str]:
 def slug(value: str) -> str:
     clean = re.sub(r"[^A-Za-z0-9._-]+", "-", value).strip("-")
     return clean or "task"
+
+
+def shell_quote(value: str) -> str:
+    return shlex.quote(value)
 
 
 def render_verification(items: object) -> list[str]:
@@ -158,6 +163,73 @@ def materialize_product_packet(task: dict) -> dict:
     }
 
 
+def product_code_task_payload(task: dict) -> dict:
+    task_id = require_string(task.get("id"), "product_code_id_missing")
+    title = require_string(task.get("title"), "product_code_title_missing")
+    objective = require_string(task.get("objective"), "product_code_objective_missing")
+    repo = task.get("repo")
+    branch = task.get("branch")
+    files = require_string_list(task.get("files"), "product_code_files_missing")
+    acceptance = require_string_list(task.get("acceptance"), "product_code_acceptance_missing")
+    stop_conditions = task.get("stop_conditions") if isinstance(task.get("stop_conditions"), list) else []
+    stop_lines = [str(item).strip() for item in stop_conditions if str(item).strip()]
+    payload = {
+        "schema_version": "ao2.pulse-code-agent-task.v1",
+        "id": task_id,
+        "title": title,
+        "objective": objective,
+        "repo": repo if isinstance(repo, str) and repo.strip() else root.name,
+        "branch": branch if isinstance(branch, str) and branch.strip() else f"codex/{slug(task_id)}",
+        "allowed_files": files,
+        "acceptance": acceptance,
+        "verification": task.get("verification"),
+        "stop_conditions": stop_lines or ["Stop if the task requires provider API keys or credential storage."],
+        "trust_boundary": {
+            "local_only": True,
+            "stores_credentials": False,
+            "side_effects": "local_code_agent_execution",
+        },
+    }
+    for optional in ["repo_path", "code_agent"]:
+        if optional in task:
+            payload[optional] = task[optional]
+    return payload
+
+
+def run_product_code_agent(task: dict, execution: dict) -> dict:
+    task_id = require_string(task.get("id"), "product_code_id_missing")
+    title = require_string(task.get("title"), "product_code_title_missing")
+    mode = execution.get("mode")
+    if mode not in {"dry_run", "execute"}:
+        fail("product_code_execution_mode_unsupported")
+    task_json = packet_dir / f"{slug(task_id)}.code-agent-task.json"
+    task_json.write_text(json.dumps(product_code_task_payload(task), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    runner_root = out_root / "code-agent-runner" / slug(task_id)
+    log_path = log_dir / f"{slug(task_id)}-code-agent-runner.log"
+    env = dict(os.environ)
+    env["AO2_PULSE_CODE_AGENT_RUNNER_ROOT"] = str(runner_root)
+    command = f"npm run pulse:code-agent-runner -- --task {shell_quote(str(task_json))} --{mode.replace('_', '-')}"
+    with log_path.open("w", encoding="utf-8") as log:
+        log.write(f"$ {command}\n")
+        log.write(f"AO2_PULSE_CODE_AGENT_RUNNER_ROOT={runner_root}\n")
+        log.flush()
+        result = subprocess.run(command, cwd=root, shell=True, env=env, stdout=log, stderr=subprocess.STDOUT)
+    status = "code_agent_dry_run_passed" if mode == "dry_run" else "code_agent_execute_passed"
+    if result.returncode != 0:
+        status = "code_agent_failed"
+    return {
+        "id": task_id,
+        "kind": "product_code",
+        "title": title,
+        "status": status,
+        "exit_code": int(result.returncode),
+        "mode": mode,
+        "code_agent_task": str(task_json),
+        "code_agent_summary": str(runner_root / "summary.json"),
+        "log": str(log_path),
+    }
+
+
 def run_executable_task(task: dict, index: int) -> dict:
     task_id = require_string(task.get("id"), "executable_task_id_missing")
     kind = require_string(task.get("kind"), "executable_task_kind_missing")
@@ -207,6 +279,10 @@ if trust_boundary.get("stores_credentials") is not False:
 tasks = manifest.get("tasks")
 if not isinstance(tasks, list) or not tasks:
     fail("tasks_missing")
+product_code_execution = manifest.get("product_code_execution")
+if product_code_execution is not None and not isinstance(product_code_execution, dict):
+    fail("product_code_execution_invalid")
+product_code_execution_enabled = isinstance(product_code_execution, dict) and product_code_execution.get("enabled") is True
 
 seen_ids: set[str] = set()
 for index, task in enumerate(tasks, start=1):
@@ -230,7 +306,18 @@ for index, task in enumerate(tasks, start=1):
                 "reason": "product_code_verification_evidence_missing",
             })
             fail("product_code_verification_evidence_missing")
-        payload["results"].append(materialize_product_packet(task))
+        if product_code_execution_enabled:
+            result = run_product_code_agent(task, product_code_execution)
+            payload["results"].append(result)
+            if result["status"] not in {"code_agent_dry_run_passed", "code_agent_execute_passed"}:
+                payload["status"] = "failed"
+                payload["reason"] = "product_code_agent_failed"
+                write_summary()
+                print(f"summary={summary_path}")
+                print("status=failed")
+                raise SystemExit(int(result.get("exit_code") or 1))
+        else:
+            payload["results"].append(materialize_product_packet(task))
     elif kind in EXECUTABLE_KINDS:
         result = run_executable_task(task, index)
         payload["results"].append(result)
