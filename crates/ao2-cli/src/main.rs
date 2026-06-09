@@ -69919,10 +69919,16 @@ fn package_release(
         )
     })?;
     let binary_sha256 = sha256_file(&staged_binary)?;
+    write_installer_scripts(&stage_dir, binary_name)?;
+    write_release_verifier_scripts(&stage_dir)?;
+    fs::write(stage_dir.join("VERSION"), format!("{version}\n"))?;
     fs::write(
-        stage_dir.join("SHA256SUMS"),
-        format!("{binary_sha256}  bin/{binary_name}\n"),
+        stage_dir.join("README.txt"),
+        format!(
+            "AO2 {version}\n\nVerify this archive offline before installing:\n  sh verify-release.sh\n\nAdd this package's bin directory to PATH, then run:\n  ao2 --help\n"
+        ),
     )?;
+
     let manifest = serde_json::json!({
         "schema_version": "ao2.release-manifest.v1",
         "package": package_name,
@@ -69932,20 +69938,64 @@ fn package_release(
         "binary_path": format!("bin/{binary_name}"),
         "binary_sha256": binary_sha256,
         "installers": ["install.sh", "install.ps1"],
+        "verifiers": ["verify-release.sh", "Verify-Release.ps1"],
+        "verification_report": "RELEASE-VERIFICATION.json",
         "checksum_file": "SHA256SUMS"
     });
     fs::write(
         stage_dir.join("RELEASE-MANIFEST.json"),
         serde_json::to_string_pretty(&manifest)?,
     )?;
-    write_installer_scripts(&stage_dir, binary_name)?;
-    fs::write(stage_dir.join("VERSION"), format!("{version}\n"))?;
+
+    let checksum_paths = vec![
+        format!("bin/{binary_name}"),
+        "RELEASE-MANIFEST.json".to_string(),
+        "RELEASE-VERIFICATION.json".to_string(),
+        "install.sh".to_string(),
+        "install.ps1".to_string(),
+        "verify-release.sh".to_string(),
+        "Verify-Release.ps1".to_string(),
+        "README.txt".to_string(),
+        "VERSION".to_string(),
+    ];
+    let verification_report = serde_json::json!({
+        "schema_version": "ao2.release-archive-offline-verification.v1",
+        "status": "packaged",
+        "package": package_name,
+        "version": version,
+        "target": target,
+        "binary": binary_name,
+        "binary_path": format!("bin/{binary_name}"),
+        "checksum_file": "SHA256SUMS",
+        "checksum_coverage": checksum_paths,
+        "verifiers": ["verify-release.sh", "Verify-Release.ps1"],
+        "provider_api_keys_required": false,
+        "control_plane_role": "read_only_observer_after_signed_evidence",
+        "control_plane_approves_release": false,
+        "mutates_ao_artifacts": false,
+        "release_acceptance_owner": "factory-v3 evaluator-closer"
+    });
     fs::write(
-        stage_dir.join("README.txt"),
-        format!(
-            "AO2 {version}\n\nAdd this package's bin directory to PATH, then run:\n  ao2 --help\n"
-        ),
+        stage_dir.join("RELEASE-VERIFICATION.json"),
+        serde_json::to_string_pretty(&verification_report)?,
     )?;
+
+    let mut checksum_text = String::new();
+    for relative_path in [
+        format!("bin/{binary_name}"),
+        "RELEASE-MANIFEST.json".to_string(),
+        "RELEASE-VERIFICATION.json".to_string(),
+        "install.sh".to_string(),
+        "install.ps1".to_string(),
+        "verify-release.sh".to_string(),
+        "Verify-Release.ps1".to_string(),
+        "README.txt".to_string(),
+        "VERSION".to_string(),
+    ] {
+        let digest = sha256_file(&stage_dir.join(&relative_path))?;
+        checksum_text.push_str(&format!("{digest}  {relative_path}\n"));
+    }
+    fs::write(stage_dir.join("SHA256SUMS"), checksum_text)?;
 
     let archive_path = out_dir.join(format!("{package_name}.tar.gz"));
     create_tar_gz(&stage_dir, &archive_path)?;
@@ -69985,6 +70035,17 @@ fn write_installer_scripts(stage_dir: &Path, binary_name: &str) -> Result<()> {
     fs::write(
         stage_dir.join("install.ps1"),
         windows_installer_script(binary_name),
+    )?;
+    Ok(())
+}
+
+fn write_release_verifier_scripts(stage_dir: &Path) -> Result<()> {
+    let verify_sh = stage_dir.join("verify-release.sh");
+    fs::write(&verify_sh, unix_release_verifier_script())?;
+    make_executable(&verify_sh)?;
+    fs::write(
+        stage_dir.join("Verify-Release.ps1"),
+        windows_release_verifier_script(),
     )?;
     Ok(())
 }
@@ -70036,6 +70097,47 @@ echo "add $install_dir to PATH if ao2 is not already available"
     )
 }
 
+fn unix_release_verifier_script() -> &'static str {
+    r#"#!/bin/sh
+set -eu
+
+source_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+checksum_file="$source_dir/SHA256SUMS"
+manifest_file="$source_dir/RELEASE-MANIFEST.json"
+report_file="$source_dir/RELEASE-VERIFICATION.json"
+
+if [ ! -f "$checksum_file" ]; then
+  echo "missing checksum file: $checksum_file" >&2
+  exit 1
+fi
+if [ ! -f "$manifest_file" ]; then
+  echo "missing release manifest: $manifest_file" >&2
+  exit 1
+fi
+if [ ! -f "$report_file" ]; then
+  echo "missing release verification report: $report_file" >&2
+  exit 1
+fi
+
+if command -v sha256sum >/dev/null 2>&1; then
+  (cd "$source_dir" && sha256sum -c SHA256SUMS >/dev/null)
+elif command -v shasum >/dev/null 2>&1; then
+  (cd "$source_dir" && shasum -a 256 -c SHA256SUMS >/dev/null)
+else
+  echo "sha256sum or shasum is required to verify the release archive" >&2
+  exit 1
+fi
+
+printf '{\n'
+printf '  "schema_version": "ao2.release-archive-offline-verification.v1",\n'
+printf '  "status": "verified",\n'
+printf '  "checksum_file": "SHA256SUMS",\n'
+printf '  "manifest": "RELEASE-MANIFEST.json",\n'
+printf '  "verification_report": "RELEASE-VERIFICATION.json"\n'
+printf '}\n'
+"#
+}
+
 fn windows_installer_script(binary_name: &str) -> String {
     format!(
         r#"$ErrorActionPreference = "Stop"
@@ -70074,6 +70176,58 @@ Write-Output "installed $DestBinary"
 Write-Output "add $InstallDir to PATH if ao2 is not already available"
 "#
     )
+}
+
+fn windows_release_verifier_script() -> &'static str {
+    r#"$ErrorActionPreference = "Stop"
+
+$SourceDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ChecksumFile = Join-Path $SourceDir "SHA256SUMS"
+$ManifestFile = Join-Path $SourceDir "RELEASE-MANIFEST.json"
+$ReportFile = Join-Path $SourceDir "RELEASE-VERIFICATION.json"
+
+if (!(Test-Path $ChecksumFile)) {
+    throw "missing checksum file: $ChecksumFile"
+}
+if (!(Test-Path $ManifestFile)) {
+    throw "missing release manifest: $ManifestFile"
+}
+if (!(Test-Path $ReportFile)) {
+    throw "missing release verification report: $ReportFile"
+}
+
+Get-Content $ChecksumFile | ForEach-Object {
+    $Line = $_.Trim()
+    if (!$Line) {
+        return
+    }
+    $Parts = $Line -split "\s+", 2
+    if ($Parts.Length -ne 2) {
+        throw "invalid SHA256SUMS line: $Line"
+    }
+    $Expected = $Parts[0].ToLowerInvariant()
+    $RelativePath = $Parts[1].Trim()
+    if ([IO.Path]::IsPathRooted($RelativePath) -or $RelativePath.Contains("..")) {
+        throw "unsafe SHA256SUMS path: $RelativePath"
+    }
+    $Path = Join-Path $SourceDir $RelativePath
+    if (!(Test-Path $Path)) {
+        throw "missing checksummed file: $RelativePath"
+    }
+    $Actual = (Get-FileHash -Algorithm SHA256 $Path).Hash.ToLowerInvariant()
+    if ($Actual -ne $Expected) {
+        throw "checksum mismatch for $RelativePath"
+    }
+}
+
+[ordered]@{
+    schema_version = "ao2.release-archive-offline-verification.v1"
+    status = "verified"
+    checksum_file = "SHA256SUMS"
+    manifest = "RELEASE-MANIFEST.json"
+    verification_report = "RELEASE-VERIFICATION.json"
+} | ConvertTo-Json -Depth 3
+"#
 }
 
 fn open_report_target(path: &Path) -> Result<()> {
