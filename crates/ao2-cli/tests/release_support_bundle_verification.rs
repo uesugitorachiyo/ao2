@@ -25,11 +25,14 @@ fn write_bundle(path: &Path, mut overlay: serde_json::Value) {
         "release_assembly": {
             "schema_version": "ao2.cp-release-assembly.v1",
             "status": "assembled",
+            "candidate_correlation": "matched",
+            "candidate_correlation_detail": candidate_correlation(),
             "control_plane_approves_release": false
         },
         "readiness": {
             "schema_version": "ao2.cp-release-readiness.v1",
             "status": "ready",
+            "candidate_correlation": candidate_correlation(),
             "operator_decision": {
                 "control_plane_approves_release": false,
                 "factory_v3_evaluator_closer_required": true
@@ -38,13 +41,18 @@ fn write_bundle(path: &Path, mut overlay: serde_json::Value) {
         "handoff": {
             "schema_version": "factory-v3/ao2-release-handoff-checklist/v1",
             "status": "ready_for_evaluator_closer",
+            "candidate_correlation": candidate_correlation(),
             "trust_boundary": {
                 "control_plane_role": "read_only_observer",
                 "control_plane_approves_release": false,
                 "release_acceptance_owner": "factory-v3 evaluator-closer"
             }
         },
-        "cockpit": {"schema_version": "ao2.cp-release-cockpit.v1", "status": "ready"},
+        "cockpit": {
+            "schema_version": "ao2.cp-release-cockpit.v1",
+            "status": "ready",
+            "candidate_correlation": candidate_correlation()
+        },
         "evaluator_decision": {
             "schema_version": "factory-v3/ao2-release-evaluator-decision/v1",
             "status": "accepted",
@@ -64,8 +72,17 @@ fn write_bundle(path: &Path, mut overlay: serde_json::Value) {
             "release_acceptance_owner": "factory-v3 evaluator-closer",
             "control_plane_role": "read_only_observer",
             "control_plane_approves_release": false
+        },
+        "ci_evidence_index": test_ci_evidence_index(),
+        "trust_boundary": {
+            "role": "read_only_observer",
+            "control_plane_role": "read_only_observer",
+            "mutates_ao_artifacts": false,
+            "control_plane_approves_release": false,
+            "release_acceptance_owner": "factory-v3 evaluator-closer"
         }
     });
+    add_portable_manifest(&mut bundle);
     if !overlay.is_null() {
         merge_json(&mut bundle, &mut overlay);
     }
@@ -96,6 +113,18 @@ fn passed_install_verification() -> serde_json::Value {
     })
 }
 
+fn candidate_correlation() -> serde_json::Value {
+    serde_json::json!({
+        "status": "matched",
+        "blockers": [],
+        "release_version": "0.4.80",
+        "three_os_version": "0.4.80",
+        "evaluator_decision": "accepted",
+        "codex_acceptance": "accepted",
+        "claude_acceptance": "accepted",
+    })
+}
+
 fn merge_json(base: &mut serde_json::Value, overlay: &mut serde_json::Value) {
     match (base, overlay) {
         (serde_json::Value::Object(base), serde_json::Value::Object(overlay)) => {
@@ -107,11 +136,143 @@ fn merge_json(base: &mut serde_json::Value, overlay: &mut serde_json::Value) {
     }
 }
 
-fn sha256_path(path: &Path) -> String {
-    let body = fs::read(path).unwrap();
+fn canonical_sha256(value: &serde_json::Value) -> String {
+    let mut canonical = String::new();
+    write_canonical_value(&mut canonical, value);
     let mut hasher = Sha256::new();
-    hasher.update(body);
+    hasher.update(canonical.as_bytes());
     format!("{:x}", hasher.finalize())
+}
+
+fn write_canonical_value(out: &mut String, value: &serde_json::Value) {
+    match value {
+        serde_json::Value::Null => out.push_str("null"),
+        serde_json::Value::Bool(flag) => out.push_str(if *flag { "true" } else { "false" }),
+        serde_json::Value::Number(number) => out.push_str(&number.to_string()),
+        serde_json::Value::String(text) => write_canonical_string(out, text),
+        serde_json::Value::Array(items) => {
+            out.push('[');
+            for (index, item) in items.iter().enumerate() {
+                if index > 0 {
+                    out.push(',');
+                }
+                write_canonical_value(out, item);
+            }
+            out.push(']');
+        }
+        serde_json::Value::Object(map) => {
+            let mut keys: Vec<_> = map.keys().collect();
+            keys.sort();
+            out.push('{');
+            for (index, key) in keys.iter().enumerate() {
+                if index > 0 {
+                    out.push(',');
+                }
+                write_canonical_string(out, key);
+                out.push(':');
+                write_canonical_value(out, &map[*key]);
+            }
+            out.push('}');
+        }
+    }
+}
+
+fn write_canonical_string(out: &mut String, text: &str) {
+    out.push('"');
+    for ch in text.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\u{08}' => out.push_str("\\b"),
+            '\u{0c}' => out.push_str("\\f"),
+            ch if (ch as u32) < 0x20 => {
+                use std::fmt::Write as _;
+                write!(out, "\\u{:04x}", ch as u32).unwrap();
+            }
+            ch => out.push(ch),
+        }
+    }
+    out.push('"');
+}
+
+fn add_portable_manifest(bundle: &mut serde_json::Value) {
+    let surfaces = [
+        (
+            "ci_evidence_index",
+            "ci_evidence_index",
+            "$.ci_evidence_index",
+        ),
+        (
+            "install_verification",
+            "install_verification",
+            "$.install_verification",
+        ),
+        ("release_assembly", "release_assembly", "$.release_assembly"),
+        ("release_readiness", "readiness", "$.readiness"),
+        ("release_candidate_handoff", "handoff", "$.handoff"),
+        ("release_cockpit", "cockpit", "$.cockpit"),
+        (
+            "release_evaluator_decision",
+            "evaluator_decision",
+            "$.evaluator_decision",
+        ),
+        (
+            "storage_support_bundle",
+            "storage_support",
+            "$.storage_support",
+        ),
+    ];
+    let mut included = Vec::new();
+    let mut sha_map = serde_json::Map::new();
+    for (id, key, path) in surfaces {
+        let surface = &bundle[key];
+        let sha = canonical_sha256(surface);
+        sha_map.insert(id.to_string(), serde_json::Value::String(sha.clone()));
+        included.push(serde_json::json!({
+            "id": id,
+            "schema_version": surface["schema_version"].as_str().unwrap_or(""),
+            "path": path,
+            "sha256": sha,
+        }));
+    }
+    bundle["portable_bundle_manifest"] = serde_json::json!({
+        "schema_version": "ao2.cp-release-support-bundle-manifest.v1",
+        "included_surfaces": included,
+        "integrity": {
+            "algorithm": "sha256-ao2-cp-canonical-json-v1",
+            "scope": "embedded_support_bundle_surfaces",
+            "surface_sha256": sha_map,
+            "verification_plan": {
+                "surface_count": surfaces.len(),
+                "expected_fail_closed": true
+            }
+        }
+    });
+}
+
+fn test_ci_evidence_index() -> serde_json::Value {
+    serde_json::json!({
+        "schema_version": "ao2.cp-ci-evidence-index.v1",
+        "status": "indexed",
+        "control_plane_role": "read-only-observer",
+        "mutates_ao_artifacts": false,
+        "control_plane_approves_release": false,
+        "auth": {
+            "required": true,
+            "scheme": "bearer",
+            "credential_material_included": false,
+            "credential_material_in_urls": false
+        },
+        "evidence_families": [
+            {"id": "risky-pr-golden-bridge-smoke", "artifact_name_pattern": "ao2-control-plane-risky-pr-golden-bridge-<target>", "schema_versions": ["ao2.cp-risky-pr-golden-bridge-smoke.v1"], "operator_action": "download-ci-artifact"},
+            {"id": "ingest-smoke", "artifact_name_pattern": "ao2-control-plane-ingest-smoke-<target>", "schema_versions": ["ao2.cp-ingest-smoke.v1"], "operator_action": "download-ci-artifact"},
+            {"id": "release-archive-smoke", "artifact_name_pattern": "ao2-control-plane-smoke-<target>", "schema_versions": ["ao2.cp-release-archive-smoke.v1"], "operator_action": "download-ci-artifact"},
+            {"id": "backup-restore-drill", "artifact_name_pattern": "ao2-control-plane-dr-restore", "schema_versions": ["ao2.cp-dr-restore-drill.v1"], "operator_action": "download-ci-artifact"}
+        ]
+    })
 }
 
 fn verify_bundle(bundle: &Path) -> std::process::Output {
@@ -161,6 +322,8 @@ fn write_support_bundle_evidence(evidence_dir: &Path) -> SupportBundleEvidencePa
         serde_json::json!({
             "schema_version": "ao2.cp-release-assembly.v1",
             "status": "assembled",
+            "candidate_correlation": "matched",
+            "candidate_correlation_detail": candidate_correlation(),
             "control_plane_approves_release": false
         }),
     );
@@ -169,6 +332,7 @@ fn write_support_bundle_evidence(evidence_dir: &Path) -> SupportBundleEvidencePa
         serde_json::json!({
             "schema_version": "ao2.cp-release-readiness.v1",
             "status": "ready",
+            "candidate_correlation": candidate_correlation(),
             "operator_decision": {
                 "control_plane_approves_release": false,
                 "factory_v3_evaluator_closer_required": true
@@ -180,6 +344,7 @@ fn write_support_bundle_evidence(evidence_dir: &Path) -> SupportBundleEvidencePa
         serde_json::json!({
             "schema_version": "factory-v3/ao2-release-handoff-checklist/v1",
             "status": "ready_for_evaluator_closer",
+            "candidate_correlation": candidate_correlation(),
             "trust_boundary": {
                 "control_plane_role": "read_only_observer",
                 "control_plane_approves_release": false,
@@ -189,7 +354,11 @@ fn write_support_bundle_evidence(evidence_dir: &Path) -> SupportBundleEvidencePa
     );
     write_json(
         &paths.cockpit,
-        serde_json::json!({"schema_version": "ao2.cp-release-cockpit.v1", "status": "ready"}),
+        serde_json::json!({
+            "schema_version": "ao2.cp-release-cockpit.v1",
+            "status": "ready",
+            "candidate_correlation": candidate_correlation()
+        }),
     );
     write_json(
         &paths.evaluator_decision,
@@ -398,6 +567,36 @@ fn release_support_bundle_verify_rejects_missing_or_unsafe_install_verification(
 }
 
 #[test]
+fn release_support_bundle_verify_rejects_missing_candidate_correlation() {
+    let temp = tempfile::tempdir().unwrap();
+    let bundle_path = temp.path().join("release-support-bundle.json");
+    write_bundle(
+        &bundle_path,
+        serde_json::json!({
+            "cockpit": {
+                "candidate_correlation": null
+            }
+        }),
+    );
+
+    let verify = verify_bundle(&bundle_path);
+    assert!(
+        !verify.status.success(),
+        "support verifier should fail missing candidate correlation"
+    );
+    let json: serde_json::Value = serde_json::from_str(&stdout(&verify)).unwrap();
+    let failures = json["failures"].as_array().unwrap();
+    assert!(
+        failures.iter().any(|failure| {
+            failure["code"] == "candidate_correlation_invalid"
+                && failure["surface"] == "release_cockpit"
+        }),
+        "expected candidate_correlation_invalid, got {failures:?}"
+    );
+    assert!(stderr(&verify).contains("release support bundle verification failed"));
+}
+
+#[test]
 fn release_support_bundle_verify_rejects_checksum_digest_mismatch() {
     let temp = tempfile::tempdir().unwrap();
     let bundle_path = temp.path().join("release-support-bundle.json");
@@ -532,7 +731,9 @@ fn release_support_bundle_verify_accepts_complete_evidence_bundle_with_checksum(
     let temp = tempfile::tempdir().unwrap();
     let bundle_path = temp.path().join("release-support-bundle.json");
     write_bundle(&bundle_path, serde_json::Value::Null);
-    let bundle_sha256 = sha256_path(&bundle_path);
+    let bundle_json: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&bundle_path).unwrap()).unwrap();
+    let bundle_sha256 = canonical_sha256(&bundle_json);
     let checksums_path = temp.path().join("SHA256SUMS");
     fs::write(
         &checksums_path,
@@ -577,6 +778,8 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
         serde_json::json!({
             "schema_version": "ao2.cp-release-assembly.v1",
             "status": "assembled",
+            "candidate_correlation": "matched",
+            "candidate_correlation_detail": candidate_correlation(),
             "control_plane_approves_release": false
         }),
     );
@@ -585,6 +788,7 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
         serde_json::json!({
             "schema_version": "ao2.cp-release-readiness.v1",
             "status": "ready",
+            "candidate_correlation": candidate_correlation(),
             "operator_decision": {
                 "control_plane_approves_release": false,
                 "factory_v3_evaluator_closer_required": true
@@ -596,6 +800,7 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
         serde_json::json!({
             "schema_version": "factory-v3/ao2-release-handoff-checklist/v1",
             "status": "ready_for_evaluator_closer",
+            "candidate_correlation": candidate_correlation(),
             "trust_boundary": {
                 "control_plane_role": "read_only_observer",
                 "control_plane_approves_release": false,
@@ -605,7 +810,11 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
     );
     write_json(
         &cockpit,
-        serde_json::json!({"schema_version": "ao2.cp-release-cockpit.v1", "status": "ready"}),
+        serde_json::json!({
+            "schema_version": "ao2.cp-release-cockpit.v1",
+            "status": "ready",
+            "candidate_correlation": candidate_correlation()
+        }),
     );
     write_json(
         &evaluator_decision,
@@ -698,6 +907,36 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
         "ao2.install-verification-evidence.v1"
     );
     assert_eq!(bundle_json["install_verification"]["status"], "verified");
+    assert_eq!(
+        bundle_json["ci_evidence_index"]["schema_version"],
+        "ao2.cp-ci-evidence-index.v1"
+    );
+    assert_eq!(
+        bundle_json["portable_bundle_manifest"]["schema_version"],
+        "ao2.cp-release-support-bundle-manifest.v1"
+    );
+    let surface_ids = bundle_json["portable_bundle_manifest"]["included_surfaces"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|surface| surface["id"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        surface_ids,
+        vec![
+            "ci_evidence_index",
+            "install_verification",
+            "release_assembly",
+            "release_readiness",
+            "release_candidate_handoff",
+            "release_cockpit",
+            "release_evaluator_decision",
+            "storage_support_bundle",
+        ]
+    );
+    let checksums = fs::read_to_string(&checksums_path).unwrap();
+    assert!(checksums.contains(build_json["bundle_sha256"].as_str().unwrap()));
+    assert_eq!(build_json["bundle_sha256"], canonical_sha256(&bundle_json));
 
     let verify = ao2([
         "release",

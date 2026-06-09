@@ -104,6 +104,15 @@ trust_boundary = {
     "control_plane_approves_release": False,
     "release_acceptance_owner": "factory-v3 evaluator-closer",
 }
+candidate_correlation = {
+    "status": "matched",
+    "blockers": [],
+    "release_version": "0.4.80",
+    "three_os_version": "0.4.80",
+    "evaluator_decision": "accepted",
+    "codex_acceptance": "accepted",
+    "claude_acceptance": "accepted",
+}
 source = {
     "producer": "risky-pr-golden-path",
     "run_id": run_id,
@@ -117,12 +126,15 @@ source = {
 write("release-assembly.json", {
     "schema_version": "ao2.cp-release-assembly.v1",
     "status": "assembled",
+    "candidate_correlation": "matched",
+    "candidate_correlation_detail": candidate_correlation,
     "control_plane_approves_release": False,
     "source": source,
 })
 write("readiness.json", {
     "schema_version": "ao2.cp-release-readiness.v1",
     "status": "ready",
+    "candidate_correlation": candidate_correlation,
     "operator_decision": {
         "control_plane_approves_release": False,
         "factory_v3_evaluator_closer_required": True,
@@ -133,12 +145,14 @@ write("readiness.json", {
 write("handoff.json", {
     "schema_version": "factory-v3/ao2-release-handoff-checklist/v1",
     "status": "ready_for_evaluator_closer",
+    "candidate_correlation": candidate_correlation,
     "trust_boundary": trust_boundary,
     "source": source,
 })
 write("cockpit.json", {
     "schema_version": "ao2.cp-release-cockpit.v1",
     "status": "ready",
+    "candidate_correlation": candidate_correlation,
     "source": source,
 })
 write("evaluator-decision.json", {
