@@ -2745,6 +2745,32 @@ fn risky_pr_golden_ci_uploads_release_support_bundle_artifacts() {
 }
 
 #[test]
+fn ci_compares_shared_release_support_fixture_with_control_plane() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let ci = fs::read_to_string(root.join(".github/workflows/ci.yml")).expect("ci workflow exists");
+    let verification =
+        fs::read_to_string(root.join("docs/VERIFICATION.md")).expect("verification docs exist");
+
+    for needle in [
+        "release-support-fixture-parity:",
+        "name: Release support fixture parity with ao2-control-plane",
+        "repository: uesugitorachiyo/ao2-control-plane",
+        "path: ao2-control-plane",
+        "cmp -s ao2/tests/fixtures/release-support-bundle-contract-v1.json ao2-control-plane/tests/fixtures/release-support-bundle-contract-v1.json",
+        "shasum -a 256 ao2/tests/fixtures/release-support-bundle-contract-v1.json ao2-control-plane/tests/fixtures/release-support-bundle-contract-v1.json",
+        "target/release-support-fixture-parity/summary.json",
+        "ao2-release-support-fixture-parity",
+    ] {
+        assert!(
+            ci.contains(needle),
+            "missing release-support fixture parity CI marker: {needle}"
+        );
+    }
+    assert!(verification.contains("Release support fixture parity with ao2-control-plane"));
+    assert!(verification.contains("ao2-release-support-fixture-parity"));
+}
+
+#[test]
 fn risky_pr_golden_path_indexes_uploaded_release_support_bundle_artifacts() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let script = fs::read_to_string(root.join("scripts/risky-pr-golden-path.sh"))
