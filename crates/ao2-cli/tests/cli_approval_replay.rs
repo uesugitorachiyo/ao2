@@ -6,8 +6,10 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use flate2::read::GzDecoder;
+use flate2::write::GzEncoder;
+use flate2::Compression;
 use sha2::{Digest, Sha256};
-use tar::Archive;
+use tar::{Archive, Builder};
 
 const TEST_HTTP_ACCEPT_ATTEMPTS: usize = 600;
 
@@ -23958,6 +23960,33 @@ fn cli_install_update_verifies_archive_signature_and_installs_binary() {
     assert_eq!(json["status"], "installed");
     assert_eq!(json["version"], "9.9.9-test");
     assert_eq!(json["signature_verified"], true);
+    assert_eq!(json["offline_verification"]["status"], "verified");
+    assert_eq!(
+        json["offline_verification"]["schema_version"],
+        "ao2.release-archive-offline-verification.v1"
+    );
+    assert_eq!(json["offline_verification"]["checksum_file"], "SHA256SUMS");
+    assert_eq!(
+        json["offline_verification"]["verification_report"],
+        "RELEASE-VERIFICATION.json"
+    );
+    assert_eq!(
+        json["offline_verification"]["checksum_coverage_verified"],
+        true
+    );
+    assert_eq!(
+        json["offline_verification"]["provider_api_keys_required"],
+        false
+    );
+    assert_eq!(
+        json["offline_verification"]["control_plane_approves_release"],
+        false
+    );
+    assert_eq!(json["offline_verification"]["mutates_ao_artifacts"], false);
+    assert_eq!(
+        json["offline_verification"]["release_acceptance_owner"],
+        "factory-v3 evaluator-closer"
+    );
     assert!(Path::new(json["installed_binary"].as_str().unwrap()).is_file());
 
     let installed = Command::new(json["installed_binary"].as_str().unwrap())
@@ -23966,6 +23995,57 @@ fn cli_install_update_verifies_archive_signature_and_installs_binary() {
         .output()
         .unwrap();
     assert!(installed.status.success(), "{}", stderr(&installed));
+}
+
+#[test]
+fn cli_install_update_rejects_signed_archive_without_release_verification_report() {
+    let temp = tempfile::tempdir().unwrap();
+    let dist = temp.path().join("dist");
+    let provenance = temp.path().join("dist-provenance");
+    let install_dir = temp.path().join("bin");
+    let extract_dir = temp.path().join("repacked");
+
+    let package = ao2([
+        "release",
+        "package",
+        "--out-dir",
+        dist.to_str().unwrap(),
+        "--version",
+        "9.9.9-test",
+    ]);
+    assert!(package.status.success(), "{}", stderr(&package));
+    let package_json: serde_json::Value = serde_json::from_str(&stdout(&package)).unwrap();
+    let archive = Path::new(package_json["archive"].as_str().unwrap());
+
+    extract_test_tar_gz(archive, &extract_dir);
+    fs::remove_file(extract_dir.join("RELEASE-VERIFICATION.json")).unwrap();
+    let repacked_archive = dist.join("ao2-9.9.9-test-missing-release-verification.tar.gz");
+    create_test_tar_gz(&extract_dir, &repacked_archive);
+    sign_test_release_archive(temp.path(), &repacked_archive, &provenance);
+
+    let update = ao2([
+        "install",
+        "update",
+        "--archive",
+        repacked_archive.to_str().unwrap(),
+        "--provenance-dir",
+        provenance.to_str().unwrap(),
+        "--install-dir",
+        install_dir.to_str().unwrap(),
+    ]);
+    assert!(
+        !update.status.success(),
+        "install should fail without release verification report"
+    );
+    assert!(
+        stderr(&update).contains("release verification report"),
+        "stderr:\n{}",
+        stderr(&update)
+    );
+    assert!(
+        !install_dir.exists(),
+        "install directory should not be created after verification failure"
+    );
 }
 
 #[test]
@@ -47297,6 +47377,38 @@ fn archive_text_entry(path: &Path, wanted: &str) -> String {
         }
     }
     panic!("missing archive entry {wanted}");
+}
+
+fn extract_test_tar_gz(archive_path: &Path, extract_dir: &Path) {
+    fs::create_dir_all(extract_dir).expect("create extract dir");
+    let archive = fs::File::open(archive_path).expect("open archive");
+    let decoder = GzDecoder::new(archive);
+    let mut archive = Archive::new(decoder);
+    archive.unpack(extract_dir).expect("extract archive");
+}
+
+fn create_test_tar_gz(stage_dir: &Path, archive_path: &Path) {
+    let archive = fs::File::create(archive_path).expect("create archive");
+    let encoder = GzEncoder::new(archive, Compression::default());
+    let mut tar = Builder::new(encoder);
+    tar.append_dir_all(".", stage_dir).expect("append archive");
+    let encoder = tar.into_inner().expect("finish tar");
+    encoder.finish().expect("finish gzip");
+}
+
+fn sign_test_release_archive(root: &Path, archive: &Path, provenance: &Path) {
+    let sign = Command::new(sh_command())
+        .arg("../../scripts/release-sign-provenance.sh")
+        .env("AO2_VERSION", "9.9.9-test")
+        .env("AO2_MACOS_ARCHIVE", archive)
+        .env("AO2_LINUX_ARCHIVE", archive)
+        .env("AO2_LINUX_X86_64_ARCHIVE", archive)
+        .env("AO2_WINDOWS_ARCHIVE", archive)
+        .env("AO2_RELEASE_PROVENANCE_DIR", provenance)
+        .env("AO2_RELEASE_PRIVATE_KEY", root.join("release-key.pem"))
+        .output()
+        .unwrap();
+    assert!(sign.status.success(), "{}", stderr(&sign));
 }
 
 fn ao2<const N: usize>(args: [&str; N]) -> std::process::Output {

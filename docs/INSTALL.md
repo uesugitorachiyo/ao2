@@ -64,6 +64,12 @@ bundle under `target/release-comparison-bundles/`; CI can override those paths
 with `AO2_RELEASE_COMPARISON_DIR`, `AO2_RELEASE_COMPARISON_RESULT`, and
 `AO2_RELEASE_COMPARISON_VERIFICATION`.
 
+`ao2 install update` fails closed unless the signed archive also contains
+`RELEASE-VERIFICATION.json`, `SHA256SUMS`, installer scripts, verifier scripts,
+manifest, README, VERSION, and packaged binary checksum coverage. Successful
+JSON output includes `offline_verification.status = "verified"` before the
+binary is copied into the install directory.
+
 ## macOS
 
 Install or update from a verified local archive:
