@@ -47253,7 +47253,9 @@ fn cli_release_support_bundle_verify_accepts_minimal_cp_bundle_fixture() {
     let temp = tempfile::tempdir().unwrap();
     let bundle_path = temp.path().join("release-support-bundle.json");
     write_minimal_release_support_bundle(&bundle_path, serde_json::Value::Null);
-    let bundle_sha256 = sha256_path(&bundle_path);
+    let bundle_json: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&bundle_path).unwrap()).unwrap();
+    let bundle_sha256 = canonical_sha256_for_test(&bundle_json);
     let checksums_path = temp.path().join("SHA256SUMS");
     fs::write(
         &checksums_path,
@@ -47335,11 +47337,14 @@ fn write_minimal_release_support_bundle(path: &Path, extra: serde_json::Value) {
         "release_assembly": {
             "schema_version": "ao2.cp-release-assembly.v1",
             "status": "assembled",
+            "candidate_correlation": "matched",
+            "candidate_correlation_detail": release_support_candidate_correlation_for_test(),
             "control_plane_approves_release": false
         },
         "readiness": {
             "schema_version": "ao2.cp-release-readiness.v1",
             "status": "ready",
+            "candidate_correlation": release_support_candidate_correlation_for_test(),
             "operator_decision": {
                 "control_plane_approves_release": false,
                 "factory_v3_evaluator_closer_required": true
@@ -47348,15 +47353,21 @@ fn write_minimal_release_support_bundle(path: &Path, extra: serde_json::Value) {
         "handoff": {
             "schema_version": "factory-v3/ao2-release-handoff-checklist/v1",
             "status": "ready_for_evaluator_closer",
+            "candidate_correlation": release_support_candidate_correlation_for_test(),
             "trust_boundary": {
                 "control_plane_role": "read_only_observer",
                 "control_plane_approves_release": false,
                 "release_acceptance_owner": "factory-v3 evaluator-closer"
             }
         },
-        "cockpit": {"schema_version": "ao2.cp-release-cockpit.v1", "status": "ready"},
+        "cockpit": {
+            "schema_version": "ao2.cp-release-cockpit.v1",
+            "status": "ready",
+            "candidate_correlation": release_support_candidate_correlation_for_test()
+        },
         "evaluator_decision": {
             "schema_version": "factory-v3/ao2-release-evaluator-decision/v1",
+            "status": "accepted",
             "decision": "accept_phase1_release_candidate",
             "trust_boundary": {
                 "control_plane_role": "read_only_observer",
@@ -47389,12 +47400,110 @@ fn write_minimal_release_support_bundle(path: &Path, extra: serde_json::Value) {
             "release_acceptance_owner": "factory-v3 evaluator-closer",
             "control_plane_role": "read_only_observer",
             "control_plane_approves_release": false
+        },
+        "ci_evidence_index": release_support_ci_evidence_index_for_test(),
+        "trust_boundary": {
+            "role": "read_only_observer",
+            "control_plane_role": "read_only_observer",
+            "mutates_ao_artifacts": false,
+            "control_plane_approves_release": false,
+            "release_acceptance_owner": "factory-v3 evaluator-closer"
         }
     });
+    add_release_support_portable_manifest_for_test(&mut bundle);
     if !extra.is_null() {
         bundle["diagnostics"] = extra;
     }
     fs::write(path, serde_json::to_string_pretty(&bundle).unwrap()).unwrap();
+}
+
+fn release_support_candidate_correlation_for_test() -> serde_json::Value {
+    serde_json::json!({
+        "status": "matched",
+        "blockers": [],
+        "release_version": "0.4.80",
+        "three_os_version": "0.4.80",
+        "evaluator_decision": "accepted",
+        "codex_acceptance": "accepted",
+        "claude_acceptance": "accepted"
+    })
+}
+
+fn release_support_ci_evidence_index_for_test() -> serde_json::Value {
+    serde_json::json!({
+        "schema_version": "ao2.cp-ci-evidence-index.v1",
+        "status": "indexed",
+        "control_plane_role": "read-only-observer",
+        "mutates_ao_artifacts": false,
+        "control_plane_approves_release": false,
+        "auth": {
+            "required": true,
+            "scheme": "bearer",
+            "credential_material_included": false,
+            "credential_material_in_urls": false
+        },
+        "evidence_families": [
+            {"id": "risky-pr-golden-bridge-smoke", "artifact_name_pattern": "ao2-control-plane-risky-pr-golden-bridge-<target>", "schema_versions": ["ao2.cp-risky-pr-golden-bridge-smoke.v1"], "operator_action": "download-ci-artifact"},
+            {"id": "ingest-smoke", "artifact_name_pattern": "ao2-control-plane-ingest-smoke-<target>", "schema_versions": ["ao2.cp-ingest-smoke.v1"], "operator_action": "download-ci-artifact"},
+            {"id": "release-archive-smoke", "artifact_name_pattern": "ao2-control-plane-smoke-<target>", "schema_versions": ["ao2.cp-release-archive-smoke.v1"], "operator_action": "download-ci-artifact"},
+            {"id": "backup-restore-drill", "artifact_name_pattern": "ao2-control-plane-dr-restore", "schema_versions": ["ao2.cp-dr-restore-drill.v1"], "operator_action": "download-ci-artifact"}
+        ]
+    })
+}
+
+fn add_release_support_portable_manifest_for_test(bundle: &mut serde_json::Value) {
+    let surfaces = [
+        (
+            "ci_evidence_index",
+            "ci_evidence_index",
+            "$.ci_evidence_index",
+        ),
+        (
+            "install_verification",
+            "install_verification",
+            "$.install_verification",
+        ),
+        ("release_assembly", "release_assembly", "$.release_assembly"),
+        ("release_readiness", "readiness", "$.readiness"),
+        ("release_candidate_handoff", "handoff", "$.handoff"),
+        ("release_cockpit", "cockpit", "$.cockpit"),
+        (
+            "release_evaluator_decision",
+            "evaluator_decision",
+            "$.evaluator_decision",
+        ),
+        (
+            "storage_support_bundle",
+            "storage_support",
+            "$.storage_support",
+        ),
+    ];
+    let mut included = Vec::new();
+    let mut sha_map = serde_json::Map::new();
+    for (id, key, path) in surfaces {
+        let surface = &bundle[key];
+        let sha = canonical_sha256_for_test(surface);
+        sha_map.insert(id.to_string(), serde_json::Value::String(sha.clone()));
+        included.push(serde_json::json!({
+            "id": id,
+            "schema_version": surface["schema_version"].as_str().unwrap_or(""),
+            "path": path,
+            "sha256": sha
+        }));
+    }
+    bundle["portable_bundle_manifest"] = serde_json::json!({
+        "schema_version": "ao2.cp-release-support-bundle-manifest.v1",
+        "included_surfaces": included,
+        "integrity": {
+            "algorithm": "sha256-ao2-cp-canonical-json-v1",
+            "scope": "embedded_support_bundle_surfaces",
+            "surface_sha256": sha_map,
+            "verification_plan": {
+                "surface_count": surfaces.len(),
+                "expected_fail_closed": true
+            }
+        }
+    });
 }
 
 fn sha256_path(path: &Path) -> String {

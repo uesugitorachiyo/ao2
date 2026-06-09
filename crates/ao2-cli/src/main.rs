@@ -67475,8 +67475,9 @@ fn release_support_bundle_build_json(
             report,
             report_index,
         )?;
-    let bundle = serde_json::json!({
+    let mut bundle = serde_json::json!({
         "schema_version": "ao2.cp-release-support-bundle.v1",
+        "bundle_kind": "release_support",
         "release_assembly": release_support_bundle_read_surface("release_assembly", release_assembly)?,
         "readiness": release_support_bundle_read_surface("readiness", readiness)?,
         "handoff": release_support_bundle_read_surface("handoff", handoff)?,
@@ -67487,14 +67488,26 @@ fn release_support_bundle_build_json(
         "report_contract_verification": report_contract_verification,
         "install_verification": release_support_bundle_read_surface("install_verification", install_verification)?,
         "operator_evidence": release_support_bundle_read_surface("operator_evidence", operator_evidence)?,
+        "ci_evidence_index": release_support_bundle_ci_evidence_index(),
+        "trust_boundary": {
+            "frontend": "Hermes front end / queue / memory surface",
+            "governed_backend": "factory-v3 / AO Operator evaluator-closer",
+            "trusted_execution": "ao2 signed evidence boundary",
+            "role": "read_only_observer",
+            "control_plane_role": "read_only_observer",
+            "mutates_ao_artifacts": false,
+            "control_plane_approves_release": false,
+            "release_acceptance_owner": "factory-v3 evaluator-closer"
+        },
         "producer": {
             "package": env!("CARGO_PKG_NAME"),
             "version": env!("CARGO_PKG_VERSION"),
             "target": runtime_target_label()
         }
     });
+    bundle["portable_bundle_manifest"] = release_support_bundle_portable_manifest(&bundle)?;
     atomic_write_text(&bundle_path, &serde_json::to_string_pretty(&bundle)?)?;
-    let bundle_sha256 = sha256_file(&bundle_path)?;
+    let bundle_sha256 = canonical_json_sha256(&bundle);
     atomic_write_text(
         &checksums_path,
         &format!("{bundle_sha256}  release-support-bundle.json\n"),
@@ -67568,6 +67581,205 @@ fn release_support_bundle_read_surface(name: &str, path: &Path) -> Result<serde_
         );
     }
     Ok(value)
+}
+
+const RELEASE_SUPPORT_BUNDLE_PUBLIC_SURFACES: [(&str, &str, &str); 8] = [
+    (
+        "ci_evidence_index",
+        "ci_evidence_index",
+        "$.ci_evidence_index",
+    ),
+    (
+        "install_verification",
+        "install_verification",
+        "$.install_verification",
+    ),
+    ("release_assembly", "release_assembly", "$.release_assembly"),
+    ("release_readiness", "readiness", "$.readiness"),
+    ("release_candidate_handoff", "handoff", "$.handoff"),
+    ("release_cockpit", "cockpit", "$.cockpit"),
+    (
+        "release_evaluator_decision",
+        "evaluator_decision",
+        "$.evaluator_decision",
+    ),
+    (
+        "storage_support_bundle",
+        "storage_support",
+        "$.storage_support",
+    ),
+];
+
+fn release_support_bundle_portable_manifest(
+    bundle: &serde_json::Value,
+) -> Result<serde_json::Value> {
+    let mut included_surfaces = Vec::new();
+    let mut surface_sha256 = serde_json::Map::new();
+    for (id, key, path) in RELEASE_SUPPORT_BUNDLE_PUBLIC_SURFACES {
+        let surface = bundle
+            .get(key)
+            .ok_or_else(|| anyhow::anyhow!("missing release support bundle surface {key}"))?;
+        let sha256 = canonical_json_sha256(surface);
+        surface_sha256.insert(id.to_string(), serde_json::Value::String(sha256.clone()));
+        included_surfaces.push(serde_json::json!({
+            "id": id,
+            "schema_version": json_string(surface, "schema_version"),
+            "path": path,
+            "sha256": sha256,
+        }));
+    }
+
+    Ok(serde_json::json!({
+        "schema_version": "ao2.cp-release-support-bundle-manifest.v1",
+        "included_surfaces": included_surfaces,
+        "integrity": {
+            "algorithm": "sha256-ao2-cp-canonical-json-v1",
+            "scope": "embedded_support_bundle_surfaces",
+            "surface_sha256": surface_sha256,
+            "verification_plan": {
+                "surface_count": RELEASE_SUPPORT_BUNDLE_PUBLIC_SURFACES.len(),
+                "expected_fail_closed": true,
+                "cross_platform_commands": {
+                    "macos_ubuntu": "python3 verify_release_support_bundle.py --json --checksums SHA256SUMS release-support-bundle.json",
+                    "windows_powershell": "pwsh -File Verify-ReleaseSupportBundle.ps1 -Json -Checksums SHA256SUMS -Path release-support-bundle.json"
+                }
+            }
+        }
+    }))
+}
+
+fn release_support_bundle_ci_evidence_index() -> serde_json::Value {
+    serde_json::json!({
+        "schema_version": "ao2.cp-ci-evidence-index.v1",
+        "status": "indexed",
+        "control_plane_role": "read-only-observer",
+        "mutates_ao_artifacts": false,
+        "mutates_observer_storage": false,
+        "control_plane_approves_release": false,
+        "auth": {
+            "required": true,
+            "scheme": "bearer",
+            "credential_material_included": false,
+            "credential_material_in_urls": false
+        },
+        "endpoints": {
+            "html": "/api/v1/ci/evidence-index",
+            "json": "/api/v1/ci/evidence-index.json"
+        },
+        "evidence_families": [
+            release_support_bundle_ci_family(
+                "risky-pr-golden-bridge-smoke",
+                "Risky PR golden bridge smoke",
+                "ao2-control-plane-risky-pr-golden-bridge-<target>",
+                &[
+                    "ao2.cp-risky-pr-golden-bridge-smoke.v1",
+                    "ao2.cp-risky-pr-golden-artifact-manifest-observer.v1",
+                ],
+                "summary.json",
+                "Proves AO2 risky PR golden artifact manifests can be observed through the control plane without token leakage or release approval.",
+                &[
+                    "Risky PR golden bridge smoke (ubuntu-x86_64)",
+                    "Risky PR golden bridge smoke (macos-aarch64)",
+                    "Risky PR golden bridge smoke (windows-x86_64)",
+                ],
+                &[
+                    "ao2-control-plane-risky-pr-golden-bridge-ubuntu-x86_64",
+                    "ao2-control-plane-risky-pr-golden-bridge-macos-aarch64",
+                    "ao2-control-plane-risky-pr-golden-bridge-windows-x86_64",
+                ],
+                "summary.json carries schema/status plus artifact manifest observer digests",
+            ),
+            release_support_bundle_ci_family(
+                "ingest-smoke",
+                "Ingest smoke",
+                "ao2-control-plane-ingest-smoke-<target>",
+                &["ao2.cp-ingest-smoke.v1"],
+                "summary.json",
+                "Proves signed AO2 evidence can be ingested on each supported operating system.",
+                &[
+                    "Ingest smoke (ubuntu-x86_64)",
+                    "Ingest smoke (macos-aarch64)",
+                    "Ingest smoke (windows-x86_64)",
+                ],
+                &[
+                    "ao2-control-plane-ingest-smoke-ubuntu-x86_64",
+                    "ao2-control-plane-ingest-smoke-macos-aarch64",
+                    "ao2-control-plane-ingest-smoke-windows-x86_64",
+                ],
+                "summary.json carries schema/status plus ingested evidence digests",
+            ),
+            release_support_bundle_ci_family(
+                "release-archive-smoke",
+                "Release archive smoke",
+                "ao2-control-plane-smoke-<target>",
+                &["ao2.cp-release-archive-smoke.v1"],
+                "<target>.json",
+                "Proves packaged release archives install and run on each supported operating system.",
+                &[
+                    "Release archive smoke (ubuntu-x86_64)",
+                    "Release archive smoke (macos-aarch64)",
+                    "Release archive smoke (windows-x86_64)",
+                ],
+                &[
+                    "ao2-control-plane-smoke-linux-x86_64",
+                    "ao2-control-plane-smoke-macos-aarch64",
+                    "ao2-control-plane-smoke-windows-x86_64",
+                ],
+                "<target>.json smoke summary carries schema/status plus archive digest and installed binary evidence",
+            ),
+            release_support_bundle_ci_family(
+                "backup-restore-drill",
+                "Backup/restore drill",
+                "ao2-control-plane-dr-restore",
+                &["ao2.cp-dr-restore-drill.v1"],
+                "dr-restore-report.json",
+                "Proves control-plane storage backup and restore behavior, including negative restore scenarios.",
+                &["Backup/restore drill"],
+                &["ao2-control-plane-dr-restore"],
+                "dr-restore-report.json summary carries schema/status plus backup and restore evidence digests",
+            ),
+        ]
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn release_support_bundle_ci_family(
+    id: &str,
+    display_name: &str,
+    artifact_name_pattern: &str,
+    schema_versions: &[&str],
+    summary_path: &str,
+    purpose: &str,
+    job_names: &[&str],
+    artifact_names: &[&str],
+    digest_reference: &str,
+) -> serde_json::Value {
+    serde_json::json!({
+        "id": id,
+        "display_name": display_name,
+        "artifact_name_pattern": artifact_name_pattern,
+        "schema_versions": schema_versions,
+        "summary_path": summary_path,
+        "operator_action": "download-ci-artifact",
+        "purpose": purpose,
+        "ci_artifact_provenance": {
+            "provider": "github-actions",
+            "workflow_file": ".github/workflows/ci.yml",
+            "workflow_name": "CI",
+            "run_id_source": "github_actions_run_id",
+            "run_url_template": "https://github.com/uesugitorachiyo/ao2-control-plane/actions/runs/<run_id>",
+            "artifact_download_url_template": "https://github.com/uesugitorachiyo/ao2-control-plane/actions/runs/<run_id>/artifacts",
+            "job_names": job_names,
+            "artifact_names": artifact_names,
+            "digest_reference": digest_reference,
+            "token_free": true
+        },
+        "trust_boundary": {
+            "read_only": true,
+            "approves_release": false,
+            "mutates_ao_artifacts": false
+        }
+    })
 }
 
 fn release_support_bundle_verify(
@@ -67686,6 +67898,9 @@ fn release_support_bundle_verification_json(
     let install_verification = bundle
         .get("install_verification")
         .unwrap_or(&serde_json::Value::Null);
+    let portable_bundle_manifest = bundle
+        .get("portable_bundle_manifest")
+        .unwrap_or(&serde_json::Value::Null);
     let report_contract_verification_present = report_contract_verification.is_object();
     let install_verification_present = install_verification.is_object();
     let operator_evidence_present = operator_evidence.is_object();
@@ -67732,6 +67947,18 @@ fn release_support_bundle_verification_json(
             }));
         }
     }
+    release_support_bundle_portable_manifest_failures(
+        &bundle,
+        portable_bundle_manifest,
+        &mut failures,
+    );
+    release_support_bundle_candidate_correlation_failures(
+        release_assembly,
+        readiness,
+        handoff,
+        bundle.get("cockpit").unwrap_or(&serde_json::Value::Null),
+        &mut failures,
+    );
 
     let report_contract_missing_sections =
         json_array(report_contract_verification, "missing_sections");
@@ -67818,7 +68045,9 @@ fn release_support_bundle_verification_json(
 
     release_support_bundle_secret_marker_failures("$", &bundle, &mut failures);
 
-    let bundle_sha256 = if bundle_path.is_file() {
+    let bundle_sha256 = if bundle.is_object() {
+        canonical_json_sha256(&bundle)
+    } else if bundle_path.is_file() {
         sha256_file(bundle_path)?
     } else {
         String::new()
@@ -67909,6 +68138,15 @@ fn release_support_bundle_verification_json(
             "control_plane_approves_release": install_verification.get("control_plane_approves_release").and_then(serde_json::Value::as_bool).unwrap_or(true),
             "mutates_ao_artifacts": install_verification.get("mutates_ao_artifacts").and_then(serde_json::Value::as_bool).unwrap_or(true)
         },
+        "portable_bundle_manifest": {
+            "present": portable_bundle_manifest.is_object(),
+            "schema_version": json_string(portable_bundle_manifest, "schema_version"),
+            "surface_count": portable_bundle_manifest
+                .get("included_surfaces")
+                .and_then(serde_json::Value::as_array)
+                .map(Vec::len)
+                .unwrap_or(0)
+        },
         "failure_count": failures.len(),
         "failures": failures,
         "trust_boundary": {
@@ -67921,6 +68159,212 @@ fn release_support_bundle_verification_json(
             "mutates_ao_artifacts": false
         }
     }))
+}
+
+fn release_support_bundle_portable_manifest_failures(
+    bundle: &serde_json::Value,
+    manifest: &serde_json::Value,
+    failures: &mut Vec<serde_json::Value>,
+) {
+    if !manifest.is_object() {
+        failures.push(serde_json::json!({
+            "code": "missing_portable_bundle_manifest",
+            "message": "release support bundle must include portable_bundle_manifest for control-plane verification"
+        }));
+        return;
+    }
+    if json_string(manifest, "schema_version") != "ao2.cp-release-support-bundle-manifest.v1" {
+        failures.push(serde_json::json!({
+            "code": "invalid_portable_bundle_manifest_schema",
+            "message": "portable_bundle_manifest must use schema ao2.cp-release-support-bundle-manifest.v1",
+            "observed": json_string(manifest, "schema_version")
+        }));
+    }
+
+    let included_surfaces = json_array(manifest, "included_surfaces");
+    if included_surfaces.len() != RELEASE_SUPPORT_BUNDLE_PUBLIC_SURFACES.len() {
+        failures.push(serde_json::json!({
+            "code": "portable_surface_count_mismatch",
+            "message": "portable_bundle_manifest included surface count does not match the public support-bundle contract",
+            "expected": RELEASE_SUPPORT_BUNDLE_PUBLIC_SURFACES.len(),
+            "observed": included_surfaces.len()
+        }));
+    }
+
+    let integrity = manifest
+        .get("integrity")
+        .unwrap_or(&serde_json::Value::Null);
+    if json_string(integrity, "algorithm") != "sha256-ao2-cp-canonical-json-v1" {
+        failures.push(serde_json::json!({
+            "code": "portable_integrity_algorithm_mismatch",
+            "message": "portable_bundle_manifest integrity must use AO2/control-plane canonical JSON digests",
+            "observed": json_string(integrity, "algorithm")
+        }));
+    }
+    let declared_surface_count = integrity
+        .get("verification_plan")
+        .and_then(|plan| plan.get("surface_count"))
+        .and_then(serde_json::Value::as_u64);
+    if declared_surface_count != Some(RELEASE_SUPPORT_BUNDLE_PUBLIC_SURFACES.len() as u64) {
+        failures.push(serde_json::json!({
+            "code": "portable_verification_plan_surface_count_mismatch",
+            "message": "portable_bundle_manifest verification plan has the wrong required surface count",
+            "expected": RELEASE_SUPPORT_BUNDLE_PUBLIC_SURFACES.len(),
+            "observed": declared_surface_count
+        }));
+    }
+    let surface_sha256 = integrity
+        .get("surface_sha256")
+        .unwrap_or(&serde_json::Value::Null);
+
+    let mut seen_ids = std::collections::BTreeSet::new();
+    for surface in included_surfaces {
+        let id = json_string(surface, "id");
+        if !seen_ids.insert(id.clone()) {
+            failures.push(serde_json::json!({
+                "code": "portable_duplicate_surface",
+                "surface": id,
+                "message": "portable_bundle_manifest repeats a surface id"
+            }));
+        }
+    }
+
+    for (id, key, path) in RELEASE_SUPPORT_BUNDLE_PUBLIC_SURFACES {
+        if !seen_ids.contains(id) {
+            failures.push(serde_json::json!({
+                "code": "portable_missing_surface",
+                "surface": id,
+                "message": format!("portable_bundle_manifest is missing required surface {id}")
+            }));
+            continue;
+        }
+        let Some(entry) = included_surfaces
+            .iter()
+            .find(|surface| json_string(surface, "id") == id)
+        else {
+            continue;
+        };
+        let Some(embedded) = bundle.get(key) else {
+            failures.push(serde_json::json!({
+                "code": "portable_embedded_surface_missing",
+                "surface": id,
+                "message": format!("portable_bundle_manifest declares {id}, but bundle key {key} is missing")
+            }));
+            continue;
+        };
+        let expected_sha256 = canonical_json_sha256(embedded);
+        let manifest_sha256 = json_string(entry, "sha256");
+        let integrity_sha256 = json_string(surface_sha256, id);
+        if json_string(entry, "path") != path {
+            failures.push(serde_json::json!({
+                "code": "portable_surface_path_mismatch",
+                "surface": id,
+                "expected": path,
+                "observed": json_string(entry, "path")
+            }));
+        }
+        if json_string(entry, "schema_version") != json_string(embedded, "schema_version") {
+            failures.push(serde_json::json!({
+                "code": "portable_surface_schema_mismatch",
+                "surface": id,
+                "expected": json_string(embedded, "schema_version"),
+                "observed": json_string(entry, "schema_version")
+            }));
+        }
+        if manifest_sha256 != expected_sha256 || integrity_sha256 != expected_sha256 {
+            failures.push(serde_json::json!({
+                "code": "portable_surface_digest_mismatch",
+                "surface": id,
+                "expected": expected_sha256,
+                "manifest_sha256": manifest_sha256,
+                "integrity_sha256": integrity_sha256
+            }));
+        }
+    }
+}
+
+fn release_support_bundle_candidate_correlation_failures(
+    release_assembly: &serde_json::Value,
+    readiness: &serde_json::Value,
+    handoff: &serde_json::Value,
+    cockpit: &serde_json::Value,
+    failures: &mut Vec<serde_json::Value>,
+) {
+    let required = [
+        (
+            "release_cockpit",
+            "candidate_correlation",
+            cockpit.get("candidate_correlation"),
+        ),
+        (
+            "release_candidate_handoff",
+            "candidate_correlation",
+            handoff.get("candidate_correlation"),
+        ),
+        (
+            "release_readiness",
+            "candidate_correlation",
+            readiness.get("candidate_correlation"),
+        ),
+        (
+            "release_assembly",
+            "candidate_correlation_detail",
+            release_assembly.get("candidate_correlation_detail"),
+        ),
+    ];
+    let mut hashes = Vec::new();
+    for (surface, field, value) in required {
+        let Some(value) = value else {
+            failures.push(serde_json::json!({
+                "code": "candidate_correlation_missing",
+                "surface": surface,
+                "field": field,
+                "message": format!("{surface}.{field} is required for operator triage")
+            }));
+            continue;
+        };
+        if !value.is_object() {
+            failures.push(serde_json::json!({
+                "code": "candidate_correlation_invalid",
+                "surface": surface,
+                "field": field,
+                "message": format!("{surface}.{field} must be a JSON object")
+            }));
+            continue;
+        }
+        let status = json_string(value, "status");
+        if status != "matched" && status != "mismatched" {
+            failures.push(serde_json::json!({
+                "code": "candidate_correlation_status_invalid",
+                "surface": surface,
+                "field": field,
+                "observed": status
+            }));
+        }
+        if !value
+            .get("blockers")
+            .is_some_and(serde_json::Value::is_array)
+        {
+            failures.push(serde_json::json!({
+                "code": "candidate_correlation_blockers_invalid",
+                "surface": surface,
+                "field": field,
+                "message": format!("{surface}.{field}.blockers must be an array")
+            }));
+        }
+        hashes.push((surface, canonical_json_sha256(value)));
+    }
+    let distinct = hashes
+        .iter()
+        .map(|(_, sha)| sha.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    if distinct.len() > 1 {
+        failures.push(serde_json::json!({
+            "code": "candidate_correlation_cross_surface_mismatch",
+            "message": "operator-triage surfaces must embed byte-identical candidate_correlation objects",
+            "surface_sha256": hashes
+        }));
+    }
 }
 
 fn release_support_bundle_secret_marker_failures(
