@@ -542,6 +542,47 @@ jobs:
           fi
           echo "Split non-approval shards passed; reporting legacy required check name."
 
+  release-archive-hosted-smoke:
+    name: Release archive hosted smoke ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build release binary
+        run: cargo build --release -p ao2-cli
+
+      - name: Run Unix hosted release archive smoke
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        env:
+          AO2_RELEASE_HOSTED_SMOKE_ROOT: target/release-archive-hosted-smoke/${{ matrix.os }}
+          AO2_RELEASE_HOSTED_SMOKE_JSON: target/release-archive-hosted-smoke/${{ matrix.os }}/summary.json
+        run: scripts/release-archive-hosted-smoke.sh
+
+      - name: Run Windows hosted release archive smoke
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          AO2_RELEASE_HOSTED_SMOKE_ROOT: target/release-archive-hosted-smoke/${{ matrix.os }}
+          AO2_RELEASE_HOSTED_SMOKE_JSON: target/release-archive-hosted-smoke/${{ matrix.os }}/summary.json
+        run: ./scripts/release-archive-hosted-smoke.ps1
+
+      - name: Upload hosted release archive smoke artifacts
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-release-archive-hosted-smoke-${{ matrix.os }}
+          path: target/release-archive-hosted-smoke
+          if-no-files-found: error
+
   workbench-operator-packet-control-plane-smoke:
     name: Workbench operator packet control-plane smoke ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
