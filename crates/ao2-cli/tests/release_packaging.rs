@@ -2411,6 +2411,39 @@ fn risky_pr_golden_path_requires_static_report_index() {
 }
 
 #[test]
+fn risky_pr_golden_path_builds_release_support_bundle() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let script = fs::read_to_string(root.join("scripts/risky-pr-golden-path.sh"))
+        .expect("risky pr golden path script exists");
+    let verification =
+        fs::read_to_string(root.join("docs/VERIFICATION.md")).expect("verification docs exist");
+
+    for needle in [
+        "RELEASE_SUPPORT_INPUTS=\"$OUT_ROOT/release-support-inputs\"",
+        "RELEASE_SUPPORT_BUNDLE_DIR=\"$OUT_ROOT/release-support-bundle\"",
+        "release support-bundle-build",
+        "--report-target \"$TARGET\"",
+        "--report-run-id \"$RUN_ID\"",
+        "--report \"$REPORT\"",
+        "--report-index \"$REPORT_INDEX\"",
+        "release-support-bundle.json",
+        "SHA256SUMS",
+        "\"release_support_bundle\"",
+        "\"release_support_checksums\"",
+        "\"release_support_bundle_sha256\"",
+        "\"release_support_bundle_verification_status\"",
+    ] {
+        assert!(
+            script.contains(needle),
+            "missing golden-path support bundle marker: {needle}"
+        );
+    }
+    assert!(verification.contains("release support bundle"));
+    assert!(verification.contains("ao2.cp-release-support-bundle.v1"));
+    assert!(verification.contains("ao2.release-support-bundle-build.v1"));
+}
+
+#[test]
 fn evaluator_closure_corpus_is_release_wired() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let package_json = fs::read_to_string(root.join("package.json")).expect("package json exists");

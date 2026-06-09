@@ -335,7 +335,12 @@ Result:
   `ao2.report-contract.v1` schema. The report and index expose denied
   `request_digest` and approved `action_digest` values under the
   `approval_boundary` summary so operators can inspect the exact approval
-  boundary without opening raw evidence JSON.
+  boundary without opening raw evidence JSON. The same run assembles a
+  release support bundle through `ao2 release support-bundle-build`, generates
+  the embedded report-contract verification from the static report inputs,
+  verifies the `ao2.cp-release-support-bundle.v1` bundle and `SHA256SUMS`, and
+  records the `ao2.release-support-bundle-build.v1` result in the golden
+  summary.
 - `npm run risky-pr:product-readiness`: runs the Risky PR golden path once,
   then verifies local run record, static report/export, and evaluator closure
   evidence from that single run; emits
