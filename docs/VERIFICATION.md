@@ -353,7 +353,10 @@ Result:
   evidence. `tests/fixtures/release-support-bundle-contract-v1.json` is the
   shared AO2/control-plane contract fixture for this handoff shape; AO2's
   release-support verifier and ao2-control-plane's offline verifier both
-  consume a byte-identical copy so schema drift fails before release.
+  consume a byte-identical copy so schema drift fails before release. CI's
+  `Release support fixture parity with ao2-control-plane` job checks out both
+  repos, compares the two fixture files byte-for-byte, and uploads
+  `ao2-release-support-fixture-parity` with SHA-256 evidence.
 - `npm run risky-pr:control-plane-bridge`: validates a downloaded Risky PR
   golden `artifact-manifest.json`, writes a stable local
   `target/risky-pr-golden-control-plane-bridge/latest/artifact-manifest.json`,

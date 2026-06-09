@@ -640,6 +640,51 @@ jobs:
           path: target/release-readiness-ci
           if-no-files-found: error
 
+  release-support-fixture-parity:
+    name: Release support fixture parity with ao2-control-plane
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout AO2
+        uses: actions/checkout@v6.0.3
+        with:
+          path: ao2
+      - name: Checkout ao2-control-plane
+        uses: actions/checkout@v6.0.3
+        with:
+          repository: uesugitorachiyo/ao2-control-plane
+          path: ao2-control-plane
+      - name: Compare shared release support fixture
+        shell: bash
+        run: |
+          mkdir -p ao2/target/release-support-fixture-parity
+          cmp -s ao2/tests/fixtures/release-support-bundle-contract-v1.json ao2-control-plane/tests/fixtures/release-support-bundle-contract-v1.json
+          shasum -a 256 ao2/tests/fixtures/release-support-bundle-contract-v1.json ao2-control-plane/tests/fixtures/release-support-bundle-contract-v1.json \
+            | tee ao2/target/release-support-fixture-parity/SHA256SUMS
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          out = Path("ao2/target/release-support-fixture-parity")
+          summary = {
+              "schema_version": "ao2.release-support-fixture-parity.v1",
+              "status": "passed",
+              "producer_repo": "ao2",
+              "consumer_repo": "ao2-control-plane",
+              "fixture": "tests/fixtures/release-support-bundle-contract-v1.json",
+              "byte_identical": True,
+              "sha256s": str(out / "SHA256SUMS"),
+          }
+          (out / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+          test -f ao2/target/release-support-fixture-parity/summary.json
+      - name: Upload release support fixture parity
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-release-support-fixture-parity
+          path: ao2/target/release-support-fixture-parity
+          if-no-files-found: error
+
   risky-pr-golden-artifacts:
     name: Risky PR golden release support bundle artifacts
     runs-on: ubuntu-latest
