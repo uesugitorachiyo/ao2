@@ -861,6 +861,11 @@ Workspace test coverage:
   `install.verification_evidence`, and release evidence bundles require it as
   a checksum-covered artifact with verified offline status and read-only
   control-plane trust-boundary fields;
+- direct archive installers write the same
+  `<binary>.install-verification.json` sidecar after packaged-binary checksum
+  verification, and release archive smoke can emit
+  `ao2.release-archive-smoke.v1` JSON that points to sidecar evidence for each
+  exercised OS leg;
 - Unix installer verifies the packaged binary checksum and installs to a
   user-writable `AO2_INSTALL_DIR` without admin access;
 - release install smoke installs the macOS archive and runs a scripted

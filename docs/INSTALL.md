@@ -75,6 +75,10 @@ under `install.verification_evidence`, and release evidence bundles require it
 as a checksum-covered artifact with verified offline status and read-only
 control-plane trust-boundary fields.
 
+The direct archive installers (`install.sh` and `install.ps1`) also write the
+same `<binary>.install-verification.json` sidecar after packaged-binary checksum
+verification. Release smoke runs fail if that sidecar is missing or trust-unsafe.
+
 ## macOS
 
 Install or update from a verified local archive:
