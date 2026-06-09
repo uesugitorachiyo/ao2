@@ -89,6 +89,52 @@ fn write_bundle(path: &Path, mut overlay: serde_json::Value) {
     fs::write(path, serde_json::to_string_pretty(&bundle).unwrap()).unwrap();
 }
 
+#[test]
+fn shared_release_support_contract_fixture_is_accepted() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let fixture = root
+        .join("tests")
+        .join("fixtures")
+        .join("release-support-bundle-contract-v1.json");
+    let bundle_json: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&fixture).expect("read shared fixture"))
+            .expect("fixture is JSON");
+    let bundle_sha256 = canonical_sha256(&bundle_json);
+    let temp = tempfile::tempdir().unwrap();
+    let checksums_path = temp.path().join("SHA256SUMS");
+    let fixture_name = fixture.file_name().unwrap().to_str().unwrap();
+    fs::write(
+        &checksums_path,
+        format!("{bundle_sha256}  {fixture_name}\n"),
+    )
+    .unwrap();
+
+    let verify = ao2([
+        "release",
+        "support-bundle-verify",
+        "--bundle",
+        fixture.to_str().unwrap(),
+        "--checksums",
+        checksums_path.to_str().unwrap(),
+        "--json",
+    ]);
+
+    assert!(
+        verify.status.success(),
+        "shared release-support fixture should verify\nstdout:\n{}\nstderr:\n{}",
+        stdout(&verify),
+        stderr(&verify)
+    );
+    let json: serde_json::Value = serde_json::from_str(&stdout(&verify)).unwrap();
+    assert_eq!(json["status"], "passed");
+    assert_eq!(json["surface_count"], 8);
+    assert_eq!(json["checksum_verified"], true);
+    assert_eq!(
+        json["trust_boundary"]["control_plane_role"],
+        "read_only_observer"
+    );
+}
+
 fn passed_report_contract_verification() -> serde_json::Value {
     serde_json::json!({
         "schema_version": "ao2.report-contract-verification.v1",
