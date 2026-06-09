@@ -63871,6 +63871,8 @@ fn doctor_report_json(
     let installed_binary = install_dir.join(binary_name);
     let installed = installed_binary.is_file();
     let on_path = installed && is_binary_on_path(binary_name, &installed_binary);
+    let install_verification_evidence =
+        doctor_install_verification_evidence_json(&installed_binary);
 
     let release_public_key = provenance_dir.join("ao2-release-signing-public.pem");
     let provenance_json = provenance_dir.join("ao2-release-provenance.json");
@@ -63943,11 +63945,42 @@ fn doctor_report_json(
             "binary": installed_binary,
             "installed": installed,
             "on_path": on_path,
+            "verification_evidence": install_verification_evidence,
         },
         "release": release_report,
         "providers": providers,
         "dependencies": dependencies,
     }))
+}
+
+fn doctor_install_verification_evidence_json(installed_binary: &Path) -> serde_json::Value {
+    let evidence_path = install_verification_evidence_path(installed_binary);
+    if !evidence_path.is_file() {
+        return serde_json::json!({
+            "present": false,
+            "status": "missing",
+            "path": evidence_path,
+        });
+    }
+    match read_json_file::<serde_json::Value>(&evidence_path) {
+        Ok(evidence) => serde_json::json!({
+            "present": true,
+            "path": evidence_path,
+            "schema_version": evidence["schema_version"],
+            "status": evidence["status"],
+            "install_status": evidence["install_status"],
+            "version": evidence["version"],
+            "target": evidence["target"],
+            "signature_verified": evidence["signature_verified"],
+            "offline_verification": evidence["offline_verification"],
+        }),
+        Err(error) => serde_json::json!({
+            "present": true,
+            "status": "invalid",
+            "path": evidence_path,
+            "error": error.to_string(),
+        }),
+    }
 }
 
 fn doctor_release_report_json(
@@ -64293,9 +64326,11 @@ fn install_update_result(options: InstallUpdateOptions) -> Result<serde_json::Va
     })?;
     make_executable(&installed_binary)?;
 
-    let _ = fs::remove_dir_all(&work_dir);
-    let result = serde_json::json!({
-        "status": "installed",
+    let evidence_path = install_verification_evidence_path(&installed_binary);
+    let evidence = serde_json::json!({
+        "schema_version": "ao2.install-verification-evidence.v1",
+        "status": "verified",
+        "install_status": "installed",
         "version": manifest["version"],
         "target": target,
         "installed_binary": installed_binary,
@@ -64304,7 +64339,23 @@ fn install_update_result(options: InstallUpdateOptions) -> Result<serde_json::Va
         "offline_verification": offline_verification,
         "archive": archive
     });
+    let mut evidence_text = serde_json::to_string_pretty(&evidence)?;
+    evidence_text.push('\n');
+    atomic_write_text(&evidence_path, &evidence_text)?;
+
+    let _ = fs::remove_dir_all(&work_dir);
+    let mut result = evidence;
+    result["status"] = serde_json::json!("installed");
+    result["install_verification_evidence"] = serde_json::json!(evidence_path);
     Ok(result)
+}
+
+fn install_verification_evidence_path(installed_binary: &Path) -> PathBuf {
+    let file_name = installed_binary
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("ao2");
+    installed_binary.with_file_name(format!("{file_name}.install-verification.json"))
 }
 
 fn verify_release_archive_offline_contract(
@@ -67915,6 +67966,7 @@ fn release_evidence_bundle_json(
     let mut seen_labels = BTreeSet::new();
     let mut artifacts = Vec::new();
     let mut checksum_entries: Vec<(String, String)> = Vec::new();
+    let mut install_verification_artifact_labels = Vec::new();
     for spec in artifact_specs {
         let Some((raw_label, raw_path)) = spec.split_once('=') else {
             anyhow::bail!("artifact must be in <label>=<path> form: {spec}");
@@ -67951,6 +68003,15 @@ fn release_evidence_bundle_json(
         if source_sha256 != bundle_sha256 {
             anyhow::bail!("artifact digest changed while staging {label}");
         }
+        if read_json_file::<serde_json::Value>(&source)
+            .ok()
+            .is_some_and(|json| {
+                json["schema_version"] == "ao2.install-verification-evidence.v1"
+                    && json["offline_verification"]["status"] == "verified"
+            })
+        {
+            install_verification_artifact_labels.push(label.to_string());
+        }
         let size_bytes = fs::metadata(&staged_path)
             .with_context(|| format!("stat {}", staged_path.display()))?
             .len();
@@ -67979,6 +68040,10 @@ fn release_evidence_bundle_json(
                 "sha256": sha256
             })
         }).collect::<Vec<_>>(),
+        "install_verification_evidence": {
+            "included": !install_verification_artifact_labels.is_empty(),
+            "artifact_labels": install_verification_artifact_labels,
+        },
         "trust_boundary": {
             "control_plane_role": "read_only_observer",
             "mutates_ao_artifacts": false,
@@ -68015,6 +68080,7 @@ fn release_evidence_bundle_json(
         "manifest_entry": "EVIDENCE-BUNDLE-MANIFEST.json",
         "checksum_entry": "SHA256SUMS",
         "artifacts": manifest["artifacts"].clone(),
+        "install_verification_evidence": manifest["install_verification_evidence"].clone(),
         "trust_boundary": manifest["trust_boundary"].clone()
     }))
 }
