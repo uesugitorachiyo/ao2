@@ -74,6 +74,8 @@
     "post-merge:canary": "node scripts/run-sh-script.js scripts/post-merge-canary.sh",
     "ci:license-provenance": "node scripts/run-sh-script.js scripts/license-provenance-gate.sh",
     "ci:local": "node scripts/run-sh-script.js scripts/local-ci.sh",
+    "test:archive-resources": "node scripts/ci/run-archive-heavy-resource-guard.mjs",
+    "test:archive-heavy": "npm run test:archive-resources && cargo test -p ao2-cli --test release_packaging -- --test-threads=1",
     "verify": "cargo fmt --all -- --check && cargo test --workspace && cargo clippy --workspace --all-targets -- -D warnings",
     "verify:replacement": "node scripts/run-sh-script.js scripts/verify-replacement-parity.sh",
     "verify:no-factory-v3": "node scripts/run-sh-script.js scripts/verify-no-factory-v3-green-path.sh",

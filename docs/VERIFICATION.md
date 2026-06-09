@@ -1003,6 +1003,28 @@ The same test target runs in CI release-readiness shards on Ubuntu, macOS, and
 Windows, so bundle assembly and strict support-bundle verification stay covered
 across the supported release platforms.
 
+## Archive-Heavy Test Resource Guard
+
+Archive-producing tests can temporarily consume multiple gigabytes while Cargo
+build artifacts, release archives, extracted payloads, and system temp
+directories coexist. Run the guarded local path before release packaging work:
+
+```sh
+npm run test:archive-resources
+npm run test:archive-heavy
+```
+
+The guard writes `target/archive-heavy-test-resources/latest.json` with schema
+`ao2.archive-heavy-test-resource-guard.v1`, checks free space for the repo,
+Cargo target directory, and system temp directory, and prunes only its own stale
+guard evidence. Tune it with `AO2_ARCHIVE_TEST_MIN_FREE_GB`,
+`AO2_ARCHIVE_TEST_STALE_HOURS`, and
+`AO2_ARCHIVE_TEST_RESOURCE_GUARD_DIR`.
+
+Hosted release packaging CI runs `npm run test:archive-resources` before
+`release_packaging` and executes archive-heavy shards with `--test-threads=1`
+to avoid parallel archive extraction and packaging pressure.
+
 ## Adapter Doctor Smoke Test
 
 ```sh
