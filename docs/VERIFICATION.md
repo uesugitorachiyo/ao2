@@ -845,6 +845,10 @@ Workspace test coverage:
 - `ao2 install update` enforces the offline release verification report and
   `SHA256SUMS` coverage before it creates or mutates the install directory, and
   reports `offline_verification.status = "verified"` on success;
+- `ao2 install update` writes `<binary>.install-verification.json` with schema
+  `ao2.install-verification-evidence.v1`, `ao2 doctor --json` reports it under
+  `install.verification_evidence`, and release evidence bundles classify it
+  when included as an artifact;
 - Unix installer verifies the packaged binary checksum and installs to a
   user-writable `AO2_INSTALL_DIR` without admin access;
 - release install smoke installs the macOS archive and runs a scripted
@@ -1150,12 +1154,12 @@ Result:
 
 Result:
 
-- `ao2 doctor --json` reports install, PATH, signed provenance, dependency,
-  and scripted provider health.
+- `ao2 doctor --json` reports install, PATH, persisted install verification
+  evidence, signed provenance, dependency, and scripted provider health.
 - `ao2 upgrade check` reports release metadata from local fixture files and
   direct release URLs.
-- `ao2 upgrade apply` installs a signed release selected from metadata and
-  preserves rollback.
+- `ao2 upgrade apply` installs a signed release selected from metadata, reports
+  the install verification sidecar path, and preserves rollback.
 - `ao2 install update` verifies the signed archive, offline release report, and
   checksum coverage before preserving the previous installed binary as
   `<binary>.rollback`.

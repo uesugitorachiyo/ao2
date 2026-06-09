@@ -68,7 +68,11 @@ with `AO2_RELEASE_COMPARISON_DIR`, `AO2_RELEASE_COMPARISON_RESULT`, and
 `RELEASE-VERIFICATION.json`, `SHA256SUMS`, installer scripts, verifier scripts,
 manifest, README, VERSION, and packaged binary checksum coverage. Successful
 JSON output includes `offline_verification.status = "verified"` before the
-binary is copied into the install directory.
+binary is copied into the install directory. It also writes
+`<binary>.install-verification.json` beside the installed binary with schema
+`ao2.install-verification-evidence.v1`; `ao2 doctor --json` reads that sidecar
+under `install.verification_evidence`, and release evidence bundles classify it
+when included as an artifact.
 
 ## macOS
 
@@ -210,7 +214,9 @@ ao2 upgrade apply \
 ## Rollback
 
 `ao2 install update` keeps the previous installed binary beside the active
-binary as `<binary>.rollback` when one exists. Restore it with:
+binary as `<binary>.rollback` when one exists and keeps the latest install
+verification sidecar as `<binary>.install-verification.json`. Restore the
+rollback binary with:
 
 ```sh
 ao2 install rollback

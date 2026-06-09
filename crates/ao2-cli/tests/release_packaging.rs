@@ -284,6 +284,7 @@ fn cli_builds_release_evidence_bundle_archive_with_manifest() {
     let readiness = tmp.path().join("readiness.json");
     let checklist = tmp.path().join("handoff-checklist.json");
     let decision = tmp.path().join("evaluator-decision.json");
+    let install_verification = tmp.path().join("install-verification.json");
     fs::write(
         &readiness,
         r#"{"schema_version":"ao2.cp-release-readiness.v1","status":"ready"}"#,
@@ -299,6 +300,11 @@ fn cli_builds_release_evidence_bundle_archive_with_manifest() {
         r#"{"schema":"factory-v3/ao2-release-evaluator-decision/v1","status":"accepted"}"#,
     )
     .expect("write decision");
+    fs::write(
+        &install_verification,
+        r#"{"schema_version":"ao2.install-verification-evidence.v1","status":"verified","offline_verification":{"status":"verified"}}"#,
+    )
+    .expect("write install verification");
 
     let output = Command::new(ao2)
         .args([
@@ -312,6 +318,8 @@ fn cli_builds_release_evidence_bundle_archive_with_manifest() {
             &format!("handoff-checklist={}", checklist.display()),
             "--artifact",
             &format!("evaluator-decision={}", decision.display()),
+            "--artifact",
+            &format!("install-verification={}", install_verification.display()),
             "--json",
         ])
         .output()
@@ -326,7 +334,12 @@ fn cli_builds_release_evidence_bundle_archive_with_manifest() {
     let json: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("evidence-bundle prints json");
     assert_eq!(json["schema_version"], "ao2.release-evidence-bundle.v1");
-    assert_eq!(json["artifact_count"], 3);
+    assert_eq!(json["artifact_count"], 4);
+    assert_eq!(json["install_verification_evidence"]["included"], true);
+    assert_eq!(
+        json["install_verification_evidence"]["artifact_labels"][0],
+        "install-verification"
+    );
     assert_eq!(
         json["trust_boundary"]["control_plane_role"],
         "read_only_observer"
@@ -356,6 +369,9 @@ fn cli_builds_release_evidence_bundle_archive_with_manifest() {
     assert!(entries
         .iter()
         .any(|entry| entry == "artifacts/evaluator-decision/evaluator-decision.json"));
+    assert!(entries
+        .iter()
+        .any(|entry| entry == "artifacts/install-verification/install-verification.json"));
 
     let manifest_text = archive_text_entry(archive, "EVIDENCE-BUNDLE-MANIFEST.json");
     let manifest: serde_json::Value =
@@ -363,7 +379,12 @@ fn cli_builds_release_evidence_bundle_archive_with_manifest() {
     assert_eq!(manifest["schema_version"], "ao2.release-evidence-bundle.v1");
     assert_eq!(
         manifest["artifacts"].as_array().expect("artifacts").len(),
-        3
+        4
+    );
+    assert_eq!(manifest["install_verification_evidence"]["included"], true);
+    assert_eq!(
+        manifest["install_verification_evidence"]["artifact_labels"][0],
+        "install-verification"
     );
     assert_eq!(
         manifest["trust_boundary"]["release_acceptance_owner"],
@@ -371,6 +392,7 @@ fn cli_builds_release_evidence_bundle_archive_with_manifest() {
     );
     let checksums = archive_text_entry(archive, "SHA256SUMS");
     assert!(checksums.contains("artifacts/readiness/readiness.json"));
+    assert!(checksums.contains("artifacts/install-verification/install-verification.json"));
     assert!(checksums.contains("EVIDENCE-BUNDLE-MANIFEST.json"));
 }
 

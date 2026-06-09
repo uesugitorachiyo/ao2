@@ -23987,6 +23987,21 @@ fn cli_install_update_verifies_archive_signature_and_installs_binary() {
         json["offline_verification"]["release_acceptance_owner"],
         "factory-v3 evaluator-closer"
     );
+    let evidence_path = Path::new(json["install_verification_evidence"].as_str().unwrap());
+    assert!(evidence_path.is_file());
+    let evidence: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(evidence_path).unwrap()).unwrap();
+    assert_eq!(
+        evidence["schema_version"],
+        "ao2.install-verification-evidence.v1"
+    );
+    assert_eq!(evidence["status"], "verified");
+    assert_eq!(evidence["signature_verified"], true);
+    assert_eq!(evidence["offline_verification"]["status"], "verified");
+    assert_eq!(
+        evidence["offline_verification"]["release_acceptance_owner"],
+        "factory-v3 evaluator-closer"
+    );
     assert!(Path::new(json["installed_binary"].as_str().unwrap()).is_file());
 
     let installed = Command::new(json["installed_binary"].as_str().unwrap())
@@ -24088,6 +24103,25 @@ fn cli_doctor_reports_install_provider_release_and_path_health() {
         .unwrap();
     assert!(sign.status.success(), "{}", stderr(&sign));
 
+    let update = ao2([
+        "install",
+        "update",
+        "--archive",
+        archive,
+        "--provenance-dir",
+        provenance.to_str().unwrap(),
+        "--install-dir",
+        install_dir.to_str().unwrap(),
+    ]);
+    assert!(update.status.success(), "{}", stderr(&update));
+    let update_json: serde_json::Value = serde_json::from_str(&stdout(&update)).unwrap();
+    assert!(Path::new(
+        update_json["install_verification_evidence"]
+            .as_str()
+            .unwrap()
+    )
+    .is_file());
+
     let path = prepend_path(&install_dir);
     let doctor = ao2_with_env(
         [
@@ -24105,6 +24139,19 @@ fn cli_doctor_reports_install_provider_release_and_path_health() {
     assert_eq!(json["status"], "ok");
     assert_eq!(json["install"]["installed"], true);
     assert_eq!(json["install"]["on_path"], true);
+    assert_eq!(json["install"]["verification_evidence"]["present"], true);
+    assert_eq!(
+        json["install"]["verification_evidence"]["status"],
+        "verified"
+    );
+    assert_eq!(
+        json["install"]["verification_evidence"]["schema_version"],
+        "ao2.install-verification-evidence.v1"
+    );
+    assert_eq!(
+        json["install"]["verification_evidence"]["offline_verification"]["status"],
+        "verified"
+    );
     assert_eq!(json["release"]["provenance_verified"], true);
     assert_eq!(json["providers"]["scripted"]["available"], true);
     assert_eq!(json["dependencies"]["native_crypto"], true);
@@ -24233,6 +24280,16 @@ fn cli_upgrade_apply_installs_signed_release_and_keeps_rollback() {
     assert_eq!(json["status"], "upgraded");
     assert_eq!(json["check"]["latest_version"], "9.9.9-test");
     assert_eq!(json["install"]["signature_verified"], true);
+    assert_eq!(
+        json["install"]["offline_verification"]["status"],
+        "verified"
+    );
+    assert!(Path::new(
+        json["install"]["install_verification_evidence"]
+            .as_str()
+            .unwrap()
+    )
+    .is_file());
     assert!(Path::new(json["install"]["installed_binary"].as_str().unwrap()).is_file());
     assert_eq!(
         fs::read_to_string(json["install"]["rollback_binary"].as_str().unwrap()).unwrap(),
