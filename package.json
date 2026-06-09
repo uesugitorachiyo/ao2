@@ -42,6 +42,7 @@
     "smoke:provider:claude-pilot": "node scripts/run-sh-script.js scripts/smoke-claude-provider-pilot.sh",
     "smoke:provider:antigravity-pilot": "node scripts/run-sh-script.js scripts/smoke-antigravity-provider-pilot.sh",
     "risky-pr:golden": "node scripts/run-sh-script.js scripts/risky-pr-golden-path.sh",
+    "risky-pr:control-plane-bridge": "node scripts/run-sh-script.js scripts/risky-pr-golden-control-plane-bridge.sh",
     "risky-pr:product-readiness": "node scripts/run-sh-script.js scripts/risky-pr-product-readiness-gate.sh",
     "evaluator:closure-corpus": "node scripts/run-sh-script.js scripts/evaluator-closure-corpus.sh",
     "approval:exact-digest-gate": "node scripts/run-sh-script.js scripts/exact-digest-approval-gate.sh",
