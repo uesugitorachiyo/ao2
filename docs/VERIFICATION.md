@@ -346,6 +346,15 @@ Result:
   `ao2.risky-pr-golden-artifact-manifest.v1` `artifact-manifest.json`,
   report-contract verification, support-bundle build result,
   `release-support-bundle.json`, and `SHA256SUMS`.
+- `npm run risky-pr:control-plane-bridge`: validates a downloaded Risky PR
+  golden `artifact-manifest.json`, writes a stable local
+  `target/risky-pr-golden-control-plane-bridge/latest/artifact-manifest.json`,
+  mirrors it to
+  `../ao2-control-plane/target/risky-pr-golden-control-plane-bridge/artifact-manifest.json`,
+  emits `control-plane.env` with
+  `AO2_CP_RISKY_PR_GOLDEN_ARTIFACT_MANIFEST`, and can smoke the read-only
+  ao2-control-plane observer endpoints when `--cp-base-url` and
+  `AO2_CP_API_TOKEN` are provided.
 - `npm run risky-pr:product-readiness`: runs the Risky PR golden path once,
   then verifies local run record, static report/export, and evaluator closure
   evidence from that single run; emits

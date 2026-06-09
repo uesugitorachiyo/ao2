@@ -154,6 +154,162 @@ def test_risky_pr_golden_upload_artifacts_have_stable_manifest():
     assert "artifact-manifest.json" in verification
 
 
+def test_risky_pr_golden_control_plane_bridge_materializes_manifest_for_cp(tmp_path):
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["risky-pr:control-plane-bridge"]
+        == "node scripts/run-sh-script.js scripts/risky-pr-golden-control-plane-bridge.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "risky-pr-golden-control-plane-bridge.sh"
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "AO2_CP_RISKY_PR_GOLDEN_ARTIFACT_MANIFEST",
+        "ao2.risky-pr-golden-control-plane-bridge.v1",
+        "ao2.risky-pr-golden-artifact-manifest.v1",
+        "ao2.cp-risky-pr-golden-artifact-manifest-observer.v1",
+        "/api/v1/risky-pr/golden/artifact-manifest",
+        "/api/v1/risky-pr/golden/artifact-manifest.json",
+        "control_plane_role",
+        "read-only-observer",
+        "credential_material_included",
+        "credential_material_in_urls",
+        "env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY",
+    ]:
+        assert needle in text
+
+    artifact_root = tmp_path / "golden"
+    bundle_dir = artifact_root / "release-support-bundle"
+    bundle_dir.mkdir(parents=True)
+    (artifact_root / "summary.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.risky-pr-golden-path.v1",
+                "status": "passed",
+                "run_id": "fixture-run",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (artifact_root / "report-verify.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.report-contract-verification.v1",
+                "status": "passed",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (bundle_dir / "release-support-bundle.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.cp-release-support-bundle.v1",
+                "status": "ready",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    artifacts = []
+    for relative_path in [
+        "summary.json",
+        "report-verify.json",
+        "release-support-bundle/release-support-bundle.json",
+    ]:
+        path = artifact_root / relative_path
+        artifacts.append(
+            {
+                "relative_path": relative_path,
+                "path": relative_path,
+                "size_bytes": path.stat().st_size,
+                "sha256": __import__("hashlib").sha256(path.read_bytes()).hexdigest(),
+                "schema_version": json.loads(path.read_text(encoding="utf-8")).get(
+                    "schema_version"
+                ),
+            }
+        )
+    manifest = {
+        "schema_version": "ao2.risky-pr-golden-artifact-manifest.v1",
+        "status": "indexed",
+        "run_id": "fixture-run",
+        "artifact_root": ".",
+        "artifact_count": len(artifacts),
+        "artifacts": artifacts,
+    }
+    (artifact_root / "artifact-manifest.json").write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    out_root = tmp_path / "bridge"
+    cp_root = tmp_path / "ao2-control-plane"
+    env = os.environ.copy()
+    env["AO2_RISKY_PR_CP_BRIDGE_ROOT"] = str(out_root)
+    result = subprocess.run(
+        [
+            "npm",
+            "run",
+            "risky-pr:control-plane-bridge",
+            "--",
+            "--artifact-root",
+            str(artifact_root),
+            "--control-plane-root",
+            str(cp_root),
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+
+    stable_manifest = out_root / "latest" / "artifact-manifest.json"
+    summary_path = out_root / "latest" / "summary.json"
+    env_file = out_root / "latest" / "control-plane.env"
+    cp_manifest = (
+        cp_root
+        / "target"
+        / "risky-pr-golden-control-plane-bridge"
+        / "artifact-manifest.json"
+    )
+    assert stable_manifest.is_file()
+    assert cp_manifest.is_file()
+    assert stable_manifest.read_text(encoding="utf-8") == cp_manifest.read_text(
+        encoding="utf-8"
+    )
+    assert env_file.is_file()
+
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.risky-pr-golden-control-plane-bridge.v1"
+    assert summary["status"] == "passed"
+    assert summary["manifest"]["schema_version"] == manifest["schema_version"]
+    assert summary["manifest"]["artifact_count"] == len(artifacts)
+    assert summary["control_plane"]["configured_env"] == (
+        "AO2_CP_RISKY_PR_GOLDEN_ARTIFACT_MANIFEST"
+    )
+    assert summary["control_plane"]["stable_manifest"] == str(stable_manifest)
+    assert summary["control_plane"]["mirror_manifest"] == str(cp_manifest)
+    assert summary["control_plane"]["role"] == "read-only-observer"
+    assert summary["control_plane"]["credential_material_included"] is False
+    assert summary["control_plane"]["credential_material_in_urls"] is False
+    assert summary["trust_boundary"]["local_only"] is True
+    assert summary["trust_boundary"]["control_plane_approves_release"] is False
+    assert summary["trust_boundary"]["mutates_ao2_artifacts"] is False
+    assert "Bearer" not in summary_path.read_text(encoding="utf-8")
+    assert (
+        f"AO2_CP_RISKY_PR_GOLDEN_ARTIFACT_MANIFEST={stable_manifest}"
+        in env_file.read_text(encoding="utf-8")
+    )
+
+
 def test_ci_reports_legacy_non_approval_required_check_names():
     ci = read(".github/workflows/ci.yml")
 
