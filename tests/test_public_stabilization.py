@@ -440,6 +440,8 @@ def test_risky_pr_golden_path_script_is_exposed_and_checks_uat_surface():
         "release support-bundle-build",
         "--report-target \"$TARGET\"",
         "--report-run-id \"$RUN_ID\"",
+        "--install-verification \"$RELEASE_SUPPORT_INPUTS/install-verification.json\"",
+        "ao2.install-verification-evidence.v1",
         "release-support-bundle.json",
         "ao2.release-support-bundle-build.v1",
         "ao2.cp-release-support-bundle.v1",

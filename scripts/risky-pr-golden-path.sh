@@ -160,6 +160,17 @@ write("operator-evidence.json", {
     "control_plane_approves_release": False,
     "source": source,
 })
+write("install-verification.json", {
+    "schema_version": "ao2.install-verification-evidence.v1",
+    "status": "verified",
+    "offline_verification": {
+        "status": "verified",
+    },
+    "provider_api_keys_required": False,
+    "control_plane_approves_release": False,
+    "mutates_ao_artifacts": False,
+    "source": source,
+})
 PY
 
 echo "=== build release support bundle ==="
@@ -176,6 +187,7 @@ env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY \
   --report-run-id "$RUN_ID" \
   --report "$REPORT" \
   --report-index "$REPORT_INDEX" \
+  --install-verification "$RELEASE_SUPPORT_INPUTS/install-verification.json" \
   --operator-evidence "$RELEASE_SUPPORT_INPUTS/operator-evidence.json" \
   --out-dir "$RELEASE_SUPPORT_BUNDLE_DIR" \
   --json > "$OUT_ROOT/release-support-bundle-build.json"
@@ -275,6 +287,10 @@ if release_support_bundle.get("schema_version") != "ao2.cp-release-support-bundl
     fail("release support bundle schema changed")
 if (release_support_bundle.get("report_contract_verification") or {}).get("status") != "passed":
     fail("release support bundle report contract verification did not pass")
+if (release_support_bundle.get("install_verification") or {}).get("schema_version") != "ao2.install-verification-evidence.v1":
+    fail("release support bundle missing install verification evidence")
+if (release_support_bundle.get("install_verification") or {}).get("status") != "verified":
+    fail("release support bundle install verification did not pass")
 approval_boundary = report_index.get("approval_boundary") or {}
 denied_request_digests = approval_boundary.get("denied_request_digests") or []
 approved_action_digests = approval_boundary.get("approved_action_digests") or []
