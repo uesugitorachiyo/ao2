@@ -350,7 +350,10 @@ Result:
   ao2-control-plane and runs its ao2-control-plane offline verifier against
   the generated bundle/checksum pair, uploading
   `release-support-bundle-control-plane-verify.json` with the handoff
-  evidence.
+  evidence. `tests/fixtures/release-support-bundle-contract-v1.json` is the
+  shared AO2/control-plane contract fixture for this handoff shape; AO2's
+  release-support verifier and ao2-control-plane's offline verifier both
+  consume a byte-identical copy so schema drift fails before release.
 - `npm run risky-pr:control-plane-bridge`: validates a downloaded Risky PR
   golden `artifact-manifest.json`, writes a stable local
   `target/risky-pr-golden-control-plane-bridge/latest/artifact-manifest.json`,

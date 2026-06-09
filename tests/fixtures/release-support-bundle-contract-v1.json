@@ -1,0 +1,332 @@
+{
+  "schema_version": "ao2.cp-release-support-bundle.v1",
+  "bundle_kind": "release_support",
+  "producer": {
+    "package": "ao2-cli",
+    "version": "0.4.80",
+    "target": "shared-contract-fixture"
+  },
+  "release_assembly": {
+    "schema_version": "ao2.cp-release-assembly.v1",
+    "status": "assembled",
+    "candidate_correlation": "matched",
+    "candidate_correlation_detail": {
+      "status": "matched",
+      "blockers": [],
+      "release_version": "0.4.80",
+      "three_os_version": "0.4.80",
+      "evaluator_decision": "accepted",
+      "codex_acceptance": "accepted",
+      "claude_acceptance": "accepted"
+    },
+    "control_plane_approves_release": false
+  },
+  "readiness": {
+    "schema_version": "ao2.cp-release-readiness.v1",
+    "status": "ready",
+    "candidate_correlation": {
+      "status": "matched",
+      "blockers": [],
+      "release_version": "0.4.80",
+      "three_os_version": "0.4.80",
+      "evaluator_decision": "accepted",
+      "codex_acceptance": "accepted",
+      "claude_acceptance": "accepted"
+    },
+    "operator_decision": {
+      "control_plane_approves_release": false,
+      "factory_v3_evaluator_closer_required": true
+    }
+  },
+  "handoff": {
+    "schema_version": "factory-v3/ao2-release-handoff-checklist/v1",
+    "status": "ready_for_evaluator_closer",
+    "candidate_correlation": {
+      "status": "matched",
+      "blockers": [],
+      "release_version": "0.4.80",
+      "three_os_version": "0.4.80",
+      "evaluator_decision": "accepted",
+      "codex_acceptance": "accepted",
+      "claude_acceptance": "accepted"
+    },
+    "trust_boundary": {
+      "control_plane_role": "read_only_observer",
+      "control_plane_approves_release": false,
+      "release_acceptance_owner": "factory-v3 evaluator-closer"
+    }
+  },
+  "cockpit": {
+    "schema_version": "ao2.cp-release-cockpit.v1",
+    "status": "ready",
+    "candidate_correlation": {
+      "status": "matched",
+      "blockers": [],
+      "release_version": "0.4.80",
+      "three_os_version": "0.4.80",
+      "evaluator_decision": "accepted",
+      "codex_acceptance": "accepted",
+      "claude_acceptance": "accepted"
+    }
+  },
+  "evaluator_decision": {
+    "schema_version": "factory-v3/ao2-release-evaluator-decision/v1",
+    "status": "accepted",
+    "decision": "accept_phase1_release_candidate",
+    "trust_boundary": {
+      "control_plane_role": "read_only_observer",
+      "control_plane_approves_release": false,
+      "release_acceptance_owner": "factory-v3 evaluator-closer"
+    }
+  },
+  "storage_support": {
+    "schema_version": "ao2.cp-storage-support.v1",
+    "status": "ready"
+  },
+  "replay": {
+    "status": "accepted",
+    "digest_failures": []
+  },
+  "report_contract_verification": {
+    "schema_version": "ao2.report-contract-verification.v1",
+    "contract_schema_version": "ao2.report-contract.v1",
+    "status": "passed",
+    "complete": true,
+    "missing_sections": [],
+    "failures": []
+  },
+  "install_verification": {
+    "schema_version": "ao2.install-verification-evidence.v1",
+    "status": "verified",
+    "offline_verification": {
+      "status": "verified"
+    },
+    "provider_api_keys_required": false,
+    "control_plane_approves_release": false,
+    "mutates_ao_artifacts": false
+  },
+  "operator_evidence": {
+    "factory_v3_evaluator_closer_required": true,
+    "release_acceptance_owner": "factory-v3 evaluator-closer",
+    "control_plane_role": "read_only_observer",
+    "control_plane_approves_release": false
+  },
+  "ci_evidence_index": {
+    "schema_version": "ao2.cp-ci-evidence-index.v1",
+    "status": "indexed",
+    "control_plane_role": "read-only-observer",
+    "mutates_ao_artifacts": false,
+    "mutates_observer_storage": false,
+    "control_plane_approves_release": false,
+    "auth": {
+      "required": true,
+      "scheme": "bearer",
+      "credential_material_included": false,
+      "credential_material_in_urls": false
+    },
+    "endpoints": {
+      "html": "/api/v1/ci/evidence-index",
+      "json": "/api/v1/ci/evidence-index.json"
+    },
+    "evidence_families": [
+      {
+        "id": "risky-pr-golden-bridge-smoke",
+        "artifact_name_pattern": "ao2-control-plane-risky-pr-golden-bridge-<target>",
+        "schema_versions": [
+          "ao2.cp-risky-pr-golden-bridge-smoke.v1"
+        ],
+        "operator_action": "download-ci-artifact",
+        "ci_artifact_provenance": {
+          "provider": "github-actions",
+          "workflow_file": ".github/workflows/ci.yml",
+          "workflow_name": "CI",
+          "run_id_source": "github_actions_run_id",
+          "token_free": true,
+          "job_names": [
+            "risky-pr-golden-bridge-smoke (<target>)"
+          ],
+          "artifact_names": [
+            "ao2-control-plane-risky-pr-golden-bridge-ubuntu-x86_64"
+          ],
+          "run_url_template": "https://github.com/uesugitorachiyo/ao2-control-plane/actions/runs/<run_id>",
+          "artifact_download_url_template": "https://github.com/uesugitorachiyo/ao2-control-plane/actions/runs/<run_id>/artifacts",
+          "digest_reference": "summary.json carries schema/status and artifact digests"
+        },
+        "trust_boundary": {
+          "read_only": true,
+          "approves_release": false,
+          "mutates_ao_artifacts": false
+        }
+      },
+      {
+        "id": "ingest-smoke",
+        "artifact_name_pattern": "ao2-control-plane-ingest-smoke-<target>",
+        "schema_versions": [
+          "ao2.cp-ingest-smoke.v1"
+        ],
+        "operator_action": "download-ci-artifact",
+        "ci_artifact_provenance": {
+          "provider": "github-actions",
+          "workflow_file": ".github/workflows/ci.yml",
+          "workflow_name": "CI",
+          "run_id_source": "github_actions_run_id",
+          "token_free": true,
+          "job_names": [
+            "ingest-smoke (<target>)"
+          ],
+          "artifact_names": [
+            "ao2-control-plane-ingest-smoke-ubuntu-x86_64"
+          ],
+          "run_url_template": "https://github.com/uesugitorachiyo/ao2-control-plane/actions/runs/<run_id>",
+          "artifact_download_url_template": "https://github.com/uesugitorachiyo/ao2-control-plane/actions/runs/<run_id>/artifacts",
+          "digest_reference": "summary.json carries schema/status and artifact digests"
+        },
+        "trust_boundary": {
+          "read_only": true,
+          "approves_release": false,
+          "mutates_ao_artifacts": false
+        }
+      },
+      {
+        "id": "release-archive-smoke",
+        "artifact_name_pattern": "ao2-control-plane-smoke-<target>",
+        "schema_versions": [
+          "ao2.cp-release-archive-smoke.v1"
+        ],
+        "operator_action": "download-ci-artifact",
+        "ci_artifact_provenance": {
+          "provider": "github-actions",
+          "workflow_file": ".github/workflows/ci.yml",
+          "workflow_name": "CI",
+          "run_id_source": "github_actions_run_id",
+          "token_free": true,
+          "job_names": [
+            "release-archive-smoke (<target>)"
+          ],
+          "artifact_names": [
+            "ao2-control-plane-smoke-ubuntu-x86_64"
+          ],
+          "run_url_template": "https://github.com/uesugitorachiyo/ao2-control-plane/actions/runs/<run_id>",
+          "artifact_download_url_template": "https://github.com/uesugitorachiyo/ao2-control-plane/actions/runs/<run_id>/artifacts",
+          "digest_reference": "summary.json carries schema/status and artifact digests"
+        },
+        "trust_boundary": {
+          "read_only": true,
+          "approves_release": false,
+          "mutates_ao_artifacts": false
+        }
+      },
+      {
+        "id": "backup-restore-drill",
+        "artifact_name_pattern": "ao2-control-plane-dr-restore",
+        "schema_versions": [
+          "ao2.cp-dr-restore-drill.v1"
+        ],
+        "operator_action": "download-ci-artifact",
+        "ci_artifact_provenance": {
+          "provider": "github-actions",
+          "workflow_file": ".github/workflows/ci.yml",
+          "workflow_name": "CI",
+          "run_id_source": "github_actions_run_id",
+          "token_free": true,
+          "job_names": [
+            "backup-restore-drill (<target>)"
+          ],
+          "artifact_names": [
+            "ao2-control-plane-dr-restore"
+          ],
+          "run_url_template": "https://github.com/uesugitorachiyo/ao2-control-plane/actions/runs/<run_id>",
+          "artifact_download_url_template": "https://github.com/uesugitorachiyo/ao2-control-plane/actions/runs/<run_id>/artifacts",
+          "digest_reference": "summary.json carries schema/status and artifact digests"
+        },
+        "trust_boundary": {
+          "read_only": true,
+          "approves_release": false,
+          "mutates_ao_artifacts": false
+        }
+      }
+    ]
+  },
+  "trust_boundary": {
+    "role": "read_only_observer",
+    "control_plane_role": "read_only_observer",
+    "mutates_ao_artifacts": false,
+    "control_plane_approves_release": false,
+    "release_acceptance_owner": "factory-v3 evaluator-closer"
+  },
+  "portable_bundle_manifest": {
+    "schema_version": "ao2.cp-release-support-bundle-manifest.v1",
+    "included_surfaces": [
+      {
+        "id": "ci_evidence_index",
+        "schema_version": "ao2.cp-ci-evidence-index.v1",
+        "path": "$.ci_evidence_index",
+        "sha256": "2cec0ba9a2bc6dc881970421b3d012ddee6b367226beedadd37f6bd4f1a2672e"
+      },
+      {
+        "id": "install_verification",
+        "schema_version": "ao2.install-verification-evidence.v1",
+        "path": "$.install_verification",
+        "sha256": "596b2893a4fdbf65289879af7b7b288f8f1d8c60c9b11f8d27d5c0f0ddd86ba9"
+      },
+      {
+        "id": "release_assembly",
+        "schema_version": "ao2.cp-release-assembly.v1",
+        "path": "$.release_assembly",
+        "sha256": "8eba32358aaaf9064f63363e8bf2d9149fb34b761aaded9d414534b1f7f44009"
+      },
+      {
+        "id": "release_readiness",
+        "schema_version": "ao2.cp-release-readiness.v1",
+        "path": "$.readiness",
+        "sha256": "d1af90a35942ac4f677a95ed055e60602f6e00fa2459b429413c42ecfea85b70"
+      },
+      {
+        "id": "release_candidate_handoff",
+        "schema_version": "factory-v3/ao2-release-handoff-checklist/v1",
+        "path": "$.handoff",
+        "sha256": "beaeb9f7fe479c322d4b574921fd6cae04471732e77206c2f8c4f3403945c9fb"
+      },
+      {
+        "id": "release_cockpit",
+        "schema_version": "ao2.cp-release-cockpit.v1",
+        "path": "$.cockpit",
+        "sha256": "f91e6eadae47bf6b3281bbc2461acb0d38bda710b0e49f1a76c374e570b9cdd9"
+      },
+      {
+        "id": "release_evaluator_decision",
+        "schema_version": "factory-v3/ao2-release-evaluator-decision/v1",
+        "path": "$.evaluator_decision",
+        "sha256": "8173ac97beb833507ed1c40fc64c851dcd3535adca879309153e0514f1ee6fa4"
+      },
+      {
+        "id": "storage_support_bundle",
+        "schema_version": "ao2.cp-storage-support.v1",
+        "path": "$.storage_support",
+        "sha256": "8271e66e6f3065216cdc68f666816f491af7e17e6aba8928159a0ae35e6c5c58"
+      }
+    ],
+    "integrity": {
+      "algorithm": "sha256-ao2-cp-canonical-json-v1",
+      "scope": "embedded_support_bundle_surfaces",
+      "surface_sha256": {
+        "ci_evidence_index": "2cec0ba9a2bc6dc881970421b3d012ddee6b367226beedadd37f6bd4f1a2672e",
+        "install_verification": "596b2893a4fdbf65289879af7b7b288f8f1d8c60c9b11f8d27d5c0f0ddd86ba9",
+        "release_assembly": "8eba32358aaaf9064f63363e8bf2d9149fb34b761aaded9d414534b1f7f44009",
+        "release_readiness": "d1af90a35942ac4f677a95ed055e60602f6e00fa2459b429413c42ecfea85b70",
+        "release_candidate_handoff": "beaeb9f7fe479c322d4b574921fd6cae04471732e77206c2f8c4f3403945c9fb",
+        "release_cockpit": "f91e6eadae47bf6b3281bbc2461acb0d38bda710b0e49f1a76c374e570b9cdd9",
+        "release_evaluator_decision": "8173ac97beb833507ed1c40fc64c851dcd3535adca879309153e0514f1ee6fa4",
+        "storage_support_bundle": "8271e66e6f3065216cdc68f666816f491af7e17e6aba8928159a0ae35e6c5c58"
+      },
+      "verification_plan": {
+        "surface_count": 8,
+        "expected_fail_closed": true,
+        "cross_platform_commands": {
+          "macos_ubuntu": "python3 verify_release_support_bundle.py --json --checksums SHA256SUMS release-support-bundle.json",
+          "windows_powershell": "pwsh -File Verify-ReleaseSupportBundle.ps1 -Json -Checksums SHA256SUMS -Path release-support-bundle.json"
+        }
+      }
+    }
+  }
+}
