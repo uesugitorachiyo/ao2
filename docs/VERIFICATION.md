@@ -340,7 +340,11 @@ Result:
   the embedded report-contract verification from the static report inputs,
   verifies the `ao2.cp-release-support-bundle.v1` bundle and `SHA256SUMS`, and
   records the `ao2.release-support-bundle-build.v1` result in the golden
-  summary.
+  summary. CI also runs the same command in the
+  `Risky PR golden release support bundle artifacts` job and uploads
+  `ao2-risky-pr-golden-release-support-bundle` with the golden summary,
+  report-contract verification, support-bundle build result,
+  `release-support-bundle.json`, and `SHA256SUMS`.
 - `npm run risky-pr:product-readiness`: runs the Risky PR golden path once,
   then verifies local run record, static report/export, and evaluator closure
   evidence from that single run; emits

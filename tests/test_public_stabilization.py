@@ -110,6 +110,26 @@ def test_ci_release_support_verifier_runs_on_ubuntu():
     assert "--test release_support_bundle_verification" in ci
 
 
+def test_ci_uploads_risky_pr_golden_release_support_bundle_artifacts():
+    ci = read(".github/workflows/ci.yml")
+    verification = read("docs/VERIFICATION.md")
+
+    for needle in [
+        "risky-pr-golden-artifacts:",
+        "name: Risky PR golden release support bundle artifacts",
+        "AO2_RISKY_PR_GOLDEN_ROOT=target/risky-pr-golden-ci",
+        "npm run risky-pr:golden",
+        "target/risky-pr-golden-ci/summary.json",
+        "target/risky-pr-golden-ci/release-support-bundle-build.json",
+        "target/risky-pr-golden-ci/release-support-bundle/release-support-bundle.json",
+        "target/risky-pr-golden-ci/release-support-bundle/SHA256SUMS",
+        "ao2-risky-pr-golden-release-support-bundle",
+    ]:
+        assert needle in ci
+    assert "Risky PR golden release support bundle artifacts" in verification
+    assert "ao2-risky-pr-golden-release-support-bundle" in verification
+
+
 def test_ci_reports_legacy_non_approval_required_check_names():
     ci = read(".github/workflows/ci.yml")
 
