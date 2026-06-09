@@ -881,6 +881,7 @@ ao2 release support-bundle-build \
   --report-run-id <run-id> \
   --report /path/to/report/index.html \
   --report-index /path/to/report/index.json \
+  --install-verification /path/to/install-verification.json \
   --operator-evidence /path/to/operator-evidence.json \
   --out-dir /path/to/release-support-bundle \
   --json

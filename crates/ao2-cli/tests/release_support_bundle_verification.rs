@@ -58,6 +58,7 @@ fn write_bundle(path: &Path, mut overlay: serde_json::Value) {
         "storage_support": {"schema_version": "ao2.cp-storage-support.v1", "status": "ready"},
         "replay": {"status": "accepted", "digest_failures": []},
         "report_contract_verification": passed_report_contract_verification(),
+        "install_verification": passed_install_verification(),
         "operator_evidence": {
             "factory_v3_evaluator_closer_required": true,
             "release_acceptance_owner": "factory-v3 evaluator-closer",
@@ -79,6 +80,19 @@ fn passed_report_contract_verification() -> serde_json::Value {
         "complete": true,
         "missing_sections": [],
         "failures": [],
+    })
+}
+
+fn passed_install_verification() -> serde_json::Value {
+    serde_json::json!({
+        "schema_version": "ao2.install-verification-evidence.v1",
+        "status": "verified",
+        "offline_verification": {
+            "status": "verified"
+        },
+        "provider_api_keys_required": false,
+        "control_plane_approves_release": false,
+        "mutates_ao_artifacts": false
     })
 }
 
@@ -123,6 +137,7 @@ struct SupportBundleEvidencePaths {
     storage_support: PathBuf,
     replay: PathBuf,
     report_contract_verification: PathBuf,
+    install_verification: PathBuf,
     operator_evidence: PathBuf,
 }
 
@@ -137,6 +152,7 @@ fn write_support_bundle_evidence(evidence_dir: &Path) -> SupportBundleEvidencePa
         storage_support: evidence_dir.join("storage-support.json"),
         replay: evidence_dir.join("replay.json"),
         report_contract_verification: evidence_dir.join("report-contract-verification.json"),
+        install_verification: evidence_dir.join("install-verification.json"),
         operator_evidence: evidence_dir.join("operator-evidence.json"),
     };
 
@@ -200,6 +216,7 @@ fn write_support_bundle_evidence(evidence_dir: &Path) -> SupportBundleEvidencePa
         &paths.report_contract_verification,
         passed_report_contract_verification(),
     );
+    write_json(&paths.install_verification, passed_install_verification());
     write_json(
         &paths.operator_evidence,
         serde_json::json!({
@@ -320,6 +337,63 @@ fn release_support_bundle_verify_rejects_missing_required_evidence_surface() {
             failure["code"] == "missing_surface" && failure["surface"] == "evaluator_decision"
         }),
         "expected missing evaluator_decision surface, got {failures:?}"
+    );
+}
+
+#[test]
+fn release_support_bundle_verify_rejects_missing_or_unsafe_install_verification() {
+    let temp = tempfile::tempdir().unwrap();
+    let missing_bundle_path = temp.path().join("missing-install-verification.json");
+    write_bundle(
+        &missing_bundle_path,
+        serde_json::json!({
+            "install_verification": null
+        }),
+    );
+
+    let missing = verify_bundle(&missing_bundle_path);
+    assert!(
+        !missing.status.success(),
+        "support verifier should fail when install verification is missing"
+    );
+    let json: serde_json::Value = serde_json::from_str(&stdout(&missing)).unwrap();
+    let failures = json["failures"].as_array().unwrap();
+    assert!(
+        failures.iter().any(|failure| {
+            failure["code"] == "missing_surface" && failure["surface"] == "install_verification"
+        }),
+        "expected missing install_verification surface, got {failures:?}"
+    );
+
+    let unsafe_bundle_path = temp.path().join("unsafe-install-verification.json");
+    write_bundle(
+        &unsafe_bundle_path,
+        serde_json::json!({
+            "install_verification": {
+                "schema_version": "ao2.install-verification-evidence.v1",
+                "status": "verified",
+                "offline_verification": {
+                    "status": "verified"
+                },
+                "provider_api_keys_required": true,
+                "control_plane_approves_release": true,
+                "mutates_ao_artifacts": true
+            }
+        }),
+    );
+
+    let unsafe_verify = verify_bundle(&unsafe_bundle_path);
+    assert!(
+        !unsafe_verify.status.success(),
+        "support verifier should fail on trust-unsafe install verification"
+    );
+    let json: serde_json::Value = serde_json::from_str(&stdout(&unsafe_verify)).unwrap();
+    let failures = json["failures"].as_array().unwrap();
+    assert!(
+        failures
+            .iter()
+            .any(|failure| { failure["code"] == "install_verification_invalid" }),
+        "expected install_verification_invalid, got {failures:?}"
     );
 }
 
@@ -495,6 +569,7 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
     let storage_support = evidence_dir.join("storage-support.json");
     let replay = evidence_dir.join("replay.json");
     let report_contract_verification = evidence_dir.join("report-contract-verification.json");
+    let install_verification = evidence_dir.join("install-verification.json");
     let operator_evidence = evidence_dir.join("operator-evidence.json");
 
     write_json(
@@ -557,6 +632,7 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
         &report_contract_verification,
         passed_report_contract_verification(),
     );
+    write_json(&install_verification, passed_install_verification());
     write_json(
         &operator_evidence,
         serde_json::json!({
@@ -587,6 +663,8 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
         replay.to_str().unwrap(),
         "--report-contract-verification",
         report_contract_verification.to_str().unwrap(),
+        "--install-verification",
+        install_verification.to_str().unwrap(),
         "--operator-evidence",
         operator_evidence.to_str().unwrap(),
         "--out-dir",
@@ -615,6 +693,11 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
         bundle_json["report_contract_verification"]["schema_version"],
         "ao2.report-contract-verification.v1"
     );
+    assert_eq!(
+        bundle_json["install_verification"]["schema_version"],
+        "ao2.install-verification-evidence.v1"
+    );
+    assert_eq!(bundle_json["install_verification"]["status"], "verified");
 
     let verify = ao2([
         "release",
@@ -667,6 +750,8 @@ fn release_support_bundle_build_generates_report_contract_verification_from_repo
         report_path.to_str().unwrap(),
         "--report-index",
         report_index_path.to_str().unwrap(),
+        "--install-verification",
+        paths.install_verification.to_str().unwrap(),
         "--operator-evidence",
         paths.operator_evidence.to_str().unwrap(),
         "--out-dir",

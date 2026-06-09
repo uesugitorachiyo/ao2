@@ -338,9 +338,10 @@ Result:
   boundary without opening raw evidence JSON. The same run assembles a
   release support bundle through `ao2 release support-bundle-build`, generates
   the embedded report-contract verification from the static report inputs,
-  verifies the `ao2.cp-release-support-bundle.v1` bundle and `SHA256SUMS`, and
-  records the `ao2.release-support-bundle-build.v1` result in the golden
-  summary. CI also runs the same command in the
+  includes `ao2.install-verification-evidence.v1` as first-class install
+  evidence, verifies the `ao2.cp-release-support-bundle.v1` bundle and
+  `SHA256SUMS`, and records the `ao2.release-support-bundle-build.v1` result
+  in the golden summary. CI also runs the same command in the
   `Risky PR golden release support bundle artifacts` job and uploads
   `ao2-risky-pr-golden-release-support-bundle` with the golden summary,
   `ao2.risky-pr-golden-artifact-manifest.v1` `artifact-manifest.json`,
@@ -985,14 +986,17 @@ Result:
 `ao2 release support-bundle-build` assembles the public
 `ao2.cp-release-support-bundle.v1` contract from explicit release assembly,
 readiness, handoff, cockpit, evaluator decision, storage support, replay, and
-operator evidence JSON files. The build can either generate the embedded
-`ao2.report-contract-verification.v1` by running the same report-contract
-verifier from `--report-target` and `--report-run-id` inputs, or accept a
-precomputed `--report-contract-verification` JSON file. It writes
+operator evidence JSON files, plus required install-verification evidence using
+schema `ao2.install-verification-evidence.v1`. The build can either generate
+the embedded `ao2.report-contract-verification.v1` by running the same
+report-contract verifier from `--report-target` and `--report-run-id` inputs,
+or accept a precomputed `--report-contract-verification` JSON file. It writes
 `release-support-bundle.json` and `SHA256SUMS`, then verifies the generated
 bundle before returning success. The strict verifier fails closed when the
-static report contract is missing, incomplete, or failed, so release support
-bundles prove the operator-facing HTML remained inspectable before handoff.
+static report contract is missing, incomplete, or failed, or when install
+verification is missing, trust-unsafe, or not offline-verified, so release
+support bundles prove the operator-facing HTML and install evidence remained
+inspectable before handoff.
 
 Regression coverage:
 

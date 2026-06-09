@@ -2471,6 +2471,8 @@ enum ReleaseCommand {
         replay: PathBuf,
         #[arg(long = "report-contract-verification")]
         report_contract_verification: Option<PathBuf>,
+        #[arg(long = "install-verification")]
+        install_verification: PathBuf,
         #[arg(long = "report-target")]
         report_target: Option<PathBuf>,
         #[arg(long = "report-run-id")]
@@ -65163,6 +65165,7 @@ fn release(command: ReleaseCommand) -> Result<()> {
             storage_support,
             replay,
             report_contract_verification,
+            install_verification,
             report_target,
             report_run_id,
             report,
@@ -65179,6 +65182,7 @@ fn release(command: ReleaseCommand) -> Result<()> {
             storage_support,
             replay,
             report_contract_verification,
+            install_verification,
             report_target,
             report_run_id,
             report,
@@ -67398,6 +67402,7 @@ fn release_support_bundle_build(
     storage_support: PathBuf,
     replay: PathBuf,
     report_contract_verification: Option<PathBuf>,
+    install_verification: PathBuf,
     report_target: Option<PathBuf>,
     report_run_id: Option<String>,
     report: Option<PathBuf>,
@@ -67415,6 +67420,7 @@ fn release_support_bundle_build(
         &storage_support,
         &replay,
         report_contract_verification.as_deref(),
+        &install_verification,
         report_target.as_deref(),
         report_run_id.as_deref(),
         report,
@@ -67450,6 +67456,7 @@ fn release_support_bundle_build_json(
     storage_support: &Path,
     replay: &Path,
     report_contract_verification: Option<&Path>,
+    install_verification: &Path,
     report_target: Option<&Path>,
     report_run_id: Option<&str>,
     report: Option<PathBuf>,
@@ -67478,6 +67485,7 @@ fn release_support_bundle_build_json(
         "storage_support": release_support_bundle_read_surface("storage_support", storage_support)?,
         "replay": release_support_bundle_read_surface("replay", replay)?,
         "report_contract_verification": report_contract_verification,
+        "install_verification": release_support_bundle_read_surface("install_verification", install_verification)?,
         "operator_evidence": release_support_bundle_read_surface("operator_evidence", operator_evidence)?,
         "producer": {
             "package": env!("CARGO_PKG_NAME"),
@@ -67615,6 +67623,7 @@ fn release_support_bundle_verification_json(
         "evaluator_decision",
         "storage_support",
         "report_contract_verification",
+        "install_verification",
     ];
     let mut surfaces = Vec::new();
     for surface in required_surfaces {
@@ -67674,7 +67683,11 @@ fn release_support_bundle_verification_json(
     let report_contract_verification = bundle
         .get("report_contract_verification")
         .unwrap_or(&serde_json::Value::Null);
+    let install_verification = bundle
+        .get("install_verification")
+        .unwrap_or(&serde_json::Value::Null);
     let report_contract_verification_present = report_contract_verification.is_object();
+    let install_verification_present = install_verification.is_object();
     let operator_evidence_present = operator_evidence.is_object();
     let readiness_operator = readiness
         .pointer("/operator_decision")
@@ -67707,6 +67720,17 @@ fn release_support_bundle_verification_json(
             "code": "missing_operator_evidence",
             "message": "release support bundle must include operator evidence"
         }));
+    }
+
+    if install_verification_present {
+        if let Err(error) =
+            release_evidence_bundle_validate_install_verification(install_verification)
+        {
+            failures.push(serde_json::json!({
+                "code": "install_verification_invalid",
+                "message": error.to_string()
+            }));
+        }
     }
 
     let report_contract_missing_sections =
@@ -67875,6 +67899,15 @@ fn release_support_bundle_verification_json(
             "complete": report_contract_complete,
             "missing_section_count": report_contract_missing_sections.len(),
             "failure_count": report_contract_failures.len()
+        },
+        "install_verification": {
+            "present": install_verification_present,
+            "schema_version": json_string(install_verification, "schema_version"),
+            "status": json_string(install_verification, "status"),
+            "offline_status": json_string(&install_verification["offline_verification"], "status"),
+            "provider_api_keys_required": install_verification.get("provider_api_keys_required").and_then(serde_json::Value::as_bool).unwrap_or(true),
+            "control_plane_approves_release": install_verification.get("control_plane_approves_release").and_then(serde_json::Value::as_bool).unwrap_or(true),
+            "mutates_ao_artifacts": install_verification.get("mutates_ao_artifacts").and_then(serde_json::Value::as_bool).unwrap_or(true)
         },
         "failure_count": failures.len(),
         "failures": failures,
