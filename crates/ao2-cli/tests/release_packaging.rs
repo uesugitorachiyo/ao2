@@ -57,8 +57,13 @@ fn cli_packages_current_binary_for_local_distribution() {
         .any(|entry| entry == &format!("bin/{expected_binary}")));
     assert!(entries.iter().any(|entry| entry == "install.sh"));
     assert!(entries.iter().any(|entry| entry == "install.ps1"));
+    assert!(entries.iter().any(|entry| entry == "verify-release.sh"));
+    assert!(entries.iter().any(|entry| entry == "Verify-Release.ps1"));
     assert!(entries.iter().any(|entry| entry == "SHA256SUMS"));
     assert!(entries.iter().any(|entry| entry == "RELEASE-MANIFEST.json"));
+    assert!(entries
+        .iter()
+        .any(|entry| entry == "RELEASE-VERIFICATION.json"));
 
     let packaged_checksum = archive_text_entry(Path::new(archive_path), "SHA256SUMS");
     let manifest = archive_text_entry(Path::new(archive_path), "RELEASE-MANIFEST.json");
@@ -78,6 +83,57 @@ fn cli_packages_current_binary_for_local_distribution() {
             .next()
             .expect("binary checksum present")
     );
+    assert_eq!(
+        manifest_json["verification_report"],
+        "RELEASE-VERIFICATION.json"
+    );
+    assert_eq!(
+        manifest_json["verifiers"],
+        serde_json::json!(["verify-release.sh", "Verify-Release.ps1"])
+    );
+
+    for required_checksum_entry in [
+        format!("bin/{expected_binary}"),
+        "RELEASE-MANIFEST.json".to_string(),
+        "RELEASE-VERIFICATION.json".to_string(),
+        "install.sh".to_string(),
+        "install.ps1".to_string(),
+        "verify-release.sh".to_string(),
+        "Verify-Release.ps1".to_string(),
+        "README.txt".to_string(),
+        "VERSION".to_string(),
+    ] {
+        assert!(
+            packaged_checksum.contains(&required_checksum_entry),
+            "SHA256SUMS must cover {required_checksum_entry}:\n{packaged_checksum}"
+        );
+    }
+
+    let verification = archive_text_entry(Path::new(archive_path), "RELEASE-VERIFICATION.json");
+    let verification_json: serde_json::Value =
+        serde_json::from_str(&verification).expect("release verification report is json");
+    assert_eq!(
+        verification_json["schema_version"],
+        "ao2.release-archive-offline-verification.v1"
+    );
+    assert_eq!(verification_json["status"], "packaged");
+    assert_eq!(verification_json["target"], manifest_json["target"]);
+    assert_eq!(
+        verification_json["binary_path"],
+        manifest_json["binary_path"]
+    );
+    assert_eq!(verification_json["provider_api_keys_required"], false);
+    assert_eq!(verification_json["control_plane_approves_release"], false);
+    assert_eq!(verification_json["mutates_ao_artifacts"], false);
+    assert_eq!(
+        verification_json["release_acceptance_owner"],
+        "factory-v3 evaluator-closer"
+    );
+    assert!(verification_json["checksum_coverage"]
+        .as_array()
+        .expect("checksum coverage")
+        .iter()
+        .any(|path| path == "RELEASE-MANIFEST.json"));
 }
 
 #[test]
@@ -120,8 +176,13 @@ fn cli_packages_explicit_binary_for_cross_target_distribution() {
     let entries = archive_entries(Path::new(json["archive"].as_str().expect("archive")));
     assert!(entries.iter().any(|entry| entry == "bin/ao2.exe"));
     assert!(entries.iter().any(|entry| entry == "install.ps1"));
+    assert!(entries.iter().any(|entry| entry == "Verify-Release.ps1"));
+    assert!(entries.iter().any(|entry| entry == "verify-release.sh"));
     assert!(entries.iter().any(|entry| entry == "SHA256SUMS"));
     assert!(entries.iter().any(|entry| entry == "RELEASE-MANIFEST.json"));
+    assert!(entries
+        .iter()
+        .any(|entry| entry == "RELEASE-VERIFICATION.json"));
 
     let manifest = archive_text_entry(
         Path::new(json["archive"].as_str().expect("archive")),
@@ -132,6 +193,10 @@ fn cli_packages_explicit_binary_for_cross_target_distribution() {
     assert_eq!(manifest_json["target"], "windows-x86_64");
     assert_eq!(manifest_json["binary"], "ao2.exe");
     assert_eq!(manifest_json["binary_path"], "bin/ao2.exe");
+    assert_eq!(
+        manifest_json["verifiers"],
+        serde_json::json!(["verify-release.sh", "Verify-Release.ps1"])
+    );
 }
 
 #[test]
@@ -3163,6 +3228,99 @@ fn unix_installer_installs_packaged_binary_without_admin_access() {
         String::from_utf8_lossy(&help.stdout),
         String::from_utf8_lossy(&help.stderr)
     );
+
+    let verify = Command::new(sh_command())
+        .arg("verify-release.sh")
+        .current_dir(extract_dir.path())
+        .output()
+        .expect("run verify-release.sh");
+    assert!(
+        verify.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&verify.stdout),
+        String::from_utf8_lossy(&verify.stderr)
+    );
+    let verification: serde_json::Value =
+        serde_json::from_slice(&verify.stdout).expect("verify-release.sh prints json");
+    assert_eq!(
+        verification["schema_version"],
+        "ao2.release-archive-offline-verification.v1"
+    );
+    assert_eq!(verification["status"], "verified");
+    assert_eq!(verification["checksum_file"], "SHA256SUMS");
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_verifier_validates_packaged_archive_checksums() {
+    let ao2 = env!("CARGO_BIN_EXE_ao2");
+    let out_dir = tempfile::tempdir().expect("tempdir");
+    let extract_dir = tempfile::tempdir().expect("extract tempdir");
+
+    let output = Command::new(ao2)
+        .args([
+            "release",
+            "package",
+            "--out-dir",
+            out_dir.path().to_str().expect("utf8 out dir"),
+            "--version",
+            "9.9.9-test",
+            "--target-label",
+            "windows-x86_64",
+        ])
+        .output()
+        .expect("run ao2 release package");
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("package command prints json");
+
+    let archive = fs::File::open(json["archive"].as_str().expect("archive")).expect("open archive");
+    let decoder = flate2::read::GzDecoder::new(archive);
+    let mut archive = tar::Archive::new(decoder);
+    archive.unpack(extract_dir.path()).expect("extract archive");
+
+    let powershell = if Command::new("pwsh")
+        .arg("-NoProfile")
+        .arg("-Command")
+        .arg("$PSVersionTable.PSVersion | Out-Null")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+    {
+        "pwsh"
+    } else {
+        "powershell"
+    };
+    let verify = Command::new(powershell)
+        .args([
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            "Verify-Release.ps1",
+        ])
+        .current_dir(extract_dir.path())
+        .output()
+        .expect("run Verify-Release.ps1");
+    assert!(
+        verify.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&verify.stdout),
+        String::from_utf8_lossy(&verify.stderr)
+    );
+    let verification: serde_json::Value =
+        serde_json::from_slice(&verify.stdout).expect("Verify-Release.ps1 prints json");
+    assert_eq!(
+        verification["schema_version"],
+        "ao2.release-archive-offline-verification.v1"
+    );
+    assert_eq!(verification["status"], "verified");
+    assert_eq!(verification["checksum_file"], "SHA256SUMS");
 }
 
 fn archive_entries(path: &Path) -> Vec<String> {

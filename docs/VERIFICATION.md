@@ -833,10 +833,15 @@ Workspace test coverage:
   renders a static support `index.html` with a `Support Bundle Trust` section
   for signed metadata status, signer id, metadata SHA256, and public-key
   SHA256;
-- release archives include `install.sh`, `install.ps1`, and bundled binary
-  checksums;
+- release archives include `install.sh`, `install.ps1`, `verify-release.sh`,
+  `Verify-Release.ps1`, and bundled checksum coverage for binary, installer,
+  verifier, manifest, version, and README payload files;
 - release archives include `RELEASE-MANIFEST.json` with package, target,
   binary path, and packaged binary checksum metadata;
+- release archives include `RELEASE-VERIFICATION.json` with schema
+  `ao2.release-archive-offline-verification.v1`, no provider API-key
+  requirement, evaluator-closer release ownership, and no control-plane release
+  approval or AO2 artifact mutation authority;
 - Unix installer verifies the packaged binary checksum and installs to a
   user-writable `AO2_INSTALL_DIR` without admin access;
 - release install smoke installs the macOS archive and runs a scripted

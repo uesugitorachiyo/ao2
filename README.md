@@ -71,7 +71,14 @@ Build a local release archive:
 
 ```sh
 npm run package:local
+tmpdir=$(mktemp -d /tmp/ao2-release.XXXXXX)
+archive=$(ls dist/ao2-0.4.80-*.tar.gz | head -1)
+tar -xzf "$archive" -C "$tmpdir"
+sh "$tmpdir/verify-release.sh"
 ```
+
+Release archives also include `Verify-Release.ps1` for native Windows
+checksum verification before install.
 
 Run the Phase 1 promotion wrapper after starting a local ao2-control-plane
 instance and placing the control-plane bearer token in an environment variable:
