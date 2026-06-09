@@ -175,7 +175,9 @@ jobs:
           - os: ubuntu-latest
             phase: test-cli-release-packaging
             timeout_minutes: 20
-            command: cargo test -p ao2-cli --test release_packaging
+            command: |
+              npm run test:archive-resources
+              cargo test -p ao2-cli --test release_packaging -- --test-threads=1
           - os: ubuntu-latest
             phase: test-cli-factory-bridge
             timeout_minutes: 20
@@ -329,9 +331,11 @@ jobs:
             phase: test-cli-release-packaging-sdd
             timeout_minutes: 15
             command: >-
+              npm run test:archive-resources &&
               cargo test -p ao2-cli
               --test release_packaging
               --test sdd_subcommand
+              -- --test-threads=1
           - os: macos-latest
             phase: clippy
             timeout_minutes: 30
@@ -470,9 +474,11 @@ jobs:
             phase: test-cli-release-packaging-sdd
             timeout_minutes: 15
             command: >-
+              npm run test:archive-resources &&
               cargo test -p ao2-cli
               --test release_packaging
               --test sdd_subcommand
+              -- --test-threads=1
           - os: windows-latest
             phase: clippy
             timeout_minutes: 30

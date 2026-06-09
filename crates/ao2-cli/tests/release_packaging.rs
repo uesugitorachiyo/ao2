@@ -2938,6 +2938,43 @@ fn linux_x86_64_docker_packaging_constrains_emulated_build_parallelism() {
 }
 
 #[test]
+fn archive_heavy_test_resource_guard_is_wired_for_ci_and_local_use() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let guard = fs::read_to_string(root.join("scripts/ci/archive-heavy-resource-guard.py"))
+        .expect("archive-heavy resource guard exists");
+    let guard_launcher =
+        fs::read_to_string(root.join("scripts/ci/run-archive-heavy-resource-guard.mjs"))
+            .expect("archive-heavy resource guard launcher exists");
+    let package_json = fs::read_to_string(root.join("package.json")).expect("package json exists");
+    let ci = fs::read_to_string(root.join(".github/workflows/ci.yml"))
+        .expect("normal CI workflow exists");
+    let ci = ci.replace("\r\n", "\n");
+    let verification =
+        fs::read_to_string(root.join("docs/VERIFICATION.md")).expect("verification doc exists");
+
+    assert!(guard.contains("ao2.archive-heavy-test-resource-guard.v1"));
+    assert!(guard.contains("AO2_ARCHIVE_TEST_MIN_FREE_GB"));
+    assert!(guard.contains("AO2_ARCHIVE_TEST_EXPECT_SINGLE_THREAD"));
+    assert!(guard.contains("shutil.disk_usage"));
+    assert!(guard.contains("tempfile.gettempdir"));
+    assert!(guard.contains("archive_heavy_test_resource_guard=passed"));
+
+    assert!(package_json.contains("\"test:archive-resources\""));
+    assert!(package_json.contains("node scripts/ci/run-archive-heavy-resource-guard.mjs"));
+    assert!(!package_json.contains("\"test:archive-resources\": \"python3 "));
+    assert!(guard_launcher.contains("archive-heavy-resource-guard.py"));
+    assert!(guard_launcher.contains("python3"));
+    assert!(guard_launcher.contains("python"));
+    assert!(guard_launcher.contains("py"));
+
+    assert!(ci.contains("npm run test:archive-resources"));
+    assert!(ci.contains("cargo test -p ao2-cli --test release_packaging -- --test-threads=1"));
+    assert!(ci.contains("--test release_packaging\n              --test sdd_subcommand\n              -- --test-threads=1"));
+    assert!(verification.contains("test:archive-resources"));
+    assert!(verification.contains("--test-threads=1"));
+}
+
+#[test]
 fn w4_release_workflows_include_no_factory_v3_guard_artifacts() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let release_gate = fs::read_to_string(root.join(".github/workflows/release-gate.yml"))
