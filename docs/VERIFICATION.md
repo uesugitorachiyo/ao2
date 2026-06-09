@@ -343,6 +343,7 @@ Result:
   summary. CI also runs the same command in the
   `Risky PR golden release support bundle artifacts` job and uploads
   `ao2-risky-pr-golden-release-support-bundle` with the golden summary,
+  `ao2.risky-pr-golden-artifact-manifest.v1` `artifact-manifest.json`,
   report-contract verification, support-bundle build result,
   `release-support-bundle.json`, and `SHA256SUMS`.
 - `npm run risky-pr:product-readiness`: runs the Risky PR golden path once,

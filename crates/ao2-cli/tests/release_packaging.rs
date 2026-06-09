@@ -2471,6 +2471,38 @@ fn risky_pr_golden_ci_uploads_release_support_bundle_artifacts() {
 }
 
 #[test]
+fn risky_pr_golden_path_indexes_uploaded_release_support_bundle_artifacts() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let script = fs::read_to_string(root.join("scripts/risky-pr-golden-path.sh"))
+        .expect("risky pr golden path script exists");
+    let ci = fs::read_to_string(root.join(".github/workflows/ci.yml")).expect("ci workflow exists");
+    let verification =
+        fs::read_to_string(root.join("docs/VERIFICATION.md")).expect("verification docs exist");
+
+    for needle in [
+        "ARTIFACT_MANIFEST=\"$OUT_ROOT/artifact-manifest.json\"",
+        "ao2.risky-pr-golden-artifact-manifest.v1",
+        "\"artifact_manifest\"",
+        "\"artifact_count\"",
+        "\"sha256\"",
+        "\"summary.json\"",
+        "\"report-verify.json\"",
+        "\"release-support-bundle-build.json\"",
+        "\"release-support-bundle/release-support-bundle.json\"",
+        "\"release-support-bundle/SHA256SUMS\"",
+        "\"cockpit/index.report.json\"",
+    ] {
+        assert!(
+            script.contains(needle),
+            "missing risky-pr golden artifact manifest marker: {needle}"
+        );
+    }
+    assert!(ci.contains("target/risky-pr-golden-ci/artifact-manifest.json"));
+    assert!(verification.contains("ao2.risky-pr-golden-artifact-manifest.v1"));
+    assert!(verification.contains("artifact-manifest.json"));
+}
+
+#[test]
 fn evaluator_closure_corpus_is_release_wired() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let package_json = fs::read_to_string(root.join("package.json")).expect("package json exists");

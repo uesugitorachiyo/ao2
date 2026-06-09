@@ -80,6 +80,7 @@ env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY \
 
 EVIDENCE_PACK="$TARGET/.ao2/runs/$RUN_ID/evidence-pack/evidence-pack.json"
 SUMMARY="$OUT_ROOT/summary.json"
+ARTIFACT_MANIFEST="$OUT_ROOT/artifact-manifest.json"
 require_file "$EVIDENCE_PACK"
 require_file "$REPORT"
 require_file "$REPORT_INDEX"
@@ -185,12 +186,13 @@ require_file "$OUT_ROOT/release-support-bundle-build.json"
 require_file "$RELEASE_SUPPORT_BUNDLE"
 require_file "$RELEASE_SUPPORT_CHECKSUMS"
 
-python3 - "$SUMMARY" "$RUN_ID" "$TARGET" "$EVIDENCE_PACK" "$REPORT" "$REPORT_INDEX" "$COCKPIT_INDEX" "$OUT_ROOT/replay.json" "$OUT_ROOT/report-verify.json" "$OUT_ROOT/release-support-bundle-build.json" "$RELEASE_SUPPORT_BUNDLE" "$RELEASE_SUPPORT_CHECKSUMS" <<'PY'
+python3 - "$SUMMARY" "$ARTIFACT_MANIFEST" "$RUN_ID" "$TARGET" "$EVIDENCE_PACK" "$REPORT" "$REPORT_INDEX" "$COCKPIT_INDEX" "$OUT_ROOT/replay.json" "$OUT_ROOT/report-verify.json" "$OUT_ROOT/release-support-bundle-build.json" "$RELEASE_SUPPORT_BUNDLE" "$RELEASE_SUPPORT_CHECKSUMS" <<'PY'
+import hashlib
 import json
 import sys
 from pathlib import Path
 
-summary_path, run_id, target, evidence_path, report_path, report_index_path, cockpit_index_path, replay_path, report_verify_path, release_support_build_path, release_support_bundle_path, release_support_checksums_path = sys.argv[1:]
+summary_path, artifact_manifest_path, run_id, target, evidence_path, report_path, report_index_path, cockpit_index_path, replay_path, report_verify_path, release_support_build_path, release_support_bundle_path, release_support_checksums_path = sys.argv[1:]
 
 def load_json(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
@@ -211,6 +213,20 @@ def text_contains(value, *needles):
 
 def fail(message):
     raise SystemExit(message)
+
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+def json_schema_version(path):
+    try:
+        payload = load_json(path)
+    except Exception:
+        return None
+    return payload.get("schema_version") or payload.get("schema")
 
 pack = load_json(evidence_path)
 replay = load_json(replay_path)
@@ -358,6 +374,7 @@ summary = {
     "release_support_bundle_build": release_support_build_path,
     "release_support_bundle": release_support_bundle_path,
     "release_support_checksums": release_support_checksums_path,
+    "artifact_manifest": artifact_manifest_path,
     "release_support_bundle_sha256": release_support_build.get("bundle_sha256"),
     "release_support_bundle_verification_status": (release_support_build.get("verification") or {}).get("status"),
     "required_report_sections": required_report_sections,
@@ -367,7 +384,46 @@ summary = {
     **checks,
 }
 Path(summary_path).write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+artifact_root = Path(summary_path).parent
+artifact_inputs = [
+    ("summary.json", summary_path),
+    ("report-verify.json", report_verify_path),
+    ("release-support-bundle-build.json", release_support_build_path),
+    ("release-support-bundle/release-support-bundle.json", release_support_bundle_path),
+    ("release-support-bundle/SHA256SUMS", release_support_checksums_path),
+    ("cockpit/index.report.json", report_index_path),
+]
+artifacts = []
+for relative_path, path in artifact_inputs:
+    artifact_path = Path(path)
+    if not artifact_path.is_file():
+        fail(f"artifact manifest missing file: {relative_path}")
+    try:
+        observed_relative_path = artifact_path.relative_to(artifact_root).as_posix()
+    except ValueError:
+        observed_relative_path = relative_path
+    if observed_relative_path != relative_path:
+        fail(f"artifact manifest relative path mismatch: {relative_path} != {observed_relative_path}")
+    artifacts.append({
+        "relative_path": relative_path,
+        "path": relative_path,
+        "size_bytes": artifact_path.stat().st_size,
+        "sha256": sha256_file(artifact_path),
+        "schema_version": json_schema_version(artifact_path),
+    })
+
+manifest = {
+    "schema_version": "ao2.risky-pr-golden-artifact-manifest.v1",
+    "status": "indexed",
+    "run_id": run_id,
+    "artifact_root": ".",
+    "artifact_count": len(artifacts),
+    "artifacts": artifacts,
+}
+Path(artifact_manifest_path).write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 PY
 
+echo "artifact_manifest=$ARTIFACT_MANIFEST"
 echo "summary=$SUMMARY"
 echo "status=passed"
