@@ -847,8 +847,9 @@ Workspace test coverage:
   reports `offline_verification.status = "verified"` on success;
 - `ao2 install update` writes `<binary>.install-verification.json` with schema
   `ao2.install-verification-evidence.v1`, `ao2 doctor --json` reports it under
-  `install.verification_evidence`, and release evidence bundles classify it
-  when included as an artifact;
+  `install.verification_evidence`, and release evidence bundles require it as
+  a checksum-covered artifact with verified offline status and read-only
+  control-plane trust-boundary fields;
 - Unix installer verifies the packaged binary checksum and installs to a
   user-writable `AO2_INSTALL_DIR` without admin access;
 - release install smoke installs the macOS archive and runs a scripted

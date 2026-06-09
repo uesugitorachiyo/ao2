@@ -302,7 +302,7 @@ fn cli_builds_release_evidence_bundle_archive_with_manifest() {
     .expect("write decision");
     fs::write(
         &install_verification,
-        r#"{"schema_version":"ao2.install-verification-evidence.v1","status":"verified","offline_verification":{"status":"verified"}}"#,
+        r#"{"schema_version":"ao2.install-verification-evidence.v1","status":"verified","offline_verification":{"status":"verified"},"provider_api_keys_required":false,"control_plane_approves_release":false,"mutates_ao_artifacts":false}"#,
     )
     .expect("write install verification");
 
@@ -394,6 +394,134 @@ fn cli_builds_release_evidence_bundle_archive_with_manifest() {
     assert!(checksums.contains("artifacts/readiness/readiness.json"));
     assert!(checksums.contains("artifacts/install-verification/install-verification.json"));
     assert!(checksums.contains("EVIDENCE-BUNDLE-MANIFEST.json"));
+}
+
+#[test]
+fn cli_release_evidence_bundle_rejects_missing_install_verification() {
+    let ao2 = env!("CARGO_BIN_EXE_ao2");
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let readiness = tmp.path().join("readiness.json");
+    fs::write(
+        &readiness,
+        r#"{"schema_version":"ao2.cp-release-readiness.v1","status":"ready"}"#,
+    )
+    .expect("write readiness");
+
+    let output = Command::new(ao2)
+        .args([
+            "release",
+            "evidence-bundle",
+            "--out-dir",
+            tmp.path()
+                .join("bundle-out")
+                .to_str()
+                .expect("utf8 out dir"),
+            "--artifact",
+            &format!("readiness={}", readiness.display()),
+            "--json",
+        ])
+        .output()
+        .expect("run ao2 release evidence-bundle");
+
+    assert!(
+        !output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("install verification evidence is required"),
+        "stderr:\n{stderr}"
+    );
+}
+
+#[test]
+fn cli_release_evidence_bundle_rejects_schema_invalid_install_verification() {
+    let ao2 = env!("CARGO_BIN_EXE_ao2");
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let readiness = tmp.path().join("readiness.json");
+    let install_verification = tmp.path().join("install-verification.json");
+    fs::write(
+        &readiness,
+        r#"{"schema_version":"ao2.cp-release-readiness.v1","status":"ready"}"#,
+    )
+    .expect("write readiness");
+    fs::write(
+        &install_verification,
+        r#"{"schema_version":"ao2.install-verification-evidence.v0","status":"verified","offline_verification":{"status":"verified"},"provider_api_keys_required":false,"control_plane_approves_release":false,"mutates_ao_artifacts":false}"#,
+    )
+    .expect("write install verification");
+
+    let output = Command::new(ao2)
+        .args([
+            "release",
+            "evidence-bundle",
+            "--out-dir",
+            tmp.path()
+                .join("bundle-out")
+                .to_str()
+                .expect("utf8 out dir"),
+            "--artifact",
+            &format!("readiness={}", readiness.display()),
+            "--artifact",
+            &format!("install-verification={}", install_verification.display()),
+            "--json",
+        ])
+        .output()
+        .expect("run ao2 release evidence-bundle");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("install verification evidence schema_version must be ao2.install-verification-evidence.v1"),
+        "stderr:\n{stderr}"
+    );
+}
+
+#[test]
+fn cli_release_evidence_bundle_rejects_trust_unsafe_install_verification() {
+    let ao2 = env!("CARGO_BIN_EXE_ao2");
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let readiness = tmp.path().join("readiness.json");
+    let install_verification = tmp.path().join("install-verification.json");
+    fs::write(
+        &readiness,
+        r#"{"schema_version":"ao2.cp-release-readiness.v1","status":"ready"}"#,
+    )
+    .expect("write readiness");
+    fs::write(
+        &install_verification,
+        r#"{"schema_version":"ao2.install-verification-evidence.v1","status":"verified","offline_verification":{"status":"verified"},"provider_api_keys_required":false,"control_plane_approves_release":true,"mutates_ao_artifacts":false}"#,
+    )
+    .expect("write install verification");
+
+    let output = Command::new(ao2)
+        .args([
+            "release",
+            "evidence-bundle",
+            "--out-dir",
+            tmp.path()
+                .join("bundle-out")
+                .to_str()
+                .expect("utf8 out dir"),
+            "--artifact",
+            &format!("readiness={}", readiness.display()),
+            "--artifact",
+            &format!("install-verification={}", install_verification.display()),
+            "--json",
+        ])
+        .output()
+        .expect("run ao2 release evidence-bundle");
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains(
+            "install verification evidence must not approve releases through the control plane"
+        ),
+        "stderr:\n{stderr}"
+    );
 }
 
 #[test]
@@ -732,8 +860,40 @@ fn cli_verifies_release_evidence_bundle_archive() {
     assert_eq!(json["manifest_verified"], true);
     assert_eq!(json["trust_boundary_verified"], true);
     assert_eq!(json["secret_scan_passed"], true);
-    assert_eq!(json["artifact_count"], 3);
+    assert_eq!(json["artifact_count"], 4);
     assert_eq!(json["failure_count"], 0);
+}
+
+#[test]
+fn cli_release_evidence_bundle_verify_rejects_checksum_uncovered_install_verification() {
+    let ao2 = env!("CARGO_BIN_EXE_ao2");
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let archive = build_test_evidence_bundle(ao2, tmp.path(), false);
+    let tampered = tamper_evidence_bundle_without_install_checksum(&archive, tmp.path());
+
+    let output = Command::new(ao2)
+        .args([
+            "release",
+            "evidence-bundle-verify",
+            "--bundle",
+            tampered.to_str().expect("utf8 archive"),
+            "--json",
+        ])
+        .output()
+        .expect("run ao2 release evidence-bundle-verify");
+
+    assert!(
+        !output.status.success(),
+        "checksum-uncovered install evidence must fail verification"
+    );
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("failed verification still prints json");
+    assert_eq!(json["status"], "failed");
+    assert!(json["failures"]
+        .as_array()
+        .expect("failures array")
+        .iter()
+        .any(|failure| failure["code"] == "install_verification_not_checksummed"));
 }
 
 #[test]
@@ -893,7 +1053,7 @@ fn phase1_evidence_bundle_verify_script_verifies_explicit_archive() {
     )
     .expect("verification output is json");
     assert_eq!(json["status"], "verified");
-    assert_eq!(json["artifact_count"], 3);
+    assert_eq!(json["artifact_count"], 4);
 }
 
 #[test]
@@ -977,6 +1137,12 @@ fn cli_reports_phase1_promotion_status_from_root_and_bundle() {
     .expect("write dashboard snapshot manifest");
 
     let bundle_out = root.join("evidence-bundle");
+    let install_verification = root.join("install-verification.json");
+    fs::write(
+        &install_verification,
+        r#"{"schema_version":"ao2.install-verification-evidence.v1","status":"verified","offline_verification":{"status":"verified"},"provider_api_keys_required":false,"control_plane_approves_release":false,"mutates_ao_artifacts":false}"#,
+    )
+    .expect("write install verification");
     let bundle = Command::new(ao2)
         .args([
             "release",
@@ -989,6 +1155,8 @@ fn cli_reports_phase1_promotion_status_from_root_and_bundle() {
             &format!("phase1-decision={}", decision.display()),
             "--artifact",
             &format!("phase1-checklist={}", checklist.display()),
+            "--artifact",
+            &format!("install-verification={}", install_verification.display()),
             "--json",
         ])
         .output()
@@ -1142,6 +1310,12 @@ fn cli_blocks_phase1_promotion_status_without_inputs_verification() {
     .expect("write checklist");
 
     let bundle_out = root.join("evidence-bundle");
+    let install_verification = root.join("install-verification.json");
+    fs::write(
+        &install_verification,
+        r#"{"schema_version":"ao2.install-verification-evidence.v1","status":"verified","offline_verification":{"status":"verified"},"provider_api_keys_required":false,"control_plane_approves_release":false,"mutates_ao_artifacts":false}"#,
+    )
+    .expect("write install verification");
     let bundle = Command::new(ao2)
         .args([
             "release",
@@ -1154,6 +1328,8 @@ fn cli_blocks_phase1_promotion_status_without_inputs_verification() {
             &format!("phase1-decision={}", decision.display()),
             "--artifact",
             &format!("phase1-checklist={}", checklist.display()),
+            "--artifact",
+            &format!("install-verification={}", install_verification.display()),
             "--json",
         ])
         .output()
@@ -3523,6 +3699,7 @@ fn build_test_evidence_bundle(ao2: &str, root: &Path, include_secret: bool) -> P
     let readiness = root.join("readiness.json");
     let checklist = root.join("handoff-checklist.json");
     let decision = root.join("evaluator-decision.json");
+    let install_verification = root.join("install-verification.json");
     fs::write(
         &readiness,
         if include_secret {
@@ -3542,6 +3719,11 @@ fn build_test_evidence_bundle(ao2: &str, root: &Path, include_secret: bool) -> P
         r#"{"schema":"factory-v3/ao2-release-evaluator-decision/v1","status":"accepted"}"#,
     )
     .expect("write decision");
+    fs::write(
+        &install_verification,
+        r#"{"schema_version":"ao2.install-verification-evidence.v1","status":"verified","offline_verification":{"status":"verified"},"provider_api_keys_required":false,"control_plane_approves_release":false,"mutates_ao_artifacts":false}"#,
+    )
+    .expect("write install verification");
 
     let output = Command::new(ao2)
         .args([
@@ -3555,6 +3737,8 @@ fn build_test_evidence_bundle(ao2: &str, root: &Path, include_secret: bool) -> P
             &format!("handoff-checklist={}", checklist.display()),
             "--artifact",
             &format!("evaluator-decision={}", decision.display()),
+            "--artifact",
+            &format!("install-verification={}", install_verification.display()),
             "--json",
         ])
         .output()
@@ -3568,6 +3752,39 @@ fn build_test_evidence_bundle(ao2: &str, root: &Path, include_secret: bool) -> P
     let json: serde_json::Value =
         serde_json::from_slice(&output.stdout).expect("evidence-bundle prints json");
     PathBuf::from(json["archive"].as_str().expect("archive path"))
+}
+
+fn tamper_evidence_bundle_without_install_checksum(archive: &Path, root: &Path) -> PathBuf {
+    let extract_dir = root.join("tampered-evidence-bundle");
+    if extract_dir.exists() {
+        fs::remove_dir_all(&extract_dir).expect("remove stale tamper dir");
+    }
+    fs::create_dir_all(&extract_dir).expect("create tamper dir");
+
+    let input = fs::File::open(archive).expect("open archive");
+    let decoder = flate2::read::GzDecoder::new(input);
+    let mut tar = tar::Archive::new(decoder);
+    tar.unpack(&extract_dir).expect("extract archive");
+
+    let checksums = extract_dir.join("SHA256SUMS");
+    let filtered = fs::read_to_string(&checksums)
+        .expect("read checksums")
+        .lines()
+        .filter(|line| !line.contains("artifacts/install-verification/"))
+        .map(|line| format!("{line}\n"))
+        .collect::<String>();
+    fs::write(&checksums, filtered).expect("write tampered checksums");
+
+    let tampered = root.join("tampered-evidence-bundle.tar.gz");
+    let output = fs::File::create(&tampered).expect("create tampered archive");
+    let encoder = flate2::write::GzEncoder::new(output, flate2::Compression::default());
+    let mut builder = tar::Builder::new(encoder);
+    builder
+        .append_dir_all(".", &extract_dir)
+        .expect("append tampered archive");
+    let encoder = builder.into_inner().expect("finish tar");
+    encoder.finish().expect("finish gzip");
+    tampered
 }
 
 fn sh_command() -> PathBuf {

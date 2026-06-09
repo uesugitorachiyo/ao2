@@ -68003,13 +68003,12 @@ fn release_evidence_bundle_json(
         if source_sha256 != bundle_sha256 {
             anyhow::bail!("artifact digest changed while staging {label}");
         }
-        if read_json_file::<serde_json::Value>(&source)
-            .ok()
-            .is_some_and(|json| {
-                json["schema_version"] == "ao2.install-verification-evidence.v1"
-                    && json["offline_verification"]["status"] == "verified"
-            })
-        {
+        let artifact_json = read_json_file::<serde_json::Value>(&source).ok();
+        if release_evidence_bundle_install_verification_candidate(label, artifact_json.as_ref()) {
+            let Some(json) = artifact_json.as_ref() else {
+                anyhow::bail!("install verification evidence must be valid JSON: {label}");
+            };
+            release_evidence_bundle_validate_install_verification(json)?;
             install_verification_artifact_labels.push(label.to_string());
         }
         let size_bytes = fs::metadata(&staged_path)
@@ -68023,6 +68022,9 @@ fn release_evidence_bundle_json(
             "sha256": bundle_sha256,
             "size_bytes": size_bytes
         }));
+    }
+    if install_verification_artifact_labels.is_empty() {
+        anyhow::bail!("install verification evidence is required");
     }
 
     let manifest_path = stage_dir.join("EVIDENCE-BUNDLE-MANIFEST.json");
@@ -68092,6 +68094,55 @@ fn is_valid_release_evidence_artifact_label(label: &str) -> bool {
         && label
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+}
+
+fn release_evidence_bundle_install_verification_candidate(
+    label: &str,
+    json: Option<&serde_json::Value>,
+) -> bool {
+    label == "install-verification"
+        || json
+            .and_then(|value| value.get("schema_version"))
+            .and_then(serde_json::Value::as_str)
+            == Some("ao2.install-verification-evidence.v1")
+}
+
+fn release_evidence_bundle_validate_install_verification(json: &serde_json::Value) -> Result<()> {
+    if json_string(json, "schema_version") != "ao2.install-verification-evidence.v1" {
+        anyhow::bail!(
+            "install verification evidence schema_version must be ao2.install-verification-evidence.v1"
+        );
+    }
+    if json_string(json, "status") != "verified" {
+        anyhow::bail!("install verification evidence status must be verified");
+    }
+    if json_string(&json["offline_verification"], "status") != "verified" {
+        anyhow::bail!("install verification evidence offline_verification.status must be verified");
+    }
+    if json
+        .get("provider_api_keys_required")
+        .and_then(serde_json::Value::as_bool)
+        != Some(false)
+    {
+        anyhow::bail!("install verification evidence must not require provider API keys");
+    }
+    if json
+        .get("control_plane_approves_release")
+        .and_then(serde_json::Value::as_bool)
+        != Some(false)
+    {
+        anyhow::bail!(
+            "install verification evidence must not approve releases through the control plane"
+        );
+    }
+    if json
+        .get("mutates_ao_artifacts")
+        .and_then(serde_json::Value::as_bool)
+        != Some(false)
+    {
+        anyhow::bail!("install verification evidence must not mutate AO artifacts");
+    }
+    Ok(())
 }
 
 fn release_evidence_bundle_verification_json(bundle_path: &Path) -> Result<serde_json::Value> {
@@ -68279,6 +68330,80 @@ fn release_evidence_bundle_verification_json(bundle_path: &Path) -> Result<serde
             "code": "manifest_not_checksummed",
             "message": "SHA256SUMS must include EVIDENCE-BUNDLE-MANIFEST.json"
         }));
+    }
+
+    let install_verification = &manifest["install_verification_evidence"];
+    let install_labels = json_array(install_verification, "artifact_labels");
+    if install_verification
+        .get("included")
+        .and_then(serde_json::Value::as_bool)
+        != Some(true)
+        || install_labels.is_empty()
+    {
+        manifest_verified = false;
+        failures.push(serde_json::json!({
+            "code": "install_verification_missing",
+            "message": "release evidence bundle must include install verification evidence"
+        }));
+    }
+    for label_value in install_labels {
+        let Some(label) = label_value.as_str() else {
+            manifest_verified = false;
+            failures.push(serde_json::json!({
+                "code": "install_verification_label_invalid",
+                "message": "install verification artifact label must be a string"
+            }));
+            continue;
+        };
+        let Some(artifact) = artifacts
+            .iter()
+            .find(|artifact| json_string(artifact, "label") == label)
+        else {
+            manifest_verified = false;
+            failures.push(serde_json::json!({
+                "code": "install_verification_artifact_missing",
+                "label": label,
+                "message": "install verification manifest label does not match an artifact"
+            }));
+            continue;
+        };
+        let bundle_path = json_string(artifact, "bundle_path");
+        if !checksum_manifest.contains_key(&bundle_path) {
+            manifest_verified = false;
+            failures.push(serde_json::json!({
+                "code": "install_verification_not_checksummed",
+                "label": label,
+                "path": bundle_path,
+                "message": "install verification artifact must be covered by SHA256SUMS"
+            }));
+            continue;
+        }
+        if !release_evidence_bundle_relative_path_allowed(&bundle_path) {
+            continue;
+        }
+        let file_path = extract_dir.join(&bundle_path);
+        match read_json_file::<serde_json::Value>(&file_path) {
+            Ok(json) => {
+                if let Err(error) = release_evidence_bundle_validate_install_verification(&json) {
+                    manifest_verified = false;
+                    failures.push(serde_json::json!({
+                        "code": "install_verification_invalid",
+                        "label": label,
+                        "path": bundle_path,
+                        "message": error.to_string()
+                    }));
+                }
+            }
+            Err(error) => {
+                manifest_verified = false;
+                failures.push(serde_json::json!({
+                    "code": "install_verification_unreadable",
+                    "label": label,
+                    "path": bundle_path,
+                    "message": format!("read install verification evidence: {error}")
+                }));
+            }
+        }
     }
 
     let trust_boundary_verified = release_evidence_bundle_trust_boundary_verified(&manifest);

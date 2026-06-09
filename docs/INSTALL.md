@@ -71,8 +71,9 @@ JSON output includes `offline_verification.status = "verified"` before the
 binary is copied into the install directory. It also writes
 `<binary>.install-verification.json` beside the installed binary with schema
 `ao2.install-verification-evidence.v1`; `ao2 doctor --json` reads that sidecar
-under `install.verification_evidence`, and release evidence bundles classify it
-when included as an artifact.
+under `install.verification_evidence`, and release evidence bundles require it
+as a checksum-covered artifact with verified offline status and read-only
+control-plane trust-boundary fields.
 
 ## macOS
 
