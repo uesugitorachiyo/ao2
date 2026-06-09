@@ -346,7 +346,11 @@ Result:
   `ao2-risky-pr-golden-release-support-bundle` with the golden summary,
   `ao2.risky-pr-golden-artifact-manifest.v1` `artifact-manifest.json`,
   report-contract verification, support-bundle build result,
-  `release-support-bundle.json`, and `SHA256SUMS`.
+  `release-support-bundle.json`, and `SHA256SUMS`. The same job checks out
+  ao2-control-plane and runs its ao2-control-plane offline verifier against
+  the generated bundle/checksum pair, uploading
+  `release-support-bundle-control-plane-verify.json` with the handoff
+  evidence.
 - `npm run risky-pr:control-plane-bridge`: validates a downloaded Risky PR
   golden `artifact-manifest.json`, writes a stable local
   `target/risky-pr-golden-control-plane-bridge/latest/artifact-manifest.json`,
