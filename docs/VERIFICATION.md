@@ -842,6 +842,9 @@ Workspace test coverage:
   `ao2.release-archive-offline-verification.v1`, no provider API-key
   requirement, evaluator-closer release ownership, and no control-plane release
   approval or AO2 artifact mutation authority;
+- `ao2 install update` enforces the offline release verification report and
+  `SHA256SUMS` coverage before it creates or mutates the install directory, and
+  reports `offline_verification.status = "verified"` on success;
 - Unix installer verifies the packaged binary checksum and installs to a
   user-writable `AO2_INSTALL_DIR` without admin access;
 - release install smoke installs the macOS archive and runs a scripted
@@ -1153,7 +1156,8 @@ Result:
   direct release URLs.
 - `ao2 upgrade apply` installs a signed release selected from metadata and
   preserves rollback.
-- `ao2 install update` preserves the previous installed binary as
+- `ao2 install update` verifies the signed archive, offline release report, and
+  checksum coverage before preserving the previous installed binary as
   `<binary>.rollback`.
 - `ao2 install rollback` restores that previous binary for default or custom
   install directories.
