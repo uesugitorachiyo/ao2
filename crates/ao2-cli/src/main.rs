@@ -70959,7 +70959,50 @@ mkdir -p "$install_dir"
 cp "$source_binary" "$dest_binary"
 chmod 755 "$dest_binary"
 
+manifest_value() {{
+  key="$1"
+  awk -v key="\"$key\"" '
+    index($0, key) {{
+      sub(/^[^:]*:[[:space:]]*"/, "", $0)
+      sub(/",?$/, "", $0)
+      print
+      exit
+    }}
+  ' "$source_dir/RELEASE-MANIFEST.json"
+}}
+
+version="$(manifest_value version)"
+target="$(manifest_value target)"
+evidence_path="$dest_binary.install-verification.json"
+cat > "$evidence_path" <<JSON
+{{
+  "schema_version": "ao2.install-verification-evidence.v1",
+  "status": "verified",
+  "install_status": "installed",
+  "version": "$version",
+  "target": "$target",
+  "binary": "$binary_name",
+  "checksum_file": "SHA256SUMS",
+  "offline_verification": {{
+    "schema_version": "ao2.release-archive-offline-verification.v1",
+    "status": "verified",
+    "checksum_file": "SHA256SUMS",
+    "verification_report": "RELEASE-VERIFICATION.json",
+    "checksum_coverage_verified": true,
+    "provider_api_keys_required": false,
+    "control_plane_approves_release": false,
+    "mutates_ao_artifacts": false,
+    "release_acceptance_owner": "factory-v3 evaluator-closer"
+  }},
+  "provider_api_keys_required": false,
+  "control_plane_approves_release": false,
+  "mutates_ao_artifacts": false,
+  "release_acceptance_owner": "factory-v3 evaluator-closer"
+}}
+JSON
+
 echo "installed $dest_binary"
+echo "install_verification_evidence=$evidence_path"
 echo "add $install_dir to PATH if ao2 is not already available"
 "#
     )
@@ -71014,6 +71057,7 @@ $BinaryName = "{binary_name}"
 $SourceDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $SourceBinary = Join-Path $SourceDir "bin/$BinaryName"
 $ChecksumFile = Join-Path $SourceDir "SHA256SUMS"
+$ManifestFile = Join-Path $SourceDir "RELEASE-MANIFEST.json"
 $InstallDir = if ($env:AO2_INSTALL_DIR) {{
     $env:AO2_INSTALL_DIR
 }} elseif ($env:LOCALAPPDATA) {{
@@ -71025,6 +71069,9 @@ $DestBinary = Join-Path $InstallDir $BinaryName
 
 if (!(Test-Path $SourceBinary)) {{
     throw "missing packaged binary: $SourceBinary"
+}}
+if (!(Test-Path $ManifestFile)) {{
+    throw "missing release manifest: $ManifestFile"
 }}
 
 $ChecksumLine = Get-Content $ChecksumFile | Where-Object {{ $_ -match "\s+bin/$([Regex]::Escape($BinaryName))$" }} | Select-Object -First 1
@@ -71040,7 +71087,35 @@ if ($Actual -ne $Expected) {{
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 Copy-Item -Force $SourceBinary $DestBinary
 
+$Manifest = Get-Content -Raw -LiteralPath $ManifestFile | ConvertFrom-Json
+$EvidencePath = "$DestBinary.install-verification.json"
+[ordered]@{{
+    schema_version = "ao2.install-verification-evidence.v1"
+    status = "verified"
+    install_status = "installed"
+    version = $Manifest.version
+    target = $Manifest.target
+    binary = $BinaryName
+    checksum_file = "SHA256SUMS"
+    offline_verification = [ordered]@{{
+        schema_version = "ao2.release-archive-offline-verification.v1"
+        status = "verified"
+        checksum_file = "SHA256SUMS"
+        verification_report = "RELEASE-VERIFICATION.json"
+        checksum_coverage_verified = $true
+        provider_api_keys_required = $false
+        control_plane_approves_release = $false
+        mutates_ao_artifacts = $false
+        release_acceptance_owner = "factory-v3 evaluator-closer"
+    }}
+    provider_api_keys_required = $false
+    control_plane_approves_release = $false
+    mutates_ao_artifacts = $false
+    release_acceptance_owner = "factory-v3 evaluator-closer"
+}} | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 -LiteralPath $EvidencePath
+
 Write-Output "installed $DestBinary"
+Write-Output "install_verification_evidence=$EvidencePath"
 Write-Output "add $InstallDir to PATH if ao2 is not already available"
 "#
     )

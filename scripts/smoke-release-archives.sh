@@ -11,6 +11,16 @@ AO2_RELEASE_PROVENANCE_DIR="${AO2_RELEASE_PROVENANCE_DIR:-dist-provenance}"
 AO2_UBUNTU_IMAGE="${AO2_UBUNTU_IMAGE:-ubuntu:24.04}"
 AO2_SMOKE_ROOT="${AO2_SMOKE_ROOT:-$PWD/target/release-smoke/$(date +%Y%m%d%H%M%S)}"
 AO2_RELEASE_SMOKE_LEG="${AO2_RELEASE_SMOKE_LEG:-all}"
+AO2_RELEASE_SMOKE_JSON="${AO2_RELEASE_SMOKE_JSON:-}"
+
+macos_status="skipped"
+macos_install_verification_evidence=""
+ubuntu_status="skipped"
+ubuntu_install_verification_evidence=""
+linux_x86_64_status="skipped"
+windows_static_status="skipped"
+windows_installer_status="skipped"
+windows_install_verification_evidence=""
 
 case "$AO2_RELEASE_SMOKE_LEG" in
   macos|ubuntu|linux_x86_64|windows_static|all) ;;
@@ -72,6 +82,13 @@ case "$(uname -s)-$(uname -m)" in
     grep -q '"schema_version": "ao2.release-manifest.v1"' "$extract/RELEASE-MANIFEST.json"
     grep -q '"binary": "ao2"' "$extract/RELEASE-MANIFEST.json"
     AO2_INSTALL_DIR="$install_dir" sh "$extract/install.sh"
+    install_evidence="$install_dir/ao2.install-verification.json"
+    test -f "$install_evidence"
+    grep -q '"schema_version": "ao2.install-verification-evidence.v1"' "$install_evidence"
+    grep -q '"status": "verified"' "$install_evidence"
+    grep -q '"provider_api_keys_required": false' "$install_evidence"
+    grep -q '"control_plane_approves_release": false' "$install_evidence"
+    grep -q '"mutates_ao_artifacts": false' "$install_evidence"
     "$install_dir/ao2" --help >/dev/null
     "$install_dir/ao2" version --json >/dev/null
     "$install_dir/ao2" adapter doctor --provider scripted >/dev/null
@@ -119,9 +136,13 @@ SH
     test "$(cat "$repo/src/value.txt")" = ok
     printf "macos_evidence=%s\n" "$repo/.ao2/runs/macos-install-smoke-repair/evidence-pack/evidence-pack.json"
     printf "macos_cockpit=%s\n" "$repo/.ao2/runs/macos-install-smoke-repair/cockpit/index.html"
+    printf "macos_install_verification_evidence=%s\n" "$install_evidence"
+    macos_install_verification_evidence="$install_evidence"
+    macos_status="passed"
     echo "macos_install_smoke=passed"
     ;;
   *)
+    macos_status="skipped"
     echo "macos_install_smoke=skipped (host is not macOS arm64)"
     ;;
 esac
@@ -147,6 +168,13 @@ docker run --rm \
     grep -q "\"schema_version\": \"ao2.release-manifest.v1\"" "$extract/RELEASE-MANIFEST.json"
     grep -q "\"binary\": \"ao2\"" "$extract/RELEASE-MANIFEST.json"
     AO2_INSTALL_DIR="$install_dir" sh "$extract/install.sh"
+    install_evidence="$install_dir/ao2.install-verification.json"
+    test -f "$install_evidence"
+    grep -q "\"schema_version\": \"ao2.install-verification-evidence.v1\"" "$install_evidence"
+    grep -q "\"status\": \"verified\"" "$install_evidence"
+    grep -q "\"provider_api_keys_required\": false" "$install_evidence"
+    grep -q "\"control_plane_approves_release\": false" "$install_evidence"
+    grep -q "\"mutates_ao_artifacts\": false" "$install_evidence"
     "$install_dir/ao2" --help >/dev/null
     "$install_dir/ao2" version --json >/dev/null
     "$install_dir/ao2" adapter doctor --provider scripted >/dev/null
@@ -197,6 +225,11 @@ SH
   '
 printf "ubuntu_host_evidence=%s\n" "$AO2_SMOKE_ROOT/ubuntu/repo/.ao2/runs/ubuntu-install-smoke-repair/evidence-pack/evidence-pack.json"
 printf "ubuntu_host_cockpit=%s\n" "$AO2_SMOKE_ROOT/ubuntu/repo/.ao2/runs/ubuntu-install-smoke-repair/cockpit/index.html"
+ubuntu_install_verification_evidence="$AO2_SMOKE_ROOT/ubuntu/bin/ao2.install-verification.json"
+test -f "$ubuntu_install_verification_evidence"
+grep -q '"schema_version": "ao2.install-verification-evidence.v1"' "$ubuntu_install_verification_evidence"
+printf "ubuntu_install_verification_evidence=%s\n" "$ubuntu_install_verification_evidence"
+ubuntu_status="passed"
 echo "ubuntu_install_smoke=passed"
 fi
 
@@ -208,9 +241,10 @@ linux_x86_64_log="$AO2_SMOKE_ROOT/linux-x86_64-remote.log"
 AO2_LINUX_X86_64_ARCHIVE="$linux_x86_64_archive_dir/$linux_x86_64_archive_name" \
 AO2_UBUNTU_SSH_TARGET="$AO2_UBUNTU_SSH_TARGET" \
 AO2_LINUX_X86_64_REMOTE_LOG="$linux_x86_64_log" \
-  scripts/smoke-linux-release-remote.sh
+scripts/smoke-linux-release-remote.sh
 grep -q "linux_x86_64_remote_smoke=passed" "$linux_x86_64_log"
 printf "linux_x86_64_remote_log=%s\n" "$linux_x86_64_log"
+linux_x86_64_status="passed"
 fi
 
 if should_run_release_smoke_leg windows_static; then
@@ -240,12 +274,67 @@ if command -v pwsh >/dev/null 2>&1; then
   install_dir="$work/install-bin"
   (cd "$work" && AO2_INSTALL_DIR="$install_dir" pwsh -NoProfile -ExecutionPolicy Bypass -File ./install.ps1 >/dev/null)
   test -f "$install_dir/ao2.exe"
+  windows_install_verification_evidence="$install_dir/ao2.exe.install-verification.json"
+  test -f "$windows_install_verification_evidence"
+  grep -q '"schema_version":  "ao2.install-verification-evidence.v1"' "$windows_install_verification_evidence" || grep -q '"schema_version": "ao2.install-verification-evidence.v1"' "$windows_install_verification_evidence"
+  printf "windows_install_verification_evidence=%s\n" "$windows_install_verification_evidence"
+  windows_installer_status="passed"
   echo "windows_installer_pwsh=passed"
 else
+  windows_installer_status="skipped"
   echo "windows_installer_pwsh=skipped (pwsh unavailable on this host)"
 fi
 printf "windows_archive=%s\n" "$windows_archive_dir/$windows_archive_name"
+windows_static_status="passed"
 echo "windows_static_smoke=passed"
 fi
 
 echo "release archive smoke completed leg=$AO2_RELEASE_SMOKE_LEG"
+
+if [ -n "$AO2_RELEASE_SMOKE_JSON" ]; then
+  mkdir -p "$(dirname -- "$AO2_RELEASE_SMOKE_JSON")"
+  export AO2_RELEASE_SMOKE_JSON
+  export AO2_RELEASE_SMOKE_LEG AO2_SMOKE_ROOT
+  export macos_status macos_install_verification_evidence
+  export ubuntu_status ubuntu_install_verification_evidence
+  export linux_x86_64_status
+  export windows_static_status windows_installer_status windows_install_verification_evidence
+  python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+out = Path(os.environ["AO2_RELEASE_SMOKE_JSON"])
+summary = {
+    "schema_version": "ao2.release-archive-smoke.v1",
+    "status": "passed",
+    "release_smoke_leg": os.environ["AO2_RELEASE_SMOKE_LEG"],
+    "smoke_root": os.environ["AO2_SMOKE_ROOT"],
+    "legs": {
+        "macos": {
+            "status": os.environ["macos_status"],
+            "install_verification_evidence": os.environ["macos_install_verification_evidence"],
+        },
+        "ubuntu": {
+            "status": os.environ["ubuntu_status"],
+            "install_verification_evidence": os.environ["ubuntu_install_verification_evidence"],
+        },
+        "linux_x86_64": {
+            "status": os.environ["linux_x86_64_status"],
+        },
+        "windows_static": {
+            "status": os.environ["windows_static_status"],
+            "installer_status": os.environ["windows_installer_status"],
+            "install_verification_evidence": os.environ["windows_install_verification_evidence"],
+        },
+    },
+    "install_verification_schema": "ao2.install-verification-evidence.v1",
+    "provider_api_keys_required": False,
+    "control_plane_approves_release": False,
+    "mutates_ao_artifacts": False,
+    "release_acceptance_owner": "factory-v3 evaluator-closer",
+}
+out.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+PY
+  printf "release_archive_smoke_json=%s\n" "$AO2_RELEASE_SMOKE_JSON"
+fi

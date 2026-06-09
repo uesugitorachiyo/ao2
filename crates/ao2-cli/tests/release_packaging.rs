@@ -2122,6 +2122,10 @@ fn release_operational_scripts_cover_three_os_ci_and_download_verification() {
     assert!(release_archives.contains("AO2_RELEASE_SMOKE_LEG"));
     assert!(release_archives.contains("should_run_release_smoke_leg()"));
     assert!(release_archives.contains("macos|ubuntu|linux_x86_64|windows_static|all"));
+    assert!(release_archives.contains("AO2_RELEASE_SMOKE_JSON"));
+    assert!(release_archives.contains("ao2.release-archive-smoke.v1"));
+    assert!(release_archives.contains("install_verification_evidence"));
+    assert!(release_archives.contains("ao2.install-verification-evidence.v1"));
     assert!(release_archives.contains("macos_install_smoke=passed"));
     assert!(release_archives.contains("ubuntu_install_smoke=passed"));
     assert!(release_archives.contains("windows_static_smoke=passed"));
@@ -3490,6 +3494,36 @@ fn unix_installer_installs_packaged_binary_without_admin_access() {
 
     let installed = install_dir.path().join("ao2");
     assert!(installed.is_file());
+    let install_verification = install_dir.path().join("ao2.install-verification.json");
+    assert!(
+        install_verification.is_file(),
+        "archive install.sh must write install verification sidecar"
+    );
+    let install_verification_json: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&install_verification).unwrap()).unwrap();
+    assert_eq!(
+        install_verification_json["schema_version"],
+        "ao2.install-verification-evidence.v1"
+    );
+    assert_eq!(install_verification_json["status"], "verified");
+    assert_eq!(install_verification_json["install_status"], "installed");
+    assert_eq!(
+        install_verification_json["offline_verification"]["status"],
+        "verified"
+    );
+    assert_eq!(
+        install_verification_json["provider_api_keys_required"],
+        false
+    );
+    assert_eq!(
+        install_verification_json["control_plane_approves_release"],
+        false
+    );
+    assert_eq!(install_verification_json["mutates_ao_artifacts"], false);
+    assert_eq!(
+        install_verification_json["release_acceptance_owner"],
+        "factory-v3 evaluator-closer"
+    );
     let help = Command::new(&installed)
         .arg("--help")
         .output()
@@ -3520,6 +3554,106 @@ fn unix_installer_installs_packaged_binary_without_admin_access() {
     );
     assert_eq!(verification["status"], "verified");
     assert_eq!(verification["checksum_file"], "SHA256SUMS");
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_installer_writes_install_verification_sidecar_without_admin_access() {
+    let ao2 = env!("CARGO_BIN_EXE_ao2");
+    let out_dir = tempfile::tempdir().expect("tempdir");
+    let extract_dir = tempfile::tempdir().expect("extract tempdir");
+    let install_dir = tempfile::tempdir().expect("install tempdir");
+
+    let output = Command::new(ao2)
+        .args([
+            "release",
+            "package",
+            "--out-dir",
+            out_dir.path().to_str().expect("utf8 out dir"),
+            "--version",
+            "9.9.9-test",
+            "--target-label",
+            "windows-x86_64",
+        ])
+        .output()
+        .expect("run ao2 release package");
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("package command prints json");
+
+    let archive = fs::File::open(json["archive"].as_str().expect("archive")).expect("open archive");
+    let decoder = flate2::read::GzDecoder::new(archive);
+    let mut archive = tar::Archive::new(decoder);
+    archive.unpack(extract_dir.path()).expect("extract archive");
+
+    let powershell = if Command::new("pwsh")
+        .arg("-NoProfile")
+        .arg("-Command")
+        .arg("$PSVersionTable.PSVersion | Out-Null")
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+    {
+        "pwsh"
+    } else {
+        "powershell"
+    };
+    let install = Command::new(powershell)
+        .args([
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            "install.ps1",
+        ])
+        .current_dir(extract_dir.path())
+        .env("AO2_INSTALL_DIR", install_dir.path())
+        .output()
+        .expect("run install.ps1");
+    assert!(
+        install.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&install.stdout),
+        String::from_utf8_lossy(&install.stderr)
+    );
+
+    let installed = install_dir.path().join("ao2.exe");
+    assert!(installed.is_file());
+    let install_verification = install_dir.path().join("ao2.exe.install-verification.json");
+    assert!(
+        install_verification.is_file(),
+        "archive install.ps1 must write install verification sidecar"
+    );
+    let install_verification_json: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&install_verification).unwrap()).unwrap();
+    assert_eq!(
+        install_verification_json["schema_version"],
+        "ao2.install-verification-evidence.v1"
+    );
+    assert_eq!(install_verification_json["status"], "verified");
+    assert_eq!(install_verification_json["install_status"], "installed");
+    assert_eq!(
+        install_verification_json["offline_verification"]["status"],
+        "verified"
+    );
+    assert_eq!(
+        install_verification_json["provider_api_keys_required"],
+        false
+    );
+    assert_eq!(
+        install_verification_json["control_plane_approves_release"],
+        false
+    );
+    assert_eq!(install_verification_json["mutates_ao_artifacts"], false);
+    assert_eq!(
+        install_verification_json["release_acceptance_owner"],
+        "factory-v3 evaluator-closer"
+    );
 }
 
 #[cfg(windows)]
