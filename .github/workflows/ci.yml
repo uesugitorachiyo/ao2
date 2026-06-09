@@ -656,6 +656,7 @@ jobs:
         shell: bash
         run: |
           test -f target/risky-pr-golden-ci/summary.json
+          test -f target/risky-pr-golden-ci/artifact-manifest.json
           test -f target/risky-pr-golden-ci/release-support-bundle-build.json
           test -f target/risky-pr-golden-ci/release-support-bundle/release-support-bundle.json
           test -f target/risky-pr-golden-ci/release-support-bundle/SHA256SUMS
@@ -665,6 +666,7 @@ jobs:
           name: ao2-risky-pr-golden-release-support-bundle
           path: |
             target/risky-pr-golden-ci/summary.json
+            target/risky-pr-golden-ci/artifact-manifest.json
             target/risky-pr-golden-ci/report-verify.json
             target/risky-pr-golden-ci/release-support-bundle-build.json
             target/risky-pr-golden-ci/release-support-bundle/release-support-bundle.json

@@ -130,6 +130,30 @@ def test_ci_uploads_risky_pr_golden_release_support_bundle_artifacts():
     assert "ao2-risky-pr-golden-release-support-bundle" in verification
 
 
+def test_risky_pr_golden_upload_artifacts_have_stable_manifest():
+    script = read("scripts/risky-pr-golden-path.sh")
+    ci = read(".github/workflows/ci.yml")
+    verification = read("docs/VERIFICATION.md")
+
+    for needle in [
+        'ARTIFACT_MANIFEST="$OUT_ROOT/artifact-manifest.json"',
+        "ao2.risky-pr-golden-artifact-manifest.v1",
+        '"artifact_manifest"',
+        '"artifact_count"',
+        '"sha256"',
+        '"summary.json"',
+        '"report-verify.json"',
+        '"release-support-bundle-build.json"',
+        '"release-support-bundle/release-support-bundle.json"',
+        '"release-support-bundle/SHA256SUMS"',
+        '"cockpit/index.report.json"',
+    ]:
+        assert needle in script
+    assert "target/risky-pr-golden-ci/artifact-manifest.json" in ci
+    assert "ao2.risky-pr-golden-artifact-manifest.v1" in verification
+    assert "artifact-manifest.json" in verification
+
+
 def test_ci_reports_legacy_non_approval_required_check_names():
     ci = read(".github/workflows/ci.yml")
 
