@@ -2725,6 +2725,13 @@ fn risky_pr_golden_ci_uploads_release_support_bundle_artifacts() {
         "target/risky-pr-golden-ci/release-support-bundle-build.json",
         "target/risky-pr-golden-ci/release-support-bundle/release-support-bundle.json",
         "target/risky-pr-golden-ci/release-support-bundle/SHA256SUMS",
+        "repository: uesugitorachiyo/ao2-control-plane",
+        "path: ao2-control-plane",
+        "python3 ao2-control-plane/scripts/verify_release_support_bundle.py",
+        "--checksums target/risky-pr-golden-ci/release-support-bundle/SHA256SUMS",
+        "target/risky-pr-golden-ci/release-support-bundle/release-support-bundle.json",
+        "> target/risky-pr-golden-ci/release-support-bundle-control-plane-verify.json",
+        "target/risky-pr-golden-ci/release-support-bundle-control-plane-verify.json",
         "ao2-risky-pr-golden-release-support-bundle",
     ] {
         assert!(
@@ -2734,6 +2741,7 @@ fn risky_pr_golden_ci_uploads_release_support_bundle_artifacts() {
     }
     assert!(verification.contains("Risky PR golden release support bundle artifacts"));
     assert!(verification.contains("ao2-risky-pr-golden-release-support-bundle"));
+    assert!(verification.contains("ao2-control-plane offline verifier"));
 }
 
 #[test]

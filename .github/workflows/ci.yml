@@ -666,6 +666,19 @@ jobs:
           test -f target/risky-pr-golden-ci/release-support-bundle-build.json
           test -f target/risky-pr-golden-ci/release-support-bundle/release-support-bundle.json
           test -f target/risky-pr-golden-ci/release-support-bundle/SHA256SUMS
+      - name: Checkout ao2-control-plane verifier
+        uses: actions/checkout@v6.0.3
+        with:
+          repository: uesugitorachiyo/ao2-control-plane
+          path: ao2-control-plane
+      - name: Verify release support bundle with ao2-control-plane offline verifier
+        shell: bash
+        run: |
+          python3 ao2-control-plane/scripts/verify_release_support_bundle.py \
+            --json \
+            --checksums target/risky-pr-golden-ci/release-support-bundle/SHA256SUMS \
+            target/risky-pr-golden-ci/release-support-bundle/release-support-bundle.json \
+            > target/risky-pr-golden-ci/release-support-bundle-control-plane-verify.json
       - name: Upload Risky PR golden release support bundle artifacts
         uses: actions/upload-artifact@v7.0.1
         with:
@@ -675,6 +688,7 @@ jobs:
             target/risky-pr-golden-ci/artifact-manifest.json
             target/risky-pr-golden-ci/report-verify.json
             target/risky-pr-golden-ci/release-support-bundle-build.json
+            target/risky-pr-golden-ci/release-support-bundle-control-plane-verify.json
             target/risky-pr-golden-ci/release-support-bundle/release-support-bundle.json
             target/risky-pr-golden-ci/release-support-bundle/SHA256SUMS
             target/risky-pr-golden-ci/cockpit/index.report.json
