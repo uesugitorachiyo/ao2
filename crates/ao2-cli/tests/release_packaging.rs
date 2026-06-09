@@ -2444,6 +2444,33 @@ fn risky_pr_golden_path_builds_release_support_bundle() {
 }
 
 #[test]
+fn risky_pr_golden_ci_uploads_release_support_bundle_artifacts() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let ci = fs::read_to_string(root.join(".github/workflows/ci.yml")).expect("ci workflow exists");
+    let verification =
+        fs::read_to_string(root.join("docs/VERIFICATION.md")).expect("verification docs exist");
+
+    for needle in [
+        "risky-pr-golden-artifacts:",
+        "name: Risky PR golden release support bundle artifacts",
+        "AO2_RISKY_PR_GOLDEN_ROOT=target/risky-pr-golden-ci",
+        "npm run risky-pr:golden",
+        "target/risky-pr-golden-ci/summary.json",
+        "target/risky-pr-golden-ci/release-support-bundle-build.json",
+        "target/risky-pr-golden-ci/release-support-bundle/release-support-bundle.json",
+        "target/risky-pr-golden-ci/release-support-bundle/SHA256SUMS",
+        "ao2-risky-pr-golden-release-support-bundle",
+    ] {
+        assert!(
+            ci.contains(needle),
+            "missing risky-pr golden CI marker: {needle}"
+        );
+    }
+    assert!(verification.contains("Risky PR golden release support bundle artifacts"));
+    assert!(verification.contains("ao2-risky-pr-golden-release-support-bundle"));
+}
+
+#[test]
 fn evaluator_closure_corpus_is_release_wired() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let package_json = fs::read_to_string(root.join("package.json")).expect("package json exists");

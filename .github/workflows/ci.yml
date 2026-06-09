@@ -634,6 +634,44 @@ jobs:
           path: target/release-readiness-ci
           if-no-files-found: error
 
+  risky-pr-golden-artifacts:
+    name: Risky PR golden release support bundle artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+      - name: Run Risky PR golden path
+        shell: bash
+        run: |
+          AO2_RISKY_PR_GOLDEN_ROOT=target/risky-pr-golden-ci \
+            npm run risky-pr:golden
+      - name: Verify Risky PR golden support bundle artifact files
+        shell: bash
+        run: |
+          test -f target/risky-pr-golden-ci/summary.json
+          test -f target/risky-pr-golden-ci/release-support-bundle-build.json
+          test -f target/risky-pr-golden-ci/release-support-bundle/release-support-bundle.json
+          test -f target/risky-pr-golden-ci/release-support-bundle/SHA256SUMS
+      - name: Upload Risky PR golden release support bundle artifacts
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-risky-pr-golden-release-support-bundle
+          path: |
+            target/risky-pr-golden-ci/summary.json
+            target/risky-pr-golden-ci/report-verify.json
+            target/risky-pr-golden-ci/release-support-bundle-build.json
+            target/risky-pr-golden-ci/release-support-bundle/release-support-bundle.json
+            target/risky-pr-golden-ci/release-support-bundle/SHA256SUMS
+            target/risky-pr-golden-ci/cockpit/index.report.json
+          if-no-files-found: error
+
   deny:
     name: Cargo deny (supply chain)
     runs-on: ubuntu-latest
