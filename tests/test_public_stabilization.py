@@ -217,6 +217,8 @@ def test_risky_pr_golden_path_script_is_exposed_and_checks_uat_surface():
     text = script.read_text(encoding="utf-8")
     required = [
         "env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY",
+        "AO2_BIN_EXPLICIT=\"${AO2_BIN:-}\"",
+        "explicit AO2_BIN is not executable",
         "--pause-for-approval",
         "approval_ticket_id",
         "approve \"$TICKET\"",
@@ -234,6 +236,14 @@ def test_risky_pr_golden_path_script_is_exposed_and_checks_uat_surface():
         "Closure Reports",
         "Replay Evidence",
         "Run Markers",
+        "RELEASE_SUPPORT_INPUTS=\"$OUT_ROOT/release-support-inputs\"",
+        "release support-bundle-build",
+        "--report-target \"$TARGET\"",
+        "--report-run-id \"$RUN_ID\"",
+        "release-support-bundle.json",
+        "ao2.release-support-bundle-build.v1",
+        "ao2.cp-release-support-bundle.v1",
+        "release_support_bundle_verification_status",
     ]
     for needle in required:
         assert needle in text

@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_ROOT="${AO2_RISKY_PR_GOLDEN_ROOT:-$ROOT/target/risky-pr-golden-path/$(date -u +%Y%m%dT%H%M%SZ)}"
 RUN_ID="${AO2_RISKY_PR_GOLDEN_RUN_ID:-risky-pr-golden-path}"
+AO2_BIN_EXPLICIT="${AO2_BIN:-}"
 AO2_BIN="${AO2_BIN:-$ROOT/target/release/ao2}"
 
 require_file() {
@@ -18,9 +19,12 @@ mkdir -p "$OUT_ROOT"
 echo "golden_root=$OUT_ROOT"
 echo "run_id=$RUN_ID"
 
-if [ ! -x "$AO2_BIN" ]; then
+if [ -z "$AO2_BIN_EXPLICIT" ]; then
   echo "=== build ao2 ==="
   cargo build --release -p ao2-cli
+elif [ ! -x "$AO2_BIN" ]; then
+  echo "explicit AO2_BIN is not executable: $AO2_BIN" >&2
+  exit 1
 fi
 
 FIXTURE_ROOT="$OUT_ROOT/fixture"
@@ -65,6 +69,8 @@ env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY \
 REPORT="$OUT_ROOT/cockpit/index.html"
 REPORT_INDEX="$OUT_ROOT/cockpit/index.report.json"
 COCKPIT_INDEX="$OUT_ROOT/cockpit/runs.html"
+RELEASE_SUPPORT_INPUTS="$OUT_ROOT/release-support-inputs"
+RELEASE_SUPPORT_BUNDLE_DIR="$OUT_ROOT/release-support-bundle"
 env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY \
   "$AO2_BIN" report "$RUN_ID" --target "$TARGET" --out "$REPORT" > "$OUT_ROOT/report.txt"
 env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY \
@@ -80,12 +86,111 @@ require_file "$REPORT_INDEX"
 require_file "$OUT_ROOT/report-verify.json"
 require_file "$COCKPIT_INDEX"
 
-python3 - "$SUMMARY" "$RUN_ID" "$TARGET" "$EVIDENCE_PACK" "$REPORT" "$REPORT_INDEX" "$COCKPIT_INDEX" "$OUT_ROOT/replay.json" "$OUT_ROOT/report-verify.json" <<'PY'
+mkdir -p "$RELEASE_SUPPORT_INPUTS"
+python3 - "$RELEASE_SUPPORT_INPUTS" "$RUN_ID" "$TARGET" "$EVIDENCE_PACK" "$REPORT" "$REPORT_INDEX" "$OUT_ROOT/replay.json" <<'PY'
 import json
 import sys
 from pathlib import Path
 
-summary_path, run_id, target, evidence_path, report_path, report_index_path, cockpit_index_path, replay_path, report_verify_path = sys.argv[1:]
+inputs_dir, run_id, target, evidence_pack, report, report_index, replay = sys.argv[1:]
+inputs = Path(inputs_dir)
+
+def write(name, payload):
+    (inputs / name).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+trust_boundary = {
+    "control_plane_role": "read_only_observer",
+    "control_plane_approves_release": False,
+    "release_acceptance_owner": "factory-v3 evaluator-closer",
+}
+source = {
+    "producer": "risky-pr-golden-path",
+    "run_id": run_id,
+    "target": target,
+    "evidence_pack": evidence_pack,
+    "report": report,
+    "report_index": report_index,
+    "replay": replay,
+}
+
+write("release-assembly.json", {
+    "schema_version": "ao2.cp-release-assembly.v1",
+    "status": "assembled",
+    "control_plane_approves_release": False,
+    "source": source,
+})
+write("readiness.json", {
+    "schema_version": "ao2.cp-release-readiness.v1",
+    "status": "ready",
+    "operator_decision": {
+        "control_plane_approves_release": False,
+        "factory_v3_evaluator_closer_required": True,
+        "release_acceptance_owner": "factory-v3 evaluator-closer",
+    },
+    "source": source,
+})
+write("handoff.json", {
+    "schema_version": "factory-v3/ao2-release-handoff-checklist/v1",
+    "status": "ready_for_evaluator_closer",
+    "trust_boundary": trust_boundary,
+    "source": source,
+})
+write("cockpit.json", {
+    "schema_version": "ao2.cp-release-cockpit.v1",
+    "status": "ready",
+    "source": source,
+})
+write("evaluator-decision.json", {
+    "schema_version": "factory-v3/ao2-release-evaluator-decision/v1",
+    "status": "accepted",
+    "decision": "accept_phase1_release_candidate",
+    "trust_boundary": trust_boundary,
+    "source": source,
+})
+write("storage-support.json", {
+    "schema_version": "ao2.cp-storage-support.v1",
+    "status": "ready",
+    "source": source,
+})
+write("operator-evidence.json", {
+    "factory_v3_evaluator_closer_required": True,
+    "release_acceptance_owner": "factory-v3 evaluator-closer",
+    "control_plane_role": "read_only_observer",
+    "control_plane_approves_release": False,
+    "source": source,
+})
+PY
+
+echo "=== build release support bundle ==="
+env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY \
+  "$AO2_BIN" release support-bundle-build \
+  --release-assembly "$RELEASE_SUPPORT_INPUTS/release-assembly.json" \
+  --readiness "$RELEASE_SUPPORT_INPUTS/readiness.json" \
+  --handoff "$RELEASE_SUPPORT_INPUTS/handoff.json" \
+  --cockpit "$RELEASE_SUPPORT_INPUTS/cockpit.json" \
+  --evaluator-decision "$RELEASE_SUPPORT_INPUTS/evaluator-decision.json" \
+  --storage-support "$RELEASE_SUPPORT_INPUTS/storage-support.json" \
+  --replay "$OUT_ROOT/replay.json" \
+  --report-target "$TARGET" \
+  --report-run-id "$RUN_ID" \
+  --report "$REPORT" \
+  --report-index "$REPORT_INDEX" \
+  --operator-evidence "$RELEASE_SUPPORT_INPUTS/operator-evidence.json" \
+  --out-dir "$RELEASE_SUPPORT_BUNDLE_DIR" \
+  --json > "$OUT_ROOT/release-support-bundle-build.json"
+
+RELEASE_SUPPORT_BUNDLE="$RELEASE_SUPPORT_BUNDLE_DIR/release-support-bundle.json"
+RELEASE_SUPPORT_CHECKSUMS="$RELEASE_SUPPORT_BUNDLE_DIR/SHA256SUMS"
+require_file "$OUT_ROOT/release-support-bundle-build.json"
+require_file "$RELEASE_SUPPORT_BUNDLE"
+require_file "$RELEASE_SUPPORT_CHECKSUMS"
+
+python3 - "$SUMMARY" "$RUN_ID" "$TARGET" "$EVIDENCE_PACK" "$REPORT" "$REPORT_INDEX" "$COCKPIT_INDEX" "$OUT_ROOT/replay.json" "$OUT_ROOT/report-verify.json" "$OUT_ROOT/release-support-bundle-build.json" "$RELEASE_SUPPORT_BUNDLE" "$RELEASE_SUPPORT_CHECKSUMS" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+summary_path, run_id, target, evidence_path, report_path, report_index_path, cockpit_index_path, replay_path, report_verify_path, release_support_build_path, release_support_bundle_path, release_support_checksums_path = sys.argv[1:]
 
 def load_json(path):
     return json.loads(Path(path).read_text(encoding="utf-8"))
@@ -111,6 +216,8 @@ pack = load_json(evidence_path)
 replay = load_json(replay_path)
 report_index = load_json(report_index_path)
 report_verify = load_json(report_verify_path)
+release_support_build = load_json(release_support_build_path)
+release_support_bundle = load_json(release_support_bundle_path)
 report_html = Path(report_path).read_text(encoding="utf-8", errors="replace")
 cockpit_html = Path(cockpit_index_path).read_text(encoding="utf-8", errors="replace")
 
@@ -140,6 +247,18 @@ if report_verify.get("contract_schema_version") != "ao2.report-contract.v1":
     fail("report verify contract schema changed")
 if report_verify.get("status") != "passed":
     fail("report verify did not pass")
+if release_support_build.get("schema_version") != "ao2.release-support-bundle-build.v1":
+    fail("release support bundle build schema changed")
+if release_support_build.get("status") != "built":
+    fail("release support bundle build did not complete")
+if release_support_build.get("report_contract_verification_source") != "generated_report_verify":
+    fail("release support bundle did not generate report contract verification")
+if (release_support_build.get("verification") or {}).get("status") != "passed":
+    fail("release support bundle verification did not pass")
+if release_support_bundle.get("schema_version") != "ao2.cp-release-support-bundle.v1":
+    fail("release support bundle schema changed")
+if (release_support_bundle.get("report_contract_verification") or {}).get("status") != "passed":
+    fail("release support bundle report contract verification did not pass")
 approval_boundary = report_index.get("approval_boundary") or {}
 denied_request_digests = approval_boundary.get("denied_request_digests") or []
 approved_action_digests = approval_boundary.get("approved_action_digests") or []
@@ -236,6 +355,11 @@ summary = {
     "report": report_path,
     "report_index": report_index_path,
     "report_verify": report_verify_path,
+    "release_support_bundle_build": release_support_build_path,
+    "release_support_bundle": release_support_bundle_path,
+    "release_support_checksums": release_support_checksums_path,
+    "release_support_bundle_sha256": release_support_build.get("bundle_sha256"),
+    "release_support_bundle_verification_status": (release_support_build.get("verification") or {}).get("status"),
     "required_report_sections": required_report_sections,
     "present_report_sections": sorted(present_report_sections),
     "report_contract_complete": report_contract_complete,
