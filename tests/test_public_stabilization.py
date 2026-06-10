@@ -544,7 +544,9 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_release_readiness_static_artifact_job",
         "ci_release_readiness_artifact_consumer_job",
         "target/release-readiness-consumer/ao2-release-readiness",
+        "target/release-readiness-consumer/ao2-release-train-control-plane-bridge",
         "ao2.release-readiness-local.v1",
+        "ao2.release-train-control-plane-bridge.v1",
     ]:
         assert needle in script
 
@@ -552,11 +554,14 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     for needle in [
         "release-readiness-artifact-consumer:",
         "name: Release readiness artifact consumer",
-        "needs: release-readiness-artifacts",
+        "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts]",
         "uses: actions/download-artifact@v8.0.1",
         "name: ao2-release-readiness",
         "path: target/release-readiness-consumer/ao2-release-readiness",
+        "name: ao2-release-train-control-plane-bridge",
+        "path: target/release-readiness-consumer/ao2-release-train-control-plane-bridge",
         "schema_version') == 'ao2.release-readiness-local.v1'",
+        "bridge_summary.get('schema_version') == 'ao2.release-train-control-plane-bridge.v1'",
         "ci_job_required_os:verify",
         "ci_job_required_os:release-archive-hosted-smoke",
         "ci_job_required_os:workbench-operator-packet-control-plane-smoke",
@@ -569,6 +574,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "Release readiness artifact consumer",
         "ao2-release-readiness-consumer",
         "ao2.release-readiness-artifact-consumer.v1",
+        "ao2-release-train-control-plane-bridge",
+        "ao2.release-train-control-plane-bridge.v1",
     ]:
         assert needle in verification
 
