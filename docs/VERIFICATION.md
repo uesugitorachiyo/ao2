@@ -375,7 +375,10 @@ Result:
   ao2-control-plane `smoke-release-train-bridge.py` read-only observer smoke
   unless `--skip-smoke` is supplied. The bridge emits
   `ao2.release-train-control-plane-bridge.v1` at
-  `target/release-train-control-plane-bridge/latest/summary.json`.
+  `target/release-train-control-plane-bridge/latest/summary.json`. CI runs this
+  as `Release train control-plane bridge artifacts` and uploads
+  `ao2-release-train-control-plane-bridge` with both the bridge summary and the
+  `ao2.cp-release-train-bridge-smoke.v1` readback evidence.
 - `npm run risky-pr:product-readiness`: runs the Risky PR golden path once,
   then verifies local run record, static report/export, and evaluator closure
   evidence from that single run; emits
@@ -555,7 +558,8 @@ Result:
   `AO2_CP_RELEASE_TRAIN_SUMMARY`, checking `/api/v1/release/train(.json)`, and
   preserving the read-only observer trust boundary; emits
   `ao2.release-train-control-plane-bridge.v1` at
-  `target/release-train-control-plane-bridge/latest/summary.json`
+  `target/release-train-control-plane-bridge/latest/summary.json`; CI uploads
+  this as `ao2-release-train-control-plane-bridge`
 - `npm run next:lengthy:gate`: runs the five lengthy-task gates above and emits
   `ao2.next-lengthy-gate.v1` at
   `target/next-lengthy-gate/latest/summary.json`

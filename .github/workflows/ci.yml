@@ -796,6 +796,59 @@ jobs:
           path: ao2/target/release-support-fixture-parity
           if-no-files-found: error
 
+  release-train-control-plane-bridge-artifacts:
+    name: Release train control-plane bridge artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+      - name: Checkout ao2-control-plane
+        uses: actions/checkout@v6.0.3
+        with:
+          repository: uesugitorachiyo/ao2-control-plane
+          path: ao2-control-plane
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+      - name: Run release train control-plane bridge
+        shell: bash
+        run: |
+          AO2_RELEASE_TRAIN_CP_BRIDGE_ROOT=target/release-train-control-plane-bridge-ci \
+            npm run release:train-control-plane-bridge -- --control-plane-root ao2-control-plane
+      - name: Verify release train control-plane bridge evidence
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("target/release-train-control-plane-bridge-ci/latest")
+          summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
+          smoke = json.loads((root / "control-plane-smoke" / "summary.json").read_text(encoding="utf-8"))
+          assert summary["schema_version"] == "ao2.release-train-control-plane-bridge.v1", summary
+          assert summary["status"] == "passed", summary
+          assert summary["control_plane"]["smoke"] == "passed", summary
+          assert smoke["schema_version"] == "ao2.cp-release-train-bridge-smoke.v1", smoke
+          assert smoke["status"] == "passed", smoke
+          assert summary["trust_boundary"]["control_plane_approves_release"] is False, summary
+          assert summary["trust_boundary"]["stores_credentials"] is False, summary
+          PY
+          test -f target/release-train-control-plane-bridge-ci/latest/release-train-summary.json
+          test -f target/release-train-control-plane-bridge-ci/latest/control-plane.env
+          test -f target/release-train-control-plane-bridge-ci/latest/control-plane-smoke/summary.json
+          test -f target/release-train-control-plane-bridge-ci/latest/control-plane-smoke/release-train-readback.json
+          test -f target/release-train-control-plane-bridge-ci/latest/control-plane-smoke/release-train-readback.html
+      - name: Upload release train control-plane bridge evidence
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-release-train-control-plane-bridge
+          path: target/release-train-control-plane-bridge-ci
+          if-no-files-found: error
+
   risky-pr-golden-artifacts:
     name: Risky PR golden release support bundle artifacts
     runs-on: ubuntu-latest
