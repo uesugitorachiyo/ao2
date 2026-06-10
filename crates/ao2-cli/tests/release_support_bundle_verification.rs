@@ -67,6 +67,7 @@ fn write_bundle(path: &Path, mut overlay: serde_json::Value) {
         "replay": {"status": "accepted", "digest_failures": []},
         "report_contract_verification": passed_report_contract_verification(),
         "install_verification": passed_install_verification(),
+        "hosted_release_smoke": passed_hosted_release_smoke(),
         "operator_evidence": {
             "factory_v3_evaluator_closer_required": true,
             "release_acceptance_owner": "factory-v3 evaluator-closer",
@@ -127,7 +128,7 @@ fn shared_release_support_contract_fixture_is_accepted() {
     );
     let json: serde_json::Value = serde_json::from_str(&stdout(&verify)).unwrap();
     assert_eq!(json["status"], "passed");
-    assert_eq!(json["surface_count"], 8);
+    assert_eq!(json["surface_count"], 9);
     assert_eq!(json["checksum_verified"], true);
     assert_eq!(
         json["trust_boundary"]["control_plane_role"],
@@ -156,6 +157,20 @@ fn passed_install_verification() -> serde_json::Value {
         "provider_api_keys_required": false,
         "control_plane_approves_release": false,
         "mutates_ao_artifacts": false
+    })
+}
+
+fn passed_hosted_release_smoke() -> serde_json::Value {
+    serde_json::json!({
+        "schema_version": "ao2.release-archive-hosted-smoke.v1",
+        "status": "passed",
+        "target": "test-fixture",
+        "install_verification_schema": "ao2.install-verification-evidence.v1",
+        "install_verification_evidence": "install-verification.json",
+        "provider_api_keys_required": false,
+        "control_plane_approves_release": false,
+        "mutates_ao_artifacts": false,
+        "release_acceptance_owner": "factory-v3 evaluator-closer"
     })
 }
 
@@ -256,6 +271,11 @@ fn add_portable_manifest(bundle: &mut serde_json::Value) {
             "install_verification",
             "$.install_verification",
         ),
+        (
+            "hosted_release_smoke",
+            "hosted_release_smoke",
+            "$.hosted_release_smoke",
+        ),
         ("release_assembly", "release_assembly", "$.release_assembly"),
         ("release_readiness", "readiness", "$.readiness"),
         ("release_candidate_handoff", "handoff", "$.handoff"),
@@ -345,6 +365,7 @@ struct SupportBundleEvidencePaths {
     replay: PathBuf,
     report_contract_verification: PathBuf,
     install_verification: PathBuf,
+    hosted_release_smoke: PathBuf,
     operator_evidence: PathBuf,
 }
 
@@ -360,6 +381,7 @@ fn write_support_bundle_evidence(evidence_dir: &Path) -> SupportBundleEvidencePa
         replay: evidence_dir.join("replay.json"),
         report_contract_verification: evidence_dir.join("report-contract-verification.json"),
         install_verification: evidence_dir.join("install-verification.json"),
+        hosted_release_smoke: evidence_dir.join("hosted-release-smoke.json"),
         operator_evidence: evidence_dir.join("operator-evidence.json"),
     };
 
@@ -432,6 +454,7 @@ fn write_support_bundle_evidence(evidence_dir: &Path) -> SupportBundleEvidencePa
         passed_report_contract_verification(),
     );
     write_json(&paths.install_verification, passed_install_verification());
+    write_json(&paths.hosted_release_smoke, passed_hosted_release_smoke());
     write_json(
         &paths.operator_evidence,
         serde_json::json!({
@@ -817,6 +840,7 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
     let replay = evidence_dir.join("replay.json");
     let report_contract_verification = evidence_dir.join("report-contract-verification.json");
     let install_verification = evidence_dir.join("install-verification.json");
+    let hosted_release_smoke = evidence_dir.join("hosted-release-smoke.json");
     let operator_evidence = evidence_dir.join("operator-evidence.json");
 
     write_json(
@@ -888,6 +912,7 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
         passed_report_contract_verification(),
     );
     write_json(&install_verification, passed_install_verification());
+    write_json(&hosted_release_smoke, passed_hosted_release_smoke());
     write_json(
         &operator_evidence,
         serde_json::json!({
@@ -920,6 +945,8 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
         report_contract_verification.to_str().unwrap(),
         "--install-verification",
         install_verification.to_str().unwrap(),
+        "--hosted-release-smoke",
+        hosted_release_smoke.to_str().unwrap(),
         "--operator-evidence",
         operator_evidence.to_str().unwrap(),
         "--out-dir",
@@ -972,6 +999,7 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
         vec![
             "ci_evidence_index",
             "install_verification",
+            "hosted_release_smoke",
             "release_assembly",
             "release_readiness",
             "release_candidate_handoff",
@@ -1037,6 +1065,8 @@ fn release_support_bundle_build_generates_report_contract_verification_from_repo
         report_index_path.to_str().unwrap(),
         "--install-verification",
         paths.install_verification.to_str().unwrap(),
+        "--hosted-release-smoke",
+        paths.hosted_release_smoke.to_str().unwrap(),
         "--operator-evidence",
         paths.operator_evidence.to_str().unwrap(),
         "--out-dir",

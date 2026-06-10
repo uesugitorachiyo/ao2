@@ -2694,8 +2694,11 @@ fn risky_pr_golden_path_builds_release_support_bundle() {
         "--report \"$REPORT\"",
         "--report-index \"$REPORT_INDEX\"",
         "--install-verification \"$RELEASE_SUPPORT_INPUTS/install-verification.json\"",
+        "--hosted-release-smoke \"$RELEASE_SUPPORT_INPUTS/hosted-release-smoke.json\"",
         "\"install_verification\"",
+        "\"hosted_release_smoke\"",
         "ao2.install-verification-evidence.v1",
+        "ao2.release-archive-hosted-smoke.v1",
         "release-support-bundle.json",
         "SHA256SUMS",
         "\"release_support_bundle\"",
@@ -2711,6 +2714,229 @@ fn risky_pr_golden_path_builds_release_support_bundle() {
     assert!(verification.contains("release support bundle"));
     assert!(verification.contains("ao2.cp-release-support-bundle.v1"));
     assert!(verification.contains("ao2.release-support-bundle-build.v1"));
+}
+
+#[test]
+fn cli_release_support_bundle_build_embeds_hosted_release_smoke_evidence() {
+    let ao2 = env!("CARGO_BIN_EXE_ao2");
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let root = tmp.path();
+    let out_dir = root.join("support-bundle");
+
+    let candidate_correlation = serde_json::json!({
+        "status": "matched",
+        "blockers": []
+    });
+    let trust_boundary = serde_json::json!({
+        "release_acceptance_owner": "factory-v3 evaluator-closer",
+        "control_plane_role": "read_only_observer",
+        "control_plane_approves_release": false,
+        "mutates_ao_artifacts": false
+    });
+    let surfaces = [
+        (
+            "release-assembly.json",
+            serde_json::json!({
+                "schema_version": "ao2.cp-release-assembly.v1",
+                "status": "assembled",
+                "candidate_correlation": "matched",
+                "candidate_correlation_detail": candidate_correlation,
+                "control_plane_approves_release": false
+            }),
+        ),
+        (
+            "readiness.json",
+            serde_json::json!({
+                "schema_version": "ao2.cp-release-readiness.v1",
+                "status": "ready",
+                "candidate_correlation": candidate_correlation,
+                "operator_decision": {
+                    "factory_v3_evaluator_closer_required": true,
+                    "control_plane_approves_release": false,
+                    "release_acceptance_owner": "factory-v3 evaluator-closer"
+                }
+            }),
+        ),
+        (
+            "handoff.json",
+            serde_json::json!({
+                "schema_version": "factory-v3/ao2-release-handoff-checklist/v1",
+                "status": "ready_for_evaluator_closer",
+                "candidate_correlation": candidate_correlation,
+                "trust_boundary": trust_boundary
+            }),
+        ),
+        (
+            "cockpit.json",
+            serde_json::json!({
+                "schema_version": "ao2.cp-release-cockpit.v1",
+                "status": "ready",
+                "candidate_correlation": candidate_correlation
+            }),
+        ),
+        (
+            "evaluator-decision.json",
+            serde_json::json!({
+                "schema_version": "factory-v3/ao2-release-evaluator-decision/v1",
+                "status": "accepted",
+                "trust_boundary": trust_boundary
+            }),
+        ),
+        (
+            "storage-support.json",
+            serde_json::json!({
+                "schema_version": "ao2.cp-storage-support.v1",
+                "status": "ready"
+            }),
+        ),
+        (
+            "replay.json",
+            serde_json::json!({
+                "schema_version": "ao2.replay.v1",
+                "status": "accepted",
+                "digest_failures": []
+            }),
+        ),
+        (
+            "report-contract-verification.json",
+            serde_json::json!({
+                "schema_version": "ao2.report-contract-verification.v1",
+                "contract_schema_version": "ao2.report-contract.v1",
+                "status": "passed",
+                "complete": true,
+                "missing_sections": [],
+                "failures": []
+            }),
+        ),
+        (
+            "install-verification.json",
+            serde_json::json!({
+                "schema_version": "ao2.install-verification-evidence.v1",
+                "status": "verified",
+                "offline_verification": {"status": "verified"},
+                "provider_api_keys_required": false,
+                "control_plane_approves_release": false,
+                "mutates_ao_artifacts": false,
+                "release_acceptance_owner": "factory-v3 evaluator-closer"
+            }),
+        ),
+        (
+            "hosted-release-smoke.json",
+            serde_json::json!({
+                "schema_version": "ao2.release-archive-hosted-smoke.v1",
+                "status": "passed",
+                "target": "linux-x86_64",
+                "install_verification_schema": "ao2.install-verification-evidence.v1",
+                "install_verification_evidence": "target/release-archive-hosted-smoke/ubuntu-latest/bin/ao2.install-verification.json",
+                "provider_api_keys_required": false,
+                "control_plane_approves_release": false,
+                "mutates_ao_artifacts": false,
+                "release_acceptance_owner": "factory-v3 evaluator-closer"
+            }),
+        ),
+        (
+            "operator-evidence.json",
+            serde_json::json!({
+                "factory_v3_evaluator_closer_required": true,
+                "release_acceptance_owner": "factory-v3 evaluator-closer",
+                "control_plane_role": "read_only_observer",
+                "control_plane_approves_release": false
+            }),
+        ),
+    ];
+    for (name, json) in surfaces {
+        fs::write(
+            root.join(name),
+            serde_json::to_string_pretty(&json).expect("surface json"),
+        )
+        .expect("write support bundle surface");
+    }
+
+    let output = Command::new(ao2)
+        .args([
+            "release",
+            "support-bundle-build",
+            "--release-assembly",
+            root.join("release-assembly.json").to_str().unwrap(),
+            "--readiness",
+            root.join("readiness.json").to_str().unwrap(),
+            "--handoff",
+            root.join("handoff.json").to_str().unwrap(),
+            "--cockpit",
+            root.join("cockpit.json").to_str().unwrap(),
+            "--evaluator-decision",
+            root.join("evaluator-decision.json").to_str().unwrap(),
+            "--storage-support",
+            root.join("storage-support.json").to_str().unwrap(),
+            "--replay",
+            root.join("replay.json").to_str().unwrap(),
+            "--report-contract-verification",
+            root.join("report-contract-verification.json")
+                .to_str()
+                .unwrap(),
+            "--install-verification",
+            root.join("install-verification.json").to_str().unwrap(),
+            "--hosted-release-smoke",
+            root.join("hosted-release-smoke.json").to_str().unwrap(),
+            "--operator-evidence",
+            root.join("operator-evidence.json").to_str().unwrap(),
+            "--out-dir",
+            out_dir.to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .expect("run ao2 release support-bundle-build");
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let build: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("support bundle build prints json");
+    assert_eq!(build["status"], "built");
+    assert_eq!(build["verification"]["status"], "passed");
+    assert_eq!(
+        build["verification"]["hosted_release_smoke"]["schema_version"],
+        "ao2.release-archive-hosted-smoke.v1"
+    );
+
+    let bundle: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(out_dir.join("release-support-bundle.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        bundle["hosted_release_smoke"]["schema_version"],
+        "ao2.release-archive-hosted-smoke.v1"
+    );
+    assert_eq!(bundle["hosted_release_smoke"]["status"], "passed");
+    assert_eq!(
+        bundle["hosted_release_smoke"]["install_verification_schema"],
+        "ao2.install-verification-evidence.v1"
+    );
+    assert_eq!(
+        bundle["hosted_release_smoke"]["provider_api_keys_required"],
+        false
+    );
+    assert_eq!(
+        bundle["hosted_release_smoke"]["control_plane_approves_release"],
+        false
+    );
+    assert_eq!(
+        bundle["hosted_release_smoke"]["mutates_ao_artifacts"],
+        false
+    );
+    let surfaces = bundle["portable_bundle_manifest"]["included_surfaces"]
+        .as_array()
+        .expect("included surfaces");
+    assert!(
+        surfaces
+            .iter()
+            .any(|surface| surface["id"] == "hosted_release_smoke"
+                && surface["path"] == "$.hosted_release_smoke"
+                && surface["schema_version"] == "ao2.release-archive-hosted-smoke.v1"),
+        "portable bundle manifest must include hosted_release_smoke surface"
+    );
 }
 
 #[test]

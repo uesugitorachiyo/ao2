@@ -695,6 +695,16 @@ jobs:
         with:
           repository: uesugitorachiyo/ao2-control-plane
           path: ao2-control-plane
+      - name: Use matching ao2-control-plane branch when present
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          head_ref="${{ github.head_ref }}"
+          if git -C ao2-control-plane ls-remote --exit-code origin "refs/heads/${head_ref}" >/dev/null 2>&1; then
+            git -C ao2-control-plane fetch --depth=1 origin "${head_ref}"
+            git -C ao2-control-plane checkout --detach FETCH_HEAD
+          fi
       - name: Compare shared release support fixture
         shell: bash
         run: |
@@ -757,6 +767,16 @@ jobs:
         with:
           repository: uesugitorachiyo/ao2-control-plane
           path: ao2-control-plane
+      - name: Use matching ao2-control-plane verifier branch when present
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          head_ref="${{ github.head_ref }}"
+          if git -C ao2-control-plane ls-remote --exit-code origin "refs/heads/${head_ref}" >/dev/null 2>&1; then
+            git -C ao2-control-plane fetch --depth=1 origin "${head_ref}"
+            git -C ao2-control-plane checkout --detach FETCH_HEAD
+          fi
       - name: Verify release support bundle with ao2-control-plane offline verifier
         shell: bash
         run: |

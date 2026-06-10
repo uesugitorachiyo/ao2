@@ -1002,13 +1002,15 @@ Result:
 `ao2.cp-release-support-bundle.v1` contract from explicit release assembly,
 readiness, handoff, cockpit, evaluator decision, storage support, replay, and
 operator evidence JSON files, plus required install-verification evidence using
-schema `ao2.install-verification-evidence.v1`. The build can either generate
-the embedded `ao2.report-contract-verification.v1` by running the same
-report-contract verifier from `--report-target` and `--report-run-id` inputs,
-or accept a precomputed `--report-contract-verification` JSON file. It writes
-`release-support-bundle.json` and `SHA256SUMS`, then verifies the generated
-bundle before returning success. The emitted bundle includes the control-plane
-portable manifest, `ci_evidence_index`, canonical per-surface digests, and a
+schema `ao2.install-verification-evidence.v1` and hosted release archive smoke
+evidence using schema `ao2.release-archive-hosted-smoke.v1`. The build can
+either generate the embedded `ao2.report-contract-verification.v1` by running
+the same report-contract verifier from `--report-target` and `--report-run-id`
+inputs, or accept a precomputed `--report-contract-verification` JSON file. It
+writes `release-support-bundle.json` and `SHA256SUMS`, then verifies the
+generated bundle before returning success. The emitted bundle includes the
+control-plane portable manifest, `ci_evidence_index`, canonical per-surface
+digests, and a
 canonical bundle digest in `SHA256SUMS`; it is directly verifiable with
 ao2-control-plane's offline verifier:
 
@@ -1021,9 +1023,10 @@ python3 ../ao2-control-plane/scripts/verify_release_support_bundle.py \
 
 The strict verifier fails closed when the static report contract is missing,
 incomplete, or failed, when install verification is missing, trust-unsafe, or
-not offline-verified, or when candidate-correlation triage is absent or
-inconsistent across the release assembly, readiness, handoff, and cockpit
-surfaces. This proves the operator-facing HTML, install evidence, and
+not offline-verified, when hosted release archive smoke is missing, failed, or
+trust-unsafe, or when candidate-correlation triage is absent or inconsistent
+across the release assembly, readiness, handoff, and cockpit surfaces. This
+proves the operator-facing HTML, install evidence, hosted CI install smoke, and
 control-plane handoff contract remained inspectable before release review.
 
 Regression coverage:
