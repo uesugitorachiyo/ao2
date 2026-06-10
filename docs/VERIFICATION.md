@@ -530,11 +530,14 @@ Result:
   blocker taxonomy, and fail-closed live guards; emits
   `ao2.provider-phase2-contract-hardening.v1` at
   `target/provider-phase2-contract-hardening/latest/summary.json`
-- `npm run release:train-drill`: rehearses release evidence closure, release
-  readiness regression, retention preflight with pruning disabled, artifact
-  consumer dry-run, and post-merge canary without tag, push, publish, or deploy
-  side effects. It records install/update verification as a
-  `release:download-verify` reference for real release assets and emits
+- `npm run release:train-drill`: rehearses release evidence closure, the
+  release readiness static summary, release readiness regression, retention preflight
+  with pruning disabled, artifact consumer dry-run, and post-merge canary
+  without tag, push, publish, or deploy side effects. The release readiness
+  static summary must include the
+  `ci_release_readiness_artifact_consumer_job` proof before the drill accepts.
+  It records install/update verification as a `release:download-verify`
+  reference for real release assets and emits
   `ao2.public-release-train-drill.v1` at
   `target/public-release-train-drill/latest/summary.json`
 - `npm run next:lengthy:gate`: runs the five lengthy-task gates above and emits

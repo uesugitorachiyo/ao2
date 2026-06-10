@@ -649,6 +649,8 @@ def test_pulse_local_mirror_script_is_exposed_and_ignored():
     assert "pulse-eval-loop.json" in text
     assert "executor-evidence.json" in text
     assert "shasum -a 256" in text
+    assert 'SOURCE="$(cd "$SOURCE" && pwd -P)"' in text
+    assert 'DEST="$(cd "$DEST" && pwd -P)"' in text
     assert "ao2.pulse-local-mirror.v1" in text
     assert "OPENAI_API_KEY" not in text
     assert "ANTHROPIC_API_KEY" not in text
@@ -3097,6 +3099,8 @@ def test_release_readiness_regression_gate_includes_artifact_and_resume_gates():
         "artifact_index",
         "release_artifact_consumer_smoke",
         "pulse_resume_dry_run",
+        'AO2_ARTIFACT_HEALTH_REQUIRED_ROOTS="ao2/target/ci-artifacts ao2/.ao2-local/pulse/latest ao2-control-plane/target/ci-artifacts"',
+        "ao2/target/release-readiness-regression-gate",
     ]:
         assert needle in text
 
@@ -3751,9 +3755,16 @@ def test_public_release_train_drill_contract():
     for needle in [
         "ao2.public-release-train-drill.v1",
         "release:evidence-closure",
+        "release:readiness:static",
         "release:readiness:regression-gate",
         "release:retention-preflight",
         "release:artifact-consumer-smoke -- --dry-run",
+        "release_readiness_static",
+        "ci_release_readiness_artifact_consumer_job",
+        "release_readiness_artifact_consumer_contract",
+        "AO2_RELEASE_TRAIN_PULSE_SOURCE",
+        "release-train-pulse-seed",
+        "pulse-eval-loop.json",
         "release:download-verify",
         "install_update_smoke_reference",
         "post-merge:canary",
@@ -3771,6 +3782,8 @@ def test_public_release_train_drill_contract():
         "npm run release:train-drill",
         "ao2.public-release-train-drill.v1",
         "target/public-release-train-drill/latest/summary.json",
+        "release readiness static summary",
+        "ci_release_readiness_artifact_consumer_job",
     ]:
         assert needle in verification
 
