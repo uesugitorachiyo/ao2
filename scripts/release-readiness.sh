@@ -120,6 +120,25 @@ add(
     "runs static release readiness and uploads target/release-readiness-ci",
 )
 
+release_readiness_artifact_consumer = workflow_job_block("release-readiness-artifact-consumer")
+release_readiness_artifact_consumer_ok = (
+    release_readiness_artifact_consumer is not None
+    and "needs: release-readiness-artifacts" in release_readiness_artifact_consumer
+    and "actions/download-artifact@v8.0.1" in release_readiness_artifact_consumer
+    and "name: ao2-release-readiness" in release_readiness_artifact_consumer
+    and "target/release-readiness-consumer/ao2-release-readiness" in release_readiness_artifact_consumer
+    and "ao2.release-readiness-local.v1" in release_readiness_artifact_consumer
+    and "ci_job_required_os:verify" in release_readiness_artifact_consumer
+    and "ci_job_required_os:release-archive-hosted-smoke" in release_readiness_artifact_consumer
+    and "ci_job_required_os:workbench-operator-packet-control-plane-smoke" in release_readiness_artifact_consumer
+    and "ci_release_readiness_static_artifact_job" in release_readiness_artifact_consumer
+)
+add(
+    "ci_release_readiness_artifact_consumer_job",
+    "passed" if release_readiness_artifact_consumer_ok else "failed",
+    "downloads ao2-release-readiness and validates schema/status/core cross-OS checks",
+)
+
 for workflow in [".github/workflows/release-gate.yml", ".github/workflows/public-release-build.yml"]:
     text = read(workflow)
     manual_only = (

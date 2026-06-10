@@ -542,8 +542,35 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         'add_job_matrix_os_check("non_approval_required_check_compat", ["macos-latest", "windows-latest"])',
         "ci_workbench_operator_packet_smoke_index_requires_all_os",
         "ci_release_readiness_static_artifact_job",
+        "ci_release_readiness_artifact_consumer_job",
+        "target/release-readiness-consumer/ao2-release-readiness",
+        "ao2.release-readiness-local.v1",
     ]:
         assert needle in script
+
+    ci = read(".github/workflows/ci.yml")
+    for needle in [
+        "release-readiness-artifact-consumer:",
+        "name: Release readiness artifact consumer",
+        "needs: release-readiness-artifacts",
+        "uses: actions/download-artifact@v8.0.1",
+        "name: ao2-release-readiness",
+        "path: target/release-readiness-consumer/ao2-release-readiness",
+        "schema_version') == 'ao2.release-readiness-local.v1'",
+        "ci_job_required_os:verify",
+        "ci_job_required_os:release-archive-hosted-smoke",
+        "ci_job_required_os:workbench-operator-packet-control-plane-smoke",
+        "ci_release_readiness_static_artifact_job",
+    ]:
+        assert needle in ci
+
+    verification = read("docs/VERIFICATION.md")
+    for needle in [
+        "Release readiness artifact consumer",
+        "ao2-release-readiness-consumer",
+        "ao2.release-readiness-artifact-consumer.v1",
+    ]:
+        assert needle in verification
 
     out_root = tmp_path / "release-readiness"
     result = subprocess.run(
@@ -570,6 +597,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_job_required_os:non_approval_required_check_compat",
         "ci_workbench_operator_packet_smoke_index_requires_all_os",
         "ci_release_readiness_static_artifact_job",
+        "ci_release_readiness_artifact_consumer_job",
     ]:
         assert checks[name]["status"] == "passed"
 
