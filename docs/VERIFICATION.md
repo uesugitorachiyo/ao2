@@ -412,9 +412,12 @@ Result:
   and the local next-length verification commands; emits
   `ao2.release-readiness-local.v1` plus local `report.md` and `report.html`
 - `Release readiness artifact consumer`: CI job that depends on
-  `Release readiness artifacts`, downloads `ao2-release-readiness`, validates
-  the `ao2.release-readiness-local.v1` summary/status/core cross-OS checks,
-  and uploads `ao2-release-readiness-consumer` with
+  `Release readiness artifacts` and `Release train control-plane bridge
+  artifacts`, downloads `ao2-release-readiness` and
+  `ao2-release-train-control-plane-bridge`, validates the
+  `ao2.release-readiness-local.v1` summary/status/core cross-OS checks plus the
+  `ao2.release-train-control-plane-bridge.v1` bridge summary/control-plane
+  smoke result, and uploads `ao2-release-readiness-consumer` with
   `ao2.release-readiness-artifact-consumer.v1` evidence.
 - `npm run release:readiness:regression-gate`: runs static release readiness,
   Phase 1 operator golden-path smoke, Pulse local mirror, Pulse resume dry-run,
