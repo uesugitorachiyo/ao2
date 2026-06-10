@@ -3095,6 +3095,47 @@ fn antigravity_provider_pilot_acceptance_script_is_guarded_and_evidence_driven()
 }
 
 #[test]
+fn hosted_release_archive_smoke_ci_uploads_three_os_install_sidecar_artifacts() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let ci = fs::read_to_string(root.join(".github/workflows/ci.yml"))
+        .expect("normal CI workflow exists");
+    let unix_smoke = fs::read_to_string(root.join("scripts/release-archive-hosted-smoke.sh"))
+        .expect("hosted Unix release archive smoke script exists");
+    let windows_smoke = fs::read_to_string(root.join("scripts/release-archive-hosted-smoke.ps1"))
+        .expect("hosted Windows release archive smoke script exists");
+
+    assert!(ci.contains("release-archive-hosted-smoke:"));
+    assert!(ci.contains("name: Release archive hosted smoke ${{ matrix.os }}"));
+    assert!(ci.contains("os: [ubuntu-latest, macos-latest, windows-latest]"));
+    assert!(ci.contains("cargo build --release -p ao2-cli"));
+    assert!(ci.contains("scripts/release-archive-hosted-smoke.sh"));
+    assert!(ci.contains("./scripts/release-archive-hosted-smoke.ps1"));
+    assert!(ci.contains("AO2_RELEASE_HOSTED_SMOKE_JSON"));
+    assert!(ci.contains("ao2-release-archive-hosted-smoke-${{ matrix.os }}"));
+    assert!(ci.contains("target/release-archive-hosted-smoke"));
+
+    for script in [&unix_smoke, &windows_smoke] {
+        assert!(script.contains("ao2.release-archive-hosted-smoke.v1"));
+        assert!(script.contains("ao2.install-verification-evidence.v1"));
+        assert!(script.contains("install_verification_evidence"));
+        assert!(script.contains("provider_api_keys_required"));
+        assert!(script.contains("control_plane_approves_release"));
+        assert!(script.contains("mutates_ao_artifacts"));
+        assert!(script.contains("factory-v3 evaluator-closer"));
+        assert!(script.contains("status"));
+        assert!(script.contains("passed"));
+    }
+
+    assert!(unix_smoke.contains("linux-x86_64"));
+    assert!(unix_smoke.contains("macos-aarch64"));
+    assert!(unix_smoke.contains("install.sh"));
+    assert!(unix_smoke.contains("provider matrix --json"));
+    assert!(windows_smoke.contains("windows-x86_64"));
+    assert!(windows_smoke.contains("install.ps1"));
+    assert!(windows_smoke.contains("provider matrix --json"));
+}
+
+#[test]
 fn release_build_all_script_and_manual_workflow_cover_public_release_sequence() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let script = fs::read_to_string(root.join("scripts/release-build-all.sh"))
