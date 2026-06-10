@@ -456,7 +456,10 @@ Result:
 - `npm run release:artifact-consumer-smoke -- --dry-run`: records the clean
   GitHub Actions artifact consumer workflow without downloading artifacts; a
   non-dry run uses `gh run download` and records checksums plus discovered
-  `schema_version` values in `ao2.release-artifact-consumer-smoke.v1`
+  `schema_version` values in `ao2.release-artifact-consumer-smoke.v1`.
+  `AO2_RELEASE_ARTIFACT_DOWNLOAD_TIMEOUT_SECONDS` bounds each `gh run list` and
+  `gh run download`; timeout or download errors are emitted as
+  `download_failures` instead of leaving a release dry-run waiting indefinitely.
 - `.github/workflows/local-canary.yml`: manual GitHub Actions canary for the
   public repos; it runs the artifact consumer smoke, CI artifact download
   contract, Pulse local mirror/resume dry-run, control-plane negative restore
