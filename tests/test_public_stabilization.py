@@ -521,6 +521,38 @@ def test_stable_release_readiness_reports_prerelease_blockers():
     assert "ao2.stable-release-readiness.v1" in verification
 
 
+def test_release_sync_provenance_assets_is_guarded_and_documented():
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["release:sync-provenance-assets"]
+        == "node scripts/run-sh-script.js scripts/release-sync-provenance-assets.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "release-sync-provenance-assets.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+
+    for needle in [
+        "ao2.release-sync-provenance-assets.v1",
+        "AO2_RELEASE_SYNC_CONFIRM",
+        "sync-$AO2_RELEASE_TAG",
+        "dry_run",
+        "gh release view",
+        "gh release upload",
+        "ao2-release-provenance.json",
+        "ao2-release-provenance.json.sig",
+        "ao2-release-signing-public.pem",
+        "mutates_releases",
+        "stores_credentials",
+    ]:
+        assert needle in text
+
+    verification = read("docs/VERIFICATION.md")
+    assert "npm run release:sync-provenance-assets" in verification
+    assert "ao2.release-sync-provenance-assets.v1" in verification
+
+
 def test_evidence_control_plane_smoke_script_is_token_safe_and_exposed_by_npm():
     package_json = json.loads(read("package.json"))
     assert (

@@ -616,6 +616,11 @@ Result:
   report, records prerelease-only and signed-provenance blockers, and emits
   `ao2.stable-release-readiness.v1` plus `dashboard.html` for stable promotion
   review
+- `npm run release:sync-provenance-assets`: queries the configured AO2 GitHub
+  Release and local `dist-provenance` sidecars, emits
+  `ao2.release-sync-provenance-assets.v1`, and stays in dry-run mode unless
+  `AO2_RELEASE_SYNC_CONFIRM=sync-<tag>` is set before uploading provenance
+  sidecars with `gh release upload`
 - `npm run phase1:promote`: prepares Phase 1 prerequisites, runs promotion
   preflights, publishes to ao2-control-plane when
   `AO2_PHASE1_CONTROL_PLANE_URL` is set, and may capture a dashboard snapshot
