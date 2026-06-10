@@ -44,8 +44,9 @@ expected_assets = closure.get("expected_release_assets") or [
     f"ao2-{version}-linux-x86_64.tar.gz",
     f"ao2-{version}-windows-x86_64.tar.gz",
     "SHA256SUMS",
-    "provenance.json",
-    "provenance.json.signature",
+    "ao2-release-provenance.json",
+    "ao2-release-provenance.json.sig",
+    "ao2-release-signing-public.pem",
 ]
 code = int((log_dir / "publish_blocker_closure_drill.log.exit-code").read_text(encoding="utf-8").strip())
 checksum_manifest = out_root / "checksum-manifest.json"
@@ -58,7 +59,7 @@ upload_plan = out_root / "artifact-upload-plan.json"
 upload_plan.write_text(json.dumps({
     "schema_version": "ao2.release-artifact-upload-plan.v1",
     "immutable_asset_names": expected_assets,
-    "provenance_signature": "provenance.json.signature",
+    "provenance_signature": "ao2-release-provenance.json.sig",
     "rollback_notes": closure.get("rollback_evidence"),
     "tag_push_publish_deploy": "not_executed",
 }, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -66,7 +67,7 @@ checks = [
     {"name": "publish_blocker_closure_drill", "command": "release:publish-blocker-closure-drill", "status": "passed" if code == 0 else "failed", "exit_code": code, "log": str(log_dir / "publish_blocker_closure_drill.log")},
     {"name": "immutable_asset_names", "status": "passed" if expected_assets else "failed"},
     {"name": "checksum_manifest", "status": "passed" if checksum_manifest.is_file() else "failed"},
-    {"name": "provenance_signature", "status": "passed" if "provenance.json.signature" in expected_assets else "failed"},
+    {"name": "provenance_signature", "status": "passed" if "ao2-release-provenance.json.sig" in expected_assets else "failed"},
     {"name": "rollback_notes", "status": "passed" if closure.get("rollback_evidence") else "failed"},
 ]
 status = "passed" if all(item["status"] == "passed" for item in checks) else "failed"
@@ -78,7 +79,7 @@ payload = {
     "checks": checks,
     "immutable_asset_names": expected_assets,
     "checksum_manifest": str(checksum_manifest),
-    "provenance_signature": "provenance.json.signature",
+    "provenance_signature": "ao2-release-provenance.json.sig",
     "rollback_notes": closure.get("rollback_evidence"),
     "upload_plan": str(upload_plan),
     "publish_guards": {"local_only": True, "tag_push_publish_deploy": "not_executed"},

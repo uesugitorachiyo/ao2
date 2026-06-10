@@ -348,6 +348,27 @@ def test_github_owned_actions_use_node24_runtime_majors():
         assert stale_action not in combined
 
 
+def test_public_release_publication_contract_matches_signed_sidecars_and_x86_artifact():
+    public_release_build = read(".github/workflows/public-release-build.yml")
+    publication_readiness = read("scripts/release-asset-publication-readiness.sh")
+    publish_simulation = read("scripts/release-artifact-publish-simulation.sh")
+    blocker_closure = read("scripts/release-publish-blocker-closure-drill.sh")
+    combined_contracts = "\n".join(
+        [publication_readiness, publish_simulation, blocker_closure]
+    )
+
+    assert "dist-linux-x86_64/*.tar.gz" in public_release_build
+    assert "dist-provenance/*" in public_release_build
+    for needle in [
+        "ao2-release-provenance.json",
+        "ao2-release-provenance.json.sig",
+        "ao2-release-signing-public.pem",
+    ]:
+        assert needle in combined_contracts
+
+    assert "provenance.json.signature" not in combined_contracts
+
+
 def test_public_agent_coordination_doc_exists_and_matches_agents_contract():
     agents = read("AGENTS.md")
     assert "docs/AGENT-COORDINATION.md" in agents
@@ -4263,6 +4284,8 @@ def test_release_install_update_fixture_contract():
         "release:download-verify",
         "refuses_publish_side_effects_by_default",
         "stores_credentials",
+        'OUT_ROOT="$(cd "$OUT_ROOT" && pwd)"',
+        'FIXTURE_DIR="$(cd "$FIXTURE_DIR" && pwd)"',
     ]:
         assert needle in text
     assert "git push origin" not in text
