@@ -532,6 +532,48 @@ def test_release_readiness_script_is_local_only_and_checks_repo_guardrails():
     assert "cat target/long-lived-control-plane/api-token" not in text
 
 
+def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
+    script = read("scripts/release-readiness.sh")
+    for needle in [
+        'required_ci_os = ["ubuntu-latest", "macos-latest", "windows-latest"]',
+        'add_job_matrix_os_check("verify", required_ci_os)',
+        'add_job_matrix_os_check("release-archive-hosted-smoke", required_ci_os)',
+        'add_job_matrix_os_check("workbench-operator-packet-control-plane-smoke", required_ci_os)',
+        'add_job_matrix_os_check("non_approval_required_check_compat", ["macos-latest", "windows-latest"])',
+        "ci_workbench_operator_packet_smoke_index_requires_all_os",
+        "ci_release_readiness_static_artifact_job",
+    ]:
+        assert needle in script
+
+    out_root = tmp_path / "release-readiness"
+    result = subprocess.run(
+        ["bash", "scripts/release-readiness.sh", "--static-only"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "AO2_RELEASE_READINESS_ROOT": str(out_root),
+        },
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.release-readiness-local.v1"
+    assert summary["status"] == "passed"
+    checks = {item["name"]: item for item in summary["checks"]}
+    for name in [
+        "ci_job_required_os:verify",
+        "ci_job_required_os:release-archive-hosted-smoke",
+        "ci_job_required_os:workbench-operator-packet-control-plane-smoke",
+        "ci_job_required_os:non_approval_required_check_compat",
+        "ci_workbench_operator_packet_smoke_index_requires_all_os",
+        "ci_release_readiness_static_artifact_job",
+    ]:
+        assert checks[name]["status"] == "passed"
+
+
 def test_verification_docs_include_next_length_task_commands():
     verification = read("docs/VERIFICATION.md")
     for needle in [
