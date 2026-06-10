@@ -34,13 +34,13 @@ npm run release:verify-provenance
 npm run release:gate
 ```
 
-The current release line is `v0.4.79`.
+The current release line is `v0.4.80`.
 
 To publish the complete private release from a clean checkout, use the guarded
 shipper:
 
 ```sh
-AO2_RELEASE_SHIP_CONFIRM=ship-v0.4.79 \
+AO2_RELEASE_SHIP_CONFIRM=ship-v0.4.80 \
 AO2_UBUNTU_SSH_TARGET=ao2-ubuntu-nucx \
 AO2_WINDOWS_SSH_TARGET=win-hp255-via-ubuntu \
 npm run release:ship
@@ -85,7 +85,7 @@ Install or update from a verified local archive:
 
 ```sh
 ao2 install update \
-  --archive dist/ao2-0.4.79-macos-aarch64.tar.gz \
+  --archive dist/ao2-0.4.80-macos-aarch64.tar.gz \
   --provenance-dir dist-provenance
 ao2 version --json
 ao2 doctor --json
@@ -105,7 +105,7 @@ normal Intel/AMD Ubuntu hosts:
 
 ```sh
 ao2 install update \
-  --archive dist-linux-x86_64/ao2-0.4.79-linux-x86_64.tar.gz \
+  --archive dist-linux-x86_64/ao2-0.4.80-linux-x86_64.tar.gz \
   --provenance-dir dist-provenance
 ao2 version --json
 ao2 doctor --json
@@ -116,7 +116,7 @@ Use the aarch64 archive for ARM Ubuntu hosts:
 
 ```sh
 ao2 install update \
-  --archive dist-linux/ao2-0.4.79-linux-aarch64.tar.gz \
+  --archive dist-linux/ao2-0.4.80-linux-aarch64.tar.gz \
   --provenance-dir dist-provenance
 ao2 version --json
 ao2 doctor --json
@@ -135,7 +135,7 @@ Install or update from PowerShell:
 
 ```powershell
 ao2.exe install update `
-  --archive dist-windows\ao2-0.4.79-windows-x86_64.tar.gz `
+  --archive dist-windows\ao2-0.4.80-windows-x86_64.tar.gz `
   --provenance-dir dist-provenance
 ao2.exe version --json
 ao2.exe doctor --json
@@ -154,7 +154,7 @@ When release assets are available at a base URL:
 
 ```sh
 ao2 install update \
-  --release-base-url https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.79
+  --release-base-url https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.80
 ```
 
 The updater downloads the target archive, checksum, signature, provenance JSON,
@@ -191,7 +191,7 @@ assets:
 ```sh
 ao2 upgrade apply \
   --release-file release.json \
-  --asset-dir target/release-download/v0.4.79
+  --asset-dir target/release-download/v0.4.80
 ```
 
 For a directly reachable release asset base URL:
@@ -199,7 +199,7 @@ For a directly reachable release asset base URL:
 ```sh
 ao2 upgrade apply \
   --release-file release.json \
-  --release-base-url https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.79
+  --release-base-url https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.80
 ```
 
 `upgrade apply` selects the archive for the current target, copies or downloads
@@ -212,7 +212,7 @@ For private GitHub releases where `gh` is authenticated:
 
 ```sh
 ao2 upgrade apply \
-  --github-release v0.4.79 \
+  --github-release v0.4.80 \
   --repo uesugitorachiyo/ao2
 ```
 
@@ -824,9 +824,9 @@ health under `release.rollback`:
 
 ```sh
 ao2 doctor --json \
-  --release v0.4.79 \
-  --release-asset-dir target/release-download/v0.4.79 \
-  --provenance-dir target/release-download/v0.4.79
+  --release v0.4.80 \
+  --release-asset-dir target/release-download/v0.4.80 \
+  --provenance-dir target/release-download/v0.4.80
 ```
 
 Run native Windows verification against downloaded private release assets:
@@ -1314,7 +1314,7 @@ when running release ship:
 ```sh
 AO2_RELEASE_CODEX_PILOT_ACCEPTANCE=1 \
 AO2_RELEASE_PROVIDER_PILOT_MAX_BUDGET_USD=1.00 \
-AO2_RELEASE_SHIP_CONFIRM=ship-v0.4.79 \
+AO2_RELEASE_SHIP_CONFIRM=ship-v0.4.80 \
 npm run release:ship
 ```
 
@@ -1361,7 +1361,7 @@ with the matching release flag:
 ```sh
 AO2_RELEASE_CLAUDE_PILOT_ACCEPTANCE=1 \
 AO2_RELEASE_PROVIDER_PILOT_MAX_BUDGET_USD=1.00 \
-AO2_RELEASE_SHIP_CONFIRM=ship-v0.4.79 \
+AO2_RELEASE_SHIP_CONFIRM=ship-v0.4.80 \
 npm run release:ship
 ```
 
@@ -1393,7 +1393,7 @@ in with the matching release flag:
 ```sh
 AO2_RELEASE_ANTIGRAVITY_PILOT_ACCEPTANCE=1 \
 AO2_RELEASE_PROVIDER_PILOT_MAX_BUDGET_USD=1.00 \
-AO2_RELEASE_SHIP_CONFIRM=ship-v0.4.79 \
+AO2_RELEASE_SHIP_CONFIRM=ship-v0.4.80 \
 npm run release:ship
 ```
 

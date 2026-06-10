@@ -370,6 +370,26 @@ def test_public_ci_docs_do_not_claim_manual_only_private_ci():
     assert "release-gate.yml" in readme
 
 
+def test_public_release_links_and_install_guide_track_current_prerelease():
+    readme = read("README.md")
+    install = read("docs/INSTALL.md")
+
+    for needle in [
+        "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.80",
+        "https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.80",
+        "img.shields.io/github/v/release/uesugitorachiyo/ao2",
+        "gh release download v0.4.80 --repo uesugitorachiyo/ao2",
+        "ao2-0.4.80-macos-aarch64.tar.gz",
+        "ao2-0.4.80-linux-x86_64.tar.gz",
+        "ao2-0.4.80-windows-x86_64.tar.gz",
+        "SHA256SUMS",
+    ]:
+        assert needle in readme
+
+    assert "The current release line is `v0.4.80`." in install
+    assert "v0.4.79" not in install
+
+
 def test_evidence_control_plane_smoke_script_is_token_safe_and_exposed_by_npm():
     package_json = json.loads(read("package.json"))
     assert (

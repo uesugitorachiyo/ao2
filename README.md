@@ -2,6 +2,8 @@
 
 [Watch the AO2 overview video](https://youtu.be/p222b0iCpbg)
 
+[![Latest release](https://img.shields.io/github/v/release/uesugitorachiyo/ao2?include_prereleases&label=latest%20release)](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.80)
+
 AO2 is a local-first governed software-delivery system for running agent work
 with policy checks, exact-digest approvals, replayable evidence, evaluator
 closure, and release-readiness gates.
@@ -79,6 +81,31 @@ sh "$tmpdir/verify-release.sh"
 
 Release archives also include `Verify-Release.ps1` for native Windows
 checksum verification before install.
+
+## Install From Public Prerelease
+
+The current public prerelease is
+[`v0.4.80`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.80).
+It publishes release archives for macOS, Ubuntu/Linux x86_64, and Windows,
+plus `SHA256SUMS` and release-readiness JSON evidence.
+
+Download and verify a macOS archive:
+
+```sh
+mkdir -p dist-release
+gh release download v0.4.80 --repo uesugitorachiyo/ao2 \
+  --pattern ao2-0.4.80-macos-aarch64.tar.gz \
+  --pattern SHA256SUMS \
+  --dir dist-release
+(cd dist-release && grep 'ao2-0.4.80-macos-aarch64.tar.gz' SHA256SUMS | shasum -a 256 -c -)
+```
+
+Use the same release base URL for Linux and Windows archives:
+
+```text
+https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.80/ao2-0.4.80-linux-x86_64.tar.gz
+https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.80/ao2-0.4.80-windows-x86_64.tar.gz
+```
 
 Run the Phase 1 promotion wrapper after starting a local ao2-control-plane
 instance and placing the control-plane bearer token in an environment variable:
