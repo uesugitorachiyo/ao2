@@ -12,6 +12,7 @@ mkdir -p "$OUT_ROOT"
 # checksum manifests. This gate reads public release state; it does not mutate.
 python3 - "$OUT_ROOT" "$SUMMARY" <<'PY'
 import json
+import html
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -114,13 +115,18 @@ for component in components:
         if not missing_assets and not missing_checksum_entries and not malformed_checksum_lines
         else "failed"
     )
+    is_prerelease = bool(release.get("isPrerelease"))
+    stable_release_present = not is_prerelease
+    release_channel = "prerelease" if is_prerelease else "stable"
     results.append(
         {
             "name": component["name"],
             "repo": component["repo"],
             "tag": component["tag"],
             "release_url": release.get("url"),
-            "is_prerelease": release.get("isPrerelease"),
+            "is_prerelease": is_prerelease,
+            "stable_release_present": stable_release_present,
+            "release_channel": release_channel,
             "published_at": release.get("publishedAt"),
             "status": status,
             "expected_assets": expected_assets,
@@ -146,7 +152,39 @@ payload = {
     },
 }
 summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+dashboard_path = out_root / "dashboard.html"
+rows = []
+for item in results:
+    stable_label = "Stable release present" if item["stable_release_present"] else "Stable release absent"
+    prerelease_label = "Prerelease present" if item["is_prerelease"] else "Prerelease absent"
+    rows.append(
+        "<tr>"
+        f"<td>{html.escape(item['name'])}</td>"
+        f"<td><a href=\"{html.escape(str(item['release_url']))}\">{html.escape(item['tag'])}</a></td>"
+        f"<td>{html.escape(item['release_channel'])}</td>"
+        f"<td>{html.escape(stable_label)}</td>"
+        f"<td>{html.escape(prerelease_label)}</td>"
+        f"<td>{html.escape(item['status'])}</td>"
+        f"<td>{len(item['missing_assets'])}</td>"
+        f"<td>{len(item['missing_checksum_entries'])}</td>"
+        "</tr>"
+    )
+dashboard_path.write_text(
+    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+    "<title>AO2 Release State Dashboard</title>"
+    "<style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:32px}"
+    "table{border-collapse:collapse;width:100%}td,th{border:1px solid #d7dde2;padding:8px;text-align:left}"
+    "th{background:#f3f6f8}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}</style>"
+    "</head><body><h1>AO2 Release State Dashboard</h1>"
+    f"<p>Status: <code>{html.escape(payload['status'])}</code></p>"
+    "<p>Stable release absent means the current public artifact is intentionally a prerelease, not a full stable release.</p>"
+    "<table><thead><tr><th>Component</th><th>Tag</th><th>Channel</th><th>Stable</th><th>Prerelease</th>"
+    "<th>Asset Gate</th><th>Missing Assets</th><th>Missing Checksums</th></tr></thead>"
+    f"<tbody>{''.join(rows)}</tbody></table></body></html>\n",
+    encoding="utf-8",
+)
 print(f"summary={summary_path}")
+print(f"dashboard={dashboard_path}")
 print(f"status={payload['status']}")
 if payload["status"] != "passed":
     raise SystemExit(1)

@@ -466,6 +466,11 @@ def test_release_asset_completeness_gate_covers_ao2_and_control_plane():
         "SHA256SUMS",
         "missing_assets",
         "missing_checksum_entries",
+        "stable_release_present",
+        "release_channel",
+        "dashboard.html",
+        "Stable release absent",
+        "Prerelease present",
         "gh release view",
         "gh release download",
     ]:
@@ -482,6 +487,7 @@ def test_release_asset_completeness_gate_covers_ao2_and_control_plane():
     verification = read("docs/VERIFICATION.md")
     assert "npm run release:asset-completeness" in verification
     assert "ao2.release-asset-completeness.v1" in verification
+    assert "dashboard.html" in verification
 
 
 def test_evidence_control_plane_smoke_script_is_token_safe_and_exposed_by_npm():
