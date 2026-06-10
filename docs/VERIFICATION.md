@@ -604,9 +604,13 @@ Result:
   and emits `ao2.frontier-lengthy-gate.v1` at
   `target/frontier-lengthy-gate/latest/summary.json`
 - `npm run post-merge:canary`: runs artifact indexing, release artifact
-  consumer dry-run, public release download checksum verification, Pulse resume
-  dry-run, and the ao2-control-plane long-lived smoke into
+  consumer dry-run, public release download checksum verification,
+  cross-repo release asset completeness, Pulse resume dry-run, and the
+  ao2-control-plane long-lived smoke into
   `ao2.post-merge-canary.v1`
+- `npm run release:asset-completeness`: queries the AO2 and ao2-control-plane
+  public prereleases, requires the expected release assets, downloads each
+  `SHA256SUMS`, and emits `ao2.release-asset-completeness.v1`
 - `npm run phase1:promote`: prepares Phase 1 prerequisites, runs promotion
   preflights, publishes to ao2-control-plane when
   `AO2_PHASE1_CONTROL_PLANE_URL` is set, and may capture a dashboard snapshot

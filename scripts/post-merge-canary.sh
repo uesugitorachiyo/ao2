@@ -37,6 +37,10 @@ run_step release_download_verify "$OUT_ROOT/release-download-verify.log" \
   env AO2_RELEASE_DOWNLOAD_DIR="$OUT_ROOT/release-download" \
     npm run release:download-verify
 
+run_step release_asset_completeness "$OUT_ROOT/release-asset-completeness.log" \
+  env AO2_RELEASE_ASSET_COMPLETENESS_ROOT="$OUT_ROOT/release-asset-completeness" \
+    npm run release:asset-completeness
+
 run_step pulse_local_mirror "$OUT_ROOT/pulse-local-mirror.log" \
   env AO2_PULSE_LOCAL_MIRROR_SOURCE="$PULSE_SOURCE" \
     AO2_PULSE_LOCAL_MIRROR_DEST="$OUT_ROOT/pulse-local-mirror" \
@@ -84,6 +88,7 @@ payload = {
     "checks": checks,
     "evidence": {
         "release_download_verify": str(out_root / "release-download" / "release-rollback-summary.json"),
+        "release_asset_completeness": str(out_root / "release-asset-completeness" / "summary.json"),
         "pulse_source": str(out_root / "pulse-source"),
         "pulse_resume": str(out_root / "pulse-resume" / "summary.json"),
     },
