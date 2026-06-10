@@ -39,8 +39,9 @@ expected_release_assets = [
     f"ao2-{version}-linux-x86_64.tar.gz",
     f"ao2-{version}-windows-x86_64.tar.gz",
     "SHA256SUMS",
-    "provenance.json",
-    "provenance.json.signature",
+    "ao2-release-provenance.json",
+    "ao2-release-provenance.json.sig",
+    "ao2-release-signing-public.pem",
 ]
 checks = []
 for name in ["cross_os_attestation", "public_ship_dry_run"]:

@@ -69,6 +69,7 @@ jobs:
           path: |
             dist/*.tar.gz
             dist-linux/*.tar.gz
+            dist-linux-x86_64/*.tar.gz
             dist-windows/*.tar.gz
             dist-provenance/*
           if-no-files-found: error

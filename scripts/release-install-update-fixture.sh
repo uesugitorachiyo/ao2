@@ -8,6 +8,9 @@ SUMMARY="$OUT_ROOT/summary.json"
 
 rm -rf "$OUT_ROOT"
 mkdir -p "$OUT_ROOT" "$FIXTURE_DIR"
+OUT_ROOT="$(cd "$OUT_ROOT" && pwd)"
+FIXTURE_DIR="$(cd "$FIXTURE_DIR" && pwd)"
+SUMMARY="$OUT_ROOT/summary.json"
 
 VERSION="$("$ROOT/scripts/current-version.sh")"
 ARCHIVE="$FIXTURE_DIR/ao2-$VERSION-local-fixture.tar.gz"
