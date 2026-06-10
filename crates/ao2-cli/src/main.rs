@@ -2473,6 +2473,8 @@ enum ReleaseCommand {
         report_contract_verification: Option<PathBuf>,
         #[arg(long = "install-verification")]
         install_verification: PathBuf,
+        #[arg(long = "hosted-release-smoke")]
+        hosted_release_smoke: PathBuf,
         #[arg(long = "report-target")]
         report_target: Option<PathBuf>,
         #[arg(long = "report-run-id")]
@@ -65166,6 +65168,7 @@ fn release(command: ReleaseCommand) -> Result<()> {
             replay,
             report_contract_verification,
             install_verification,
+            hosted_release_smoke,
             report_target,
             report_run_id,
             report,
@@ -65183,6 +65186,7 @@ fn release(command: ReleaseCommand) -> Result<()> {
             replay,
             report_contract_verification,
             install_verification,
+            hosted_release_smoke,
             report_target,
             report_run_id,
             report,
@@ -67403,6 +67407,7 @@ fn release_support_bundle_build(
     replay: PathBuf,
     report_contract_verification: Option<PathBuf>,
     install_verification: PathBuf,
+    hosted_release_smoke: PathBuf,
     report_target: Option<PathBuf>,
     report_run_id: Option<String>,
     report: Option<PathBuf>,
@@ -67421,6 +67426,7 @@ fn release_support_bundle_build(
         &replay,
         report_contract_verification.as_deref(),
         &install_verification,
+        &hosted_release_smoke,
         report_target.as_deref(),
         report_run_id.as_deref(),
         report,
@@ -67457,6 +67463,7 @@ fn release_support_bundle_build_json(
     replay: &Path,
     report_contract_verification: Option<&Path>,
     install_verification: &Path,
+    hosted_release_smoke: &Path,
     report_target: Option<&Path>,
     report_run_id: Option<&str>,
     report: Option<PathBuf>,
@@ -67487,6 +67494,7 @@ fn release_support_bundle_build_json(
         "replay": release_support_bundle_read_surface("replay", replay)?,
         "report_contract_verification": report_contract_verification,
         "install_verification": release_support_bundle_read_surface("install_verification", install_verification)?,
+        "hosted_release_smoke": release_support_bundle_read_surface("hosted_release_smoke", hosted_release_smoke)?,
         "operator_evidence": release_support_bundle_read_surface("operator_evidence", operator_evidence)?,
         "ci_evidence_index": release_support_bundle_ci_evidence_index(),
         "trust_boundary": {
@@ -67583,7 +67591,7 @@ fn release_support_bundle_read_surface(name: &str, path: &Path) -> Result<serde_
     Ok(value)
 }
 
-const RELEASE_SUPPORT_BUNDLE_PUBLIC_SURFACES: [(&str, &str, &str); 8] = [
+const RELEASE_SUPPORT_BUNDLE_PUBLIC_SURFACES: [(&str, &str, &str); 9] = [
     (
         "ci_evidence_index",
         "ci_evidence_index",
@@ -67593,6 +67601,11 @@ const RELEASE_SUPPORT_BUNDLE_PUBLIC_SURFACES: [(&str, &str, &str); 8] = [
         "install_verification",
         "install_verification",
         "$.install_verification",
+    ),
+    (
+        "hosted_release_smoke",
+        "hosted_release_smoke",
+        "$.hosted_release_smoke",
     ),
     ("release_assembly", "release_assembly", "$.release_assembly"),
     ("release_readiness", "readiness", "$.readiness"),
@@ -67836,6 +67849,7 @@ fn release_support_bundle_verification_json(
         "storage_support",
         "report_contract_verification",
         "install_verification",
+        "hosted_release_smoke",
     ];
     let mut surfaces = Vec::new();
     for surface in required_surfaces {
@@ -67898,11 +67912,15 @@ fn release_support_bundle_verification_json(
     let install_verification = bundle
         .get("install_verification")
         .unwrap_or(&serde_json::Value::Null);
+    let hosted_release_smoke = bundle
+        .get("hosted_release_smoke")
+        .unwrap_or(&serde_json::Value::Null);
     let portable_bundle_manifest = bundle
         .get("portable_bundle_manifest")
         .unwrap_or(&serde_json::Value::Null);
     let report_contract_verification_present = report_contract_verification.is_object();
     let install_verification_present = install_verification.is_object();
+    let hosted_release_smoke_present = hosted_release_smoke.is_object();
     let operator_evidence_present = operator_evidence.is_object();
     let readiness_operator = readiness
         .pointer("/operator_decision")
@@ -67943,6 +67961,16 @@ fn release_support_bundle_verification_json(
         {
             failures.push(serde_json::json!({
                 "code": "install_verification_invalid",
+                "message": error.to_string()
+            }));
+        }
+    }
+    if hosted_release_smoke_present {
+        if let Err(error) =
+            release_support_bundle_validate_hosted_release_smoke(hosted_release_smoke)
+        {
+            failures.push(serde_json::json!({
+                "code": "hosted_release_smoke_invalid",
                 "message": error.to_string()
             }));
         }
@@ -68137,6 +68165,15 @@ fn release_support_bundle_verification_json(
             "provider_api_keys_required": install_verification.get("provider_api_keys_required").and_then(serde_json::Value::as_bool).unwrap_or(true),
             "control_plane_approves_release": install_verification.get("control_plane_approves_release").and_then(serde_json::Value::as_bool).unwrap_or(true),
             "mutates_ao_artifacts": install_verification.get("mutates_ao_artifacts").and_then(serde_json::Value::as_bool).unwrap_or(true)
+        },
+        "hosted_release_smoke": {
+            "present": hosted_release_smoke_present,
+            "schema_version": json_string(hosted_release_smoke, "schema_version"),
+            "status": json_string(hosted_release_smoke, "status"),
+            "install_verification_schema": json_string(hosted_release_smoke, "install_verification_schema"),
+            "provider_api_keys_required": hosted_release_smoke.get("provider_api_keys_required").and_then(serde_json::Value::as_bool).unwrap_or(true),
+            "control_plane_approves_release": hosted_release_smoke.get("control_plane_approves_release").and_then(serde_json::Value::as_bool).unwrap_or(true),
+            "mutates_ao_artifacts": hosted_release_smoke.get("mutates_ao_artifacts").and_then(serde_json::Value::as_bool).unwrap_or(true)
         },
         "portable_bundle_manifest": {
             "present": portable_bundle_manifest.is_object(),
@@ -68618,6 +68655,50 @@ fn release_evidence_bundle_validate_install_verification(json: &serde_json::Valu
         != Some(false)
     {
         anyhow::bail!("install verification evidence must not mutate AO artifacts");
+    }
+    Ok(())
+}
+
+fn release_support_bundle_validate_hosted_release_smoke(json: &serde_json::Value) -> Result<()> {
+    if json_string(json, "schema_version") != "ao2.release-archive-hosted-smoke.v1" {
+        anyhow::bail!(
+            "hosted release smoke schema_version must be ao2.release-archive-hosted-smoke.v1"
+        );
+    }
+    if json_string(json, "status") != "passed" {
+        anyhow::bail!("hosted release smoke status must be passed");
+    }
+    if json_string(json, "install_verification_schema") != "ao2.install-verification-evidence.v1" {
+        anyhow::bail!("hosted release smoke must reference ao2.install-verification-evidence.v1");
+    }
+    if json_string(json, "install_verification_evidence").is_empty() {
+        anyhow::bail!("hosted release smoke must reference install_verification_evidence");
+    }
+    if json
+        .get("provider_api_keys_required")
+        .and_then(serde_json::Value::as_bool)
+        != Some(false)
+    {
+        anyhow::bail!("hosted release smoke must not require provider API keys");
+    }
+    if json
+        .get("control_plane_approves_release")
+        .and_then(serde_json::Value::as_bool)
+        != Some(false)
+    {
+        anyhow::bail!("hosted release smoke must not approve releases through the control plane");
+    }
+    if json
+        .get("mutates_ao_artifacts")
+        .and_then(serde_json::Value::as_bool)
+        != Some(false)
+    {
+        anyhow::bail!("hosted release smoke must not mutate AO artifacts");
+    }
+    if json_string(json, "release_acceptance_owner") != "factory-v3 evaluator-closer" {
+        anyhow::bail!(
+            "hosted release smoke release_acceptance_owner must be factory-v3 evaluator-closer"
+        );
     }
     Ok(())
 }

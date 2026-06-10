@@ -185,6 +185,18 @@ write("install-verification.json", {
     "mutates_ao_artifacts": False,
     "source": source,
 })
+write("hosted-release-smoke.json", {
+    "schema_version": "ao2.release-archive-hosted-smoke.v1",
+    "status": "passed",
+    "target": "golden-fixture",
+    "install_verification_schema": "ao2.install-verification-evidence.v1",
+    "install_verification_evidence": str(release_support_inputs / "install-verification.json"),
+    "provider_api_keys_required": False,
+    "control_plane_approves_release": False,
+    "mutates_ao_artifacts": False,
+    "release_acceptance_owner": "factory-v3 evaluator-closer",
+    "source": source,
+})
 PY
 
 echo "=== build release support bundle ==="
@@ -202,6 +214,7 @@ env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY \
   --report "$REPORT" \
   --report-index "$REPORT_INDEX" \
   --install-verification "$RELEASE_SUPPORT_INPUTS/install-verification.json" \
+  --hosted-release-smoke "$RELEASE_SUPPORT_INPUTS/hosted-release-smoke.json" \
   --operator-evidence "$RELEASE_SUPPORT_INPUTS/operator-evidence.json" \
   --out-dir "$RELEASE_SUPPORT_BUNDLE_DIR" \
   --json > "$OUT_ROOT/release-support-bundle-build.json"
@@ -305,6 +318,10 @@ if (release_support_bundle.get("install_verification") or {}).get("schema_versio
     fail("release support bundle missing install verification evidence")
 if (release_support_bundle.get("install_verification") or {}).get("status") != "verified":
     fail("release support bundle install verification did not pass")
+if (release_support_bundle.get("hosted_release_smoke") or {}).get("schema_version") != "ao2.release-archive-hosted-smoke.v1":
+    fail("release support bundle missing hosted release smoke evidence")
+if (release_support_bundle.get("hosted_release_smoke") or {}).get("status") != "passed":
+    fail("release support bundle hosted release smoke did not pass")
 approval_boundary = report_index.get("approval_boundary") or {}
 denied_request_digests = approval_boundary.get("denied_request_digests") or []
 approved_action_digests = approval_boundary.get("approved_action_digests") or []
