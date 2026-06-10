@@ -410,7 +410,11 @@ Result:
 - `npm run release:readiness`: checks public CI triggers, manual release
   workflows, branch protection, latest `main` CI status in both public repos,
   and the local next-length verification commands; emits
-  `ao2.release-readiness-local.v1` plus local `report.md` and `report.html`
+  `ao2.release-readiness-local.v1` plus local `report.md`, `report.html`, and
+  an `artifact-closure-index.json` file with
+  `ao2.release-artifact-closure-index.v1` coverage for
+  `ao2-release-readiness`, `ao2-release-train-control-plane-bridge`, and
+  `ao2-release-readiness-consumer`
 - `Release readiness artifact consumer`: CI job that depends on
   `Release readiness artifacts` and `Release train control-plane bridge
   artifacts`, downloads `ao2-release-readiness` and

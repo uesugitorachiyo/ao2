@@ -547,6 +547,10 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "target/release-readiness-consumer/ao2-release-train-control-plane-bridge",
         "ao2.release-readiness-local.v1",
         "ao2.release-train-control-plane-bridge.v1",
+        "ao2.release-artifact-closure-index.v1",
+        "artifact-closure-index.json",
+        "release_readiness_artifact_consumer",
+        "release_train_control_plane_bridge",
     ]:
         assert needle in script
 
@@ -576,6 +580,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.release-readiness-artifact-consumer.v1",
         "ao2-release-train-control-plane-bridge",
         "ao2.release-train-control-plane-bridge.v1",
+        "ao2.release-artifact-closure-index.v1",
+        "artifact-closure-index.json",
     ]:
         assert needle in verification
 
@@ -596,6 +602,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
     assert summary["schema_version"] == "ao2.release-readiness-local.v1"
     assert summary["status"] == "passed"
+    assert summary["artifact_closure_index"] == str(out_root / "artifact-closure-index.json")
     checks = {item["name"]: item for item in summary["checks"]}
     for name in [
         "ci_job_required_os:verify",
@@ -605,8 +612,40 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_workbench_operator_packet_smoke_index_requires_all_os",
         "ci_release_readiness_static_artifact_job",
         "ci_release_readiness_artifact_consumer_job",
+        "ci_release_train_control_plane_bridge_artifact_job",
     ]:
         assert checks[name]["status"] == "passed"
+    closure = json.loads(
+        (out_root / "artifact-closure-index.json").read_text(encoding="utf-8")
+    )
+    assert closure["schema_version"] == "ao2.release-artifact-closure-index.v1"
+    assert closure["status"] == "passed"
+    artifacts = {artifact["id"]: artifact for artifact in closure["required_artifacts"]}
+    assert artifacts["release_readiness"]["artifact_name"] == "ao2-release-readiness"
+    assert artifacts["release_readiness"]["schema_versions"] == [
+        "ao2.release-readiness-local.v1"
+    ]
+    assert artifacts["release_readiness_artifact_consumer"]["artifact_name"] == (
+        "ao2-release-readiness-consumer"
+    )
+    assert artifacts["release_readiness_artifact_consumer"]["producer_job"] == (
+        "release-readiness-artifact-consumer"
+    )
+    assert artifacts["release_readiness_artifact_consumer"]["schema_versions"] == [
+        "ao2.release-readiness-artifact-consumer.v1"
+    ]
+    assert artifacts["release_train_control_plane_bridge"]["artifact_name"] == (
+        "ao2-release-train-control-plane-bridge"
+    )
+    assert artifacts["release_train_control_plane_bridge"]["producer_job"] == (
+        "release-train-control-plane-bridge-artifacts"
+    )
+    assert artifacts["release_train_control_plane_bridge"]["schema_versions"] == [
+        "ao2.release-train-control-plane-bridge.v1",
+        "ao2.cp-release-train-bridge-smoke.v1",
+    ]
+    assert closure["trust_boundary"]["local_only"] is True
+    assert closure["trust_boundary"]["stores_credentials"] is False
 
 
 def test_verification_docs_include_next_length_task_commands():
