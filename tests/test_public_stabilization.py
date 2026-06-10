@@ -440,6 +440,50 @@ def test_public_release_download_verify_is_checksum_first_and_post_merge_canarie
         assert needle in install + "\n" + verification
 
 
+def test_release_asset_completeness_gate_covers_ao2_and_control_plane():
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["release:asset-completeness"]
+        == "node scripts/run-sh-script.js scripts/release-asset-completeness.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "release-asset-completeness.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.release-asset-completeness.v1",
+        "uesugitorachiyo/ao2",
+        "uesugitorachiyo/ao2-control-plane",
+        "v0.4.80",
+        "v0.1.12",
+        "ao2-0.4.80-linux-x86_64.tar.gz",
+        "ao2-0.4.80-macos-aarch64.tar.gz",
+        "ao2-0.4.80-windows-x86_64.tar.gz",
+        "ao2-release-readiness-summary.json",
+        "ao2-control-plane-0.1.12-macos-aarch64.tar.gz",
+        "ao2-control-plane-release-train-bridge-windows-summary.json",
+        "SHA256SUMS",
+        "missing_assets",
+        "missing_checksum_entries",
+        "gh release view",
+        "gh release download",
+    ]:
+        assert needle in text
+
+    canary = read("scripts/post-merge-canary.sh")
+    for needle in [
+        "release_asset_completeness",
+        "npm run release:asset-completeness",
+        '"release_asset_completeness": str(out_root / "release-asset-completeness" / "summary.json")',
+    ]:
+        assert needle in canary
+
+    verification = read("docs/VERIFICATION.md")
+    assert "npm run release:asset-completeness" in verification
+    assert "ao2.release-asset-completeness.v1" in verification
+
+
 def test_evidence_control_plane_smoke_script_is_token_safe_and_exposed_by_npm():
     package_json = json.loads(read("package.json"))
     assert (
