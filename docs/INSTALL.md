@@ -24,8 +24,11 @@ From the repository checkout:
 npm run release:download-verify
 ```
 
-This downloads the private GitHub release with `gh release download`, then runs
-signature and checksum verification through `scripts/release-verify-provenance.sh`.
+This downloads the GitHub release with `gh release download`, verifies every
+asset listed in `SHA256SUMS`, and records rollback evidence. If the release also
+publishes `ao2-release-signing-public.pem` plus provenance sidecars, the same
+command verifies signed provenance; public alpha releases without those sidecars
+record provenance as skipped instead of pretending it was verified.
 
 For already-local release assets:
 

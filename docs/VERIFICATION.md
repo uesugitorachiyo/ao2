@@ -604,14 +604,17 @@ Result:
   and emits `ao2.frontier-lengthy-gate.v1` at
   `target/frontier-lengthy-gate/latest/summary.json`
 - `npm run post-merge:canary`: runs artifact indexing, release artifact
-  consumer dry-run, Pulse resume dry-run, and the ao2-control-plane long-lived
-  smoke into `ao2.post-merge-canary.v1`
+  consumer dry-run, public release download checksum verification, Pulse resume
+  dry-run, and the ao2-control-plane long-lived smoke into
+  `ao2.post-merge-canary.v1`
 - `npm run phase1:promote`: prepares Phase 1 prerequisites, runs promotion
   preflights, publishes to ao2-control-plane when
   `AO2_PHASE1_CONTROL_PLANE_URL` is set, and may capture a dashboard snapshot
   with `AO2_PHASE1_DASHBOARD_SNAPSHOT=1`
-- four cross-OS archives at v0.4.80 (macOS aarch64, Linux aarch64, Linux
-  x86_64, Windows x86_64) all SHA256 + RSA signature verified
+- public alpha archives at v0.4.80 (macOS aarch64, Linux x86_64, Windows
+  x86_64) are SHA256 verified from the published `SHA256SUMS`; signed
+  provenance remains a separate full-release sidecar contract when the release
+  publishes `ao2-release-signing-public.pem` and signature files
 - `npm run release:cross-os-attestation` emits
   `ao2.cross-os-release-attestation.v1` at
   `target/cross-os-release-artifact-attestation/latest/summary.json`; by

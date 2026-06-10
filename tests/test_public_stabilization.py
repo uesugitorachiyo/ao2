@@ -404,6 +404,42 @@ def test_windows_release_smoke_verifies_public_archive_checksum():
         assert needle in workflow
 
 
+def test_public_release_download_verify_is_checksum_first_and_post_merge_canaried():
+    verifier = read("scripts/release-download-verify.sh")
+    canary = read("scripts/post-merge-canary.sh")
+    install = read("docs/INSTALL.md")
+    verification = read("docs/VERIFICATION.md")
+
+    for needle in [
+        "SHA256SUMS",
+        "shasum -a 256 -c SHA256SUMS",
+        "release_checksum_verify=passed",
+        "release_provenance_verify=skipped_missing_public_key",
+        "release_provenance_status",
+    ]:
+        assert needle in verifier
+
+    for needle in [
+        "release_download_verify",
+        "npm run release:download-verify",
+        "AO2_RELEASE_DOWNLOAD_DIR",
+        "PULSE_SOURCE=\"$OUT_ROOT/pulse-source\"",
+        "AO2_PULSE_LOCAL_MIRROR_SOURCE=\"$PULSE_SOURCE\"",
+        "pulse-eval-loop.json",
+        '"release_download_verify": str(out_root / "release-download" / "release-rollback-summary.json")',
+        '"pulse_resume": str(out_root / "pulse-resume" / "summary.json")',
+    ]:
+        assert needle in canary
+
+    for needle in [
+        "verifies every\nasset listed in `SHA256SUMS`",
+        "record provenance as skipped",
+        "public release download checksum verification",
+        "public alpha archives at v0.4.80",
+    ]:
+        assert needle in install + "\n" + verification
+
+
 def test_evidence_control_plane_smoke_script_is_token_safe_and_exposed_by_npm():
     package_json = json.loads(read("package.json"))
     assert (

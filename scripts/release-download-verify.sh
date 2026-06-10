@@ -70,12 +70,35 @@ JSON
 
 gh release download "$AO2_RELEASE_TAG" --repo "$AO2_RELEASE_REPO" --dir "$AO2_RELEASE_DOWNLOAD_DIR" --clobber
 
-AO2_MACOS_ARCHIVE="$AO2_RELEASE_DOWNLOAD_DIR/ao2-$AO2_RELEASE_VERSION-macos-aarch64.tar.gz" \
-AO2_LINUX_ARCHIVE="$AO2_RELEASE_DOWNLOAD_DIR/ao2-$AO2_RELEASE_VERSION-linux-aarch64.tar.gz" \
-AO2_LINUX_X86_64_ARCHIVE="$AO2_RELEASE_DOWNLOAD_DIR/ao2-$AO2_RELEASE_VERSION-linux-x86_64.tar.gz" \
-AO2_WINDOWS_ARCHIVE="$AO2_RELEASE_DOWNLOAD_DIR/ao2-$AO2_RELEASE_VERSION-windows-x86_64.tar.gz" \
-AO2_RELEASE_PROVENANCE_DIR="$AO2_RELEASE_DOWNLOAD_DIR" \
-  sh scripts/release-verify-provenance.sh
+if [ ! -f "$AO2_RELEASE_DOWNLOAD_DIR/SHA256SUMS" ]; then
+  echo "missing release checksum manifest: $AO2_RELEASE_DOWNLOAD_DIR/SHA256SUMS" >&2
+  exit 1
+fi
+
+if command -v shasum >/dev/null 2>&1; then
+  (cd "$AO2_RELEASE_DOWNLOAD_DIR" && shasum -a 256 -c SHA256SUMS)
+elif command -v sha256sum >/dev/null 2>&1; then
+  (cd "$AO2_RELEASE_DOWNLOAD_DIR" && sha256sum -c SHA256SUMS)
+else
+  echo "missing checksum verifier: shasum or sha256sum required" >&2
+  exit 1
+fi
+printf "release_checksum_verify=passed\n"
+
+release_provenance_status="skipped_missing_public_key"
+if [ -f "$AO2_RELEASE_DOWNLOAD_DIR/ao2-release-signing-public.pem" ]; then
+  AO2_MACOS_ARCHIVE="$AO2_RELEASE_DOWNLOAD_DIR/ao2-$AO2_RELEASE_VERSION-macos-aarch64.tar.gz" \
+  AO2_LINUX_ARCHIVE="$AO2_RELEASE_DOWNLOAD_DIR/ao2-$AO2_RELEASE_VERSION-linux-aarch64.tar.gz" \
+  AO2_LINUX_X86_64_ARCHIVE="$AO2_RELEASE_DOWNLOAD_DIR/ao2-$AO2_RELEASE_VERSION-linux-x86_64.tar.gz" \
+  AO2_WINDOWS_ARCHIVE="$AO2_RELEASE_DOWNLOAD_DIR/ao2-$AO2_RELEASE_VERSION-windows-x86_64.tar.gz" \
+  AO2_RELEASE_PROVENANCE_DIR="$AO2_RELEASE_DOWNLOAD_DIR" \
+    sh scripts/release-verify-provenance.sh
+  release_provenance_status="passed"
+fi
+printf "release_provenance_status=%s\n" "$release_provenance_status"
+if [ "$release_provenance_status" = "skipped_missing_public_key" ]; then
+  printf "release_provenance_verify=skipped_missing_public_key\n"
+fi
 
 if [ "$AO2_NATIVE_UBUNTU_DOWNLOAD_VERIFY" = "1" ]; then
   ubuntu_log="$AO2_RELEASE_DOWNLOAD_DIR/ubuntu-download-verify.log"
