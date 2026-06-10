@@ -490,6 +490,37 @@ def test_release_asset_completeness_gate_covers_ao2_and_control_plane():
     assert "dashboard.html" in verification
 
 
+def test_stable_release_readiness_reports_prerelease_blockers():
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["release:stable-readiness"]
+        == "node scripts/run-sh-script.js scripts/release-stable-readiness.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "release-stable-readiness.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+
+    for needle in [
+        "ao2.stable-release-readiness.v1",
+        "release:asset-completeness",
+        "stable_release_absent",
+        "current_channel_is_prerelease",
+        "signed_provenance_public_key_missing",
+        "stable_release_ready",
+        "promotion_blockers",
+        "dashboard.html",
+        "Stable Release Readiness",
+        "Not ready for stable release",
+    ]:
+        assert needle in text
+
+    verification = read("docs/VERIFICATION.md")
+    assert "npm run release:stable-readiness" in verification
+    assert "ao2.stable-release-readiness.v1" in verification
+
+
 def test_evidence_control_plane_smoke_script_is_token_safe_and_exposed_by_npm():
     package_json = json.loads(read("package.json"))
     assert (

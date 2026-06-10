@@ -612,6 +612,10 @@ Result:
   public prereleases, requires the expected release assets, downloads each
   `SHA256SUMS`, and emits `ao2.release-asset-completeness.v1` plus
   `dashboard.html` showing stable-vs-prerelease release state
+- `npm run release:stable-readiness`: consumes the release asset completeness
+  report, records prerelease-only and signed-provenance blockers, and emits
+  `ao2.stable-release-readiness.v1` plus `dashboard.html` for stable promotion
+  review
 - `npm run phase1:promote`: prepares Phase 1 prerequisites, runs promotion
   preflights, publishes to ao2-control-plane when
   `AO2_PHASE1_CONTROL_PLANE_URL` is set, and may capture a dashboard snapshot
