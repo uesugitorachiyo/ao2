@@ -190,7 +190,7 @@ write("hosted-release-smoke.json", {
     "status": "passed",
     "target": "golden-fixture",
     "install_verification_schema": "ao2.install-verification-evidence.v1",
-    "install_verification_evidence": str(release_support_inputs / "install-verification.json"),
+    "install_verification_evidence": str(inputs / "install-verification.json"),
     "provider_api_keys_required": False,
     "control_plane_approves_release": False,
     "mutates_ao_artifacts": False,

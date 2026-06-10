@@ -47279,7 +47279,7 @@ fn cli_release_support_bundle_verify_accepts_minimal_cp_bundle_fixture() {
         "ao2.release-support-bundle-verification.v1"
     );
     assert_eq!(json["status"], "passed");
-    assert_eq!(json["surface_count"], 8);
+    assert_eq!(json["surface_count"], 9);
     assert_eq!(json["checksum_verified"], true);
     assert_eq!(json["failure_count"], 0);
     assert_eq!(
@@ -47395,6 +47395,17 @@ fn write_minimal_release_support_bundle(path: &Path, extra: serde_json::Value) {
             "control_plane_approves_release": false,
             "mutates_ao_artifacts": false
         },
+        "hosted_release_smoke": {
+            "schema_version": "ao2.release-archive-hosted-smoke.v1",
+            "status": "passed",
+            "target": "test-fixture",
+            "install_verification_schema": "ao2.install-verification-evidence.v1",
+            "install_verification_evidence": "install-verification.json",
+            "provider_api_keys_required": false,
+            "control_plane_approves_release": false,
+            "mutates_ao_artifacts": false,
+            "release_acceptance_owner": "factory-v3 evaluator-closer"
+        },
         "operator_evidence": {
             "factory_v3_evaluator_closer_required": true,
             "release_acceptance_owner": "factory-v3 evaluator-closer",
@@ -47462,6 +47473,11 @@ fn add_release_support_portable_manifest_for_test(bundle: &mut serde_json::Value
             "install_verification",
             "install_verification",
             "$.install_verification",
+        ),
+        (
+            "hosted_release_smoke",
+            "hosted_release_smoke",
+            "$.hosted_release_smoke",
         ),
         ("release_assembly", "release_assembly", "$.release_assembly"),
         ("release_readiness", "readiness", "$.readiness"),
