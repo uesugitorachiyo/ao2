@@ -215,6 +215,61 @@ if mode == "full":
 status = "passed" if all(check["status"] == "passed" for check in checks) else "failed"
 report_md_path = summary_path.with_name("report.md")
 report_html_path = summary_path.with_name("report.html")
+artifact_closure_index_path = summary_path.with_name("artifact-closure-index.json")
+artifact_closure_index = {
+    "schema_version": "ao2.release-artifact-closure-index.v1",
+    "status": status,
+    "source_summary": str(summary_path),
+    "required_artifacts": [
+        {
+            "id": "release_readiness",
+            "artifact_name": "ao2-release-readiness",
+            "producer_job": "release-readiness-artifacts",
+            "required_files": ["summary.json", "report.md", "report.html"],
+            "schema_versions": ["ao2.release-readiness-local.v1"],
+            "required_checks": ["ci_release_readiness_static_artifact_job"],
+        },
+        {
+            "id": "release_train_control_plane_bridge",
+            "artifact_name": "ao2-release-train-control-plane-bridge",
+            "producer_job": "release-train-control-plane-bridge-artifacts",
+            "required_files": [
+                "latest/summary.json",
+                "latest/release-train-summary.json",
+                "latest/control-plane.env",
+                "latest/control-plane-smoke/summary.json",
+                "latest/control-plane-smoke/release-train-readback.json",
+                "latest/control-plane-smoke/release-train-readback.html",
+            ],
+            "schema_versions": [
+                "ao2.release-train-control-plane-bridge.v1",
+                "ao2.cp-release-train-bridge-smoke.v1",
+            ],
+            "required_checks": ["ci_release_train_control_plane_bridge_artifact_job"],
+        },
+        {
+            "id": "release_readiness_artifact_consumer",
+            "artifact_name": "ao2-release-readiness-consumer",
+            "producer_job": "release-readiness-artifact-consumer",
+            "required_files": ["summary.json"],
+            "schema_versions": ["ao2.release-readiness-artifact-consumer.v1"],
+            "required_checks": ["ci_release_readiness_artifact_consumer_job"],
+            "consumes": [
+                "ao2-release-readiness",
+                "ao2-release-train-control-plane-bridge",
+            ],
+        },
+    ],
+    "trust_boundary": {
+        "local_only": True,
+        "stores_credentials": False,
+        "control_plane_approves_release": False,
+    },
+}
+artifact_closure_index_path.write_text(
+    json.dumps(artifact_closure_index, indent=2, sort_keys=True) + "\n",
+    encoding="utf-8",
+)
 summary = {
     "schema_version": "ao2.release-readiness-local.v1",
     "status": status,
@@ -223,6 +278,7 @@ summary = {
     "control_plane_root_exists": cp_root.is_dir(),
     "report_md": str(report_md_path),
     "report_html": str(report_html_path),
+    "artifact_closure_index": str(artifact_closure_index_path),
     "checks": checks,
 }
 summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -279,6 +335,7 @@ report_html_path.write_text(
 print(f"summary={summary_path}")
 print(f"report_md={report_md_path}")
 print(f"report_html={report_html_path}")
+print(f"artifact_closure_index={artifact_closure_index_path}")
 print(f"status={status}")
 if status != "passed":
     for check in checks:
