@@ -557,7 +557,10 @@ Result:
   with pruning disabled, artifact consumer dry-run, and post-merge canary
   without tag, push, publish, or deploy side effects. The release readiness
   static summary must include the
-  `ci_release_readiness_artifact_consumer_job` proof before the drill accepts.
+  `ci_release_readiness_artifact_consumer_job` proof and the
+  `artifact-closure-index.json` /
+  `ao2.release-artifact-closure-index.v1` required artifact list before the
+  drill accepts.
   It records install/update verification as a `release:download-verify`
   reference for real release assets and emits
   `ao2.public-release-train-drill.v1` at

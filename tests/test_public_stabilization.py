@@ -3808,6 +3808,15 @@ def test_public_release_train_drill_contract():
         "release_readiness_static",
         "ci_release_readiness_artifact_consumer_job",
         "release_readiness_artifact_consumer_contract",
+        "artifact-closure-index.json",
+        "ao2.release-artifact-closure-index.v1",
+        "artifact_closure_index_contract",
+        "release_train_control_plane_bridge",
+        "expected_closure_artifacts",
+        '"required_artifacts": expected_closure_artifacts',
+        '"artifact_closure_index_contract": artifact_closure_index_contract',
+        '"release_artifact_closure_index": str(artifact_closure_index_path)',
+        'and artifact_closure_index_contract["status"] == "passed"',
         "AO2_RELEASE_TRAIN_PULSE_SOURCE",
         "release-train-pulse-seed",
         "pulse-eval-loop.json",
@@ -3830,6 +3839,8 @@ def test_public_release_train_drill_contract():
         "target/public-release-train-drill/latest/summary.json",
         "release readiness static summary",
         "ci_release_readiness_artifact_consumer_job",
+        "artifact-closure-index.json",
+        "ao2.release-artifact-closure-index.v1",
     ]:
         assert needle in verification
 

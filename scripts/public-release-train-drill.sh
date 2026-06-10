@@ -123,10 +123,22 @@ for name in names:
     })
 
 release_readiness_static_summary = out_root / "release-readiness-static" / "summary.json"
+artifact_closure_index_path = out_root / "release-readiness-static" / "artifact-closure-index.json"
 release_readiness_artifact_consumer_contract = {
     "status": "missing",
     "source_summary": str(release_readiness_static_summary),
     "required_check": "ci_release_readiness_artifact_consumer_job",
+}
+expected_closure_artifacts = [
+    "release_readiness",
+    "release_train_control_plane_bridge",
+    "release_readiness_artifact_consumer",
+]
+artifact_closure_index_contract = {
+    "status": "missing",
+    "source_index": str(artifact_closure_index_path),
+    "schema_version": "ao2.release-artifact-closure-index.v1",
+    "required_artifacts": expected_closure_artifacts,
 }
 try:
     release_readiness_static = json.loads(release_readiness_static_summary.read_text(encoding="utf-8"))
@@ -141,10 +153,42 @@ try:
         "release_readiness_status": release_readiness_static.get("status"),
         "check_detail": consumer_check.get("detail"),
     })
+    closure_index = json.loads(artifact_closure_index_path.read_text(encoding="utf-8"))
+    artifacts_by_id = {
+        item.get("id"): item
+        for item in closure_index.get("required_artifacts", [])
+        if isinstance(item, dict)
+    }
+    missing_artifacts = [
+        artifact_id
+        for artifact_id in expected_closure_artifacts
+        if artifact_id not in artifacts_by_id
+    ]
+    missing_checks = []
+    for artifact_id in expected_closure_artifacts:
+        artifact = artifacts_by_id.get(artifact_id, {})
+        for check_name in artifact.get("required_checks", []):
+            if checks_by_name.get(check_name, {}).get("status") != "passed":
+                missing_checks.append(check_name)
+    closure_ok = (
+        closure_index.get("schema_version") == "ao2.release-artifact-closure-index.v1"
+        and closure_index.get("status") == "passed"
+        and not missing_artifacts
+        and not missing_checks
+    )
+    artifact_closure_index_contract.update({
+        "status": "passed" if closure_ok else "failed",
+        "observed_status": closure_index.get("status"),
+        "observed_artifacts": list(artifacts_by_id),
+        "missing_artifacts": missing_artifacts,
+        "missing_required_checks": sorted(set(missing_checks)),
+    })
 except FileNotFoundError:
     release_readiness_artifact_consumer_contract["error"] = "release readiness static summary missing"
+    artifact_closure_index_contract["error"] = "release readiness artifact-closure-index.json missing"
 except json.JSONDecodeError as exc:
     release_readiness_artifact_consumer_contract.update({"status": "failed", "error": str(exc)})
+    artifact_closure_index_contract.update({"status": "failed", "error": str(exc)})
 
 publish_guards = {
     "refuses_publish_side_effects_by_default": True,
@@ -156,6 +200,7 @@ status = (
     "passed"
     if all(item["exit_code"] == 0 for item in checks)
     and release_readiness_artifact_consumer_contract["status"] == "passed"
+    and artifact_closure_index_contract["status"] == "passed"
     else "failed"
 )
 payload = {
@@ -166,9 +211,11 @@ payload = {
     "checks": checks,
     "publish_guards": publish_guards,
     "release_readiness_artifact_consumer_contract": release_readiness_artifact_consumer_contract,
+    "artifact_closure_index_contract": artifact_closure_index_contract,
     "component_summaries": {
         "release_evidence_closure": str(out_root / "release-evidence-closure" / "summary.json"),
         "release_readiness_static": str(release_readiness_static_summary),
+        "release_artifact_closure_index": str(artifact_closure_index_path),
         "release_readiness_regression_gate": str(out_root / "release-readiness-regression-gate" / "summary.json"),
         "post_merge_canary": str(out_root / "post-merge-canary" / "post-merge-canary.json"),
     },
@@ -196,6 +243,8 @@ html_path.write_text(
     "<p>No tag, push, publish, or deploy side effects are executed by this rehearsal.</p>"
     "<p>Release readiness artifact consumer contract: "
     f"<code>{html.escape(release_readiness_artifact_consumer_contract['status'])}</code>.</p>"
+    "<p>Artifact closure index contract: "
+    f"<code>{html.escape(artifact_closure_index_contract['status'])}</code>.</p>"
     "<table><thead><tr><th>Check</th><th>Status</th><th>Exit</th><th>Log</th></tr></thead>"
     f"<tbody>{rows}</tbody></table></body></html>\n",
     encoding="utf-8",
