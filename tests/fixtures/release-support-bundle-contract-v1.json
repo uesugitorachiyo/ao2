@@ -159,6 +159,37 @@
         }
       },
       {
+        "id": "release-train-bridge-smoke",
+        "artifact_name_pattern": "ao2-control-plane-release-train-bridge-<target>",
+        "schema_versions": [
+          "ao2.cp-release-train-bridge-smoke.v1",
+          "ao2.cp-release-train-readback.v1",
+          "ao2.public-release-train-drill.v1"
+        ],
+        "operator_action": "download-ci-artifact",
+        "ci_artifact_provenance": {
+          "provider": "github-actions",
+          "workflow_file": ".github/workflows/ci.yml",
+          "workflow_name": "CI",
+          "run_id_source": "github_actions_run_id",
+          "token_free": true,
+          "job_names": [
+            "release-train-bridge-smoke (<target>)"
+          ],
+          "artifact_names": [
+            "ao2-control-plane-release-train-bridge-ubuntu-x86_64"
+          ],
+          "run_url_template": "https://github.com/uesugitorachiyo/ao2-control-plane/actions/runs/<run_id>",
+          "artifact_download_url_template": "https://github.com/uesugitorachiyo/ao2-control-plane/actions/runs/<run_id>/artifacts",
+          "digest_reference": "summary.json carries schema/status and release-train readback captures"
+        },
+        "trust_boundary": {
+          "read_only": true,
+          "approves_release": false,
+          "mutates_ao_artifacts": false
+        }
+      },
+      {
         "id": "ingest-smoke",
         "artifact_name_pattern": "ao2-control-plane-ingest-smoke-<target>",
         "schema_versions": [
@@ -261,7 +292,7 @@
         "id": "ci_evidence_index",
         "schema_version": "ao2.cp-ci-evidence-index.v1",
         "path": "$.ci_evidence_index",
-        "sha256": "2cec0ba9a2bc6dc881970421b3d012ddee6b367226beedadd37f6bd4f1a2672e"
+        "sha256": "9c4a2e535bb3a1c4de6be3794feb2a86793de9f734a23276155b3a36dbb832c0"
       },
       {
         "id": "install_verification",
@@ -316,7 +347,7 @@
       "algorithm": "sha256-ao2-cp-canonical-json-v1",
       "scope": "embedded_support_bundle_surfaces",
       "surface_sha256": {
-        "ci_evidence_index": "2cec0ba9a2bc6dc881970421b3d012ddee6b367226beedadd37f6bd4f1a2672e",
+        "ci_evidence_index": "9c4a2e535bb3a1c4de6be3794feb2a86793de9f734a23276155b3a36dbb832c0",
         "install_verification": "596b2893a4fdbf65289879af7b7b288f8f1d8c60c9b11f8d27d5c0f0ddd86ba9",
         "hosted_release_smoke": "379914d06f5240e3097607176642d353923dcc5ef3ffc9e6fd98150d2631e007",
         "release_assembly": "8eba32358aaaf9064f63363e8bf2d9149fb34b761aaded9d414534b1f7f44009",
