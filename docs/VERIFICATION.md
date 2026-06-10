@@ -366,6 +366,16 @@ Result:
   `AO2_CP_RISKY_PR_GOLDEN_ARTIFACT_MANIFEST`, and can smoke the read-only
   ao2-control-plane observer endpoints when `--cp-base-url` and
   `AO2_CP_API_TOKEN` are provided.
+- `npm run release:train-control-plane-bridge`: generates or accepts an AO2
+  public release-train drill summary, writes a stable local
+  `target/release-train-control-plane-bridge/latest/release-train-summary.json`,
+  mirrors it to
+  `../ao2-control-plane/target/release-train-control-plane-bridge/release-train-summary.json`,
+  emits `control-plane.env` with `AO2_CP_RELEASE_TRAIN_SUMMARY`, then runs the
+  ao2-control-plane `smoke-release-train-bridge.py` read-only observer smoke
+  unless `--skip-smoke` is supplied. The bridge emits
+  `ao2.release-train-control-plane-bridge.v1` at
+  `target/release-train-control-plane-bridge/latest/summary.json`.
 - `npm run risky-pr:product-readiness`: runs the Risky PR golden path once,
   then verifies local run record, static report/export, and evaluator closure
   evidence from that single run; emits
@@ -540,6 +550,12 @@ Result:
   reference for real release assets and emits
   `ao2.public-release-train-drill.v1` at
   `target/public-release-train-drill/latest/summary.json`
+- `npm run release:train-control-plane-bridge`: extends the release train drill
+  into ao2-control-plane readback by materializing
+  `AO2_CP_RELEASE_TRAIN_SUMMARY`, checking `/api/v1/release/train(.json)`, and
+  preserving the read-only observer trust boundary; emits
+  `ao2.release-train-control-plane-bridge.v1` at
+  `target/release-train-control-plane-bridge/latest/summary.json`
 - `npm run next:lengthy:gate`: runs the five lengthy-task gates above and emits
   `ao2.next-lengthy-gate.v1` at
   `target/next-lengthy-gate/latest/summary.json`

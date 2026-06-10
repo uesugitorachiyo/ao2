@@ -3788,6 +3788,126 @@ def test_public_release_train_drill_contract():
         assert needle in verification
 
 
+def test_release_train_control_plane_bridge_contract(tmp_path):
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["release:train-control-plane-bridge"]
+        == "node scripts/run-sh-script.js scripts/release-train-control-plane-bridge.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "release-train-control-plane-bridge.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "AO2_CP_RELEASE_TRAIN_SUMMARY",
+        "AO2_PUBLIC_RELEASE_TRAIN_DRILL_ROOT",
+        "ao2.release-train-control-plane-bridge.v1",
+        "ao2.public-release-train-drill.v1",
+        "ao2.cp-release-train-bridge-smoke.v1",
+        "smoke-release-train-bridge.py",
+        "/api/v1/release/train",
+        "/api/v1/release/train.json",
+        "read-only-observer",
+        "credential_material_included",
+        "credential_material_in_urls",
+        "env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY",
+    ]:
+        assert needle in text
+    assert "git push origin" not in text
+    assert "gh release create" not in text
+    assert "OPENAI_API_KEY" not in text.replace("env -u OPENAI_API_KEY", "")
+    assert "ANTHROPIC_API_KEY" not in text.replace(" -u ANTHROPIC_API_KEY", "")
+
+    for needle in [
+        "npm run release:train-control-plane-bridge",
+        "ao2.release-train-control-plane-bridge.v1",
+        "target/release-train-control-plane-bridge/latest/summary.json",
+        "AO2_CP_RELEASE_TRAIN_SUMMARY",
+    ]:
+        assert needle in verification
+
+    release_summary = tmp_path / "release-train-summary.json"
+    release_summary.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.public-release-train-drill.v1",
+                "status": "passed",
+                "checks": [{"name": "fixture", "status": "passed"}],
+                "release_readiness_artifact_consumer_contract": {"status": "passed"},
+                "publish_guards": {"refuses_publish_side_effects_by_default": True},
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    out_root = tmp_path / "bridge"
+    cp_root = tmp_path / "ao2-control-plane"
+    env = os.environ.copy()
+    env["AO2_RELEASE_TRAIN_CP_BRIDGE_ROOT"] = str(out_root)
+    result = subprocess.run(
+        [
+            "npm",
+            "run",
+            "release:train-control-plane-bridge",
+            "--",
+            "--summary",
+            str(release_summary),
+            "--control-plane-root",
+            str(cp_root),
+            "--skip-smoke",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+
+    stable_summary = out_root / "latest" / "release-train-summary.json"
+    bridge_summary = out_root / "latest" / "summary.json"
+    env_file = out_root / "latest" / "control-plane.env"
+    cp_summary = (
+        cp_root
+        / "target"
+        / "release-train-control-plane-bridge"
+        / "release-train-summary.json"
+    )
+    assert stable_summary.is_file()
+    assert cp_summary.is_file()
+    assert stable_summary.read_text(encoding="utf-8") == cp_summary.read_text(
+        encoding="utf-8"
+    )
+    assert env_file.is_file()
+
+    summary = json.loads(bridge_summary.read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.release-train-control-plane-bridge.v1"
+    assert summary["status"] == "passed"
+    assert summary["release_train"]["schema_version"] == "ao2.public-release-train-drill.v1"
+    assert summary["release_train"]["status"] == "passed"
+    assert summary["control_plane"]["configured_env"] == "AO2_CP_RELEASE_TRAIN_SUMMARY"
+    assert summary["control_plane"]["stable_summary"] == str(stable_summary)
+    assert summary["control_plane"]["mirror_summary"] == str(cp_summary)
+    assert summary["control_plane"]["smoke"] == "not_run"
+    assert summary["control_plane"]["observer_schema"] == "ao2.cp-release-train-bridge-smoke.v1"
+    assert summary["control_plane"]["role"] == "read-only-observer"
+    assert summary["control_plane"]["credential_material_included"] is False
+    assert summary["control_plane"]["credential_material_in_urls"] is False
+    assert summary["trust_boundary"]["local_only"] is True
+    assert summary["trust_boundary"]["control_plane_approves_release"] is False
+    assert summary["trust_boundary"]["mutates_ao2_artifacts"] is False
+    assert "Bearer" not in bridge_summary.read_text(encoding="utf-8")
+    assert f"AO2_CP_RELEASE_TRAIN_SUMMARY={stable_summary}" in env_file.read_text(
+        encoding="utf-8"
+    )
+
+
 def test_next_lengthy_gate_contract():
     package_json = json.loads(read("package.json"))
     verification = read("docs/VERIFICATION.md")
