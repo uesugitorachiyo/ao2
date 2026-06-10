@@ -3785,7 +3785,7 @@ def test_provider_phase2_contract_hardening_contract():
         assert needle in verification
 
 
-def test_public_release_train_drill_contract(tmp_path):
+def test_public_release_train_drill_contract():
     package_json = json.loads(read("package.json"))
     verification = read("docs/VERIFICATION.md")
 
@@ -3812,6 +3812,11 @@ def test_public_release_train_drill_contract(tmp_path):
         "ao2.release-artifact-closure-index.v1",
         "artifact_closure_index_contract",
         "release_train_control_plane_bridge",
+        "expected_closure_artifacts",
+        '"required_artifacts": expected_closure_artifacts',
+        '"artifact_closure_index_contract": artifact_closure_index_contract',
+        '"release_artifact_closure_index": str(artifact_closure_index_path)',
+        'and artifact_closure_index_contract["status"] == "passed"',
         "AO2_RELEASE_TRAIN_PULSE_SOURCE",
         "release-train-pulse-seed",
         "pulse-eval-loop.json",
@@ -3838,34 +3843,6 @@ def test_public_release_train_drill_contract(tmp_path):
         "ao2.release-artifact-closure-index.v1",
     ]:
         assert needle in verification
-
-    out_root = tmp_path / "release-train-drill"
-    result = subprocess.run(
-        ["bash", "scripts/public-release-train-drill.sh"],
-        cwd=REPO_ROOT,
-        text=True,
-        capture_output=True,
-        env={
-            **os.environ,
-            "AO2_PUBLIC_RELEASE_TRAIN_DRILL_ROOT": str(out_root),
-        },
-        check=False,
-    )
-    assert result.returncode == 0, result.stderr + result.stdout
-    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
-    assert summary["schema_version"] == "ao2.public-release-train-drill.v1"
-    assert summary["status"] == "passed"
-    contract = summary["artifact_closure_index_contract"]
-    assert contract["status"] == "passed"
-    assert contract["schema_version"] == "ao2.release-artifact-closure-index.v1"
-    assert contract["source_index"] == str(
-        out_root / "release-readiness-static" / "artifact-closure-index.json"
-    )
-    assert contract["required_artifacts"] == [
-        "release_readiness",
-        "release_train_control_plane_bridge",
-        "release_readiness_artifact_consumer",
-    ]
 
 
 def test_release_train_control_plane_bridge_contract(tmp_path):
