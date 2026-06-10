@@ -12,9 +12,11 @@ if [ ! -d "$SOURCE" ]; then
   echo "pulse mirror source not found: $SOURCE" >&2
   exit 1
 fi
+SOURCE="$(cd "$SOURCE" && pwd -P)"
 
 rm -rf "$DEST"
 mkdir -p "$DEST"
+DEST="$(cd "$DEST" && pwd -P)"
 
 (
   cd "$SOURCE"
