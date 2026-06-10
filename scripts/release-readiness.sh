@@ -69,6 +69,57 @@ add("ci_pull_request_enabled", "passed" if re.search(r"(?m)^\s*pull_request:\s*$
 add("ci_main_push_enabled", "passed" if re.search(r"(?m)^\s*branches:\s*\[\s*main\s*\]\s*$", ci) else "failed")
 add("ci_read_only_permissions", "passed" if "permissions:\n  contents: read" in ci else "failed")
 
+required_ci_os = ["ubuntu-latest", "macos-latest", "windows-latest"]
+
+def workflow_job_block(job_name):
+    match = re.search(
+        rf"(?ms)^  {re.escape(job_name)}:\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)",
+        ci,
+    )
+    return match.group("body") if match else None
+
+def add_job_matrix_os_check(job_name, expected_os):
+    block = workflow_job_block(job_name)
+    if block is None:
+        add(f"ci_job_required_os:{job_name}", "failed", "job_missing")
+        return
+    missing = [os_name for os_name in expected_os if os_name not in block]
+    add(
+        f"ci_job_required_os:{job_name}",
+        "passed" if not missing else "failed",
+        "required_os=" + ",".join(expected_os) + (" missing=" + ",".join(missing) if missing else ""),
+    )
+
+add_job_matrix_os_check("verify", required_ci_os)
+add_job_matrix_os_check("release-archive-hosted-smoke", required_ci_os)
+add_job_matrix_os_check("workbench-operator-packet-control-plane-smoke", required_ci_os)
+add_job_matrix_os_check("non_approval_required_check_compat", ["macos-latest", "windows-latest"])
+
+operator_index = workflow_job_block("workbench-operator-packet-control-plane-smoke-index")
+operator_index_ok = (
+    operator_index is not None
+    and "needs: workbench-operator-packet-control-plane-smoke" in operator_index
+    and "AO2_WORKBENCH_OPERATOR_PACKET_CP_INDEX_REQUIRED_OS: ubuntu-latest,macos-latest,windows-latest" in operator_index
+)
+add(
+    "ci_workbench_operator_packet_smoke_index_requires_all_os",
+    "passed" if operator_index_ok else "failed",
+    "requires ubuntu-latest,macos-latest,windows-latest uploaded smoke artifacts",
+)
+
+release_readiness_artifacts = workflow_job_block("release-readiness-artifacts")
+release_readiness_artifacts_ok = (
+    release_readiness_artifacts is not None
+    and "scripts/release-readiness.sh --static-only" in release_readiness_artifacts
+    and "ao2-release-readiness" in release_readiness_artifacts
+    and "target/release-readiness-ci" in release_readiness_artifacts
+)
+add(
+    "ci_release_readiness_static_artifact_job",
+    "passed" if release_readiness_artifacts_ok else "failed",
+    "runs static release readiness and uploads target/release-readiness-ci",
+)
+
 for workflow in [".github/workflows/release-gate.yml", ".github/workflows/public-release-build.yml"]:
     text = read(workflow)
     manual_only = (
