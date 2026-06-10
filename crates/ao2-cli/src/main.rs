@@ -67703,6 +67703,29 @@ fn release_support_bundle_ci_evidence_index() -> serde_json::Value {
                 "summary.json carries schema/status plus artifact manifest observer digests",
             ),
             release_support_bundle_ci_family(
+                "release-train-bridge-smoke",
+                "Release train bridge smoke",
+                "ao2-control-plane-release-train-bridge-<target>",
+                &[
+                    "ao2.cp-release-train-bridge-smoke.v1",
+                    "ao2.cp-release-train-readback.v1",
+                    "ao2.public-release-train-drill.v1",
+                ],
+                "summary.json",
+                "Proves AO2 public release-train summaries can be observed through the control plane without token leakage or release approval.",
+                &[
+                    "Release train bridge smoke (ubuntu-x86_64)",
+                    "Release train bridge smoke (macos-aarch64)",
+                    "Release train bridge smoke (windows-x86_64)",
+                ],
+                &[
+                    "ao2-control-plane-release-train-bridge-ubuntu-x86_64",
+                    "ao2-control-plane-release-train-bridge-macos-aarch64",
+                    "ao2-control-plane-release-train-bridge-windows-x86_64",
+                ],
+                "summary.json carries schema/status plus release-train readback observer digests",
+            ),
+            release_support_bundle_ci_family(
                 "ingest-smoke",
                 "Ingest smoke",
                 "ao2-control-plane-ingest-smoke-<target>",
