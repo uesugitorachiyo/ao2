@@ -390,6 +390,20 @@ def test_public_release_links_and_install_guide_track_current_prerelease():
     assert "v0.4.79" not in install
 
 
+def test_windows_release_smoke_verifies_public_archive_checksum():
+    workflow = read(".github/workflows/windows-release-smoke.yml")
+
+    for needle in [
+        "gh release download v0.4.80",
+        '--pattern "ao2-0.4.80-windows-x86_64.tar.gz"',
+        '--pattern "SHA256SUMS"',
+        "Get-FileHash -Algorithm SHA256",
+        "ao2-0.4.80-windows-x86_64.tar.gz",
+        "Archive checksum mismatch",
+    ]:
+        assert needle in workflow
+
+
 def test_evidence_control_plane_smoke_script_is_token_safe_and_exposed_by_npm():
     package_json = json.loads(read("package.json"))
     assert (
