@@ -375,8 +375,10 @@ Result:
   ao2-control-plane `smoke-release-train-bridge.py` read-only observer smoke
   unless `--skip-smoke` is supplied. The bridge emits
   `ao2.release-train-control-plane-bridge.v1` at
-  `target/release-train-control-plane-bridge/latest/summary.json`. CI runs this
-  as `Release train control-plane bridge artifacts` and uploads
+  `target/release-train-control-plane-bridge/latest/summary.json`. CI runs a
+  fixture-backed invocation with
+  `ao2-control-plane/tests/fixtures/public-release-train-summary.json` as
+  `Release train control-plane bridge artifacts` and uploads
   `ao2-release-train-control-plane-bridge` with both the bridge summary and the
   `ao2.cp-release-train-bridge-smoke.v1` readback evidence.
 - `npm run risky-pr:product-readiness`: runs the Risky PR golden path once,

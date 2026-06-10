@@ -818,7 +818,7 @@ jobs:
         shell: bash
         run: |
           AO2_RELEASE_TRAIN_CP_BRIDGE_ROOT=target/release-train-control-plane-bridge-ci \
-            npm run release:train-control-plane-bridge -- --control-plane-root ao2-control-plane
+            npm run release:train-control-plane-bridge -- --summary ao2-control-plane/tests/fixtures/public-release-train-summary.json --control-plane-root ao2-control-plane
       - name: Verify release train control-plane bridge evidence
         shell: bash
         run: |

@@ -3836,7 +3836,7 @@ def test_release_train_control_plane_bridge_contract(tmp_path):
         "name: Release train control-plane bridge artifacts",
         "repository: uesugitorachiyo/ao2-control-plane",
         "AO2_RELEASE_TRAIN_CP_BRIDGE_ROOT=target/release-train-control-plane-bridge-ci",
-        "npm run release:train-control-plane-bridge -- --control-plane-root ao2-control-plane",
+        "npm run release:train-control-plane-bridge -- --summary ao2-control-plane/tests/fixtures/public-release-train-summary.json --control-plane-root ao2-control-plane",
         "ao2.release-train-control-plane-bridge.v1",
         "ao2.cp-release-train-bridge-smoke.v1",
         "target/release-train-control-plane-bridge-ci/latest/control-plane-smoke/summary.json",
