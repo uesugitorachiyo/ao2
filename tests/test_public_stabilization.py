@@ -3423,6 +3423,27 @@ def test_real_artifact_consumer_dashboard_pulse_execute_and_manual_canary_contra
         assert needle in verification
 
 
+def test_release_artifact_consumer_smoke_bounds_gh_downloads():
+    consumer = read("scripts/release-artifact-consumer-smoke.sh")
+    verification = read("docs/VERIFICATION.md")
+
+    for needle in [
+        "AO2_RELEASE_ARTIFACT_DOWNLOAD_TIMEOUT_SECONDS",
+        "DOWNLOAD_FAILURES",
+        "download_timeout_seconds",
+        "download_failures",
+        "subprocess.TimeoutExpired",
+        "gh run list",
+        "gh run download",
+        "exit_code",
+        "timed_out",
+    ]:
+        assert needle in consumer
+
+    assert "AO2_RELEASE_ARTIFACT_DOWNLOAD_TIMEOUT_SECONDS" in verification
+    assert "download_failures" in verification
+
+
 def test_artifact_health_local_canary_bundle_and_pulse_execute_simulation_contracts():
     package_json = json.loads(read("package.json"))
     verification = read("docs/VERIFICATION.md")
