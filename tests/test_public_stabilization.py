@@ -2447,6 +2447,55 @@ def test_pulse_generate_next_emits_ai_task_board_control_surface(tmp_path):
         assert task["source_recommendation"] == board["source_recommendation"]
 
 
+def test_pulse_generate_next_writes_operator_board_exports_with_status_lanes(tmp_path):
+    out_root = tmp_path / "generate-next"
+    packet_root = tmp_path / "packet"
+    task_board_root = tmp_path / "task-board"
+    cursor = tmp_path / "cursor.json"
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:generate-next"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_GENERATE_NEXT_REGISTER": "0",
+            "AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY": "0",
+            "AO2_PULSE_GENERATE_NEXT_ROOT": str(out_root),
+            "AO2_PULSE_GENERATE_NEXT_PACKET_ROOT": str(packet_root),
+            "AO2_PULSE_TASK_BOARD_ROOT": str(task_board_root),
+            "AO2_PULSE_GENERATE_NEXT_CURSOR": str(cursor),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    board = json.loads((task_board_root / "summary.json").read_text(encoding="utf-8"))
+    board_md = (task_board_root / "board.md").read_text(encoding="utf-8")
+    board_html = (task_board_root / "board.html").read_text(encoding="utf-8")
+
+    assert board["exports"]["markdown"] == str(task_board_root / "board.md")
+    assert board["exports"]["html"] == str(task_board_root / "board.html")
+    for needle in [
+        "Status Lanes",
+        "Proposed",
+        "Product Code",
+        "Evidence Gates",
+        "Required Evidence",
+        "Stop Conditions",
+    ]:
+        assert needle in board_md
+    for needle in [
+        "<!doctype html>",
+        "AO2 AI Task Board",
+        "status-lane",
+        "Product Code",
+        "Evidence Gates",
+    ]:
+        assert needle in board_html
+
+
 def test_pulse_generate_next_writes_ai_task_board_artifact(tmp_path):
     out_root = tmp_path / "generate-next"
     packet_root = tmp_path / "packet"
@@ -2505,6 +2554,49 @@ def test_pulse_generate_next_writes_ai_task_board_artifact(tmp_path):
     assert summary["task_board"] == str(packet_root / "task-board.json")
     assert summary["task_board_summary"] == str(task_board_root / "summary.json")
     assert any(item["path"] == "task-board.json" for item in summary["files"])
+
+
+def test_pulse_generate_next_records_task_board_history_and_diff(tmp_path):
+    history_root = tmp_path / "history"
+    cursor = tmp_path / "cursor.json"
+
+    for index in [1, 2]:
+        result = subprocess.run(
+            ["npm", "run", "pulse:generate-next"],
+            cwd=REPO_ROOT,
+            env={
+                **os.environ,
+                "AO2_PULSE_GENERATE_NEXT_REGISTER": "0",
+                "AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY": "0",
+                "AO2_PULSE_GENERATE_NEXT_ROOT": str(tmp_path / f"generate-{index}"),
+                "AO2_PULSE_GENERATE_NEXT_PACKET_ROOT": str(tmp_path / f"packet-{index}"),
+                "AO2_PULSE_TASK_BOARD_ROOT": str(tmp_path / f"task-board-{index}"),
+                "AO2_PULSE_TASK_BOARD_HISTORY_ROOT": str(history_root),
+                "AO2_PULSE_GENERATE_NEXT_CURSOR": str(cursor),
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr + result.stdout
+
+    first = json.loads((tmp_path / "task-board-1" / "task-board-diff.json").read_text(encoding="utf-8"))
+    second = json.loads((tmp_path / "task-board-2" / "task-board-diff.json").read_text(encoding="utf-8"))
+    second_board = json.loads((tmp_path / "task-board-2" / "summary.json").read_text(encoding="utf-8"))
+
+    assert first["schema_version"] == "ao2.ai-task-board-diff.v1"
+    assert first["previous_present"] is False
+    assert second["schema_version"] == "ao2.ai-task-board-diff.v1"
+    assert second["previous_present"] is True
+    assert second["current_task_ids"]
+    assert set(second["current_task_ids"]) == {
+        task["task_id"] for task in second_board["tasks"]
+    }
+    assert second_board["history"]["latest"] == str(history_root / "latest.json")
+    assert second_board["history"]["diff"] == str(tmp_path / "task-board-2" / "task-board-diff.json")
+    assert (history_root / "latest.json").is_file()
+    assert (history_root / "generation-1.json").is_file()
+    assert (history_root / "generation-2.json").is_file()
 
 
 def test_pulse_generate_next_local_only_mode_omits_product_code_tasks(tmp_path):
@@ -3620,6 +3712,72 @@ def test_control_plane_fixture_consumer_smoke_reads_ai_task_board_fixture(tmp_pa
         "requires_credentials": False,
         "mutates_releases": False,
     }
+
+
+def test_control_plane_fixture_consumer_smoke_reads_task_board_from_catalog(tmp_path):
+    out_root = tmp_path / "control-plane-fixture-consumer"
+    task_board = tmp_path / "task-board.json"
+    task_board.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.ai-task-board.v1",
+                "status": "ready",
+                "release_objective": "Expose Pulse work as an operator-readable task board.",
+                "tasks": [
+                    {
+                        "task_id": "catalog-task",
+                        "title": "Catalog task",
+                        "status": "proposed",
+                        "required_evidence": ["ao2.ai-task-board.v1"],
+                        "stop_conditions": ["Stop if catalog readback requires credentials."],
+                    }
+                ],
+                "control_plane_readback": {
+                    "role": "read_only_observer",
+                    "requires_credentials": False,
+                    "can_mutate_ao2_artifacts": False,
+                    "can_mutate_release_metadata": False,
+                },
+                "trust_boundary": {"local_only": True, "stores_credentials": False},
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "control-plane:fixture-consumer-smoke"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_CP_FIXTURE_CONSUMER_SMOKE_ROOT": str(out_root),
+            "AO2_OPERATOR_INDEX_CP_TASK_BOARD": str(task_board),
+            "AO2_CP_FIXTURE_CONSUMER_TASK_BOARD": str(tmp_path / "missing-direct-board.json"),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["task_board_readback"]["status"] == "passed"
+    assert summary["task_board_readback"]["source"] == "fixture_catalog"
+    assert summary["task_board_readback"]["task_count"] == 1
+    catalog = json.loads(
+        (
+            out_root
+            / "operator-index-control-plane-fixture-ingest"
+            / "control-plane-fixture-catalog.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert any(
+        item.get("source_schema") == "ao2.ai-task-board.v1"
+        and item.get("task_board_fixture_reusable") is True
+        for item in catalog["control_plane_fixture_catalog"]
+    )
 
 
 def test_control_plane_fixture_consumer_smoke_skips_missing_ai_task_board(tmp_path):

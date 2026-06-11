@@ -168,8 +168,13 @@ no tracked or untracked source changes, it exits successfully with
 `target/pulse-next-recommended-tasks`, which is also the default
 `pulse:local-mirror` source used by release-readiness gates. It also emits an
 operator-readable `ao2.ai-task-board.v1` control-surface artifact at
-`target/pulse-task-board/latest/summary.json`, plus a companion board markdown
-file. The board preserves the current release objective, source recommendation,
+`target/pulse-task-board/latest/summary.json`, plus companion
+`board.md` and `board.html` exports grouped into status and work-type lanes.
+It also writes `target/pulse-task-board/latest/task-board-diff.json` and keeps
+generation snapshots under
+`${AO2_PULSE_TASK_BOARD_HISTORY_ROOT:-.ao2-local/pulse/task-board-history}` so
+operators can see whether the selected work changed between Pulse generations.
+The board preserves the current release objective, source recommendation,
 rationale, required evidence, stop conditions, and read-only control-plane
 readback semantics without granting mutation authority. For the Risky PR
 product MVP and AI task-board selections, the manifest includes a product-code
@@ -199,8 +204,11 @@ is present, fails closed if the release objective, required evidence, or stop
 conditions are missing, and records `task_board_drift_gate` plus
 `task_board_blockers` in its summary. `npm run control-plane:fixture-consumer-smoke`
 can also read the task board through `AO2_CP_FIXTURE_CONSUMER_TASK_BOARD`,
-recording read-only `task_board_readback` without credentials or release
-mutation authority.
+or through the fixture catalog produced by
+`evidence:operator-index-control-plane-fixture-ingest` when
+`AO2_OPERATOR_INDEX_CP_TASK_BOARD` points at a valid board. Both paths record
+read-only `task_board_readback` without credentials or release mutation
+authority.
 
 `npm run pulse:task-executor` reads an `ao2.pulse-task-manifest.v1` manifest
 from `.ao2-local/pulse/latest/pulse-task-manifest.json` by default and emits
