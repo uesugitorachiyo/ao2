@@ -744,7 +744,11 @@ Result:
   post-stable install/update evidence, and ao2-control-plane
   Ubuntu/macOS/Windows post-release summaries with checksum and trust-boundary
   checks. Use `AO2_OPERATOR_RELEASE_EVIDENCE_FIXTURE_DIR=<path>` for offline
-  fixture verification.
+  fixture verification. The scheduled/manual `Operator Release Evidence Audit`
+  workflow runs the same command on GitHub Actions and uploads
+  `ao2-operator-release-evidence-bundle` so operators can download
+  `summary.json` and point `AO2_CP_OPERATOR_RELEASE_EVIDENCE_SUMMARY` at it for
+  read-only control-plane dashboard readback.
 - `npm run release:immutability-audit`: composes asset completeness, stable
   readiness, full release download verification, checksum validation, signed
   provenance verification, GitHub asset digest checks, and release metadata

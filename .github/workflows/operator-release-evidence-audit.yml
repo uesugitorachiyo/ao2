@@ -1,0 +1,65 @@
+name: Operator Release Evidence Audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "42 12 * * 2"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: operator-release-evidence-audit-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  operator-release-evidence-audit:
+    name: Build operator release evidence bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+
+      - name: Generate operator release evidence bundle
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          AO2_OPERATOR_RELEASE_EVIDENCE_ROOT=target/operator-release-evidence-bundle \
+            npm run release:operator-evidence-bundle
+
+      - name: Verify operator release evidence summary
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary_path = Path("target/operator-release-evidence-bundle/summary.json")
+          summary = json.loads(summary_path.read_text(encoding="utf-8"))
+          assert summary["schema_version"] == "ao2.operator-release-evidence-bundle.v1", summary
+          assert summary["status"] == "passed", summary
+          assert summary["operator_release_evidence_ready"] is True, summary
+          assert len(summary["checks"]) == 7, summary
+          assert all(check["status"] == "passed" for check in summary["checks"]), summary
+          trust = summary["trust_boundary"]
+          assert trust["mutates_releases"] is False, summary
+          assert trust["stores_credentials"] is False, summary
+          assert trust["downloads_github_actions_artifacts"] is True, summary
+          print(f"summary={summary_path}")
+          PY
+
+      - name: Upload operator release evidence bundle
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-operator-release-evidence-bundle
+          path: target/operator-release-evidence-bundle
+          if-no-files-found: error
