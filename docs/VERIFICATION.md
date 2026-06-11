@@ -649,8 +649,10 @@ Result:
   readiness can pass
 - `.github/workflows/post-stable-release-verification.yml` runs a hosted
   consumer smoke for the stable public release on Ubuntu, macOS, and Windows:
-  download the published archive, verify `SHA256SUMS`, install into a temporary
-  bin directory, then run `ao2 version --json`, `ao2 doctor --json`, and
+  download the published archive plus signed provenance sidecars, verify
+  `SHA256SUMS`, install via `ao2 install update --provenance-dir` into a
+  temporary bin directory, require `signature_verified` install-update evidence,
+  then run `ao2 version --json`, `ao2 doctor --json`, and
   `ao2 adapter doctor --provider scripted`
 - `npm run release:cross-os-attestation` emits
   `ao2.cross-os-release-attestation.v1` at

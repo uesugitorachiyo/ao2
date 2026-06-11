@@ -86,8 +86,9 @@ checksum verification before install.
 
 The current stable public release is
 [`v0.4.80`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.80).
-It publishes release archives for macOS, Ubuntu/Linux x86_64, and Windows,
-plus `SHA256SUMS`, signed provenance, and release-readiness JSON evidence.
+It publishes release archives for macOS, Ubuntu/Linux x86_64,
+Ubuntu/Linux aarch64, and Windows, plus `SHA256SUMS`, signed provenance, and
+release-readiness JSON evidence.
 The overview video is available at
 [https://youtu.be/p222b0iCpbg](https://youtu.be/p222b0iCpbg).
 
@@ -106,6 +107,7 @@ Use the same release base URL for Linux and Windows archives:
 
 ```text
 https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.80/ao2-0.4.80-linux-x86_64.tar.gz
+https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.80/ao2-0.4.80-linux-aarch64.tar.gz
 https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.80/ao2-0.4.80-windows-x86_64.tar.gz
 ```
 

@@ -434,6 +434,50 @@ if selection["id"] == "risky-pr-product-mvp" and not local_only_while_pr_blocked
         "rationale": selection["rationale"],
         "required_evidence": selection["required_evidence"],
     })
+if selection["id"] == "ai-task-board-control-surface" and not local_only_while_pr_blocked:
+    tasks.append({
+        "id": f"ao2-ai-task-board-control-surface-implementation-g{generation}",
+        "kind": "product_code",
+        "title": "AI task board control-surface implementation",
+        "objective": (
+            "Start the v0.4.81 control-surface slice by defining the task-board contract "
+            "and wiring Pulse generated packets to expose release objective, rationale, "
+            "evidence requirements, and stop conditions as operator-visible product state."
+        ),
+        "files": [
+            "scripts/pulse-generate-next.sh",
+            "tests/test_public_stabilization.py",
+            "docs/release/v0.4.81-ai-task-board-control-surface.md",
+            "docs/VERIFICATION.md",
+        ],
+        "acceptance": [
+            "Pulse emits an operator-readable task-board packet using ao2.ai-task-board.v1.",
+            "Task-board entries preserve evidence requirements and stop conditions.",
+            "The control-plane remains a read-only observer with no release mutation authority.",
+        ],
+        "verification": [
+            {
+                "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py -q",
+                "expected_evidence": "pytest.tests.test_public_stabilization",
+            },
+            {
+                "command": "npm run pulse:generate-next:contract",
+                "expected_evidence": "ao2.pulse-generate-next-contract.v1",
+            },
+            {
+                "command": "npm run control-plane:fixture-consumer-smoke",
+                "expected_evidence": "ao2.control-plane-fixture-consumer-smoke.v1",
+            },
+        ],
+        "stop_conditions": [
+            "Stop if the task board can mutate AO2 release metadata.",
+            "Stop if generated tasks lack evidence requirements or stop conditions.",
+            "Stop if control-plane readback requires credentials or private local paths.",
+        ],
+        "why": "Create the actual product-code control surface before running supporting evidence gates.",
+        "rationale": selection["rationale"],
+        "required_evidence": selection["required_evidence"],
+    })
 for task_id, title, command, expected_evidence, why in selection["tasks"]:
     tasks.append({
         "id": f"{task_id}-g{generation}",

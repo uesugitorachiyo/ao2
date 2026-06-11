@@ -28,16 +28,22 @@ jobs:
           - label: Ubuntu stable release smoke
             os: ubuntu-latest
             asset: ao2-0.4.80-linux-x86_64.tar.gz
+            asset_sha: ao2-0.4.80-linux-x86_64.tar.gz.sha256
+            asset_sig: ao2-0.4.80-linux-x86_64.tar.gz.sig
             binary: ao2
             shell: bash
           - label: macOS stable release smoke
             os: macos-14
             asset: ao2-0.4.80-macos-aarch64.tar.gz
+            asset_sha: ao2-0.4.80-macos-aarch64.tar.gz.sha256
+            asset_sig: ao2-0.4.80-macos-aarch64.tar.gz.sig
             binary: ao2
             shell: bash
           - label: Windows stable release smoke
             os: windows-latest
             asset: ao2-0.4.80-windows-x86_64.tar.gz
+            asset_sha: ao2-0.4.80-windows-x86_64.tar.gz.sha256
+            asset_sig: ao2-0.4.80-windows-x86_64.tar.gz.sig
             binary: ao2.exe
             shell: pwsh
 
@@ -49,12 +55,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           AO2_ASSET: ${{ matrix.asset }}
+          AO2_ASSET_SHA: ${{ matrix.asset_sha }}
+          AO2_ASSET_SIG: ${{ matrix.asset_sig }}
         run: |
           mkdir -p release smoke/extract smoke/bin
           gh release download "$AO2_RELEASE_TAG" \
             --repo "$AO2_RELEASE_REPO" \
             --pattern "$AO2_ASSET" \
+            --pattern "$AO2_ASSET_SHA" \
+            --pattern "$AO2_ASSET_SIG" \
             --pattern SHA256SUMS \
+            --pattern ao2-release-provenance.json \
+            --pattern ao2-release-provenance.json.sig \
+            --pattern ao2-release-signing-public.pem \
             --dir release \
             --clobber
         shell: bash
@@ -70,7 +83,13 @@ jobs:
           (cd release && shasum -a 256 -c SHA256SUMS.asset)
           tar -xzf "release/$AO2_ASSET" -C smoke/extract
           test -f smoke/extract/RELEASE-MANIFEST.json
-          AO2_INSTALL_DIR="$PWD/smoke/bin" sh smoke/extract/install.sh
+          smoke/extract/bin/ao2 install update \
+            --archive "$PWD/release/$AO2_ASSET" \
+            --provenance-dir "$PWD/release" \
+            --install-dir "$PWD/smoke/bin" \
+            | tee smoke/install-update.json
+          grep -q '"signature_verified": true' smoke/install-update.json
+          grep -q '"status": "installed"' smoke/install-update.json
           test -x "smoke/bin/$AO2_BINARY"
           "smoke/bin/$AO2_BINARY" version --json | tee smoke/version.json
           "smoke/bin/$AO2_BINARY" doctor --json | tee smoke/doctor.json
@@ -98,7 +117,18 @@ jobs:
             throw "missing RELEASE-MANIFEST.json"
           }
           $env:AO2_INSTALL_DIR = (Resolve-Path smoke/bin).Path
-          & smoke/extract/install.ps1
+          & smoke/extract/bin/ao2.exe install update `
+            --archive (Resolve-Path (Join-Path "release" $env:AO2_ASSET)).Path `
+            --provenance-dir (Resolve-Path "release").Path `
+            --install-dir $env:AO2_INSTALL_DIR `
+            | Set-Content -Encoding UTF8 smoke/install-update.json
+          $installUpdate = Get-Content smoke/install-update.json -Raw
+          if ($installUpdate -notmatch '"signature_verified": true') {
+            throw "install update did not verify release signature"
+          }
+          if ($installUpdate -notmatch '"status": "installed"') {
+            throw "install update did not install release"
+          }
           $ao2 = Join-Path $env:AO2_INSTALL_DIR $env:AO2_BINARY
           if (!(Test-Path $ao2)) {
             throw "installed binary missing: $ao2"
@@ -114,6 +144,10 @@ jobs:
           name: post-stable-release-smoke-${{ runner.os }}
           path: |
             release/SHA256SUMS
+            release/ao2-release-provenance.json
+            release/ao2-release-provenance.json.sig
+            release/ao2-release-signing-public.pem
+            smoke/install-update.json
             smoke/version.json
             smoke/doctor.json
             smoke/scripted-doctor.txt
