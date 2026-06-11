@@ -4,12 +4,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_ROOT="${AO2_PULSE_NEXT_ACTIONS_ROOT:-$ROOT/target/pulse-next-actions/latest}"
 BOARD="${AO2_PULSE_NEXT_ACTIONS_BOARD:-$ROOT/target/pulse-task-board/latest/summary.json}"
+STATUS_FILTER="${AO2_PULSE_NEXT_ACTIONS_STATUS:-}"
 SUMMARY="$OUT_ROOT/summary.json"
 MARKDOWN="$OUT_ROOT/next-actions.md"
 
 mkdir -p "$OUT_ROOT"
 
-python3 - "$BOARD" "$OUT_ROOT" "$SUMMARY" "$MARKDOWN" <<'PY'
+python3 - "$BOARD" "$OUT_ROOT" "$SUMMARY" "$MARKDOWN" "$STATUS_FILTER" <<'PY'
 import json
 import sys
 from datetime import datetime, timezone
@@ -19,6 +20,7 @@ board_path = Path(sys.argv[1]).resolve()
 out_root = Path(sys.argv[2]).resolve()
 summary_path = Path(sys.argv[3]).resolve()
 markdown_path = Path(sys.argv[4]).resolve()
+status_filter_raw = sys.argv[5]
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -29,6 +31,11 @@ payload = {
     "status": "failed",
     "artifact_root": str(out_root),
     "task_board": str(board_path),
+    "status_filter": [
+        value.strip().lower().replace("-", "_")
+        for value in status_filter_raw.split(",")
+        if value.strip()
+    ],
     "next_actions": [],
     "exports": {"markdown": str(markdown_path)},
     "trust_boundary": {"local_only": True, "stores_credentials": False},
@@ -46,14 +53,18 @@ else:
         payload["reason"] = "task_board_schema_invalid"
     elif board:
         actions = []
+        status_filter = set(payload["status_filter"])
         for item in board.get("tasks", []):
             if not isinstance(item, dict):
+                continue
+            status = str(item.get("status") or "unknown").lower().replace("-", "_")
+            if status_filter and status not in status_filter:
                 continue
             actions.append({
                 "task_id": item.get("task_id"),
                 "stable_task_id": item.get("stable_task_id"),
                 "title": item.get("title"),
-                "status": str(item.get("status") or "unknown"),
+                "status": status,
                 "next_action": item.get("next_action"),
             })
         payload.update({
@@ -64,6 +75,9 @@ else:
         })
 
 lines = ["# Next Actions", ""]
+if payload["status"] != "passed":
+    lines.append(f"Reason: {payload.get('reason')}")
+    lines.append("")
 for item in payload["next_actions"]:
     lines.append(
         f"- `{item.get('task_id')}` [{item.get('status')}]: "
