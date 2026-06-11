@@ -34537,8 +34537,11 @@ fn cli_workbench_support_bundle_summarizes_queue_failure_diagnostics() {
         support_bundle_dir.to_str().unwrap(),
     ]);
     assert!(inspect_text.status.success(), "{}", stderr(&inspect_text));
-    assert!(stdout(&inspect_text)
+    let inspect_stdout = stdout(&inspect_text);
+    assert!(inspect_stdout
         .contains("queue_job_diagnosis_1=support-diagnostics-failed non_zero_exit exit=1"));
+    assert!(inspect_stdout.contains("error=queued ao2 run failed"));
+    assert!(inspect_stdout.contains("recovery=Review stderr first"));
 
     let import_dir = temp.path().join("workbench-support-cases");
     let import = ao2([
@@ -34555,7 +34558,10 @@ fn cli_workbench_support_bundle_summarizes_queue_failure_diagnostics() {
     assert_eq!(import_json["queue_job_diagnosis_count"], 1);
     let html = fs::read_to_string(import_json["index_path"].as_str().unwrap()).unwrap();
     assert!(html.contains("Queue Failure Diagnostics"));
+    assert!(html.contains("Primary Error"));
+    assert!(html.contains("Recovery"));
     assert!(html.contains("support-diagnostics-missing-prompt.sh"));
+    assert!(html.contains("Review stderr first"));
 }
 
 #[test]
@@ -36125,9 +36131,12 @@ fn cli_workbench_export_renders_latest_support_packet_queue_diagnostics() {
     let html = fs::read_to_string(out).unwrap();
     assert!(html.contains("Latest Support Packet"));
     assert!(html.contains("Queue Failure Diagnostics"));
+    assert!(html.contains("Primary Error"));
+    assert!(html.contains("Recovery"));
     assert!(html.contains("support-packet-diag-failed"));
     assert!(html.contains("non_zero_exit"));
     assert!(html.contains("support-packet-diag-missing-prompt.sh"));
+    assert!(html.contains("Review stderr first"));
 }
 
 #[test]
