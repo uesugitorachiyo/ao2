@@ -2305,6 +2305,7 @@ def test_pulse_generate_next_auto_registration_contract():
         "AO2_PULSE_TASK_BOARD_STATUS_EVIDENCE",
         "ao2.ai-task-board-status-evidence.v1",
         "status_transition_source",
+        "next_action",
         "changed_tasks",
         "field_changes",
         "release_objective",
@@ -2482,6 +2483,8 @@ def test_pulse_generate_next_writes_operator_board_exports_with_status_lanes(tmp
 
     assert board["exports"]["markdown"] == str(task_board_root / "board.md")
     assert board["exports"]["html"] == str(task_board_root / "board.html")
+    for task in board["tasks"]:
+        assert task["next_action"]
     for needle in [
         "Status Lanes",
         "Proposed",
@@ -2489,6 +2492,7 @@ def test_pulse_generate_next_writes_operator_board_exports_with_status_lanes(tmp
         "Evidence Gates",
         "Required Evidence",
         "Stop Conditions",
+        "Next Action",
     ]:
         assert needle in board_md
     for needle in [
@@ -2497,6 +2501,7 @@ def test_pulse_generate_next_writes_operator_board_exports_with_status_lanes(tmp
         "status-lane",
         "Product Code",
         "Evidence Gates",
+        "Next Action",
     ]:
         assert needle in board_html
 
@@ -2949,6 +2954,9 @@ def test_pulse_task_executor_contract_supports_product_code_tasks():
         "product_code",
         "product_code_execution",
         "pulse:code-agent-runner",
+        "ao2.ai-task-board-status-evidence.v1",
+        "task-board-status-evidence.json",
+        "status_evidence",
         "evidence_gate",
         "implementation-packets",
         "trust_boundary",
@@ -2969,6 +2977,8 @@ def test_pulse_task_executor_contract_supports_product_code_tasks():
         "product-code tasks can opt into `pulse:code-agent-runner`",
         "product_code tasks require verification evidence",
         "product_code task cannot close from packet materialization alone",
+        "task-board-status-evidence.json",
+        "AO2_PULSE_NEXT_TASK_QUALITY_STATUS_EVIDENCE",
     ]:
         assert needle in verification
 
@@ -3045,6 +3055,87 @@ def test_pulse_task_executor_materializes_product_code_packet_without_command(tm
     gate_result = [item for item in summary["results"] if item["id"] == "node-evidence-gate"][0]
     assert gate_result["status"] == "passed"
     assert gate_result["expected_evidence"] == "node.stdout.ok"
+
+
+def test_pulse_task_executor_emits_task_board_status_evidence(tmp_path):
+    out_root = tmp_path / "executor"
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.pulse-task-manifest.v1",
+                "selection": "ai-task-board-control-surface",
+                "cursor": {"generation": 7},
+                "trust_boundary": {
+                    "local_only": True,
+                    "stores_credentials": False,
+                    "side_effects": "local_process_execution_and_packet_materialization",
+                },
+                "tasks": [
+                    {
+                        "id": "product-task",
+                        "kind": "product_code",
+                        "title": "Product task",
+                        "objective": "Materialize implementation packet for the board.",
+                        "files": ["scripts/pulse-task-executor.sh"],
+                        "acceptance": ["Status evidence marks product packet ready."],
+                        "verification": [
+                            {
+                                "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py -q",
+                                "expected_evidence": "pytest.tests.test_public_stabilization",
+                            }
+                        ],
+                        "stop_conditions": ["Stop if task requires credentials."],
+                    },
+                    {
+                        "id": "evidence-task",
+                        "kind": "evidence_gate",
+                        "title": "Evidence task",
+                        "command": "node -e \"console.log('status-evidence-ok')\"",
+                        "expected_evidence": "node.stdout.ok",
+                    },
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:task-executor"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_TASK_EXECUTOR_MANIFEST": str(manifest),
+            "AO2_PULSE_TASK_EXECUTOR_ROOT": str(out_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    status_evidence_path = Path(summary["status_evidence"])
+    assert status_evidence_path == out_root / "task-board-status-evidence.json"
+    status_evidence = json.loads(status_evidence_path.read_text(encoding="utf-8"))
+    assert status_evidence["schema_version"] == "ao2.ai-task-board-status-evidence.v1"
+    assert status_evidence["status"] == "ready"
+    assert status_evidence["source"] == "ao2.pulse-task-executor.v1"
+    assert status_evidence["task_board_generation"] == 7
+    assert status_evidence["task_statuses"]["product-task"]["status"] == "ready"
+    assert status_evidence["task_statuses"]["product-task"]["executor_status"] == (
+        "packet_materialized"
+    )
+    assert status_evidence["task_statuses"]["evidence-task"]["status"] == "passed"
+    assert status_evidence["task_statuses"]["evidence-task"]["evidence"][0] == (
+        str(out_root / "summary.json")
+    )
+    assert status_evidence["task_statuses"]["evidence-task"]["evidence"][1] == (
+        str(out_root / "logs" / "02-evidence-task.log")
+    )
 
 
 def test_pulse_task_executor_dry_runs_product_code_through_code_agent_runner(tmp_path):
@@ -3838,6 +3929,166 @@ def test_pulse_next_task_quality_filter_accepts_complete_task_board(tmp_path):
     assert summary["task_board_blockers"] == []
 
 
+def test_pulse_next_task_quality_filter_rejects_unknown_status_evidence_task_id(tmp_path):
+    packet = tmp_path / "packet.md"
+    task_board = tmp_path / "task-board.json"
+    status_evidence = tmp_path / "status-evidence.json"
+    out_root = tmp_path / "quality"
+    packet.write_text(
+        "# Packet\n\n"
+        "## 1. AI task board control surface\n\n"
+        "Build operator-visible product evidence for the control-plane task board.\n",
+        encoding="utf-8",
+    )
+    task_board.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.ai-task-board.v1",
+                "status": "ready",
+                "release_objective": "Expose Pulse work as an operator-readable task board.",
+                "source_recommendation": {"generation": 7},
+                "tasks": [
+                    {
+                        "task_id": "complete-task",
+                        "title": "Complete task",
+                        "status": "proposed",
+                        "required_evidence": ["ao2.ai-task-board.v1"],
+                        "stop_conditions": ["Stop if readback requires credentials."],
+                    }
+                ],
+                "trust_boundary": {"local_only": True, "stores_credentials": False},
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    status_evidence.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.ai-task-board-status-evidence.v1",
+                "status": "ready",
+                "task_board_generation": 7,
+                "task_statuses": {
+                    "ghost-task": {
+                        "status": "passed",
+                        "status_reason": "This task id is not present on the board.",
+                        "evidence": ["target/pulse-task-executor/latest/summary.json"],
+                    }
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:next-task-quality-filter"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_NEXT_TASK_QUALITY_PACKET": str(packet),
+            "AO2_PULSE_NEXT_TASK_QUALITY_TASK_BOARD": str(task_board),
+            "AO2_PULSE_NEXT_TASK_QUALITY_STATUS_EVIDENCE": str(status_evidence),
+            "AO2_PULSE_NEXT_TASK_QUALITY_ROOT": str(out_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["task_board_drift_gate"] == "failed"
+    assert summary["status_evidence_gate"] == "failed"
+    assert summary["status_evidence_blockers"] == [
+        "status_evidence_unknown_task_id:ghost-task"
+    ]
+
+
+def test_pulse_next_task_quality_filter_rejects_stale_status_evidence_generation(tmp_path):
+    packet = tmp_path / "packet.md"
+    task_board = tmp_path / "task-board.json"
+    status_evidence = tmp_path / "status-evidence.json"
+    out_root = tmp_path / "quality"
+    packet.write_text(
+        "# Packet\n\n"
+        "## 1. AI task board control surface\n\n"
+        "Build operator-visible product evidence for the control-plane task board.\n",
+        encoding="utf-8",
+    )
+    task_board.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.ai-task-board.v1",
+                "status": "ready",
+                "release_objective": "Expose Pulse work as an operator-readable task board.",
+                "source_recommendation": {"generation": 7},
+                "tasks": [
+                    {
+                        "task_id": "complete-task",
+                        "title": "Complete task",
+                        "status": "proposed",
+                        "required_evidence": ["ao2.ai-task-board.v1"],
+                        "stop_conditions": ["Stop if readback requires credentials."],
+                    }
+                ],
+                "trust_boundary": {"local_only": True, "stores_credentials": False},
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    status_evidence.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.ai-task-board-status-evidence.v1",
+                "status": "ready",
+                "task_board_generation": 6,
+                "task_statuses": {
+                    "complete-task": {
+                        "status": "passed",
+                        "status_reason": "This evidence belongs to an older board generation.",
+                        "evidence": ["target/pulse-task-executor/latest/summary.json"],
+                    }
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:next-task-quality-filter"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_NEXT_TASK_QUALITY_PACKET": str(packet),
+            "AO2_PULSE_NEXT_TASK_QUALITY_TASK_BOARD": str(task_board),
+            "AO2_PULSE_NEXT_TASK_QUALITY_STATUS_EVIDENCE": str(status_evidence),
+            "AO2_PULSE_NEXT_TASK_QUALITY_ROOT": str(out_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["task_board_drift_gate"] == "failed"
+    assert summary["status_evidence_gate"] == "failed"
+    assert summary["status_evidence_blockers"] == [
+        "status_evidence_stale_generation:6!=7"
+    ]
+
+
 def test_control_plane_fixture_consumer_smoke_reads_ai_task_board_fixture(tmp_path):
     out_root = tmp_path / "control-plane-fixture-consumer"
     task_board = tmp_path / "task-board.json"
@@ -3977,6 +4228,7 @@ def test_control_plane_fixture_consumer_smoke_writes_operator_task_board_view_fr
                         "title": "Catalog task",
                         "status": "blocked",
                         "rationale": "The operator needs drift-free task state.",
+                        "next_action": "npm run pulse:task-executor",
                         "required_evidence": ["ao2.ai-task-board.v1"],
                         "stop_conditions": ["Stop if catalog readback requires credentials."],
                     }
@@ -4028,6 +4280,7 @@ def test_control_plane_fixture_consumer_smoke_writes_operator_task_board_view_fr
         "Catalog task",
         "status-blocked",
         "read-only observer",
+        "npm run pulse:task-executor",
         "Stop if catalog readback requires credentials.",
     ]:
         assert needle in view_html
@@ -5963,6 +6216,8 @@ def test_release_immutability_audit_composes_stable_asset_and_download_checks():
     assert "Pulse loops stop\n  drifting" in next_patch
     assert "AO2_PULSE_TASK_BOARD_STATUS_EVIDENCE" in next_patch
     assert "ao2.control-plane-operator-task-board-view.v1" in next_patch
+    assert "next_action" in next_patch
+    assert "AO2_PULSE_NEXT_TASK_QUALITY_STATUS_EVIDENCE" in next_patch
     assert "ai-task-board-control-surface" in pulse_generate_next
     assert "ao2.ai-task-board.v1" in pulse_generate_next
     assert "status_transition_source" in pulse_generate_next

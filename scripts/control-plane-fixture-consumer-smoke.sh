@@ -116,6 +116,12 @@ if task_board_readback.get("status") == "passed" and task_board:
             if rationale
             else ""
         )
+        next_action = item.get("next_action")
+        next_action_html = (
+            f"<h3>Next Action</h3><p><code>{html.escape(str(next_action))}</code></p>"
+            if next_action
+            else ""
+        )
         return (
             f"<article class=\"task-card {html.escape(status_class)}\">"
             f"<h2>{html.escape(str(item.get('title') or item.get('task_id') or 'Untitled task'))}</h2>"
@@ -123,6 +129,7 @@ if task_board_readback.get("status") == "passed" and task_board:
             f"<span class=\"status-pill {html.escape(status_class)}\">"
             f"{html.escape(task_status.replace('_', ' ').title())}</span></p>"
             + rationale_html
+            + next_action_html
             + "<h3>Required Evidence</h3><ul>"
             + evidence
             + "</ul><h3>Stop Conditions</h3><ul>"

@@ -27,6 +27,7 @@ out_root = Path(sys.argv[3]).resolve()
 summary_path = Path(sys.argv[4]).resolve()
 log_dir = Path(sys.argv[5]).resolve()
 packet_dir = Path(sys.argv[6]).resolve()
+status_evidence_path = out_root / "task-board-status-evidence.json"
 
 ALLOWED_KINDS = {"product_code", "evidence_gate", "verification"}
 EXECUTABLE_KINDS = {"evidence_gate", "verification"}
@@ -43,13 +44,75 @@ payload = {
     "manifest": str(manifest_path),
     "artifact_root": str(out_root),
     "implementation_packet_dir": str(packet_dir),
+    "status_evidence": str(status_evidence_path),
     "counts": {"product_code": 0, "evidence_gate": 0, "verification": 0},
     "results": [],
     "trust_boundary": {"local_only": True, "stores_credentials": False},
 }
 
 
+def manifest_task_board_generation():
+    cursor = manifest.get("cursor") if "manifest" in globals() else None
+    if isinstance(cursor, dict) and isinstance(cursor.get("generation"), int):
+        return cursor["generation"]
+    source = manifest.get("source_recommendation") if "manifest" in globals() else None
+    if isinstance(source, dict) and isinstance(source.get("generation"), int):
+        return source["generation"]
+    return None
+
+
+def status_from_executor_result(result: dict) -> str:
+    executor_status = str(result.get("status") or "")
+    if executor_status == "packet_materialized":
+        return "ready"
+    if executor_status in {"passed", "code_agent_dry_run_passed", "code_agent_execute_passed"}:
+        return "passed"
+    if executor_status == "skipped":
+        return "skipped"
+    if executor_status:
+        return "blocked"
+    return "proposed"
+
+
+def write_status_evidence() -> None:
+    task_statuses = {}
+    for result in payload.get("results", []):
+        if not isinstance(result, dict) or not result.get("id"):
+            continue
+        evidence = [str(summary_path)]
+        for key in ["packet", "code_agent_summary", "log"]:
+            value = result.get(key)
+            if isinstance(value, str) and value.strip():
+                evidence.append(value.strip())
+        executor_status = str(result.get("status") or "")
+        task_status = status_from_executor_result(result)
+        task_statuses[str(result["id"])] = {
+            "status": task_status,
+            "status_reason": f"pulse-task-executor recorded {executor_status}",
+            "executor_status": executor_status,
+            "kind": result.get("kind"),
+            "title": result.get("title"),
+            "evidence": evidence,
+        }
+    status_evidence = {
+        "schema_version": "ao2.ai-task-board-status-evidence.v1",
+        "generated_at_utc": utc_now(),
+        "status": "ready" if payload.get("status") == "passed" else "partial",
+        "source": "ao2.pulse-task-executor.v1",
+        "manifest": str(manifest_path),
+        "executor_summary": str(summary_path),
+        "task_board_generation": manifest_task_board_generation(),
+        "task_statuses": task_statuses,
+        "trust_boundary": {"local_only": True, "stores_credentials": False},
+    }
+    status_evidence_path.write_text(
+        json.dumps(status_evidence, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def write_summary() -> None:
+    write_status_evidence()
     summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
