@@ -536,7 +536,9 @@ Result:
   control-plane evidence to `../ao2-control-plane/target/ci-artifacts/latest`,
   and emits `ao2.ci-artifact-download-contract.v1` at
   `target/ci-artifacts/latest/summary.json`. Use `--fixture-dir <path>` for
-  deterministic local tests.
+  deterministic local tests. `AO2_CI_ARTIFACT_CONTRACT_STEP_TIMEOUT_SECONDS`
+  bounds the nested consumer command so npm/node/bash process wrappers fail
+  closed instead of waiting indefinitely after a child process stalls.
 - `npm run artifacts:index`: scans AO2 and ao2-control-plane local/CI evidence
   roots, writes `ao2.artifact-index-report.v1`, renders a local `report.md`,
   and writes the `ao2.artifact-evidence-dashboard.v1` HTML dashboard at
@@ -567,7 +569,9 @@ Result:
   `ao2-local-canary`
 - `npm run local:canary`: runs the same local canary sequence and writes
   `ao2.local-canary-run.v1` to
-  `target/local-canary/latest/local-canary-summary.json`
+  `target/local-canary/latest/local-canary-summary.json`.
+  `AO2_LOCAL_CANARY_STEP_TIMEOUT_SECONDS` bounds each nested canary step and
+  terminates the step process group on timeout.
 - Pulse execute simulation: a local resume fixture can set
   `simulation=true` and `simulation_output_path` so
   `npm run pulse:resume -- --resume-json <fixture> --execute` writes
@@ -600,7 +604,9 @@ Result:
   artifact index, and fail-on-attention artifact health, then writes
   `ao2.release-evidence-closure.v1` at
   `target/release-evidence-closure/latest/summary.json` plus
-  `target/release-evidence-closure/latest/closure.html`. The closure rejects
+  `target/release-evidence-closure/latest/closure.html`.
+  `AO2_RELEASE_EVIDENCE_CLOSURE_STEP_TIMEOUT_SECONDS` bounds each closure
+  evidence step and terminates the step process group on timeout. The closure rejects
   release acceptance when Risky PR digest-boundary evidence is missing from the
   static report `approval_boundary`, when denied request or approved action
   digest summaries are absent, when replay has digest failures, or when the

@@ -6,9 +6,11 @@ CP_ROOT="${AO2_CONTROL_PLANE_ROOT:-$ROOT/../ao2-control-plane}"
 OUT_ROOT="${AO2_CI_ARTIFACT_DOWNLOAD_ROOT:-$ROOT/target/ci-artifacts/latest}"
 SUMMARY="$OUT_ROOT/summary.json"
 CONSUMER_ROOT="$OUT_ROOT/release-artifact-consumer-smoke"
+CONSUMER_LOG="$OUT_ROOT/release-artifact-consumer-smoke.log"
 FIXTURE_DIR="${AO2_CI_ARTIFACT_DOWNLOAD_FIXTURE_DIR:-}"
 REQUIRED_ARTIFACTS="${AO2_CI_ARTIFACT_REQUIRED_ARTIFACTS:-ao2-python-guard}"
 REQUIRED_SCHEMAS="${AO2_CI_ARTIFACT_REQUIRED_SCHEMAS:-ao2.python-guard-ci-artifacts.v1}"
+STEP_TIMEOUT_SECONDS="${AO2_CI_ARTIFACT_CONTRACT_STEP_TIMEOUT_SECONDS:-900}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -46,6 +48,60 @@ done
 rm -rf "$OUT_ROOT"
 mkdir -p "$OUT_ROOT"
 
+run_with_step_timeout() {
+  local timeout_seconds="$1"
+  local log_path="$2"
+  shift 2
+  python3 - "$timeout_seconds" "$log_path" "$@" <<'PY'
+import os
+import signal
+import subprocess
+import sys
+import time
+
+timeout_seconds = float(sys.argv[1])
+log_path = sys.argv[2]
+cmd = sys.argv[3:]
+started = time.monotonic()
+with open(log_path, "w", encoding="utf-8") as log:
+    try:
+        kwargs = {
+            "stdout": log,
+            "stderr": subprocess.STDOUT,
+            "text": True,
+        }
+        if os.name == "nt":
+            kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        else:
+            kwargs["start_new_session"] = True
+        proc = subprocess.Popen(cmd, **kwargs)
+        code = proc.wait(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        elapsed = round(time.monotonic() - started, 3)
+        log.write(
+            f"step timed out after {int(timeout_seconds)}s "
+            f"elapsed_seconds={elapsed}: {' '.join(cmd)}\n"
+        )
+        if os.name == "nt":
+            proc.kill()
+        else:
+            os.killpg(proc.pid, signal.SIGTERM)
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            if os.name == "nt":
+                proc.kill()
+            else:
+                os.killpg(proc.pid, signal.SIGKILL)
+            proc.wait()
+        code = 124
+    except FileNotFoundError as exc:
+        log.write(f"failed to start command: {exc}\n")
+        code = 127
+raise SystemExit(code)
+PY
+}
+
 consumer_args=()
 if [ -n "$FIXTURE_DIR" ]; then
   consumer_args+=(--fixture-dir "$FIXTURE_DIR")
@@ -57,8 +113,16 @@ for schema in $REQUIRED_SCHEMAS; do
   consumer_args+=(--require-schema "$schema")
 done
 
-AO2_RELEASE_ARTIFACT_CONSUMER_ROOT="$CONSUMER_ROOT" \
+set +e
+run_with_step_timeout "$STEP_TIMEOUT_SECONDS" "$CONSUMER_LOG" \
+  env AO2_RELEASE_ARTIFACT_CONSUMER_ROOT="$CONSUMER_ROOT" \
   npm run release:artifact-consumer-smoke -- "${consumer_args[@]}"
+consumer_code=$?
+set -e
+cat "$CONSUMER_LOG"
+if [ "$consumer_code" -ne 0 ]; then
+  exit "$consumer_code"
+fi
 
 mkdir -p "$CP_ROOT/target/ci-artifacts/latest"
 

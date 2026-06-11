@@ -5975,6 +5975,9 @@ def test_local_canary_runner_matches_manual_workflow_contract():
     text = runner.read_text(encoding="utf-8")
     for needle in [
         "ao2.local-canary-run.v1",
+        "AO2_LOCAL_CANARY_STEP_TIMEOUT_SECONDS",
+        "subprocess.TimeoutExpired",
+        "start_new_session",
         "release:artifact-consumer-smoke -- --dry-run",
         "pulse:local-mirror",
         "pulse:resume -- --dry-run",
@@ -6090,6 +6093,9 @@ def test_ci_artifact_download_contract_and_health_gate_wiring():
     text = contract.read_text(encoding="utf-8")
     for needle in [
         "ao2.ci-artifact-download-contract.v1",
+        "AO2_CI_ARTIFACT_CONTRACT_STEP_TIMEOUT_SECONDS",
+        "subprocess.TimeoutExpired",
+        "start_new_session",
         "target/ci-artifacts/latest",
         "release:artifact-consumer-smoke",
         "--require-artifact",
@@ -6224,6 +6230,9 @@ def test_release_evidence_closure_contract():
     text = script.read_text(encoding="utf-8")
     for needle in [
         "ao2.release-evidence-closure.v1",
+        "AO2_RELEASE_EVIDENCE_CLOSURE_STEP_TIMEOUT_SECONDS",
+        "subprocess.TimeoutExpired",
+        "start_new_session",
         "local:canary",
         "artifacts:health",
         "phase1:promotion-golden",
