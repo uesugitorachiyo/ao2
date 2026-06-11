@@ -180,6 +180,14 @@ task-id keyed status transitions and records `status_transition_source` plus
 per-task `status_transition` evidence. The diff now includes
 `changed_task_ids`, `changed_tasks`, and field-level `field_changes` for task
 title, objective, status, rationale, required evidence, and stop conditions.
+If `AO2_PULSE_TASK_BOARD_STATUS_EVIDENCE` is not set, `pulse:generate-next`
+auto-discovers AO2's own executor output at
+`${AO2_PULSE_TASK_EXECUTOR_ROOT:-target/pulse-task-executor/latest}/task-board-status-evidence.json`
+and applies it only when the evidence generation matches the generated board.
+The generator also writes
+`target/pulse-task-board/latest/board-state-summary.json` using
+`ao2.ai-task-board-state-summary.v1`, a compact read-only summary with task
+status counts and next actions for dashboard/control-plane ingestion.
 The board preserves the current release objective, source recommendation,
 rationale, required evidence, stop conditions, and read-only control-plane
 readback semantics without granting mutation authority. For the Risky PR

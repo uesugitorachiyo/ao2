@@ -140,6 +140,13 @@ if task_board_readback.get("status") == "passed" and task_board:
     objective = task_board.get("release_objective") or "AO2 task board"
     html_path = view_dir / "operator-task-board.html"
     view_summary_path = view_dir / "summary.json"
+    exports = task_board.get("exports") if isinstance(task_board.get("exports"), dict) else {}
+    board_state_summary = exports.get("state_summary")
+    board_state_summary_path = (
+        Path(str(board_state_summary)).expanduser()
+        if isinstance(board_state_summary, str) and board_state_summary.strip()
+        else None
+    )
     html_path.write_text(
         "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
         "<title>AO2 Control Plane Task Board</title>"
@@ -163,6 +170,7 @@ if task_board_readback.get("status") == "passed" and task_board:
         "source": task_board_source,
         "task_board": str(effective_task_board_path),
         "html": str(html_path),
+        "board_state_summary": str(board_state_summary_path) if board_state_summary_path and board_state_summary_path.is_file() else None,
         "task_count": len(tasks),
         "task_status_counts": status_counts,
         "read_only": True,
@@ -178,6 +186,7 @@ if task_board_readback.get("status") == "passed" and task_board:
         "task_board": str(effective_task_board_path),
         "summary": str(view_summary_path),
         "html": str(html_path),
+        "board_state_summary": str(board_state_summary_path) if board_state_summary_path and board_state_summary_path.is_file() else None,
         "task_count": len(tasks),
         "read_only": True,
     }
