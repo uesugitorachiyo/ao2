@@ -76,6 +76,7 @@
     "provider:phase2-contract-hardening": "node scripts/run-sh-script.js scripts/provider-phase2-contract-hardening.sh",
     "release:train-drill": "node scripts/run-sh-script.js scripts/public-release-train-drill.sh",
     "release:train-control-plane-bridge": "node scripts/run-sh-script.js scripts/release-train-control-plane-bridge.sh",
+    "ai-task-board:control-plane-bridge": "node scripts/run-sh-script.js scripts/ai-task-board-control-plane-bridge.sh",
     "next:lengthy:gate": "node scripts/run-sh-script.js scripts/next-lengthy-gate.sh",
     "post-merge:canary": "node scripts/run-sh-script.js scripts/post-merge-canary.sh",
     "ci:license-provenance": "node scripts/run-sh-script.js scripts/license-provenance-gate.sh",

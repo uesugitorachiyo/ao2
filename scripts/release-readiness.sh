@@ -134,27 +134,46 @@ add(
     "runs release train control-plane bridge and uploads read-only bridge evidence",
 )
 
+ai_task_board_bridge_artifacts = workflow_job_block("ai-task-board-control-plane-bridge-artifacts")
+ai_task_board_bridge_artifacts_ok = (
+    ai_task_board_bridge_artifacts is not None
+    and "ao2-ai-task-board-control-plane-bridge" in ai_task_board_bridge_artifacts
+    and "target/ai-task-board-control-plane-bridge-ci" in ai_task_board_bridge_artifacts
+    and "ao2.ai-task-board-control-plane-bridge.v1" in ai_task_board_bridge_artifacts
+    and "ao2.cp-ai-task-board-readback.v1" in ai_task_board_bridge_artifacts
+    and "ao2.cp-ai-task-board-dashboard.v1" in ai_task_board_bridge_artifacts
+)
+add(
+    "ci_ai_task_board_control_plane_bridge_artifact_job",
+    "passed" if ai_task_board_bridge_artifacts_ok else "failed",
+    "runs AI task board control-plane bridge and uploads read-only bridge evidence",
+)
+
 release_readiness_artifact_consumer = workflow_job_block("release-readiness-artifact-consumer")
 release_readiness_artifact_consumer_ok = (
     release_readiness_artifact_consumer is not None
-    and "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts]" in release_readiness_artifact_consumer
+    and "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts]" in release_readiness_artifact_consumer
     and "actions/download-artifact@v8.0.1" in release_readiness_artifact_consumer
     and "name: ao2-release-readiness" in release_readiness_artifact_consumer
     and "target/release-readiness-consumer/ao2-release-readiness" in release_readiness_artifact_consumer
     and "name: ao2-release-train-control-plane-bridge" in release_readiness_artifact_consumer
     and "target/release-readiness-consumer/ao2-release-train-control-plane-bridge" in release_readiness_artifact_consumer
+    and "name: ao2-ai-task-board-control-plane-bridge" in release_readiness_artifact_consumer
+    and "target/release-readiness-consumer/ao2-ai-task-board-control-plane-bridge" in release_readiness_artifact_consumer
     and "ao2.release-readiness-local.v1" in release_readiness_artifact_consumer
     and "ao2.release-train-control-plane-bridge.v1" in release_readiness_artifact_consumer
+    and "ao2.ai-task-board-control-plane-bridge.v1" in release_readiness_artifact_consumer
     and "ci_job_required_os:verify" in release_readiness_artifact_consumer
     and "ci_job_required_os:release-archive-hosted-smoke" in release_readiness_artifact_consumer
     and "ci_job_required_os:workbench-operator-packet-control-plane-smoke" in release_readiness_artifact_consumer
     and "ci_release_readiness_static_artifact_job" in release_readiness_artifact_consumer
     and "ci_release_train_control_plane_bridge_artifact_job" in release_readiness_artifact_consumer
+    and "ci_ai_task_board_control_plane_bridge_artifact_job" in release_readiness_artifact_consumer
 )
 add(
     "ci_release_readiness_artifact_consumer_job",
     "passed" if release_readiness_artifact_consumer_ok else "failed",
-    "downloads release-readiness and release-train bridge artifacts and validates schema/status/core cross-OS checks",
+    "downloads release-readiness plus control-plane bridge artifacts and validates schema/status/core cross-OS checks",
 )
 
 for workflow in [".github/workflows/release-gate.yml", ".github/workflows/public-release-build.yml"]:
@@ -248,6 +267,26 @@ artifact_closure_index = {
             "required_checks": ["ci_release_train_control_plane_bridge_artifact_job"],
         },
         {
+            "id": "ai_task_board_control_plane_bridge",
+            "artifact_name": "ao2-ai-task-board-control-plane-bridge",
+            "producer_job": "ai-task-board-control-plane-bridge-artifacts",
+            "required_files": [
+                "latest/summary.json",
+                "latest/task-board.json",
+                "latest/control-plane-smoke/summary.json",
+                "latest/control-plane-smoke/ingest-receipt.json",
+                "latest/control-plane-smoke/task-board-readback.json",
+                "latest/control-plane-smoke/task-board-dashboard.json",
+            ],
+            "schema_versions": [
+                "ao2.ai-task-board-control-plane-bridge.v1",
+                "ao2.ai-task-board-control-plane-bridge-smoke.v1",
+                "ao2.cp-ai-task-board-readback.v1",
+                "ao2.cp-ai-task-board-dashboard.v1",
+            ],
+            "required_checks": ["ci_ai_task_board_control_plane_bridge_artifact_job"],
+        },
+        {
             "id": "release_readiness_artifact_consumer",
             "artifact_name": "ao2-release-readiness-consumer",
             "producer_job": "release-readiness-artifact-consumer",
@@ -257,6 +296,7 @@ artifact_closure_index = {
             "consumes": [
                 "ao2-release-readiness",
                 "ao2-release-train-control-plane-bridge",
+                "ao2-ai-task-board-control-plane-bridge",
             ],
         },
     ],
