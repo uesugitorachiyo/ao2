@@ -201,16 +201,20 @@ fallback; `npm run pulse:daemon:status` emits `ao2.pulse-daemon.v1` at
 
 The generated `task-board.json` uses `ao2.ai-task-board.v1` for the v0.4.81 AI
 task board/control-surface train. It records the release objective, selected
-task lane, recommended task statuses, rationale, evidence requirements, stop
-conditions, and a read-only control-plane trust boundary so Pulse can expose
-operator-visible work without giving the control plane release mutation
-authority.
+task lane, recommended task statuses, operator `next_action`, rationale,
+evidence requirements, stop conditions, and a read-only control-plane trust
+boundary so Pulse can expose operator-visible work without giving the control
+plane release mutation authority.
 `npm run pulse:next-task-quality-filter` reads that task-board artifact when it
 is present, fails closed if the release objective, required evidence, or stop
 conditions are missing, and records `task_board_drift_gate` plus
-`task_board_blockers` in its summary. `npm run control-plane:fixture-consumer-smoke`
-can also read the task board through `AO2_CP_FIXTURE_CONSUMER_TASK_BOARD`,
-or through the fixture catalog produced by
+`task_board_blockers` in its summary. When
+`AO2_PULSE_NEXT_TASK_QUALITY_STATUS_EVIDENCE` points at
+`ao2.ai-task-board-status-evidence.v1`, the quality filter also fails closed on
+unknown task ids or stale `task_board_generation` values and records
+`status_evidence_gate` plus `status_evidence_blockers`.
+`npm run control-plane:fixture-consumer-smoke` can also read the task board
+through `AO2_CP_FIXTURE_CONSUMER_TASK_BOARD`, or through the fixture catalog produced by
 `evidence:operator-index-control-plane-fixture-ingest` when
 `AO2_OPERATOR_INDEX_CP_TASK_BOARD` points at a valid board. Both paths record
 read-only `task_board_readback` without credentials or release mutation
@@ -228,6 +232,11 @@ product-code implementation packets under `implementation-packets/` without
 requiring a shell command. product_code tasks require verification evidence:
 the executor rejects packets that do not name both a verification command and
 expected evidence. A product_code task cannot close from packet materialization alone.
+The executor also writes
+`target/pulse-task-executor/latest/task-board-status-evidence.json` using
+`ao2.ai-task-board-status-evidence.v1`, and its summary exposes that path as
+`status_evidence` so the next `pulse:generate-next` run can apply executor
+results back to the AI task board.
 When a manifest sets `product_code_execution.enabled=true`, product-code tasks can opt into `pulse:code-agent-runner`
 instead of packet-only materialization.
 `product_code_execution.mode=dry_run` validates the generated

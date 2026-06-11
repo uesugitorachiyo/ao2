@@ -641,6 +641,23 @@ if status_evidence_path and status_evidence_path.is_file():
             "error": str(exc),
         })
 
+def task_next_action(task: dict) -> str:
+    command = task.get("command")
+    if isinstance(command, str) and command.strip():
+        return command.strip()
+    verification = task.get("verification")
+    if isinstance(verification, list):
+        for item in verification:
+            if not isinstance(item, dict):
+                continue
+            command = item.get("command")
+            if isinstance(command, str) and command.strip():
+                return command.strip()
+    objective = task.get("objective")
+    if isinstance(objective, str) and objective.strip():
+        return objective.strip()
+    return str(task.get("why") or selection["rationale"]).strip()
+
 task_board_tasks = []
 for task in tasks:
     item = {
@@ -649,6 +666,7 @@ for task in tasks:
         "kind": task["kind"],
         "status": "proposed",
         "objective": task.get("objective") or task.get("why") or selection["rationale"],
+        "next_action": task_next_action(task),
         "confidence": "medium",
         "rationale": task.get("rationale") or selection["rationale"],
         "required_evidence": task.get("required_evidence") or selection["required_evidence"],
@@ -791,6 +809,7 @@ def task_md(item: dict) -> str:
         f"- [ ] `{item['task_id']}` **{item['title']}**\n"
         f"  - Kind: `{item['kind']}`\n"
         f"  - Status: `{item['status']}`\n"
+        f"  - Next Action: `{item['next_action']}`\n"
         f"  - Required Evidence: {evidence}\n"
         f"  - Stop Conditions: {stops}\n"
     )
@@ -830,6 +849,7 @@ def task_card(item: dict) -> str:
         f"<p><code>{html.escape(item['task_id'])}</code> - <code>{html.escape(item['kind'])}</code> - <span class=\"status-pill {status_class}\">{html.escape(str(item['status']).replace('_', ' ').title())}</span></p>"
         + transition_html +
         f"<p>{html.escape(item['objective'])}</p>"
+        f"<h4>Next Action</h4><p><code>{html.escape(item['next_action'])}</code></p>"
         "<h4>Required Evidence</h4><ul>" + evidence + "</ul>"
         "<h4>Stop Conditions</h4><ul>" + stops + "</ul>"
         "</article>"

@@ -40,6 +40,7 @@ needles = [
     "ao2.ai-task-board-status-evidence.v1",
     "status_transition_source",
     "status_transition",
+    "next_action",
     "AO2_PULSE_TASK_BOARD_HISTORY_ROOT",
     "ao2.ai-task-board-diff.v1",
     "changed_task_ids",
