@@ -718,6 +718,119 @@ def test_stable_promotion_workflow_is_guarded_and_documented():
     assert "AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD=1" in public_release_index
 
 
+def test_operator_release_evidence_bundle_downloads_and_verifies_cross_repo_artifacts(tmp_path):
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["release:operator-evidence-bundle"]
+        == "node scripts/run-sh-script.js scripts/operator-release-evidence-bundle.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "operator-release-evidence-bundle.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+
+    for needle in [
+        "ao2.operator-release-evidence-bundle.v1",
+        "AO2_OPERATOR_RELEASE_EVIDENCE_FIXTURE_DIR",
+        "AO2_OPERATOR_RELEASE_EVIDENCE_ROOT",
+        "gh run list --repo \"$repo\" --branch main --workflow \"$workflow\" --status success",
+        "gh run download \"$run_id\" --repo \"$repo\" --name \"$artifact\" --dir \"$dest\"",
+        "ao2-dual-repo-release-publication-closure-index",
+        "post-stable-release-smoke-Linux",
+        "post-stable-release-smoke-macOS",
+        "post-stable-release-smoke-Windows",
+        "ao2-control-plane-post-release-verification-ubuntu",
+        "ao2-control-plane-post-release-verification-macos",
+        "ao2-control-plane-post-release-verification-windows",
+        "ao2.dual-repo-release-publication-closure-index.v1",
+        "ao2.cp-release-publication-closure.v1",
+        "signature_verified",
+        "checksum_verified",
+        "credential_material_included",
+        "mutates_github_releases",
+        "operator_release_evidence_ready",
+    ]:
+        assert needle in text
+
+    fixture = tmp_path / "fixture"
+    (fixture / "ao2-dual-repo-release-publication-closure-index").mkdir(parents=True)
+    (fixture / "ao2-dual-repo-release-publication-closure-index" / "summary.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.dual-repo-release-publication-closure-index.v1",
+                "status": "passed",
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    for name in ["ao2-linux", "ao2-macos", "ao2-windows"]:
+        install_update = fixture / name / "smoke" / "install-update.json"
+        install_update.parent.mkdir(parents=True)
+        install_update.write_text(
+            json.dumps(
+                {
+                    "status": "installed",
+                    "signature_verified": True,
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+    for name in ["control-plane-ubuntu", "control-plane-macos", "control-plane-windows"]:
+        summary = fixture / name / "summary.json"
+        summary.parent.mkdir(parents=True)
+        summary.write_text(
+            json.dumps(
+                {
+                    "schema_version": "ao2.cp-release-publication-closure.v1",
+                    "status": "passed",
+                    "checksum_verified": True,
+                    "trust_boundary": {
+                        "credential_material_included": False,
+                        "mutates_github_releases": False,
+                    },
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    out_root = tmp_path / "bundle"
+    result = subprocess.run(
+        ["npm", "run", "release:operator-evidence-bundle"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_OPERATOR_RELEASE_EVIDENCE_ROOT": str(out_root),
+            "AO2_OPERATOR_RELEASE_EVIDENCE_FIXTURE_DIR": str(fixture),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.operator-release-evidence-bundle.v1"
+    assert summary["status"] == "passed"
+    assert summary["operator_release_evidence_ready"] is True
+    assert summary["trust_boundary"]["downloads_github_actions_artifacts"] is False
+    assert summary["trust_boundary"]["mutates_releases"] is False
+    assert summary["trust_boundary"]["stores_credentials"] is False
+
+    verification = read("docs/VERIFICATION.md")
+    assert "npm run release:operator-evidence-bundle" in verification
+    assert "ao2.operator-release-evidence-bundle.v1" in verification
+
+    public_release_index = read("docs/release/PUBLIC-RELEASE-VERIFICATION.md")
+    assert "Operator release evidence bundle" in public_release_index
+    assert "release:operator-evidence-bundle" in public_release_index
+
+
 def test_evidence_control_plane_smoke_script_is_token_safe_and_exposed_by_npm():
     package_json = json.loads(read("package.json"))
     assert (

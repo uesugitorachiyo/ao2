@@ -20,6 +20,7 @@
     "release:asset-completeness": "node scripts/run-sh-script.js scripts/release-asset-completeness.sh",
     "release:stable-readiness": "node scripts/run-sh-script.js scripts/release-stable-readiness.sh",
     "release:stable-promotion-workflow": "node scripts/run-sh-script.js scripts/release-stable-promotion-workflow.sh",
+    "release:operator-evidence-bundle": "node scripts/run-sh-script.js scripts/operator-release-evidence-bundle.sh",
     "release:immutability-audit": "node scripts/run-sh-script.js scripts/release-immutability-audit.sh",
     "release:sync-provenance-assets": "node scripts/run-sh-script.js scripts/release-sync-provenance-assets.sh",
     "release:publication-dry-run-closure": "node scripts/run-sh-script.js scripts/release-publication-dry-run-closure.sh",

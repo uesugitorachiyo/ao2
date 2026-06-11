@@ -80,6 +80,28 @@ gh run download <run-id> --repo uesugitorachiyo/ao2-control-plane \
 For a full control-plane post-release verification run, download all three
 per-OS artifacts and inspect each `summary.json`.
 
+## Operator release evidence bundle
+
+Run `npm run release:operator-evidence-bundle` to download the complete
+operator-facing release evidence set into
+`target/operator-release-evidence-bundle/latest`. The command emits
+`ao2.operator-release-evidence-bundle.v1` and verifies:
+
+- AO2 `ao2-dual-repo-release-publication-closure-index`;
+- AO2 `post-stable-release-smoke-Linux`,
+  `post-stable-release-smoke-macOS`, and
+  `post-stable-release-smoke-Windows` install/update evidence with
+  `signature_verified=true`;
+- control-plane `ao2-control-plane-post-release-verification-ubuntu`,
+  `ao2-control-plane-post-release-verification-macos`, and
+  `ao2-control-plane-post-release-verification-windows` summaries with
+  `checksum_verified=true`;
+- read-only trust-boundary values showing
+  `mutates_github_releases=false` and `credential_material_included=false`.
+
+Use `AO2_OPERATOR_RELEASE_EVIDENCE_FIXTURE_DIR=<path>` or
+`--fixture-dir <path>` for offline fixture verification.
+
 ## Stable promotion evidence gate
 
 `npm run release:stable-promotion-workflow` uses this hosted evidence before it
