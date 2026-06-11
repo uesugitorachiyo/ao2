@@ -185,6 +185,7 @@ but they are not required for AO2 to leave an auditable local record.
 - [Implementation slices](docs/IMPLEMENTATION-SLICES.md)
 - [Security](docs/SECURITY.md)
 - [Verification](docs/VERIFICATION.md)
+- [Public release verification](docs/release/PUBLIC-RELEASE-VERIFICATION.md)
 
 ## License
 
