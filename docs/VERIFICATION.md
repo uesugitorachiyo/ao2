@@ -232,7 +232,10 @@ conditions are missing, and records `task_board_drift_gate` plus
 `AO2_PULSE_NEXT_TASK_QUALITY_STATUS_EVIDENCE` points at
 `ao2.ai-task-board-status-evidence.v1`, the quality filter also fails closed on
 unknown task ids or stale `task_board_generation` values and records
-`status_evidence_gate` plus `status_evidence_blockers`.
+`status_evidence_gate` plus `status_evidence_blockers`. Evidence keys may use
+the generated `task_id` or the task's stable `stable_task_id`, matching
+`pulse:generate-next` status carryover semantics without accepting arbitrary
+unknown IDs.
 `npm run control-plane:fixture-consumer-smoke` can also read the task board
 through `AO2_CP_FIXTURE_CONSUMER_TASK_BOARD`, or through the fixture catalog produced by
 `evidence:operator-index-control-plane-fixture-ingest` when
