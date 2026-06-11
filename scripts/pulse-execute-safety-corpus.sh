@@ -23,11 +23,11 @@ summary_path = Path(sys.argv[3]).resolve()
 def write_case(
     name: str,
     *,
-    sha_override: str | None = None,
+    sha_override = None,
     simulation: bool = True,
-    simulation_output_path: str | None = None,
+    simulation_output_path = None,
     simulated_exit_code: int = 0,
-    args: list[str] | None = None,
+    args = None,
 ) -> dict[str, object]:
     case_root = out_root / "cases" / name
     loop_dir = case_root / "loop-000"

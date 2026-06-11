@@ -233,7 +233,7 @@ def load_seen() -> set[str]:
                 seen.add(str(digest))
     return seen
 
-def write_heartbeat(reason: str, resume: dict | None = None, digest: str | None = None) -> None:
+def write_heartbeat(reason: str, resume=None, digest=None) -> None:
     payload["schema_version"] = "ao2.pulse-auto-advance-heartbeat.v1"
     payload["status"] = "waiting"
     payload["reason"] = reason

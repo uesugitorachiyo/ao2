@@ -38,7 +38,7 @@ def sha256(path: Path) -> str:
             digest.update(chunk)
     return digest.hexdigest()
 
-def schema_version(path: Path) -> str | None:
+def schema_version(path: Path):
     if path.suffix != ".json":
         return None
     try:

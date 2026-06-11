@@ -428,7 +428,7 @@ def test_public_release_links_and_install_guide_track_current_prerelease():
     ]:
         assert needle in readme
 
-    assert "The current release line is `v0.4.80`." in install
+    assert "The current stable public release line is `v0.4.80`." in install
     assert "v0.4.79" not in install
 
 
@@ -475,9 +475,9 @@ def test_public_release_download_verify_is_checksum_first_and_post_merge_canarie
 
     for needle in [
         "verifies every\nasset listed in `SHA256SUMS`",
-        "record provenance as skipped",
+        "verifies signed\nprovenance",
         "public release download checksum verification",
-        "public alpha archives at v0.4.80",
+        "stable public release archives at v0.4.80",
     ]:
         assert needle in install + "\n" + verification
 
@@ -5117,3 +5117,90 @@ def test_cross_os_release_attestation_is_ci_safe_and_separates_optional_native_p
         "npm publish",
     ]:
         assert forbidden not in text
+
+
+def test_post_stable_release_verification_workflow_runs_hosted_consumer_smoke():
+    workflow = read(".github/workflows/post-stable-release-verification.yml")
+
+    for needle in [
+        "name: Post Stable Release Verification",
+        "workflow_dispatch:",
+        "schedule:",
+        "ubuntu-latest",
+        "macos-14",
+        "windows-latest",
+        "AO2_RELEASE_TAG: v0.4.80",
+        "ao2-0.4.80-linux-x86_64.tar.gz",
+        "ao2-0.4.80-macos-aarch64.tar.gz",
+        "ao2-0.4.80-windows-x86_64.tar.gz",
+        "gh release download",
+        "SHA256SUMS",
+        "AO2_INSTALL_DIR",
+        "version --json",
+        "doctor --json",
+        "adapter doctor --provider scripted",
+        "post-stable-release-smoke",
+    ]:
+        assert needle in workflow
+
+    for forbidden in [
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "/Users/torachiyouesugi/Documents/private",
+        "target/long-lived-control-plane/api-token",
+        "gh release create",
+        "git push origin",
+        "npm publish",
+    ]:
+        assert forbidden not in workflow
+
+
+def test_release_immutability_audit_composes_stable_asset_and_download_checks():
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["release:immutability-audit"]
+        == "node scripts/run-sh-script.js scripts/release-immutability-audit.sh"
+    )
+
+    script_path = REPO_ROOT / "scripts" / "release-immutability-audit.sh"
+    assert script_path.is_file()
+    assert script_path.stat().st_mode & stat.S_IXUSR
+
+    text = script_path.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.release-immutability-audit.v1",
+        "npm run release:asset-completeness",
+        "npm run release:stable-readiness",
+        "npm run release:download-verify",
+        "AO2_IMMUTABILITY_SKIP_DOWNLOAD_VERIFY",
+        "release_metadata",
+        "asset_completeness_summary",
+        "stable_readiness_summary",
+        "download_verify_log",
+        "checksums",
+        "signed_provenance",
+        "release_metadata_coherent",
+        "control_plane_approves_release",
+        "mutates_releases",
+        "target/release-immutability-audit/latest/summary.json",
+    ]:
+        assert needle in text
+
+    verification = read("docs/VERIFICATION.md")
+    install = read("docs/INSTALL.md")
+    readme = read("README.md")
+    next_patch = read("docs/release/v0.4.81-ai-task-board-control-surface.md")
+    pulse_generate_next = read("scripts/pulse-generate-next.sh")
+
+    assert "npm run release:immutability-audit" in verification
+    assert "ao2.release-immutability-audit.v1" in verification
+    assert "stable public release" in readme
+    assert "v0.4.80" in readme
+    assert "https://youtu.be/p222b0iCpbg" in readme
+    assert "stable public release" in install
+    assert "v0.4.81" in next_patch
+    assert "AI task board" in next_patch
+    assert "control surface" in next_patch
+    assert "Pulse loops stop\n  drifting" in next_patch
+    assert "ai-task-board-control-surface" in pulse_generate_next
+    assert "ao2.ai-task-board.v1" in pulse_generate_next

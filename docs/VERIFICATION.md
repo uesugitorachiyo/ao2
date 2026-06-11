@@ -612,7 +612,7 @@ Result:
   ao2-control-plane long-lived smoke into
   `ao2.post-merge-canary.v1`
 - `npm run release:asset-completeness`: queries the AO2 and ao2-control-plane
-  public prereleases, requires the expected release assets, downloads each
+  stable public releases, requires the expected release assets, downloads each
   `SHA256SUMS`, and emits `ao2.release-asset-completeness.v1` plus
   `dashboard.html` showing stable-vs-prerelease release state
 - `npm run release:asset-publication-readiness`: composes cross-OS attestation
@@ -629,6 +629,11 @@ Result:
   `AO2_STABLE_PROMOTION_CONFIRM=promote-stable-<ao2-tag>-<control-plane-tag>`
   is set before flipping the AO2 and ao2-control-plane GitHub Releases from
   prerelease to stable
+- `npm run release:immutability-audit`: composes asset completeness, stable
+  readiness, full release download verification, checksum validation, signed
+  provenance verification, GitHub asset digest checks, and release metadata
+  coherence into `ao2.release-immutability-audit.v1` at
+  `target/release-immutability-audit/latest/summary.json`
 - `npm run release:sync-provenance-assets`: queries the configured AO2 GitHub
   Release and local `dist-provenance` sidecars, emits
   `ao2.release-sync-provenance-assets.v1`, and stays in dry-run mode unless
@@ -638,10 +643,15 @@ Result:
   preflights, publishes to ao2-control-plane when
   `AO2_PHASE1_CONTROL_PLANE_URL` is set, and may capture a dashboard snapshot
   with `AO2_PHASE1_DASHBOARD_SNAPSHOT=1`
-- public alpha archives at v0.4.80 (macOS aarch64, Linux aarch64, Linux
-  x86_64, Windows x86_64) are SHA256 verified from the published `SHA256SUMS`;
-  signed provenance sidecars are required before stable-promotion readiness can
-  pass
+- stable public release archives at v0.4.80 (macOS aarch64, Linux aarch64,
+  Linux x86_64, Windows x86_64) are SHA256 verified from the published
+  `SHA256SUMS`; signed provenance sidecars are required before stable-promotion
+  readiness can pass
+- `.github/workflows/post-stable-release-verification.yml` runs a hosted
+  consumer smoke for the stable public release on Ubuntu, macOS, and Windows:
+  download the published archive, verify `SHA256SUMS`, install into a temporary
+  bin directory, then run `ao2 version --json`, `ao2 doctor --json`, and
+  `ao2 adapter doctor --provider scripted`
 - `npm run release:cross-os-attestation` emits
   `ao2.cross-os-release-attestation.v1` at
   `target/cross-os-release-artifact-attestation/latest/summary.json`; by

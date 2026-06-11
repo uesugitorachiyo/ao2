@@ -50,7 +50,7 @@ def check_is_green(check: dict) -> bool:
         return False
     return state in {"SUCCESS", "NEUTRAL", "SKIPPED"}
 
-def load_pr_view() -> tuple[dict | None, dict]:
+def load_pr_view():
     if source_json:
         source_path = Path(source_json).resolve()
         data = json.loads(source_path.read_text(encoding="utf-8"))
@@ -82,7 +82,7 @@ def load_pr_view() -> tuple[dict | None, dict]:
         }
     return json.loads(result.stdout), {"kind": "gh", "status": "passed", "command": "gh pr view"}
 
-def materialize_state(pr_view: dict | None, source: dict) -> dict:
+def materialize_state(pr_view, source: dict) -> dict:
     base = {
         "schema_version": "ao2.pulse-pr-ci-gate.v1",
         "generated_at_utc": utc_now(),

@@ -7,7 +7,12 @@ read-only control-plane observer proof. The plugin flow is local OAuth
 CLI-only, token-safe, and keeps C85 hosted GitHub Actions proof deferred until
 GitHub billing/spending-limit access is fixed.
 
-AO2 release archives are private-first and signed. The normal flow is:
+AO2 now has a stable public release:
+[`v0.4.80`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.80).
+The overview video is available at
+[https://youtu.be/p222b0iCpbg](https://youtu.be/p222b0iCpbg). Release
+archives are private-first in trust boundary and public-stable in distribution;
+the normal flow is:
 
 1. Download the release assets.
 2. Verify archive checksums and detached signatures.
@@ -25,10 +30,8 @@ npm run release:download-verify
 ```
 
 This downloads the GitHub release with `gh release download`, verifies every
-asset listed in `SHA256SUMS`, and records rollback evidence. If the release also
-publishes `ao2-release-signing-public.pem` plus provenance sidecars, the same
-command verifies signed provenance; public alpha releases without those sidecars
-record provenance as skipped instead of pretending it was verified.
+asset listed in `SHA256SUMS`, records rollback evidence, and verifies signed
+provenance from `ao2-release-signing-public.pem` plus provenance sidecars.
 
 For already-local release assets:
 
@@ -37,7 +40,7 @@ npm run release:verify-provenance
 npm run release:gate
 ```
 
-The current release line is `v0.4.80`.
+The current stable public release line is `v0.4.80`.
 
 To publish the complete private release from a clean checkout, use the guarded
 shipper:

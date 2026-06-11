@@ -79,7 +79,7 @@ def run(
     *,
     check: bool = True,
     shell: bool = False,
-    env: dict[str, str] | None = None,
+    env = None,
 ) -> subprocess.CompletedProcess[str]:
     log_path = log_dir / f"{name}.log"
     with log_path.open("w", encoding="utf-8") as log:

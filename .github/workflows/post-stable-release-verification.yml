@@ -1,0 +1,120 @@
+name: Post Stable Release Verification
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 11 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: post-stable-release-verification-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AO2_RELEASE_REPO: uesugitorachiyo/ao2
+  AO2_RELEASE_TAG: v0.4.80
+  AO2_RELEASE_VERSION: 0.4.80
+
+jobs:
+  post-stable-release-smoke:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Ubuntu stable release smoke
+            os: ubuntu-latest
+            asset: ao2-0.4.80-linux-x86_64.tar.gz
+            binary: ao2
+            shell: bash
+          - label: macOS stable release smoke
+            os: macos-14
+            asset: ao2-0.4.80-macos-aarch64.tar.gz
+            binary: ao2
+            shell: bash
+          - label: Windows stable release smoke
+            os: windows-latest
+            asset: ao2-0.4.80-windows-x86_64.tar.gz
+            binary: ao2.exe
+            shell: pwsh
+
+    steps:
+      - name: Checkout smoke helpers
+        uses: actions/checkout@v6.0.3
+
+      - name: Download stable release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AO2_ASSET: ${{ matrix.asset }}
+        run: |
+          mkdir -p release smoke/extract smoke/bin
+          gh release download "$AO2_RELEASE_TAG" \
+            --repo "$AO2_RELEASE_REPO" \
+            --pattern "$AO2_ASSET" \
+            --pattern SHA256SUMS \
+            --dir release \
+            --clobber
+        shell: bash
+
+      - name: Verify and install stable release on Unix
+        if: matrix.shell == 'bash'
+        env:
+          AO2_ASSET: ${{ matrix.asset }}
+          AO2_BINARY: ${{ matrix.binary }}
+        run: |
+          set -euo pipefail
+          (cd release && grep "  $AO2_ASSET$" SHA256SUMS > SHA256SUMS.asset)
+          (cd release && shasum -a 256 -c SHA256SUMS.asset)
+          tar -xzf "release/$AO2_ASSET" -C smoke/extract
+          test -f smoke/extract/RELEASE-MANIFEST.json
+          AO2_INSTALL_DIR="$PWD/smoke/bin" sh smoke/extract/install.sh
+          test -x "smoke/bin/$AO2_BINARY"
+          "smoke/bin/$AO2_BINARY" version --json | tee smoke/version.json
+          "smoke/bin/$AO2_BINARY" doctor --json | tee smoke/doctor.json
+          "smoke/bin/$AO2_BINARY" adapter doctor --provider scripted | tee smoke/scripted-doctor.txt
+        shell: bash
+
+      - name: Verify and install stable release on Windows
+        if: matrix.shell == 'pwsh'
+        env:
+          AO2_ASSET: ${{ matrix.asset }}
+          AO2_BINARY: ${{ matrix.binary }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $manifestLine = Select-String -Path release/SHA256SUMS -Pattern "  $([Regex]::Escape($env:AO2_ASSET))$" | Select-Object -First 1
+          if (-not $manifestLine) {
+            throw "missing checksum entry for $env:AO2_ASSET"
+          }
+          $expected = ($manifestLine.Line -split "\s+")[0].ToLowerInvariant()
+          $observed = (Get-FileHash -Algorithm SHA256 (Join-Path "release" $env:AO2_ASSET)).Hash.ToLowerInvariant()
+          if ($expected -ne $observed) {
+            throw "checksum mismatch for $env:AO2_ASSET expected=$expected observed=$observed"
+          }
+          tar -xzf (Join-Path "release" $env:AO2_ASSET) -C smoke/extract
+          if (!(Test-Path smoke/extract/RELEASE-MANIFEST.json)) {
+            throw "missing RELEASE-MANIFEST.json"
+          }
+          $env:AO2_INSTALL_DIR = (Resolve-Path smoke/bin).Path
+          & smoke/extract/install.ps1
+          $ao2 = Join-Path $env:AO2_INSTALL_DIR $env:AO2_BINARY
+          if (!(Test-Path $ao2)) {
+            throw "installed binary missing: $ao2"
+          }
+          & $ao2 version --json | Set-Content -Encoding UTF8 smoke/version.json
+          & $ao2 doctor --json | Set-Content -Encoding UTF8 smoke/doctor.json
+          & $ao2 adapter doctor --provider scripted | Set-Content -Encoding UTF8 smoke/scripted-doctor.txt
+        shell: pwsh
+
+      - name: Upload post stable release smoke evidence
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: post-stable-release-smoke-${{ runner.os }}
+          path: |
+            release/SHA256SUMS
+            smoke/version.json
+            smoke/doctor.json
+            smoke/scripted-doctor.txt
+          if-no-files-found: error

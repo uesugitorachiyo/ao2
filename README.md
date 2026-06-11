@@ -2,7 +2,7 @@
 
 [Watch the AO2 overview video](https://youtu.be/p222b0iCpbg)
 
-[![Latest release](https://img.shields.io/github/v/release/uesugitorachiyo/ao2?include_prereleases&label=latest%20release)](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.80)
+[![Latest release](https://img.shields.io/github/v/release/uesugitorachiyo/ao2?label=latest%20stable%20release)](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.80)
 
 AO2 is a local-first governed software-delivery system for running agent work
 with policy checks, exact-digest approvals, replayable evidence, evaluator
@@ -82,12 +82,14 @@ sh "$tmpdir/verify-release.sh"
 Release archives also include `Verify-Release.ps1` for native Windows
 checksum verification before install.
 
-## Install From Public Prerelease
+## Install From Stable Public Release
 
-The current public prerelease is
+The current stable public release is
 [`v0.4.80`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.80).
 It publishes release archives for macOS, Ubuntu/Linux x86_64, and Windows,
-plus `SHA256SUMS` and release-readiness JSON evidence.
+plus `SHA256SUMS`, signed provenance, and release-readiness JSON evidence.
+The overview video is available at
+[https://youtu.be/p222b0iCpbg](https://youtu.be/p222b0iCpbg).
 
 Download and verify a macOS archive:
 
