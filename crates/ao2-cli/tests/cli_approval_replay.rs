@@ -34114,27 +34114,7 @@ printf 'Changed files: discount_service/discounts.py\n'
         .iter()
         .any(|warning| warning == "execution_boundary=sandbox_copy_then_digest_patch"));
 
-    let mut final_job = serde_json::Value::Null;
-    for _ in 0..80 {
-        let response = http_request(
-            port,
-            "GET /api/queue?token=test-token HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
-        );
-        assert!(response.starts_with("HTTP/1.1 200 OK"));
-        let queue_json: serde_json::Value = serde_json::from_str(http_body(&response)).unwrap();
-        let job = queue_json["jobs"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|job| job["run_id"] == "queue-exec")
-            .cloned()
-            .unwrap();
-        if job["status"] == "accepted" {
-            final_job = job;
-            break;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    }
+    let final_job = wait_for_queue_job_status(port, "queue-exec", "accepted");
     let _ = child.kill();
     let _ = child.wait();
 

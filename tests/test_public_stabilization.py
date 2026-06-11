@@ -2367,6 +2367,7 @@ def test_pulse_generate_next_auto_registration_contract():
         "ao2.pulse-generate-next.v1",
         "ao2.pulse-task-board-state.v1",
         "ao2.pulse-next-actions.v1",
+        "AO2_PULSE_NEXT_ACTIONS_STATUS",
         "ao2.ai-task-board.v1",
         "stable_task_id",
         "task-board.json",
@@ -3062,6 +3063,156 @@ def test_pulse_next_actions_reads_current_board_actions(tmp_path):
     assert summary["trust_boundary"] == {"local_only": True, "stores_credentials": False}
     assert "Next Actions" in (actions_root / "next-actions.md").read_text(encoding="utf-8")
     assert "next_action" in actions_result.stdout
+
+
+def test_pulse_next_actions_reports_missing_board(tmp_path):
+    actions_root = tmp_path / "next-actions"
+    missing_board = tmp_path / "missing-summary.json"
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:next-actions"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_NEXT_ACTIONS_ROOT": str(actions_root),
+            "AO2_PULSE_NEXT_ACTIONS_BOARD": str(missing_board),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    summary = json.loads((actions_root / "summary.json").read_text(encoding="utf-8"))
+    markdown = (actions_root / "next-actions.md").read_text(encoding="utf-8")
+    assert summary["schema_version"] == "ao2.pulse-next-actions.v1"
+    assert summary["status"] == "failed"
+    assert summary["reason"] == "task_board_missing"
+    assert summary["task_board"] == str(missing_board)
+    assert "Reason: task_board_missing" in markdown
+
+
+def test_pulse_next_actions_reports_invalid_board_schema(tmp_path):
+    actions_root = tmp_path / "next-actions"
+    board = tmp_path / "summary.json"
+    board.write_text(
+        json.dumps({"schema_version": "ao2.not-a-task-board.v1"}, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:next-actions"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_NEXT_ACTIONS_ROOT": str(actions_root),
+            "AO2_PULSE_NEXT_ACTIONS_BOARD": str(board),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    summary = json.loads((actions_root / "summary.json").read_text(encoding="utf-8"))
+    markdown = (actions_root / "next-actions.md").read_text(encoding="utf-8")
+    assert summary["schema_version"] == "ao2.pulse-next-actions.v1"
+    assert summary["status"] == "failed"
+    assert summary["reason"] == "task_board_schema_invalid"
+    assert summary["task_board"] == str(board)
+    assert "Reason: task_board_schema_invalid" in markdown
+
+
+def test_pulse_next_actions_reports_invalid_board_json(tmp_path):
+    actions_root = tmp_path / "next-actions"
+    board = tmp_path / "summary.json"
+    board.write_text("{\n", encoding="utf-8")
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:next-actions"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_NEXT_ACTIONS_ROOT": str(actions_root),
+            "AO2_PULSE_NEXT_ACTIONS_BOARD": str(board),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    summary = json.loads((actions_root / "summary.json").read_text(encoding="utf-8"))
+    markdown = (actions_root / "next-actions.md").read_text(encoding="utf-8")
+    assert summary["schema_version"] == "ao2.pulse-next-actions.v1"
+    assert summary["status"] == "failed"
+    assert summary["reason"] == "task_board_invalid_json:2"
+    assert summary["task_board"] == str(board)
+    assert "Reason: task_board_invalid_json:2" in markdown
+
+
+def test_pulse_next_actions_filters_by_status(tmp_path):
+    actions_root = tmp_path / "next-actions"
+    board = tmp_path / "summary.json"
+    board.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.ai-task-board.v1",
+                "tasks": [
+                    {
+                        "task_id": "proposed-task-g1",
+                        "stable_task_id": "proposed-task",
+                        "title": "Proposed task",
+                        "status": "proposed",
+                        "next_action": "npm run proposed",
+                    },
+                    {
+                        "task_id": "blocked-task-g1",
+                        "stable_task_id": "blocked-task",
+                        "title": "Blocked task",
+                        "status": "blocked",
+                        "next_action": "npm run blocked",
+                    },
+                    {
+                        "task_id": "passed-task-g1",
+                        "stable_task_id": "passed-task",
+                        "title": "Passed task",
+                        "status": "passed",
+                        "next_action": "npm run passed",
+                    },
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:next-actions"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_NEXT_ACTIONS_ROOT": str(actions_root),
+            "AO2_PULSE_NEXT_ACTIONS_BOARD": str(board),
+            "AO2_PULSE_NEXT_ACTIONS_STATUS": " proposed,blocked ",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((actions_root / "summary.json").read_text(encoding="utf-8"))
+    markdown = (actions_root / "next-actions.md").read_text(encoding="utf-8")
+    assert summary["schema_version"] == "ao2.pulse-next-actions.v1"
+    assert summary["status"] == "passed"
+    assert summary["status_filter"] == ["proposed", "blocked"]
+    assert [item["status"] for item in summary["next_actions"]] == ["proposed", "blocked"]
+    assert "passed-task-g1" not in markdown
+    assert "proposed-task-g1" in markdown
+    assert "blocked-task-g1" in markdown
 
 
 def test_pulse_generate_next_writes_ai_task_board_artifact(tmp_path):
@@ -4559,6 +4710,94 @@ def test_pulse_next_task_quality_filter_accepts_stable_status_evidence_task_id(t
     assert summary["status_evidence_match_counts"] == {
         "task_id": 0,
         "stable_task_id": 1,
+    }
+
+
+def test_pulse_next_task_quality_filter_reports_exact_task_id_match_telemetry(tmp_path):
+    packet = tmp_path / "packet.md"
+    task_board = tmp_path / "task-board.json"
+    status_evidence = tmp_path / "status-evidence.json"
+    out_root = tmp_path / "quality"
+    packet.write_text(
+        "# Packet\n\n"
+        "## 1. AI task board control surface\n\n"
+        "Build operator-visible product evidence for the control-plane task board.\n",
+        encoding="utf-8",
+    )
+    task_board.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.ai-task-board.v1",
+                "status": "ready",
+                "release_objective": "Expose Pulse work as an operator-readable task board.",
+                "source_recommendation": {"generation": 7},
+                "tasks": [
+                    {
+                        "task_id": "complete-task-g7",
+                        "stable_task_id": "complete-task",
+                        "title": "Complete task",
+                        "status": "proposed",
+                        "required_evidence": ["ao2.ai-task-board.v1"],
+                        "stop_conditions": ["Stop if readback requires credentials."],
+                    }
+                ],
+                "trust_boundary": {"local_only": True, "stores_credentials": False},
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    status_evidence.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.ai-task-board-status-evidence.v1",
+                "status": "ready",
+                "task_board_generation": 7,
+                "task_statuses": {
+                    "complete-task-g7": {
+                        "status": "passed",
+                        "status_reason": "Generated task id should match exactly.",
+                        "evidence": ["target/pulse-task-executor/latest/summary.json"],
+                    }
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:next-task-quality-filter"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_NEXT_TASK_QUALITY_PACKET": str(packet),
+            "AO2_PULSE_NEXT_TASK_QUALITY_TASK_BOARD": str(task_board),
+            "AO2_PULSE_NEXT_TASK_QUALITY_STATUS_EVIDENCE": str(status_evidence),
+            "AO2_PULSE_NEXT_TASK_QUALITY_ROOT": str(out_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status_evidence_matches"] == [
+        {
+            "evidence_task_id": "complete-task-g7",
+            "task_id": "complete-task-g7",
+            "stable_task_id": "complete-task",
+            "matched_by": "task_id",
+        }
+    ]
+    assert summary["status_evidence_match_counts"] == {
+        "task_id": 1,
+        "stable_task_id": 0,
     }
 
 
