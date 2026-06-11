@@ -92,4 +92,4 @@ Run focused selectors and expect PASS.
 - [x] Run focused pytest selectors.
 - [x] Run `npm run control-plane:fixture-consumer-smoke`.
 - [x] Run `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py -q`.
-- [ ] Commit, push, and open a draft PR.
+- [x] Commit, push, and open a draft PR.
