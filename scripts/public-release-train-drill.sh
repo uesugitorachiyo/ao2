@@ -8,6 +8,7 @@ HTML="$OUT_ROOT/closure.html"
 LOG_DIR="$OUT_ROOT/logs"
 FIXTURE_DIR="${AO2_PUBLIC_RELEASE_TRAIN_FIXTURE_DIR:-}"
 PULSE_SOURCE="${AO2_RELEASE_TRAIN_PULSE_SOURCE:-$OUT_ROOT/release-train-pulse-seed}"
+CI_SAFE="${AO2_PUBLIC_RELEASE_TRAIN_CI_SAFE:-0}"
 
 rm -rf "$OUT_ROOT"
 mkdir -p "$LOG_DIR"
@@ -61,6 +62,17 @@ run_step() {
   printf "%s\n" "$code" >"$log.exit-code"
 }
 
+skip_ci_safe_step() {
+  local name="$1"
+  local log="$LOG_DIR/$name.log"
+  printf "%s skipped in ci-safe mode; covered by dedicated CI jobs\n" "$name" >"$log"
+  printf "0\n" >"$log.exit-code"
+}
+
+# CI-safe release-publication closure intentionally records:
+# release_evidence_closure skipped in ci-safe mode
+# post_merge_canary skipped in ci-safe mode
+
 closure_env=(env AO2_RELEASE_EVIDENCE_CLOSURE_ROOT="$OUT_ROOT/release-evidence-closure")
 static_env=(env AO2_RELEASE_READINESS_ROOT="$OUT_ROOT/release-readiness-static")
 regression_env=(env AO2_RELEASE_READINESS_REGRESSION_ROOT="$OUT_ROOT/release-readiness-regression-gate")
@@ -69,14 +81,22 @@ if [ -n "$FIXTURE_DIR" ]; then
   regression_env+=(AO2_CI_ARTIFACT_DOWNLOAD_FIXTURE_DIR="$FIXTURE_DIR")
 fi
 
-run_step release_evidence_closure \
-  "${closure_env[@]}" npm run release:evidence-closure
+if [ "$CI_SAFE" = "1" ]; then
+  skip_ci_safe_step release_evidence_closure
+else
+  run_step release_evidence_closure \
+    "${closure_env[@]}" npm run release:evidence-closure
+fi
 
 run_step release_readiness_static \
   "${static_env[@]}" npm run release:readiness:static
 
-run_step release_readiness_regression_gate \
-  "${regression_env[@]}" npm run release:readiness:regression-gate
+if [ "$CI_SAFE" = "1" ]; then
+  skip_ci_safe_step release_readiness_regression_gate
+else
+  run_step release_readiness_regression_gate \
+    "${regression_env[@]}" npm run release:readiness:regression-gate
+fi
 
 run_step retention_preflight \
   env AO2_RELEASE_RETENTION_PRUNE=0 npm run release:retention-preflight
@@ -90,10 +110,14 @@ run_step artifact_consumer \
   env AO2_RELEASE_ARTIFACT_CONSUMER_ROOT="$OUT_ROOT/release-artifact-consumer" \
     npm run release:artifact-consumer-smoke -- "${consumer_args[@]}"
 
-run_step post_merge_canary \
-  env AO2_POST_MERGE_CANARY_ROOT="$OUT_ROOT/post-merge-canary" npm run post-merge:canary
+if [ "$CI_SAFE" = "1" ]; then
+  skip_ci_safe_step post_merge_canary
+else
+  run_step post_merge_canary \
+    env AO2_POST_MERGE_CANARY_ROOT="$OUT_ROOT/post-merge-canary" npm run post-merge:canary
+fi
 
-python3 - "$OUT_ROOT" "$SUMMARY" "$HTML" <<'PY'
+python3 - "$OUT_ROOT" "$SUMMARY" "$HTML" "$CI_SAFE" <<'PY'
 import html
 import json
 import sys
@@ -103,6 +127,7 @@ from pathlib import Path
 out_root = Path(sys.argv[1]).resolve()
 summary_path = Path(sys.argv[2]).resolve()
 html_path = Path(sys.argv[3]).resolve()
+ci_safe = sys.argv[4] == "1"
 log_dir = out_root / "logs"
 names = [
     "release_evidence_closure",
@@ -208,6 +233,7 @@ payload = {
     "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     "status": status,
     "artifact_root": str(out_root),
+    "ci_safe_mode": ci_safe,
     "checks": checks,
     "publish_guards": publish_guards,
     "release_readiness_artifact_consumer_contract": release_readiness_artifact_consumer_contract,

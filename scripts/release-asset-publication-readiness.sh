@@ -6,6 +6,7 @@ OUT_ROOT="${AO2_RELEASE_ASSET_PUBLICATION_READINESS_ROOT:-$ROOT/target/release-a
 SUMMARY="$OUT_ROOT/summary.json"
 LOG_DIR="$OUT_ROOT/logs"
 FIXTURE_DIR="${AO2_RELEASE_ASSET_PUBLICATION_FIXTURE_DIR:-$OUT_ROOT/release-artifact-fixture}"
+CI_SAFE="${AO2_RELEASE_ASSET_PUBLICATION_READINESS_CI_SAFE:-0}"
 
 rm -rf "$OUT_ROOT"
 mkdir -p "$LOG_DIR" "$FIXTURE_DIR/uesugitorachiyo-ao2/ao2-python-guard"
@@ -34,9 +35,10 @@ ao2_gate_run_step "$LOG_DIR" public_ship_dry_run \
     AO2_PUBLIC_SHIP_DRY_RUN_ROOT="$OUT_ROOT/public-ship-dry-run" \
     AO2_PUBLIC_SHIP_DRY_RUN_FIXTURE_DIR="$FIXTURE_DIR" \
     AO2_PUBLIC_RELEASE_TRAIN_FIXTURE_DIR="$FIXTURE_DIR" \
+    AO2_PUBLIC_SHIP_DRY_RUN_CI_SAFE="$CI_SAFE" \
     npm run release:public-ship-dry-run
 
-python3 - "$ROOT" "$OUT_ROOT" "$SUMMARY" "$FIXTURE_DIR" <<'PY'
+python3 - "$ROOT" "$OUT_ROOT" "$SUMMARY" "$FIXTURE_DIR" "$CI_SAFE" <<'PY'
 import json
 import subprocess
 import sys
@@ -47,6 +49,7 @@ root = Path(sys.argv[1]).resolve()
 out_root = Path(sys.argv[2]).resolve()
 summary_path = Path(sys.argv[3]).resolve()
 fixture_dir = Path(sys.argv[4]).resolve()
+ci_safe = sys.argv[5] == "1"
 log_dir = out_root / "logs"
 version = subprocess.check_output([str(root / "scripts" / "current-version.sh")], cwd=root, text=True).strip()
 tag = f"v{version}"
@@ -87,6 +90,7 @@ payload = {
     "expected_release_assets": expected_release_assets,
     "asset_contract": str(asset_contract),
     "release_artifact_fixture": str(fixture_dir),
+    "ci_safe_mode": ci_safe,
     "release_not_found_gap": {
         "status": "tracked",
         "next_action": "publish release assets only after explicit human approval",

@@ -864,28 +864,39 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_release_readiness_artifact_consumer_job",
         "ci_ai_task_board_control_plane_bridge_artifact_job",
         "ci_dual_repo_installed_release_smoke_artifact_job",
+        "ci_release_publication_closure_artifact_job",
         "target/release-readiness-consumer/ao2-release-readiness",
         "target/release-readiness-consumer/ao2-release-train-control-plane-bridge",
         "target/release-readiness-consumer/ao2-ai-task-board-control-plane-bridge",
         "target/release-readiness-consumer/ao2-dual-repo-installed-release-smoke",
+        "target/release-readiness-consumer/ao2-release-publication-closure",
         "ao2.release-readiness-local.v1",
         "ao2.release-train-control-plane-bridge.v1",
         "ao2.ai-task-board-control-plane-bridge.v1",
         "ao2.dual-repo-installed-release-smoke.v1",
+        "ao2.release-publication-dry-run-closure.v1",
         "ao2.release-artifact-closure-index.v1",
         "artifact-closure-index.json",
         "release_readiness_artifact_consumer",
         "release_train_control_plane_bridge",
         "ai_task_board_control_plane_bridge",
         "dual_repo_installed_release_smoke",
+        "release_publication_closure",
     ]:
         assert needle in script
 
     ci = read(".github/workflows/ci.yml")
     for needle in [
+        "release-publication-closure-artifacts:",
+        "name: Release publication closure artifacts",
+        "uses: dtolnay/rust-toolchain@stable",
+        "Download published provenance sidecars",
+        "gh release download",
+        "AO2_RELEASE_PROVENANCE_DIR=target/release-publication-provenance",
+        "AO2_RELEASE_ASSET_PUBLICATION_READINESS_CI_SAFE=1",
         "release-readiness-artifact-consumer:",
         "name: Release readiness artifact consumer",
-        "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, dual-repo-installed-release-smoke-artifacts]",
+        "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts]",
         "uses: actions/download-artifact@v8.0.1",
         "name: ao2-release-readiness",
         "path: target/release-readiness-consumer/ao2-release-readiness",
@@ -895,18 +906,44 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "path: target/release-readiness-consumer/ao2-ai-task-board-control-plane-bridge",
         "name: ao2-dual-repo-installed-release-smoke",
         "path: target/release-readiness-consumer/ao2-dual-repo-installed-release-smoke",
+        "name: ao2-release-publication-closure",
+        "path: target/release-readiness-consumer/ao2-release-publication-closure",
+        "AO2_RELEASE_PUBLICATION_DRY_RUN_CLOSURE_ROOT=target/release-publication-closure-ci",
+        "npm run release:publication-dry-run-closure",
+        "if: always()",
         "schema_version') == 'ao2.release-readiness-local.v1'",
         "bridge_summary.get('schema_version') == 'ao2.release-train-control-plane-bridge.v1'",
         "task_board_bridge_summary.get('schema_version') == 'ao2.ai-task-board-control-plane-bridge.v1'",
         "dual_repo_summary.get('schema_version') == 'ao2.dual-repo-installed-release-smoke.v1'",
+        "publication_closure_summary.get('schema_version') == 'ao2.release-publication-dry-run-closure.v1'",
+        "publication_closure_summary.get('publication_ready') is True",
+        "publication_closure_summary.get('stable_release_ready') is True",
         "ci_job_required_os:verify",
         "ci_job_required_os:release-archive-hosted-smoke",
         "ci_job_required_os:workbench-operator-packet-control-plane-smoke",
         "ci_release_readiness_static_artifact_job",
         "ci_ai_task_board_control_plane_bridge_artifact_job",
         "ci_dual_repo_installed_release_smoke_artifact_job",
+        "ci_release_publication_closure_artifact_job",
     ]:
         assert needle in ci
+
+    asset_publication = read("scripts/release-asset-publication-readiness.sh")
+    public_ship_dry_run = read("scripts/public-ship-dry-run.sh")
+    public_ship_rehearsal = read("scripts/public-ship-rehearsal.sh")
+    release_train = read("scripts/public-release-train-drill.sh")
+    for text, needle in [
+        (asset_publication, "AO2_RELEASE_ASSET_PUBLICATION_READINESS_CI_SAFE"),
+        (asset_publication, "AO2_PUBLIC_SHIP_DRY_RUN_CI_SAFE"),
+        (public_ship_dry_run, "AO2_PUBLIC_SHIP_DRY_RUN_CI_SAFE"),
+        (public_ship_dry_run, "AO2_PUBLIC_SHIP_REHEARSAL_CI_SAFE"),
+        (public_ship_rehearsal, "AO2_PUBLIC_SHIP_REHEARSAL_CI_SAFE"),
+        (public_ship_rehearsal, "AO2_PUBLIC_RELEASE_TRAIN_CI_SAFE"),
+        (release_train, "AO2_PUBLIC_RELEASE_TRAIN_CI_SAFE"),
+        (release_train, "release_evidence_closure skipped in ci-safe mode"),
+        (release_train, "post_merge_canary skipped in ci-safe mode"),
+    ]:
+        assert needle in text
 
     verification = read("docs/VERIFICATION.md")
     for needle in [
@@ -915,6 +952,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.release-readiness-artifact-consumer.v1",
         "ao2-release-train-control-plane-bridge",
         "ao2.release-train-control-plane-bridge.v1",
+        "ao2-release-publication-closure",
+        "ao2.release-publication-dry-run-closure.v1",
         "ao2.release-artifact-closure-index.v1",
         "artifact-closure-index.json",
     ]:
@@ -950,6 +989,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_release_train_control_plane_bridge_artifact_job",
         "ci_ai_task_board_control_plane_bridge_artifact_job",
         "ci_dual_repo_installed_release_smoke_artifact_job",
+        "ci_release_publication_closure_artifact_job",
     ]:
         assert checks[name]["status"] == "passed"
     closure = json.loads(
@@ -1005,6 +1045,18 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2-control-plane.release-manifest.v1",
         "ao2.cp-ai-task-board-readback.v1",
         "ao2.cp-ai-task-board-dashboard.v1",
+    ]
+    assert artifacts["release_publication_closure"]["artifact_name"] == (
+        "ao2-release-publication-closure"
+    )
+    assert artifacts["release_publication_closure"]["producer_job"] == (
+        "release-publication-closure-artifacts"
+    )
+    assert artifacts["release_publication_closure"]["schema_versions"] == [
+        "ao2.release-publication-dry-run-closure.v1",
+        "ao2.release-asset-publication-readiness.v1",
+        "ao2.release-sync-provenance-assets.v1",
+        "ao2.stable-release-readiness.v1",
     ]
     assert closure["trust_boundary"]["local_only"] is True
     assert closure["trust_boundary"]["stores_credentials"] is False
