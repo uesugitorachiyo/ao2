@@ -518,6 +518,11 @@ Result:
   `ao2.dual-repo-release-publication-closure-index.v1` evidence. The consumer
   then uploads `ao2-release-readiness-consumer` with
   `ao2.release-readiness-artifact-consumer.v1` evidence.
+  The operator-facing dual-repo evidence index is documented in
+  `docs/release/PUBLIC-RELEASE-VERIFICATION.md`, including AO2 hosted
+  post-stable release verification, control-plane post-release verification,
+  `ao2-control-plane-release-publication-closure`, and
+  `ao2.dual-repo-release-publication-closure-index.v1` evidence.
 - `npm run release:readiness:regression-gate`: runs static release readiness,
   Phase 1 operator golden-path smoke, Pulse local mirror, Pulse resume dry-run,
   real CI artifact download contract, artifact indexing, fail-on-attention

@@ -7432,6 +7432,55 @@ def test_post_stable_release_verification_workflow_runs_hosted_consumer_smoke():
         assert forbidden not in workflow
 
 
+def test_dual_repo_public_release_verification_index_is_documented():
+    doc_path = REPO_ROOT / "docs/release/PUBLIC-RELEASE-VERIFICATION.md"
+    assert doc_path.is_file()
+
+    doc = doc_path.read_text(encoding="utf-8")
+    readme = read("README.md")
+    verification = read("docs/VERIFICATION.md")
+
+    for needle in [
+        "# Public Release Verification",
+        "uesugitorachiyo/ao2",
+        "uesugitorachiyo/ao2-control-plane",
+        "v0.4.80",
+        "v0.1.12",
+        "Post Stable Release Verification",
+        ".github/workflows/post-stable-release-verification.yml",
+        "post-stable-release-smoke-${{ runner.os }}",
+        "Post Release Verification",
+        ".github/workflows/post-release-verification.yml",
+        "ao2-control-plane-post-release-verification-ubuntu",
+        "ao2-control-plane-post-release-verification-macos",
+        "ao2-control-plane-post-release-verification-windows",
+        "ao2-release-publication-closure",
+        "ao2-dual-repo-release-publication-closure-index",
+        "ao2-control-plane-release-publication-closure",
+        "ao2.release-publication-dry-run-closure.v1",
+        "ao2.dual-repo-release-publication-closure-index.v1",
+        "ao2.cp-release-publication-closure.v1",
+        "read-only",
+        "checksum_verified",
+        "mutates_github_releases=false",
+        "credential_material_included=false",
+        "gh run download",
+    ]:
+        assert needle in doc
+
+    for forbidden in [
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "/Users/torachiyouesugi/Documents/private",
+        "target/long-lived-control-plane/api-token",
+    ]:
+        assert forbidden not in doc
+
+    assert "[Public release verification](docs/release/PUBLIC-RELEASE-VERIFICATION.md)" in readme
+    assert "docs/release/PUBLIC-RELEASE-VERIFICATION.md" in verification
+    assert "ao2.dual-repo-release-publication-closure-index.v1" in verification
+
+
 def test_release_immutability_audit_composes_stable_asset_and_download_checks():
     package_json = json.loads(read("package.json"))
     assert (
