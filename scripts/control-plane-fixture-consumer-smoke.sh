@@ -18,6 +18,7 @@ ao2_gate_run_step "$LOG_DIR" operator_index_control_plane_fixture_ingest \
     npm run evidence:operator-index-control-plane-fixture-ingest
 
 python3 - "$OUT_ROOT" "$SUMMARY" "$LOG_DIR" "$TASK_BOARD" <<'PY'
+import html
 import json
 import sys
 from datetime import datetime, timezone
@@ -45,6 +46,7 @@ for item in fixtures:
 
 task_board_source = "direct_path" if task_board_path.is_file() else "fixture_catalog"
 effective_task_board_path = task_board_path if task_board_path.is_file() else catalog_task_board_path
+task_board = {}
 task_board_readback = {"status": "skipped", "path": str(task_board_path)}
 if effective_task_board_path and effective_task_board_path.is_file():
     try:
@@ -82,11 +84,103 @@ if effective_task_board_path and effective_task_board_path.is_file():
         if task_board_source == "fixture_catalog":
             task_board_readback["source"] = "fixture_catalog"
             task_board_readback["path"] = str(effective_task_board_path)
+
+operator_task_board_view = {
+    "status": "skipped",
+    "reason": "task_board_readback_not_passed",
+}
+if task_board_readback.get("status") == "passed" and task_board:
+    view_dir = out_root / "operator-task-board-view"
+    view_dir.mkdir(parents=True, exist_ok=True)
+    tasks = [item for item in task_board.get("tasks", []) if isinstance(item, dict)]
+    status_counts = {}
+    for item in tasks:
+        status_counts[str(item.get("status") or "unknown")] = (
+            status_counts.get(str(item.get("status") or "unknown"), 0) + 1
+        )
+
+    def task_card(item: dict) -> str:
+        task_status = str(item.get("status") or "unknown")
+        status_class = "status-" + task_status.lower().replace(" ", "_")
+        evidence = "".join(
+            f"<li><code>{html.escape(str(value))}</code></li>"
+            for value in item.get("required_evidence", [])
+        )
+        stops = "".join(
+            f"<li>{html.escape(str(value))}</li>"
+            for value in item.get("stop_conditions", [])
+        )
+        rationale = item.get("rationale")
+        rationale_html = (
+            f"<p>{html.escape(str(rationale))}</p>"
+            if rationale
+            else ""
+        )
+        return (
+            f"<article class=\"task-card {html.escape(status_class)}\">"
+            f"<h2>{html.escape(str(item.get('title') or item.get('task_id') or 'Untitled task'))}</h2>"
+            f"<p><code>{html.escape(str(item.get('task_id') or 'missing-task-id'))}</code> "
+            f"<span class=\"status-pill {html.escape(status_class)}\">"
+            f"{html.escape(task_status.replace('_', ' ').title())}</span></p>"
+            + rationale_html
+            + "<h3>Required Evidence</h3><ul>"
+            + evidence
+            + "</ul><h3>Stop Conditions</h3><ul>"
+            + stops
+            + "</ul></article>"
+        )
+
+    objective = task_board.get("release_objective") or "AO2 task board"
+    html_path = view_dir / "operator-task-board.html"
+    view_summary_path = view_dir / "summary.json"
+    html_path.write_text(
+        "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+        "<title>AO2 Control Plane Task Board</title>"
+        "<style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:32px;color:#17202a}"
+        ".task-card{border:1px solid #d8dee4;border-radius:6px;padding:16px;margin:14px 0}"
+        ".status-pill{display:inline-block;border-radius:4px;padding:2px 6px;background:#eef2f6}"
+        ".status-blocked{border-color:#c93c37;color:#842029}.status-in_progress{border-color:#2f6fbd;color:#174a8b}"
+        "code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#f4f6f8;padding:1px 4px;border-radius:4px}"
+        "</style></head><body>"
+        "<h1>AO2 Control Plane Task Board</h1>"
+        f"<p>{html.escape(str(objective))}</p>"
+        "<p>Control plane role: read-only observer; no credential requirement; no release mutation authority.</p>"
+        + "".join(task_card(item) for item in tasks)
+        + "</body></html>\n",
+        encoding="utf-8",
+    )
+    view_summary = {
+        "schema_version": "ao2.control-plane-operator-task-board-view.v1",
+        "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "status": "passed",
+        "source": task_board_source,
+        "task_board": str(effective_task_board_path),
+        "html": str(html_path),
+        "task_count": len(tasks),
+        "task_status_counts": status_counts,
+        "read_only": True,
+        "trust_boundary": {"local_only": True, "stores_credentials": False},
+    }
+    view_summary_path.write_text(
+        json.dumps(view_summary, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    operator_task_board_view = {
+        "status": "passed",
+        "source": task_board_source,
+        "task_board": str(effective_task_board_path),
+        "summary": str(view_summary_path),
+        "html": str(html_path),
+        "task_count": len(tasks),
+        "read_only": True,
+    }
+
 consumer_smoke_cases = [
     {"name": "valid_catalog_read", "status": "passed" if fixture_catalog_read else "failed"},
     {"name": "fail_closed_missing_receipt", "status": "passed", "input": {"source_schema": "ao2.control-plane-fixture-catalog.v1"}},
     {"name": "fail_closed_bad_schema", "status": "passed", "input": {"source_schema": "bad.schema"}},
     {"name": "ai_task_board_readback", "status": "passed" if task_board_readback["status"] == "skipped" else task_board_readback["status"]},
+    {"name": "operator_task_board_view", "status": "passed" if operator_task_board_view["status"] in {"passed", "skipped"} else operator_task_board_view["status"]},
 ]
 smoke_path = out_root / "consumer-smoke-cases.json"
 smoke_path.write_text(json.dumps({
@@ -104,6 +198,7 @@ checks = [
     {"name": "fail_closed_missing_receipt", "status": "passed"},
     {"name": "fail_closed_bad_schema", "status": "passed"},
     {"name": "ai_task_board_readback", "status": "passed" if task_board_readback["status"] == "skipped" else task_board_readback["status"]},
+    {"name": "operator_task_board_view", "status": "passed" if operator_task_board_view["status"] in {"passed", "skipped"} else operator_task_board_view["status"]},
 ]
 status = "passed" if all(item["status"] == "passed" for item in checks) else "failed"
 payload = {
@@ -117,6 +212,7 @@ payload = {
     "fail_closed_missing_receipt": True,
     "fail_closed_bad_schema": True,
     "task_board_readback": task_board_readback,
+    "operator_task_board_view": operator_task_board_view,
     "component_summaries": {"operator_index_control_plane_fixture_ingest": str(component)},
     "trust_boundary": {"local_only": True, "stores_credentials": False},
 }

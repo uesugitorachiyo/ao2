@@ -174,6 +174,12 @@ It also writes `target/pulse-task-board/latest/task-board-diff.json` and keeps
 generation snapshots under
 `${AO2_PULSE_TASK_BOARD_HISTORY_ROOT:-.ao2-local/pulse/task-board-history}` so
 operators can see whether the selected work changed between Pulse generations.
+When `AO2_PULSE_TASK_BOARD_STATUS_EVIDENCE` points at an
+`ao2.ai-task-board-status-evidence.v1` JSON file, the generated board applies
+task-id keyed status transitions and records `status_transition_source` plus
+per-task `status_transition` evidence. The diff now includes
+`changed_task_ids`, `changed_tasks`, and field-level `field_changes` for task
+title, objective, status, rationale, required evidence, and stop conditions.
 The board preserves the current release objective, source recommendation,
 rationale, required evidence, stop conditions, and read-only control-plane
 readback semantics without granting mutation authority. For the Risky PR
@@ -208,7 +214,10 @@ or through the fixture catalog produced by
 `evidence:operator-index-control-plane-fixture-ingest` when
 `AO2_OPERATOR_INDEX_CP_TASK_BOARD` points at a valid board. Both paths record
 read-only `task_board_readback` without credentials or release mutation
-authority.
+authority. When readback passes, the smoke also writes
+`operator-task-board-view/summary.json` with
+`ao2.control-plane-operator-task-board-view.v1` and a local
+`operator-task-board.html` read-only operator view.
 
 `npm run pulse:task-executor` reads an `ao2.pulse-task-manifest.v1` manifest
 from `.ao2-local/pulse/latest/pulse-task-manifest.json` by default and emits
