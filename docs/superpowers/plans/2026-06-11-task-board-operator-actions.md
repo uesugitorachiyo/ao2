@@ -103,4 +103,4 @@ Run the same selector and expect PASS.
 - [x] Run `bash -n scripts/pulse-task-board-state.sh scripts/pulse-next-actions.sh scripts/pulse-next-task-quality-filter.sh`.
 - [x] Run `npm run pulse:next-actions` against the current generated board when present.
 - [x] Run `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py -q`.
-- [ ] Commit, push, and open a PR.
+- [x] Commit, push, and open a PR.
