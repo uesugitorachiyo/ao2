@@ -683,10 +683,58 @@ jobs:
           path: target/release-readiness-ci
           if-no-files-found: error
 
+  release-publication-closure-artifacts:
+    name: Release publication closure artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+      - name: Run release publication dry-run closure
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          AO2_RELEASE_PUBLICATION_DRY_RUN_CLOSURE_ROOT=target/release-publication-closure-ci \
+            npm run release:publication-dry-run-closure
+      - name: Verify release publication closure evidence
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("target/release-publication-closure-ci")
+          summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
+          assert summary["schema_version"] == "ao2.release-publication-dry-run-closure.v1", summary
+          assert summary["status"] == "passed", summary
+          assert summary["publication_ready"] is True, summary
+          assert summary["stable_release_ready"] is True, summary
+          assert summary["publication_state"]["dry_run"] is True, summary
+          assert summary["publication_state"]["upload_status"] == "not_attempted", summary
+          assert summary["publication_state"]["release_publish"] == "not executed", summary
+          assert summary["trust_boundary"]["mutates_releases"] is False, summary
+          assert summary["trust_boundary"]["stores_credentials"] is False, summary
+          PY
+          test -f target/release-publication-closure-ci/summary.json
+          test -f target/release-publication-closure-ci/release-asset-publication-readiness/summary.json
+          test -f target/release-publication-closure-ci/release-sync-provenance-assets/summary.json
+          test -f target/release-publication-closure-ci/stable-release-readiness/summary.json
+      - name: Upload release publication closure evidence
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-release-publication-closure
+          path: target/release-publication-closure-ci
+          if-no-files-found: error
+
   release-readiness-artifact-consumer:
     name: Release readiness artifact consumer
     runs-on: ubuntu-latest
-    needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, dual-repo-installed-release-smoke-artifacts]
+    needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts]
     timeout-minutes: 5
     steps:
       - name: Download release-readiness artifact
@@ -709,6 +757,11 @@ jobs:
         with:
           name: ao2-dual-repo-installed-release-smoke
           path: target/release-readiness-consumer/ao2-dual-repo-installed-release-smoke
+      - name: Download release publication closure artifact
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: ao2-release-publication-closure
+          path: target/release-readiness-consumer/ao2-release-publication-closure
       - name: Validate release-readiness artifact contract
         shell: bash
         run: |
@@ -745,6 +798,17 @@ jobs:
           assert dual_repo_summary.get("archives", {}).get("ao2", {}).get("manifest_schema") == "ao2.release-manifest.v1", dual_repo_summary
           assert dual_repo_summary.get("archives", {}).get("ao2_control_plane", {}).get("manifest_schema") == "ao2-control-plane.release-manifest.v1", dual_repo_summary
           assert dual_repo_summary.get("trust_boundary", {}).get("auth_value_stored") is False, dual_repo_summary
+          publication_closure_artifact_root = Path("target/release-readiness-consumer/ao2-release-publication-closure")
+          publication_closure_summary_path = publication_closure_artifact_root / "summary.json"
+          publication_closure_summary = json.loads(publication_closure_summary_path.read_text(encoding="utf-8"))
+          assert publication_closure_summary.get('schema_version') == 'ao2.release-publication-dry-run-closure.v1', publication_closure_summary
+          assert publication_closure_summary.get("status") == "passed", publication_closure_summary
+          assert publication_closure_summary.get('publication_ready') is True, publication_closure_summary
+          assert publication_closure_summary.get('stable_release_ready') is True, publication_closure_summary
+          assert publication_closure_summary.get("publication_state", {}).get("dry_run") is True, publication_closure_summary
+          assert publication_closure_summary.get("publication_state", {}).get("upload_status") == "not_attempted", publication_closure_summary
+          assert publication_closure_summary.get("trust_boundary", {}).get("mutates_releases") is False, publication_closure_summary
+          assert publication_closure_summary.get("trust_boundary", {}).get("stores_credentials") is False, publication_closure_summary
           checks = {item.get("name"): item for item in summary.get("checks", [])}
           required_checks = [
               "ci_job_required_os:verify",
@@ -754,6 +818,7 @@ jobs:
               "ci_release_train_control_plane_bridge_artifact_job",
               "ci_ai_task_board_control_plane_bridge_artifact_job",
               "ci_dual_repo_installed_release_smoke_artifact_job",
+              "ci_release_publication_closure_artifact_job",
           ]
           missing = [
               name
@@ -770,8 +835,9 @@ jobs:
                   "ao2-release-train-control-plane-bridge",
                   "ao2-ai-task-board-control-plane-bridge",
                   "ao2-dual-repo-installed-release-smoke",
+                  "ao2-release-publication-closure",
               ],
-              "source_summaries": [str(summary_path), str(bridge_summary_path), str(task_board_bridge_summary_path), str(dual_repo_summary_path)],
+              "source_summaries": [str(summary_path), str(bridge_summary_path), str(task_board_bridge_summary_path), str(dual_repo_summary_path), str(publication_closure_summary_path)],
               "required_checks": required_checks,
               "trust_boundary": {
                   "local_only": True,

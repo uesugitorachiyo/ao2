@@ -492,15 +492,23 @@ Result:
   `ao2.release-readiness-local.v1` plus local `report.md`, `report.html`, and
   an `artifact-closure-index.json` file with
   `ao2.release-artifact-closure-index.v1` coverage for
-  `ao2-release-readiness`, `ao2-release-train-control-plane-bridge`, and
+  `ao2-release-readiness`, `ao2-release-train-control-plane-bridge`,
+  `ao2-ai-task-board-control-plane-bridge`,
+  `ao2-dual-repo-installed-release-smoke`,
+  `ao2-release-publication-closure`, and
   `ao2-release-readiness-consumer`
 - `Release readiness artifact consumer`: CI job that depends on
   `Release readiness artifacts` and `Release train control-plane bridge
-  artifacts`, downloads `ao2-release-readiness` and
-  `ao2-release-train-control-plane-bridge`, validates the
-  `ao2.release-readiness-local.v1` summary/status/core cross-OS checks plus the
-  `ao2.release-train-control-plane-bridge.v1` bridge summary/control-plane
-  smoke result, and uploads `ao2-release-readiness-consumer` with
+  artifacts`, the AI task-board bridge, dual-repo installed release smoke, and
+  `Release publication closure artifacts`; downloads `ao2-release-readiness`,
+  `ao2-release-train-control-plane-bridge`,
+  `ao2-ai-task-board-control-plane-bridge`,
+  `ao2-dual-repo-installed-release-smoke`, and
+  `ao2-release-publication-closure`; validates the
+  `ao2.release-readiness-local.v1` summary/status/core cross-OS checks, the
+  control-plane bridge/readback schemas, and the
+  `ao2.release-publication-dry-run-closure.v1` publication/stable readiness
+  fields; and uploads `ao2-release-readiness-consumer` with
   `ao2.release-readiness-artifact-consumer.v1` evidence.
 - `npm run release:readiness:regression-gate`: runs static release readiness,
   Phase 1 operator golden-path smoke, Pulse local mirror, Pulse resume dry-run,
