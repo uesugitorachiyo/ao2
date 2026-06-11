@@ -52119,7 +52119,7 @@ fn workbench_support_evidence_export_text(summary: &serde_json::Value) -> String
 }
 
 fn workbench_support_queue_job_diagnosis_text(diagnosis: &serde_json::Value) -> String {
-    format!(
+    let mut text = format!(
         "{} {} exit={} timed_out={}",
         json_string(diagnosis, "run_id"),
         json_string(diagnosis, "failure_kind"),
@@ -52131,7 +52131,26 @@ fn workbench_support_queue_job_diagnosis_text(diagnosis: &serde_json::Value) -> 
             .get("timed_out")
             .and_then(serde_json::Value::as_bool)
             .unwrap_or(false)
-    )
+    );
+    let primary_error = json_string(diagnosis, "primary_error");
+    if !primary_error.is_empty() {
+        text.push_str(" error=");
+        text.push_str(&primary_error);
+    }
+    let recovery = workbench_support_queue_job_recovery_text(diagnosis);
+    if !recovery.is_empty() {
+        text.push_str(" recovery=");
+        text.push_str(&recovery);
+    }
+    text
+}
+
+fn workbench_support_queue_job_recovery_text(diagnosis: &serde_json::Value) -> String {
+    json_array(diagnosis, "recovery_actions")
+        .first()
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("")
+        .to_string()
 }
 
 fn render_workbench_queue_failure_diagnostics_table(
@@ -52147,7 +52166,7 @@ fn render_workbench_queue_failure_diagnostics_table(
         .iter()
         .map(|diagnosis| {
             format!(
-                "<tr><td><code>{}</code></td><td>{}</td><td>{}</td><td>{}</td><td><code>{}</code></td></tr>",
+                "<tr><td><code>{}</code></td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td><code>{}</code></td></tr>",
                 escape_html(&json_string(diagnosis, "run_id")),
                 escape_html(&json_string(diagnosis, "failure_kind")),
                 diagnosis
@@ -52158,6 +52177,8 @@ fn render_workbench_queue_failure_diagnostics_table(
                     .get("timed_out")
                     .and_then(serde_json::Value::as_bool)
                     .unwrap_or(false),
+                escape_html(&json_string(diagnosis, "primary_error")),
+                escape_html(&workbench_support_queue_job_recovery_text(diagnosis)),
                 escape_html(&json_string(diagnosis, "stderr_excerpt"))
             )
         })
@@ -52361,13 +52382,13 @@ fn render_workbench_support_bundle_import_html(summary: &serde_json::Value) -> R
     };
     let queue_diagnosis_entries = json_array(summary, "queue_job_diagnoses");
     let queue_diagnoses =
-        render_workbench_queue_failure_diagnostics_table(queue_diagnosis_entries, 5);
+        render_workbench_queue_failure_diagnostics_table(queue_diagnosis_entries, 7);
     let redaction_audit_section =
         render_workbench_redaction_audit_section(&summary["redaction_audit"]);
     let queue_diagnoses_section = format!(
         r#"<section>
 <h2>Queue Failure Diagnostics</h2>
-<table><thead><tr><th>Run</th><th>Failure</th><th>Exit</th><th>Timed Out</th><th>Stderr</th></tr></thead><tbody>
+<table><thead><tr><th>Run</th><th>Failure</th><th>Exit</th><th>Timed Out</th><th>Primary Error</th><th>Recovery</th><th>Stderr</th></tr></thead><tbody>
 {queue_diagnoses}
 </tbody></table>
 </section>"#
@@ -61275,7 +61296,7 @@ fn render_workbench_support_packet_html(packet: &serde_json::Value) -> Result<St
 {hermes_flow_contract}
 {redaction_audit}
 <h2>Queue Failure Diagnostics</h2>
-<table><thead><tr><th>Run</th><th>Failure</th><th>Exit</th><th>Timed Out</th><th>Stderr</th></tr></thead><tbody>
+<table><thead><tr><th>Run</th><th>Failure</th><th>Exit</th><th>Timed Out</th><th>Primary Error</th><th>Recovery</th><th>Stderr</th></tr></thead><tbody>
 {queue_diagnoses}
 </tbody></table>
 <h2>Evidence Exports</h2>
@@ -61298,7 +61319,7 @@ fn render_workbench_support_packet_html(packet: &serde_json::Value) -> Result<St
         redaction_audit = render_workbench_redaction_audit_section(&packet["redaction_audit"]),
         queue_diagnoses = render_workbench_queue_failure_diagnostics_table(
             json_array(packet, "queue_job_diagnoses"),
-            5
+            7
         )
     )?;
 
@@ -62149,14 +62170,19 @@ ${renderSupportTrust(packet ? packet.support_metadata : null)}
 </tr>`).join('');
     const queueDiagnoses = packet.queue_job_diagnoses || [];
     const diagnosisRows = queueDiagnoses.length === 0
-      ? '<tr><td colspan="5" class="muted">No queue failure diagnostics.</td></tr>'
-      : queueDiagnoses.map((diagnosis) => `<tr>
+      ? '<tr><td colspan="7" class="muted">No queue failure diagnostics.</td></tr>'
+      : queueDiagnoses.map((diagnosis) => {
+        const recovery = (diagnosis.recovery_actions || [])[0] || '';
+        return `<tr>
 <td><code>${escapeHtml(diagnosis.run_id || '')}</code></td>
 <td>${escapeHtml(diagnosis.failure_kind || '')}</td>
 <td>${escapeHtml(diagnosis.exit_code || 0)}</td>
 <td>${escapeHtml(diagnosis.timed_out || false)}</td>
+<td>${escapeHtml(diagnosis.primary_error || '')}</td>
+<td>${escapeHtml(recovery)}</td>
 <td><code>${escapeHtml(diagnosis.stderr_excerpt || '')}</code></td>
-</tr>`).join('');
+</tr>`;
+      }).join('');
     return `<section>
 <h2>Latest Support Packet</h2>
 <div class="metrics">
@@ -62172,7 +62198,7 @@ ${renderSupportTrust(packet.support_metadata)}
 ${renderSupportHermesFlowContract(packet.hermes_project_start_flow_contract)}
 ${renderRedactionAudit(packet.redaction_audit)}
 <h2>Queue Failure Diagnostics</h2>
-<table><thead><tr><th>Run</th><th>Failure</th><th>Exit</th><th>Timed Out</th><th>Stderr</th></tr></thead><tbody>${diagnosisRows}</tbody></table>
+<table><thead><tr><th>Run</th><th>Failure</th><th>Exit</th><th>Timed Out</th><th>Primary Error</th><th>Recovery</th><th>Stderr</th></tr></thead><tbody>${diagnosisRows}</tbody></table>
 <h2>Evidence Exports</h2>
 <table><thead><tr><th>Kind</th><th>Subject</th><th>SHA256</th><th>Path</th></tr></thead><tbody>${rows}</tbody></table>
 </section>`;
