@@ -75,4 +75,4 @@ Run the selector and expect PASS if the merged telemetry implementation already 
 - [x] Run `bash -n scripts/pulse-next-actions.sh scripts/pulse-next-task-quality-filter.sh`.
 - [x] Run `npm run pulse:next-actions`.
 - [x] Run `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py -q`.
-- [ ] Commit, push, and open a PR.
+- [x] Commit, push, and open a PR.
