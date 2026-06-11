@@ -86,4 +86,4 @@ Run focused selector and expect PASS.
 - [x] Run `npm run pulse:generate-next:contract`.
 - [x] Run `npm run pulse:task-board-state`.
 - [x] Run full public stabilization tests.
-- [ ] Commit, push, and open a draft PR.
+- [x] Commit, push, and open a PR.
