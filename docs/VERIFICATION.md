@@ -495,12 +495,14 @@ Result:
   `ao2-release-readiness`, `ao2-release-train-control-plane-bridge`,
   `ao2-ai-task-board-control-plane-bridge`,
   `ao2-dual-repo-installed-release-smoke`,
-  `ao2-release-publication-closure`, and
+  `ao2-release-publication-closure`,
+  `ao2-dual-repo-release-publication-closure-index`, and
   `ao2-release-readiness-consumer`
 - `Release readiness artifact consumer`: CI job that depends on
   `Release readiness artifacts` and `Release train control-plane bridge
   artifacts`, the AI task-board bridge, dual-repo installed release smoke, and
-  `Release publication closure artifacts`; downloads `ao2-release-readiness`,
+  `Release publication closure artifacts`, plus the dual-repo publication
+  closure index; downloads `ao2-release-readiness`,
   `ao2-release-train-control-plane-bridge`,
   `ao2-ai-task-board-control-plane-bridge`,
   `ao2-dual-repo-installed-release-smoke`, and
@@ -508,7 +510,13 @@ Result:
   `ao2.release-readiness-local.v1` summary/status/core cross-OS checks, the
   control-plane bridge/readback schemas, and the
   `ao2.release-publication-dry-run-closure.v1` publication/stable readiness
-  fields; and uploads `ao2-release-readiness-consumer` with
+  fields. The companion `Dual-repo release publication closure index` job
+  downloads AO2's `ao2-release-publication-closure` and the latest successful
+  control-plane `ao2-control-plane-release-publication-closure`, validates
+  `ao2.cp-release-publication-closure.v1`, and uploads
+  `ao2-dual-repo-release-publication-closure-index` with
+  `ao2.dual-repo-release-publication-closure-index.v1` evidence. The consumer
+  then uploads `ao2-release-readiness-consumer` with
   `ao2.release-readiness-artifact-consumer.v1` evidence.
 - `npm run release:readiness:regression-gate`: runs static release readiness,
   Phase 1 operator golden-path smoke, Pulse local mirror, Pulse resume dry-run,
@@ -648,6 +656,7 @@ Result:
   without tag, push, publish, or deploy side effects. The release readiness
   static summary must include the
   `ci_release_readiness_artifact_consumer_job` proof and the
+  `ci_dual_repo_release_publication_closure_index_job` proof plus the
   `artifact-closure-index.json` /
   `ao2.release-artifact-closure-index.v1` required artifact list before the
   drill accepts.
