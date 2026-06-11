@@ -608,6 +608,56 @@ def test_release_sync_provenance_assets_is_guarded_and_documented():
     assert "ao2.release-sync-provenance-assets.v1" in verification
 
 
+def test_release_publication_dry_run_closure_composes_no_publish_gates():
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["release:publication-dry-run-closure"]
+        == "node scripts/run-sh-script.js scripts/release-publication-dry-run-closure.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "release-publication-dry-run-closure.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+
+    for needle in [
+        "ao2.release-publication-dry-run-closure.v1",
+        "release:asset-publication-readiness",
+        "release:sync-provenance-assets",
+        "release:stable-readiness",
+        "AO2_RELEASE_PUBLICATION_DRY_RUN_CLOSURE_ROOT",
+        "AO2_RELEASE_SYNC_CONFIRM=",
+        "AO2_STABLE_PROMOTION_CONFIRM=",
+        "ao2.release-asset-publication-readiness.v1",
+        "ao2.release-sync-provenance-assets.v1",
+        "ao2.stable-release-readiness.v1",
+        "publication_ready",
+        "stable_release_ready",
+        "upload_status",
+        "dry_run",
+        "mutates_releases",
+        "stores_credentials",
+        "release_publish",
+        "not executed",
+    ]:
+        assert needle in text
+
+    for forbidden in [
+        "gh release upload",
+        "gh release edit",
+        "git push origin",
+        "npm publish",
+        "OPENAI_API_KEY=",
+        "ANTHROPIC_API_KEY=",
+    ]:
+        assert forbidden not in text
+
+    verification = read("docs/VERIFICATION.md")
+    assert "npm run release:publication-dry-run-closure" in verification
+    assert "ao2.release-publication-dry-run-closure.v1" in verification
+    assert "release publication dry-run closure" in verification
+
+
 def test_stable_promotion_workflow_is_guarded_and_documented():
     package_json = json.loads(read("package.json"))
     assert (
