@@ -11,7 +11,9 @@ LOG_DIR="$OUT_ROOT/logs"
 CURSOR_FILE="${AO2_PULSE_GENERATE_NEXT_CURSOR:-$ROOT/.ao2-local/pulse/pulse-generate-next-cursor.json}"
 REGISTER="${AO2_PULSE_GENERATE_NEXT_REGISTER:-1}"
 LOCAL_ONLY="${AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY:-0}"
-STATUS_EVIDENCE="${AO2_PULSE_TASK_BOARD_STATUS_EVIDENCE:-}"
+TASK_EXECUTOR_ROOT="${AO2_PULSE_TASK_EXECUTOR_ROOT:-$ROOT/target/pulse-task-executor/latest}"
+DEFAULT_STATUS_EVIDENCE="$TASK_EXECUTOR_ROOT/task-board-status-evidence.json"
+STATUS_EVIDENCE="${AO2_PULSE_TASK_BOARD_STATUS_EVIDENCE:-$DEFAULT_STATUS_EVIDENCE}"
 DEFAULT_AUTO_ADVANCE_PROMPT="After each task batch, re-evaluate AO2 and ao2-control-plane at project level. Choose next tasks by highest long-term value, not similarity to last tasks. Prefer the Risky PR Run MVP product loop, local run record, static report/export, evaluator closure evidence, public reliability, Ubuntu/macOS/Windows correctness, CI confidence, evidence quality, security/safety boundaries, control-plane integration, release readiness, and developer/operator usability. Do not create new shell wrappers unless they directly unlock a product-slice or release-readiness bottleneck. Avoid narrow recursion or low-value daemon work unless it is the bottleneck. Generate next lengthy tasks with rationale, required evidence, and stop conditions, then register and continue through the AO2 event loop."
 AUTO_ADVANCE_PROMPT="${AO2_PULSE_AUTO_ADVANCE_PROMPT:-$DEFAULT_AUTO_ADVANCE_PROMPT}"
 
@@ -623,18 +625,33 @@ status_transition_source = {
 if status_evidence_path and status_evidence_path.is_file():
     try:
         status_evidence = json.loads(status_evidence_path.read_text(encoding="utf-8"))
-        task_status_updates = {
-            str(task_id): value
-            for task_id, value in status_evidence.get("task_statuses", {}).items()
-            if isinstance(value, dict)
-        }
-        status_transition_source.update({
-            "status": "loaded",
-            "schema_version": status_evidence.get(
-                "schema_version",
-                "ao2.ai-task-board-status-evidence.v1",
-            ),
-        })
+        evidence_generation = status_evidence.get("task_board_generation")
+        if evidence_generation is not None and evidence_generation != generation:
+            task_status_updates = {}
+            status_transition_source.update({
+                "status": "stale_generation",
+                "schema_version": status_evidence.get(
+                    "schema_version",
+                    "ao2.ai-task-board-status-evidence.v1",
+                ),
+                "task_board_generation": evidence_generation,
+                "current_generation": generation,
+            })
+        else:
+            task_status_updates = {
+                str(task_id): value
+                for task_id, value in status_evidence.get("task_statuses", {}).items()
+                if isinstance(value, dict)
+            }
+            status_transition_source.update({
+                "status": "loaded",
+                "schema_version": status_evidence.get(
+                    "schema_version",
+                    "ao2.ai-task-board-status-evidence.v1",
+                ),
+                "task_board_generation": evidence_generation,
+                "current_generation": generation,
+            })
     except json.JSONDecodeError as exc:
         status_transition_source.update({
             "status": "invalid_json",
@@ -786,6 +803,7 @@ task_board_diff = {
 task_board["exports"] = {
     "markdown": str(task_board_root / "board.md"),
     "html": str(task_board_root / "board.html"),
+    "state_summary": str(task_board_root / "board-state-summary.json"),
 }
 task_board["history"] = {
     "root": str(task_board_history_root),
@@ -801,6 +819,35 @@ kind_lanes = {"product_code": [], "evidence_gate": []}
 for item in task_board_tasks:
     status_lanes.setdefault(str(item["status"]).replace("_", " ").title(), []).append(item)
     kind_lanes.setdefault(item["kind"], []).append(item)
+status_counts = {}
+for item in task_board_tasks:
+    status_counts[str(item["status"])] = status_counts.get(str(item["status"]), 0) + 1
+task_board_state_summary = {
+    "schema_version": "ao2.ai-task-board-state-summary.v1",
+    "generated_at_utc": utc_now(),
+    "status": "ready",
+    "task_board": str(task_board_root / "summary.json"),
+    "release_train": release_train,
+    "release_objective": release_objective,
+    "source_recommendation": source_recommendation,
+    "status_transition_source": status_transition_source,
+    "task_count": len(task_board_tasks),
+    "status_counts": status_counts,
+    "next_actions": [
+        {
+            "task_id": item["task_id"],
+            "title": item["title"],
+            "status": item["status"],
+            "next_action": item["next_action"],
+        }
+        for item in task_board_tasks
+    ],
+    "trust_boundary": {
+        "local_only": True,
+        "stores_credentials": False,
+        "control_plane_can_mutate": False,
+    },
+}
 
 def task_md(item: dict) -> str:
     evidence = ", ".join(f"`{value}`" for value in item["required_evidence"])
@@ -885,6 +932,7 @@ task_board_html = (
 (packet_root / "pulse-eval-loop.json").write_text(json.dumps(eval_loop, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 (packet_root / "pulse-task-manifest.json").write_text(json.dumps(task_manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 (task_board_root / "summary.json").write_text(json.dumps(task_board, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+(task_board_root / "board-state-summary.json").write_text(json.dumps(task_board_state_summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 (task_board_root / "board.md").write_text(task_board_md, encoding="utf-8")
 (task_board_root / "board.html").write_text(task_board_html, encoding="utf-8")
 (task_board_root / "task-board-diff.json").write_text(json.dumps(task_board_diff, indent=2, sort_keys=True) + "\n", encoding="utf-8")

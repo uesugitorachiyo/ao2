@@ -130,6 +130,15 @@ def test_ci_uploads_risky_pr_golden_release_support_bundle_artifacts():
     assert "ao2-risky-pr-golden-release-support-bundle" in verification
 
 
+def test_ci_python_guard_documents_task_board_full_loop_selector():
+    ci = read(".github/workflows/ci.yml")
+    guard = read("scripts/ci-python-guard-artifacts.sh")
+
+    assert "test_pulse_task_board_full_loop_generate_execute_validate_regenerate" in ci
+    assert "tests/test_public_stabilization.py" in guard
+    assert "tests/test_phase1_promote_wrapper.py" in guard
+
+
 def test_risky_pr_golden_upload_artifacts_have_stable_manifest():
     script = read("scripts/risky-pr-golden-path.sh")
     ci = read(".github/workflows/ci.yml")
@@ -2603,6 +2612,131 @@ def test_pulse_generate_next_applies_task_board_status_transitions_from_evidence
     assert "status-blocked" in board_html
 
 
+def test_pulse_generate_next_auto_discovers_executor_status_evidence(tmp_path):
+    baseline_root = tmp_path / "baseline-generate-next"
+    baseline_packet = tmp_path / "baseline-packet"
+    baseline_board_root = tmp_path / "baseline-task-board"
+    executor_root = tmp_path / "executor"
+
+    baseline_result = subprocess.run(
+        ["npm", "run", "pulse:generate-next"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_GENERATE_NEXT_REGISTER": "0",
+            "AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY": "0",
+            "AO2_PULSE_GENERATE_NEXT_ROOT": str(baseline_root),
+            "AO2_PULSE_GENERATE_NEXT_PACKET_ROOT": str(baseline_packet),
+            "AO2_PULSE_TASK_BOARD_ROOT": str(baseline_board_root),
+            "AO2_PULSE_GENERATE_NEXT_CURSOR": str(tmp_path / "baseline-cursor.json"),
+            "AO2_PULSE_TASK_EXECUTOR_ROOT": str(executor_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert baseline_result.returncode == 0, baseline_result.stderr + baseline_result.stdout
+    baseline_board = json.loads((baseline_board_root / "summary.json").read_text(encoding="utf-8"))
+    first_task, second_task = baseline_board["tasks"][:2]
+    executor_root.mkdir(parents=True)
+    (executor_root / "task-board-status-evidence.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.ai-task-board-status-evidence.v1",
+                "status": "ready",
+                "source": "ao2.pulse-task-executor.v1",
+                "task_board_generation": baseline_board["source_recommendation"]["generation"],
+                "task_statuses": {
+                    first_task["task_id"]: {
+                        "status": "ready",
+                        "status_reason": "Executor materialized this implementation packet.",
+                        "evidence": [str(executor_root / "summary.json")],
+                    },
+                    second_task["task_id"]: {
+                        "status": "passed",
+                        "status_reason": "Executor completed this evidence gate.",
+                        "evidence": [str(executor_root / "summary.json")],
+                    },
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    out_root = tmp_path / "generate-next"
+    task_board_root = tmp_path / "task-board"
+    result = subprocess.run(
+        ["npm", "run", "pulse:generate-next"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_GENERATE_NEXT_REGISTER": "0",
+            "AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY": "0",
+            "AO2_PULSE_GENERATE_NEXT_ROOT": str(out_root),
+            "AO2_PULSE_GENERATE_NEXT_PACKET_ROOT": str(tmp_path / "packet"),
+            "AO2_PULSE_TASK_BOARD_ROOT": str(task_board_root),
+            "AO2_PULSE_GENERATE_NEXT_CURSOR": str(tmp_path / "cursor.json"),
+            "AO2_PULSE_TASK_EXECUTOR_ROOT": str(executor_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    board = json.loads((task_board_root / "summary.json").read_text(encoding="utf-8"))
+    tasks_by_id = {task["task_id"]: task for task in board["tasks"]}
+    assert board["status_transition_source"]["path"] == str(
+        executor_root / "task-board-status-evidence.json"
+    )
+    assert board["status_transition_source"]["status"] == "applied"
+    assert tasks_by_id[first_task["task_id"]]["status"] == "ready"
+    assert tasks_by_id[second_task["task_id"]]["status"] == "passed"
+
+
+def test_pulse_generate_next_writes_compact_board_state_summary(tmp_path):
+    out_root = tmp_path / "generate-next"
+    packet_root = tmp_path / "packet"
+    task_board_root = tmp_path / "task-board"
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:generate-next"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_GENERATE_NEXT_REGISTER": "0",
+            "AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY": "0",
+            "AO2_PULSE_GENERATE_NEXT_ROOT": str(out_root),
+            "AO2_PULSE_GENERATE_NEXT_PACKET_ROOT": str(packet_root),
+            "AO2_PULSE_TASK_BOARD_ROOT": str(task_board_root),
+            "AO2_PULSE_GENERATE_NEXT_CURSOR": str(tmp_path / "cursor.json"),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    board = json.loads((task_board_root / "summary.json").read_text(encoding="utf-8"))
+    state_summary_path = Path(board["exports"]["state_summary"])
+    assert state_summary_path == task_board_root / "board-state-summary.json"
+    state_summary = json.loads(state_summary_path.read_text(encoding="utf-8"))
+    assert state_summary["schema_version"] == "ao2.ai-task-board-state-summary.v1"
+    assert state_summary["status"] == "ready"
+    assert state_summary["task_board"] == str(task_board_root / "summary.json")
+    assert state_summary["task_count"] == len(board["tasks"])
+    assert state_summary["status_counts"] == {"proposed": len(board["tasks"])}
+    assert state_summary["next_actions"]
+    assert state_summary["trust_boundary"] == {
+        "local_only": True,
+        "stores_credentials": False,
+        "control_plane_can_mutate": False,
+    }
+
+
 def test_pulse_generate_next_writes_ai_task_board_artifact(tmp_path):
     out_root = tmp_path / "generate-next"
     packet_root = tmp_path / "packet"
@@ -4087,6 +4221,139 @@ def test_pulse_next_task_quality_filter_rejects_stale_status_evidence_generation
     assert summary["status_evidence_blockers"] == [
         "status_evidence_stale_generation:6!=7"
     ]
+
+
+def test_pulse_task_board_full_loop_generate_execute_validate_regenerate(tmp_path):
+    first_root = tmp_path / "generate-first"
+    first_packet = tmp_path / "packet-first"
+    first_board_root = tmp_path / "task-board-first"
+    executor_root = tmp_path / "executor"
+    quality_root = tmp_path / "quality"
+
+    first_result = subprocess.run(
+        ["npm", "run", "pulse:generate-next"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_GENERATE_NEXT_REGISTER": "0",
+            "AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY": "0",
+            "AO2_PULSE_GENERATE_NEXT_ROOT": str(first_root),
+            "AO2_PULSE_GENERATE_NEXT_PACKET_ROOT": str(first_packet),
+            "AO2_PULSE_TASK_BOARD_ROOT": str(first_board_root),
+            "AO2_PULSE_GENERATE_NEXT_CURSOR": str(tmp_path / "first-cursor.json"),
+            "AO2_PULSE_TASK_EXECUTOR_ROOT": str(executor_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert first_result.returncode == 0, first_result.stderr + first_result.stdout
+    first_board = json.loads((first_board_root / "summary.json").read_text(encoding="utf-8"))
+    product_task = next(task for task in first_board["tasks"] if task["kind"] == "product_code")
+    evidence_task = next(task for task in first_board["tasks"] if task["kind"] == "evidence_gate")
+    manifest = tmp_path / "loop-manifest.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.pulse-task-manifest.v1",
+                "cursor": {"generation": first_board["source_recommendation"]["generation"]},
+                "trust_boundary": {
+                    "local_only": True,
+                    "stores_credentials": False,
+                    "side_effects": "local_process_execution_and_packet_materialization",
+                },
+                "tasks": [
+                    {
+                        "id": product_task["task_id"],
+                        "kind": "product_code",
+                        "title": product_task["title"],
+                        "objective": product_task["objective"],
+                        "files": ["scripts/pulse-generate-next.sh"],
+                        "acceptance": ["Loop fixture materializes implementation packet."],
+                        "verification": [
+                            {
+                                "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py -q",
+                                "expected_evidence": "pytest.tests.test_public_stabilization",
+                            }
+                        ],
+                        "stop_conditions": product_task["stop_conditions"],
+                    },
+                    {
+                        "id": evidence_task["task_id"],
+                        "kind": "evidence_gate",
+                        "title": evidence_task["title"],
+                        "command": "node -e \"console.log('task-board-full-loop-ok')\"",
+                        "expected_evidence": "node.stdout.ok",
+                    },
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    executor_result = subprocess.run(
+        ["npm", "run", "pulse:task-executor"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_TASK_EXECUTOR_MANIFEST": str(manifest),
+            "AO2_PULSE_TASK_EXECUTOR_ROOT": str(executor_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert executor_result.returncode == 0, executor_result.stderr + executor_result.stdout
+    status_evidence = executor_root / "task-board-status-evidence.json"
+    assert status_evidence.is_file()
+
+    quality_result = subprocess.run(
+        ["npm", "run", "pulse:next-task-quality-filter"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_NEXT_TASK_QUALITY_PACKET": str(first_packet / "packet.md"),
+            "AO2_PULSE_NEXT_TASK_QUALITY_TASK_BOARD": str(first_packet / "task-board.json"),
+            "AO2_PULSE_NEXT_TASK_QUALITY_STATUS_EVIDENCE": str(status_evidence),
+            "AO2_PULSE_NEXT_TASK_QUALITY_ROOT": str(quality_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert quality_result.returncode == 0, quality_result.stderr + quality_result.stdout
+
+    second_board_root = tmp_path / "task-board-second"
+    second_result = subprocess.run(
+        ["npm", "run", "pulse:generate-next"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_GENERATE_NEXT_REGISTER": "0",
+            "AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY": "0",
+            "AO2_PULSE_GENERATE_NEXT_ROOT": str(tmp_path / "generate-second"),
+            "AO2_PULSE_GENERATE_NEXT_PACKET_ROOT": str(tmp_path / "packet-second"),
+            "AO2_PULSE_TASK_BOARD_ROOT": str(second_board_root),
+            "AO2_PULSE_GENERATE_NEXT_CURSOR": str(tmp_path / "second-cursor.json"),
+            "AO2_PULSE_TASK_EXECUTOR_ROOT": str(executor_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert second_result.returncode == 0, second_result.stderr + second_result.stdout
+    second_board = json.loads((second_board_root / "summary.json").read_text(encoding="utf-8"))
+    second_tasks = {task["task_id"]: task for task in second_board["tasks"]}
+    assert second_tasks[product_task["task_id"]]["status"] == "ready"
+    assert second_tasks[evidence_task["task_id"]]["status"] == "passed"
+    state_summary = json.loads(
+        Path(second_board["exports"]["state_summary"]).read_text(encoding="utf-8")
+    )
+    assert state_summary["status_counts"]["ready"] == 1
+    assert state_summary["status_counts"]["passed"] == 1
 
 
 def test_control_plane_fixture_consumer_smoke_reads_ai_task_board_fixture(tmp_path):
