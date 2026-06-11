@@ -675,10 +675,27 @@ def task_next_action(task: dict) -> str:
         return objective.strip()
     return str(task.get("why") or selection["rationale"]).strip()
 
+def stable_task_id(value: str) -> str:
+    if value.startswith("ao2-") and "-g" in value:
+        prefix, maybe_generation = value.rsplit("-g", 1)
+        if maybe_generation.isdigit():
+            return prefix
+    return value
+
+def task_status_update_for(item: dict):
+    exact = task_status_updates.get(item["task_id"])
+    if exact:
+        return exact, "task_id"
+    for source_task_id, update in task_status_updates.items():
+        if stable_task_id(source_task_id) == item["stable_task_id"]:
+            return update, "stable_task_id"
+    return None, None
+
 task_board_tasks = []
 for task in tasks:
     item = {
         "task_id": task["id"],
+        "stable_task_id": stable_task_id(task["id"]),
         "title": task["title"],
         "kind": task["kind"],
         "status": "proposed",
@@ -691,7 +708,7 @@ for task in tasks:
         "source_recommendation": source_recommendation,
         "release_train": release_train,
     }
-    status_update = task_status_updates.get(item["task_id"])
+    status_update, matched_by = task_status_update_for(item)
     if status_update:
         requested_status = str(status_update.get("status", "")).strip().lower().replace("-", "_")
         if requested_status in allowed_task_statuses:
@@ -701,6 +718,7 @@ for task in tasks:
                 "previous_status": "proposed",
                 "current_status": requested_status,
                 "reason": str(status_update.get("status_reason") or status_update.get("reason") or ""),
+                "matched_by": matched_by,
                 "evidence": [
                     str(value)
                     for value in status_update.get("evidence", [])
@@ -813,6 +831,13 @@ task_board["history"] = {
     "previous_present": previous_board is not None,
 }
 task_board["diff"] = task_board_diff
+stale_evidence_warning = ""
+if status_transition_source.get("status") == "stale_generation":
+    stale_evidence_warning = (
+        "Status evidence ignored: stale_generation "
+        f"(evidence generation {status_transition_source.get('task_board_generation')} "
+        f"does not match board generation {status_transition_source.get('current_generation')})."
+    )
 
 status_lanes = {}
 kind_lanes = {"product_code": [], "evidence_gate": []}
@@ -867,7 +892,8 @@ task_board_md = (
     f"{release_objective}\n\n"
     f"Source recommendation: `{source_recommendation['selection']}`\n\n"
     "Control plane role: read-only observer; no credential requirement; no release mutation authority.\n\n"
-    "## Status Lanes\n\n"
+    + (stale_evidence_warning + "\n\n" if stale_evidence_warning else "")
+    + "## Status Lanes\n\n"
     + "".join(
         f"### {status}\n\n" + "".join(task_md(item) for item in items) + "\n"
         for status, items in sorted(status_lanes.items())
@@ -912,7 +938,8 @@ task_board_html = (
     "</style></head><body>"
     f"<h1>AO2 AI Task Board</h1><p>{html.escape(release_objective)}</p>"
     f"<p>Release train: <code>{html.escape(release_train['version'])}</code> - {html.escape(release_train['theme'])}</p>"
-    "<h2>Status Lanes</h2>"
+    + (f"<p class=\"status-evidence-warning\">{html.escape(stale_evidence_warning)}</p>" if stale_evidence_warning else "")
+    + "<h2>Status Lanes</h2>"
     + "".join(
         f"<section class=\"status-lane\"><h2>{html.escape(status)}</h2>"
         + "".join(task_card(item) for item in items)
