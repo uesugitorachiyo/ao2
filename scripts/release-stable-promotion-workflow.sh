@@ -8,9 +8,13 @@ AO2_CP_RELEASE_TAG="${AO2_CP_RELEASE_TAG:-v0.1.12}"
 AO2_CP_RELEASE_REPO="${AO2_CP_RELEASE_REPO:-uesugitorachiyo/ao2-control-plane}"
 AO2_STABLE_PROMOTION_ROOT="${AO2_STABLE_PROMOTION_ROOT:-$ROOT/target/stable-promotion-workflow/latest}"
 AO2_STABLE_PROMOTION_CONFIRM="${AO2_STABLE_PROMOTION_CONFIRM:-}"
+AO2_STABLE_PROMOTION_EVIDENCE_ROOT="${AO2_STABLE_PROMOTION_EVIDENCE_ROOT:-$AO2_STABLE_PROMOTION_ROOT/post-release-verification-evidence}"
+AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD="${AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD:-0}"
 # Default release train confirmation: AO2_STABLE_PROMOTION_CONFIRM=promote-stable-v0.4.80-v0.1.12
 READINESS_ROOT="$AO2_STABLE_PROMOTION_ROOT/stable-release-readiness"
 READINESS_SUMMARY="$READINESS_ROOT/summary.json"
+EVIDENCE_SUMMARY="$AO2_STABLE_PROMOTION_EVIDENCE_ROOT/summary.json"
+EVIDENCE_LOG="$AO2_STABLE_PROMOTION_ROOT/post-release-evidence.log"
 SUMMARY="$AO2_STABLE_PROMOTION_ROOT/summary.json"
 PLAN="$AO2_STABLE_PROMOTION_ROOT/plan.json"
 PROMOTION_LOG="$AO2_STABLE_PROMOTION_ROOT/promotion.log"
@@ -22,8 +26,199 @@ mkdir -p "$AO2_STABLE_PROMOTION_ROOT"
 AO2_STABLE_RELEASE_READINESS_ROOT="$READINESS_ROOT" npm run release:stable-readiness \
   > "$READINESS_LOG" 2>&1
 
+download_latest_artifact() {
+  local repo="$1"
+  local workflow="$2"
+  local artifact="$3"
+  local dest="$4"
+  local run_id=""
+  rm -rf "$dest"
+  mkdir -p "$dest"
+
+  while IFS= read -r candidate_run_id; do
+    [ -n "$candidate_run_id" ] || continue
+    rm -rf "$dest"
+    mkdir -p "$dest"
+    run_id="$candidate_run_id"
+    if gh run download "$run_id" --repo "$repo" --name "$artifact" --dir "$dest"; then
+      printf "downloaded repo=%s workflow=%s artifact=%s run_id=%s dest=%s\n" \
+        "$repo" "$workflow" "$artifact" "$run_id" "$dest" >> "$EVIDENCE_LOG"
+      printf "%s\n" "$run_id" > "$dest/run-id.txt"
+      return 0
+    fi
+  done < <(gh run list --repo "$repo" --branch main --workflow "$workflow" --status success --limit 10 --json databaseId --jq '.[].databaseId')
+
+  printf "missing repo=%s workflow=%s artifact=%s\n" "$repo" "$workflow" "$artifact" >> "$EVIDENCE_LOG"
+  return 1
+}
+
+rm -rf "$AO2_STABLE_PROMOTION_EVIDENCE_ROOT"
+mkdir -p "$AO2_STABLE_PROMOTION_EVIDENCE_ROOT"
+printf "stable_promotion_evidence_gate=start\n" > "$EVIDENCE_LOG"
+
+download_status="passed"
+if [ "$AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD" = "1" ]; then
+  download_status="skipped"
+  printf "stable_promotion_evidence_gate=skipped\n" >> "$EVIDENCE_LOG"
+else
+  while IFS='|' read -r repo workflow artifact dest_name; do
+    [ -n "$repo" ] || continue
+    dest="$AO2_STABLE_PROMOTION_EVIDENCE_ROOT/$dest_name"
+    if ! download_latest_artifact "$repo" "$workflow" "$artifact" "$dest"; then
+      download_status="failed"
+    fi
+  done <<EOF
+$AO2_RELEASE_REPO|Post Stable Release Verification|post-stable-release-smoke-Linux|ao2-linux
+$AO2_RELEASE_REPO|Post Stable Release Verification|post-stable-release-smoke-macOS|ao2-macos
+$AO2_RELEASE_REPO|Post Stable Release Verification|post-stable-release-smoke-Windows|ao2-windows
+$AO2_CP_RELEASE_REPO|Post Release Verification|ao2-control-plane-post-release-verification-ubuntu|control-plane-ubuntu
+$AO2_CP_RELEASE_REPO|Post Release Verification|ao2-control-plane-post-release-verification-macos|control-plane-macos
+$AO2_CP_RELEASE_REPO|Post Release Verification|ao2-control-plane-post-release-verification-windows|control-plane-windows
+EOF
+fi
+
+python3 - "$AO2_STABLE_PROMOTION_EVIDENCE_ROOT" "$EVIDENCE_SUMMARY" "$download_status" "$EVIDENCE_LOG" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+root = Path(sys.argv[1])
+summary_path = Path(sys.argv[2])
+download_status = sys.argv[3]
+log_path = Path(sys.argv[4])
+
+required = [
+    {
+        "component": "ao2",
+        "platform": "linux",
+        "artifact": "post-stable-release-smoke-Linux",
+        "path": root / "ao2-linux",
+        "kind": "ao2-post-stable",
+    },
+    {
+        "component": "ao2",
+        "platform": "macos",
+        "artifact": "post-stable-release-smoke-macOS",
+        "path": root / "ao2-macos",
+        "kind": "ao2-post-stable",
+    },
+    {
+        "component": "ao2",
+        "platform": "windows",
+        "artifact": "post-stable-release-smoke-Windows",
+        "path": root / "ao2-windows",
+        "kind": "ao2-post-stable",
+    },
+    {
+        "component": "ao2-control-plane",
+        "platform": "ubuntu",
+        "artifact": "ao2-control-plane-post-release-verification-ubuntu",
+        "path": root / "control-plane-ubuntu",
+        "kind": "control-plane-post-release",
+    },
+    {
+        "component": "ao2-control-plane",
+        "platform": "macos",
+        "artifact": "ao2-control-plane-post-release-verification-macos",
+        "path": root / "control-plane-macos",
+        "kind": "control-plane-post-release",
+    },
+    {
+        "component": "ao2-control-plane",
+        "platform": "windows",
+        "artifact": "ao2-control-plane-post-release-verification-windows",
+        "path": root / "control-plane-windows",
+        "kind": "control-plane-post-release",
+    },
+]
+
+checks = []
+for item in required:
+    status = "passed"
+    details = {
+        "component": item["component"],
+        "platform": item["platform"],
+        "artifact": item["artifact"],
+        "path": str(item["path"]),
+        "kind": item["kind"],
+    }
+    if download_status == "skipped":
+        status = "skipped"
+        details["skip_reason"] = "AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD=1"
+    elif not item["path"].is_dir():
+        status = "missing"
+        details["missing"] = "artifact_directory"
+    elif item["kind"] == "ao2-post-stable":
+        install_update = item["path"] / "smoke" / "install-update.json"
+        if not install_update.is_file():
+            status = "missing"
+            details["missing"] = "smoke/install-update.json"
+        else:
+            payload = json.loads(install_update.read_text(encoding="utf-8"))
+            details["install_update"] = str(install_update)
+            details["signature_verified"] = payload.get("signature_verified")
+            details["install_status"] = payload.get("status")
+            if payload.get("signature_verified") is not True or payload.get("status") != "installed":
+                status = "failed"
+    else:
+        summary = item["path"] / "summary.json"
+        if not summary.is_file():
+            status = "missing"
+            details["missing"] = "summary.json"
+        else:
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            trust = payload.get("trust_boundary", {})
+            details["summary"] = str(summary)
+            details["schema_version"] = payload.get("schema_version")
+            details["checksum_verified"] = payload.get("checksum_verified")
+            details["credential_material_included"] = trust.get("credential_material_included")
+            details["mutates_github_releases"] = trust.get("mutates_github_releases")
+            if (
+                payload.get("schema_version") != "ao2.cp-release-publication-closure.v1"
+                or payload.get("status") != "passed"
+                or payload.get("checksum_verified") is not True
+                or trust.get("credential_material_included") is not False
+                or trust.get("mutates_github_releases") is not False
+            ):
+                status = "failed"
+    details["status"] = status
+    checks.append(details)
+
+ready = download_status == "passed" and all(item["status"] == "passed" for item in checks)
+payload = {
+    "schema_version": "ao2.stable-promotion-evidence-gate.v1",
+    "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    "status": "passed" if ready else "skipped" if download_status == "skipped" else "failed",
+    "post_release_evidence_ready": ready,
+    "download_status": download_status,
+    "checks": checks,
+    "required_artifacts": [
+        {
+            "component": item["component"],
+            "platform": item["platform"],
+            "artifact": item["artifact"],
+            "kind": item["kind"],
+        }
+        for item in required
+    ],
+    "trust_boundary": {
+        "queries_github_actions": True,
+        "downloads_github_actions_artifacts": download_status != "skipped",
+        "mutates_releases": False,
+        "stores_credentials": False,
+    },
+    "log": str(log_path),
+}
+summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+print(f"stable_promotion_evidence_gate={payload['status']}")
+print(f"post_release_evidence_ready={str(ready).lower()}")
+print(f"stable_promotion_evidence_summary={summary_path}")
+PY
+
 python3 - "$READINESS_SUMMARY" "$PLAN" "$AO2_RELEASE_REPO" "$AO2_RELEASE_TAG" \
-  "$AO2_CP_RELEASE_REPO" "$AO2_CP_RELEASE_TAG" "$AO2_STABLE_PROMOTION_CONFIRM" <<'PY'
+  "$AO2_CP_RELEASE_REPO" "$AO2_CP_RELEASE_TAG" "$AO2_STABLE_PROMOTION_CONFIRM" \
+  "$EVIDENCE_SUMMARY" <<'PY'
 import json
 import sys
 from datetime import datetime, timezone
@@ -36,8 +231,10 @@ ao2_tag = sys.argv[4]
 cp_repo = sys.argv[5]
 cp_tag = sys.argv[6]
 confirm = sys.argv[7]
+evidence_path = Path(sys.argv[8])
 
 readiness = json.loads(readiness_path.read_text(encoding="utf-8"))
+evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
 allowed_channel_blockers = {"stable_release_absent", "current_channel_is_prerelease"}
 expected = {
     ("ao2", ao2_repo, ao2_tag),
@@ -67,9 +264,18 @@ channel_blockers = [
 
 required_confirm = f"promote-stable-{ao2_tag}-{cp_tag}"
 confirmed = confirm == required_confirm
-stable_channel_only = not non_channel_blockers and not missing_components and bool(channel_blockers)
+evidence_ready = evidence.get("post_release_evidence_ready") is True
+stable_channel_only = not non_channel_blockers and not missing_components and evidence_ready and bool(channel_blockers)
 already_stable = bool(readiness.get("stable_release_ready")) and not readiness.get("promotion_blockers")
-status = "ready_to_promote" if stable_channel_only else "already_stable" if already_stable else "blocked"
+status = (
+    "ready_to_promote"
+    if stable_channel_only
+    else "blocked"
+    if (missing_components or non_channel_blockers or not evidence_ready)
+    else "already_stable"
+    if already_stable
+    else "blocked"
+)
 
 blockers = []
 if missing_components:
@@ -79,6 +285,16 @@ if missing_components:
             "severity": "blocking",
             "components": missing_components,
             "message": "Stable promotion requires AO2 and ao2-control-plane readiness components.",
+        }
+    )
+if not evidence_ready:
+    blockers.append(
+        {
+            "code": "post_release_evidence_missing",
+            "severity": "blocking",
+            "evidence_gate_status": evidence.get("status"),
+            "evidence_gate_summary": str(evidence_path),
+            "message": "Stable promotion requires AO2 and ao2-control-plane post-release verification evidence.",
         }
     )
 if non_channel_blockers:
@@ -99,6 +315,9 @@ plan = {
     "confirmed": confirmed,
     "required_confirm": required_confirm,
     "stable_channel_only": stable_channel_only,
+    "post_release_evidence_ready": evidence_ready,
+    "stable_promotion_evidence_gate": str(evidence_path),
+    "evidence_gate_status": evidence.get("status"),
     "readiness_summary": str(readiness_path),
     "promotion_targets": [
         {"name": "ao2", "repo": ao2_repo, "tag": ao2_tag},

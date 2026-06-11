@@ -729,7 +729,14 @@ Result:
   `ao2.stable-promotion-workflow.v1`, and stays in dry-run mode unless
   `AO2_STABLE_PROMOTION_CONFIRM=promote-stable-<ao2-tag>-<control-plane-tag>`
   is set before flipping the AO2 and ao2-control-plane GitHub Releases from
-  prerelease to stable
+  prerelease to stable. Confirmed promotion is also blocked by a
+  post-release verification evidence gate: the workflow downloads the latest
+  successful AO2 `Post Stable Release Verification` artifacts and
+  ao2-control-plane `Post Release Verification` artifacts, validates
+  signatures/checksum summaries, and emits
+  `ao2.stable-promotion-evidence-gate.v1` with
+  `post-release verification evidence gate` status before any release mutation
+  is attempted
 - `npm run release:immutability-audit`: composes asset completeness, stable
   readiness, full release download verification, checksum validation, signed
   provenance verification, GitHub asset digest checks, and release metadata

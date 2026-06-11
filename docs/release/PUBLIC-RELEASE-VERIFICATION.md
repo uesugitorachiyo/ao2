@@ -80,6 +80,30 @@ gh run download <run-id> --repo uesugitorachiyo/ao2-control-plane \
 For a full control-plane post-release verification run, download all three
 per-OS artifacts and inspect each `summary.json`.
 
+## Stable promotion evidence gate
+
+`npm run release:stable-promotion-workflow` uses this hosted evidence before it
+can promote AO2 and `ao2-control-plane` releases from prerelease to stable. The
+workflow downloads the latest successful AO2 `Post Stable Release Verification`
+artifacts and the latest successful control-plane `Post Release Verification`
+artifacts, then emits `ao2.stable-promotion-evidence-gate.v1`.
+
+The gate requires:
+
+- AO2 `post-stable-release-smoke-Linux`, `post-stable-release-smoke-macOS`,
+  and `post-stable-release-smoke-Windows` artifacts with
+  `signature_verified=true` install/update evidence;
+- control-plane `ao2-control-plane-post-release-verification-ubuntu`,
+  `ao2-control-plane-post-release-verification-macos`, and
+  `ao2-control-plane-post-release-verification-windows` artifacts with
+  `checksum_verified=true`;
+- control-plane trust-boundary values showing
+  `mutates_github_releases=false` and `credential_material_included=false`.
+
+`AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD=1` is only for local dry-run
+inspection. It makes the evidence gate emit a skipped/not-ready summary and
+keeps confirmed stable promotion blocked.
+
 ## Acceptance Checklist
 
 - AO2 post-stable release verification passes on Ubuntu, macOS, and Windows.

@@ -685,12 +685,37 @@ def test_stable_promotion_workflow_is_guarded_and_documented():
         "mutates_releases",
         "uesugitorachiyo/ao2",
         "uesugitorachiyo/ao2-control-plane",
+        "AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD",
+        "AO2_STABLE_PROMOTION_EVIDENCE_ROOT",
+        "Post Stable Release Verification",
+        "Post Release Verification",
+        "post-stable-release-smoke-Linux",
+        "post-stable-release-smoke-macOS",
+        "post-stable-release-smoke-Windows",
+        "ao2-control-plane-post-release-verification-ubuntu",
+        "ao2-control-plane-post-release-verification-macos",
+        "ao2-control-plane-post-release-verification-windows",
+        "gh run list --repo \"$repo\" --branch main --workflow \"$workflow\" --status success",
+        "gh run download \"$run_id\" --repo \"$repo\" --name \"$artifact\" --dir \"$dest\"",
+        "ao2.stable-promotion-evidence-gate.v1",
+        "stable_promotion_evidence_gate",
+        "post_release_evidence_ready",
+        "post_release_evidence_missing",
+        "checksum_verified",
+        "credential_material_included",
+        "signature_verified",
     ]:
         assert needle in text
 
     verification = read("docs/VERIFICATION.md")
     assert "npm run release:stable-promotion-workflow" in verification
     assert "ao2.stable-promotion-workflow.v1" in verification
+    assert "ao2.stable-promotion-evidence-gate.v1" in verification
+    assert "post-release verification evidence gate" in verification
+
+    public_release_index = read("docs/release/PUBLIC-RELEASE-VERIFICATION.md")
+    assert "Stable promotion evidence gate" in public_release_index
+    assert "AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD=1" in public_release_index
 
 
 def test_evidence_control_plane_smoke_script_is_token_safe_and_exposed_by_npm():
