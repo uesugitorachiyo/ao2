@@ -92,6 +92,7 @@ task_board_blockers = []
 task_board_drift_gate = "skipped"
 task_board = {}
 task_board_task_ids = set()
+task_board_task_id_matches = {}
 task_board_generation = None
 if task_board_path.is_file():
     task_board_drift_gate = "passed"
@@ -117,9 +118,19 @@ if task_board_path.is_file():
                 continue
             task_id = str(task.get("task_id") or task.get("id") or f"index-{index}")
             task_board_task_ids.add(task_id)
+            task_board_task_id_matches[task_id] = {
+                "task_id": task_id,
+                "stable_task_id": str(task.get("stable_task_id") or "").strip() or None,
+                "matched_by": "task_id",
+            }
             stable_task_id = str(task.get("stable_task_id") or "").strip()
             if stable_task_id:
                 task_board_task_ids.add(stable_task_id)
+                task_board_task_id_matches[stable_task_id] = {
+                    "task_id": task_id,
+                    "stable_task_id": stable_task_id,
+                    "matched_by": "stable_task_id",
+                }
             required_evidence = task.get("required_evidence") or task.get("evidence_requirements")
             stop_conditions = task.get("stop_conditions")
             if not isinstance(required_evidence, list) or not any(str(item).strip() for item in required_evidence):
@@ -130,6 +141,8 @@ if task_board_path.is_file():
         task_board_drift_gate = "failed"
 status_evidence_blockers = []
 status_evidence_gate = "skipped"
+status_evidence_matches = []
+status_evidence_match_counts = {"task_id": 0, "stable_task_id": 0}
 if status_evidence_path and status_evidence_path.is_file():
     status_evidence_gate = "passed"
     try:
@@ -154,6 +167,12 @@ if status_evidence_path and status_evidence_path.is_file():
         for task_id in sorted(str(key) for key in task_statuses):
             if task_board_task_ids and task_id not in task_board_task_ids:
                 status_evidence_blockers.append(f"status_evidence_unknown_task_id:{task_id}")
+            elif task_id in task_board_task_id_matches:
+                match = dict(task_board_task_id_matches[task_id])
+                match["evidence_task_id"] = task_id
+                status_evidence_matches.append(match)
+                matched_by = str(match["matched_by"])
+                status_evidence_match_counts[matched_by] = status_evidence_match_counts.get(matched_by, 0) + 1
     if status_evidence_blockers:
         status_evidence_gate = "failed"
         task_board_drift_gate = "failed"
@@ -176,6 +195,8 @@ payload = {
     "task_board_blockers": task_board_blockers,
     "status_evidence_gate": status_evidence_gate,
     "status_evidence_blockers": status_evidence_blockers,
+    "status_evidence_matches": status_evidence_matches,
+    "status_evidence_match_counts": status_evidence_match_counts,
     "coverage_gain": "measured_per_task",
     "manifest_only_recursion": any(item["manifest_only_recursion"] for item in quality_items),
     "consolidation_bias": any(item["consolidation_bias"] for item in quality_items),
