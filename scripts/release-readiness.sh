@@ -67,7 +67,14 @@ for name in [
 ci = read(".github/workflows/ci.yml")
 add("ci_pull_request_enabled", "passed" if re.search(r"(?m)^\s*pull_request:\s*$", ci) else "failed")
 add("ci_main_push_enabled", "passed" if re.search(r"(?m)^\s*branches:\s*\[\s*main\s*\]\s*$", ci) else "failed")
-add("ci_read_only_permissions", "passed" if "permissions:\n  contents: read" in ci else "failed")
+ci_read_only_permissions_ok = (
+    "permissions:" in ci
+    and "  actions: read" in ci
+    and "  contents: read" in ci
+    and "  contents: write" not in ci
+    and "  actions: write" not in ci
+)
+add("ci_read_only_permissions", "passed" if ci_read_only_permissions_ok else "failed")
 
 required_ci_os = ["ubuntu-latest", "macos-latest", "windows-latest"]
 
@@ -192,10 +199,32 @@ add(
     "runs release publication dry-run closure and uploads non-mutating release publication evidence",
 )
 
+dual_repo_release_publication_closure_index = workflow_job_block("dual-repo-release-publication-closure-index")
+dual_repo_release_publication_closure_index_ok = (
+    dual_repo_release_publication_closure_index is not None
+    and "needs: release-publication-closure-artifacts" in dual_repo_release_publication_closure_index
+    and "ao2-dual-repo-release-publication-closure-index" in dual_repo_release_publication_closure_index
+    and "ao2-control-plane-release-publication-closure" in dual_repo_release_publication_closure_index
+    and "target/dual-repo-release-publication-closure-index/ao2-release-publication-closure" in dual_repo_release_publication_closure_index
+    and "target/dual-repo-release-publication-closure-index/ao2-control-plane-release-publication-closure" in dual_repo_release_publication_closure_index
+    and "gh run list --repo uesugitorachiyo/ao2-control-plane --branch main --workflow CI" in dual_repo_release_publication_closure_index
+    and 'gh run download "$candidate_run_id" --repo uesugitorachiyo/ao2-control-plane' in dual_repo_release_publication_closure_index
+    and "ao2.dual-repo-release-publication-closure-index.v1" in dual_repo_release_publication_closure_index
+    and "ao2.release-publication-dry-run-closure.v1" in dual_repo_release_publication_closure_index
+    and "ao2.cp-release-publication-closure.v1" in dual_repo_release_publication_closure_index
+    and "checksum_verified" in dual_repo_release_publication_closure_index
+    and "mutates_github_releases" in dual_repo_release_publication_closure_index
+)
+add(
+    "ci_dual_repo_release_publication_closure_index_job",
+    "passed" if dual_repo_release_publication_closure_index_ok else "failed",
+    "downloads AO2 and ao2-control-plane release publication closure artifacts and uploads a combined closure index",
+)
+
 release_readiness_artifact_consumer = workflow_job_block("release-readiness-artifact-consumer")
 release_readiness_artifact_consumer_ok = (
     release_readiness_artifact_consumer is not None
-    and "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts]" in release_readiness_artifact_consumer
+    and "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index]" in release_readiness_artifact_consumer
     and "actions/download-artifact@v8.0.1" in release_readiness_artifact_consumer
     and "name: ao2-release-readiness" in release_readiness_artifact_consumer
     and "target/release-readiness-consumer/ao2-release-readiness" in release_readiness_artifact_consumer
@@ -207,11 +236,15 @@ release_readiness_artifact_consumer_ok = (
     and "target/release-readiness-consumer/ao2-dual-repo-installed-release-smoke" in release_readiness_artifact_consumer
     and "name: ao2-release-publication-closure" in release_readiness_artifact_consumer
     and "target/release-readiness-consumer/ao2-release-publication-closure" in release_readiness_artifact_consumer
+    and "name: ao2-dual-repo-release-publication-closure-index" in release_readiness_artifact_consumer
+    and "target/release-readiness-consumer/ao2-dual-repo-release-publication-closure-index" in release_readiness_artifact_consumer
     and "ao2.release-readiness-local.v1" in release_readiness_artifact_consumer
     and "ao2.release-train-control-plane-bridge.v1" in release_readiness_artifact_consumer
     and "ao2.ai-task-board-control-plane-bridge.v1" in release_readiness_artifact_consumer
     and "ao2.dual-repo-installed-release-smoke.v1" in release_readiness_artifact_consumer
     and "ao2.release-publication-dry-run-closure.v1" in release_readiness_artifact_consumer
+    and "ao2.dual-repo-release-publication-closure-index.v1" in release_readiness_artifact_consumer
+    and "ao2.cp-release-publication-closure.v1" in release_readiness_artifact_consumer
     and "publication_ready" in release_readiness_artifact_consumer
     and "stable_release_ready" in release_readiness_artifact_consumer
     and "ci_job_required_os:verify" in release_readiness_artifact_consumer
@@ -222,6 +255,7 @@ release_readiness_artifact_consumer_ok = (
     and "ci_ai_task_board_control_plane_bridge_artifact_job" in release_readiness_artifact_consumer
     and "ci_dual_repo_installed_release_smoke_artifact_job" in release_readiness_artifact_consumer
     and "ci_release_publication_closure_artifact_job" in release_readiness_artifact_consumer
+    and "ci_dual_repo_release_publication_closure_index_job" in release_readiness_artifact_consumer
 )
 add(
     "ci_release_readiness_artifact_consumer_job",
@@ -379,6 +413,26 @@ artifact_closure_index = {
             "required_checks": ["ci_release_publication_closure_artifact_job"],
         },
         {
+            "id": "dual_repo_release_publication_closure_index",
+            "artifact_name": "ao2-dual-repo-release-publication-closure-index",
+            "producer_job": "dual-repo-release-publication-closure-index",
+            "required_files": [
+                "summary.json",
+                "ao2-release-publication-closure/summary.json",
+                "ao2-control-plane-release-publication-closure/summary.json",
+            ],
+            "schema_versions": [
+                "ao2.dual-repo-release-publication-closure-index.v1",
+                "ao2.release-publication-dry-run-closure.v1",
+                "ao2.cp-release-publication-closure.v1",
+            ],
+            "required_checks": ["ci_dual_repo_release_publication_closure_index_job"],
+            "source_artifacts": [
+                "ao2-release-publication-closure",
+                "ao2-control-plane-release-publication-closure",
+            ],
+        },
+        {
             "id": "release_readiness_artifact_consumer",
             "artifact_name": "ao2-release-readiness-consumer",
             "producer_job": "release-readiness-artifact-consumer",
@@ -391,6 +445,7 @@ artifact_closure_index = {
                 "ao2-ai-task-board-control-plane-bridge",
                 "ao2-dual-repo-installed-release-smoke",
                 "ao2-release-publication-closure",
+                "ao2-dual-repo-release-publication-closure-index",
             ],
         },
     ],
