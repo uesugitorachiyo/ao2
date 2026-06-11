@@ -3564,6 +3564,94 @@ def test_pulse_next_task_quality_filter_accepts_complete_task_board(tmp_path):
     assert summary["task_board_blockers"] == []
 
 
+def test_control_plane_fixture_consumer_smoke_reads_ai_task_board_fixture(tmp_path):
+    out_root = tmp_path / "control-plane-fixture-consumer"
+    task_board = tmp_path / "task-board.json"
+    task_board.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.ai-task-board.v1",
+                "status": "ready",
+                "release_objective": "Expose Pulse work as an operator-readable task board.",
+                "tasks": [
+                    {
+                        "task_id": "complete-task",
+                        "title": "Complete task",
+                        "status": "proposed",
+                        "required_evidence": ["ao2.ai-task-board.v1"],
+                        "stop_conditions": ["Stop if readback requires credentials."],
+                    }
+                ],
+                "control_plane_readback": {
+                    "role": "read_only_observer",
+                    "requires_credentials": False,
+                    "can_mutate_ao2_artifacts": False,
+                    "can_mutate_release_metadata": False,
+                },
+                "trust_boundary": {"local_only": True, "stores_credentials": False},
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "control-plane:fixture-consumer-smoke"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_CP_FIXTURE_CONSUMER_SMOKE_ROOT": str(out_root),
+            "AO2_CP_FIXTURE_CONSUMER_TASK_BOARD": str(task_board),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["task_board_readback"] == {
+        "status": "passed",
+        "schema_version": "ao2.ai-task-board.v1",
+        "task_count": 1,
+        "control_plane_role": "read_only_observer",
+        "requires_credentials": False,
+        "mutates_releases": False,
+    }
+
+
+def test_control_plane_fixture_consumer_smoke_skips_missing_ai_task_board(tmp_path):
+    out_root = tmp_path / "control-plane-fixture-consumer"
+    task_board = tmp_path / "missing-task-board.json"
+
+    result = subprocess.run(
+        ["npm", "run", "control-plane:fixture-consumer-smoke"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_CP_FIXTURE_CONSUMER_SMOKE_ROOT": str(out_root),
+            "AO2_CP_FIXTURE_CONSUMER_TASK_BOARD": str(task_board),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "passed"
+    assert summary["task_board_readback"] == {
+        "status": "skipped",
+        "path": str(task_board.resolve()),
+    }
+    assert {
+        "name": "ai_task_board_readback",
+        "status": "passed",
+    } in summary["checks"]
+
+
 def test_artifact_index_consumer_canary_and_pulse_resume_contracts():
     package_json = json.loads(read("package.json"))
     verification = read("docs/VERIFICATION.md")

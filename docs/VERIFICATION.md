@@ -194,6 +194,13 @@ task lane, recommended task statuses, rationale, evidence requirements, stop
 conditions, and a read-only control-plane trust boundary so Pulse can expose
 operator-visible work without giving the control plane release mutation
 authority.
+`npm run pulse:next-task-quality-filter` reads that task-board artifact when it
+is present, fails closed if the release objective, required evidence, or stop
+conditions are missing, and records `task_board_drift_gate` plus
+`task_board_blockers` in its summary. `npm run control-plane:fixture-consumer-smoke`
+can also read the task board through `AO2_CP_FIXTURE_CONSUMER_TASK_BOARD`,
+recording read-only `task_board_readback` without credentials or release
+mutation authority.
 
 `npm run pulse:task-executor` reads an `ao2.pulse-task-manifest.v1` manifest
 from `.ao2-local/pulse/latest/pulse-task-manifest.json` by default and emits
