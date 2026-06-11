@@ -11,13 +11,14 @@ LOG_DIR="$OUT_ROOT/logs"
 CURSOR_FILE="${AO2_PULSE_GENERATE_NEXT_CURSOR:-$ROOT/.ao2-local/pulse/pulse-generate-next-cursor.json}"
 REGISTER="${AO2_PULSE_GENERATE_NEXT_REGISTER:-1}"
 LOCAL_ONLY="${AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY:-0}"
+STATUS_EVIDENCE="${AO2_PULSE_TASK_BOARD_STATUS_EVIDENCE:-}"
 DEFAULT_AUTO_ADVANCE_PROMPT="After each task batch, re-evaluate AO2 and ao2-control-plane at project level. Choose next tasks by highest long-term value, not similarity to last tasks. Prefer the Risky PR Run MVP product loop, local run record, static report/export, evaluator closure evidence, public reliability, Ubuntu/macOS/Windows correctness, CI confidence, evidence quality, security/safety boundaries, control-plane integration, release readiness, and developer/operator usability. Do not create new shell wrappers unless they directly unlock a product-slice or release-readiness bottleneck. Avoid narrow recursion or low-value daemon work unless it is the bottleneck. Generate next lengthy tasks with rationale, required evidence, and stop conditions, then register and continue through the AO2 event loop."
 AUTO_ADVANCE_PROMPT="${AO2_PULSE_AUTO_ADVANCE_PROMPT:-$DEFAULT_AUTO_ADVANCE_PROMPT}"
 
 rm -rf "$OUT_ROOT" "$PACKET_ROOT" "$TASK_BOARD_ROOT"
 mkdir -p "$OUT_ROOT" "$LOG_DIR" "$PACKET_ROOT" "$TASK_BOARD_ROOT" "$TASK_BOARD_HISTORY_ROOT" "$(dirname "$CURSOR_FILE")"
 
-python3 - "$ROOT" "$OUT_ROOT" "$PACKET_ROOT" "$TASK_BOARD_ROOT" "$TASK_BOARD_HISTORY_ROOT" "$SUMMARY" "$CURSOR_FILE" "$LOCAL_ONLY" <<'PY'
+python3 - "$ROOT" "$OUT_ROOT" "$PACKET_ROOT" "$TASK_BOARD_ROOT" "$TASK_BOARD_HISTORY_ROOT" "$SUMMARY" "$CURSOR_FILE" "$STATUS_EVIDENCE" "$LOCAL_ONLY" <<'PY'
 import html
 import hashlib
 import json
@@ -32,7 +33,9 @@ task_board_root = Path(sys.argv[4]).resolve()
 task_board_history_root = Path(sys.argv[5]).resolve()
 summary_path = Path(sys.argv[6]).resolve()
 cursor_file = Path(sys.argv[7]).resolve()
-local_only_while_pr_blocked = sys.argv[8] == "1"
+status_evidence_arg = sys.argv[8]
+status_evidence_path = Path(status_evidence_arg).resolve() if status_evidence_arg else None
+local_only_while_pr_blocked = sys.argv[9] == "1"
 generation_mode = "local_only_while_pr_blocked" if local_only_while_pr_blocked else "normal"
 
 def utc_now() -> str:
@@ -600,9 +603,47 @@ source_recommendation = {
     "generation_mode": generation_mode,
     "strategic_score": selected_score["strategic_score"],
 }
+
+allowed_task_statuses = {
+    "proposed",
+    "ready",
+    "in_progress",
+    "blocked",
+    "passed",
+    "skipped",
+}
+task_status_updates = {}
+status_transition_source = {
+    "schema_version": "ao2.ai-task-board-status-evidence.v1",
+    "status": "skipped",
+    "path": str(status_evidence_path) if status_evidence_path else None,
+    "updates_applied": 0,
+    "allowed_statuses": sorted(allowed_task_statuses),
+}
+if status_evidence_path and status_evidence_path.is_file():
+    try:
+        status_evidence = json.loads(status_evidence_path.read_text(encoding="utf-8"))
+        task_status_updates = {
+            str(task_id): value
+            for task_id, value in status_evidence.get("task_statuses", {}).items()
+            if isinstance(value, dict)
+        }
+        status_transition_source.update({
+            "status": "loaded",
+            "schema_version": status_evidence.get(
+                "schema_version",
+                "ao2.ai-task-board-status-evidence.v1",
+            ),
+        })
+    except json.JSONDecodeError as exc:
+        status_transition_source.update({
+            "status": "invalid_json",
+            "error": str(exc),
+        })
+
 task_board_tasks = []
 for task in tasks:
-    task_board_tasks.append({
+    item = {
         "task_id": task["id"],
         "title": task["title"],
         "kind": task["kind"],
@@ -614,7 +655,28 @@ for task in tasks:
         "stop_conditions": task.get("stop_conditions") or selection["stop_conditions"],
         "source_recommendation": source_recommendation,
         "release_train": release_train,
-    })
+    }
+    status_update = task_status_updates.get(item["task_id"])
+    if status_update:
+        requested_status = str(status_update.get("status", "")).strip().lower().replace("-", "_")
+        if requested_status in allowed_task_statuses:
+            item["status"] = requested_status
+            item["status_transition"] = {
+                "source": str(status_evidence_path),
+                "previous_status": "proposed",
+                "current_status": requested_status,
+                "reason": str(status_update.get("status_reason") or status_update.get("reason") or ""),
+                "evidence": [
+                    str(value)
+                    for value in status_update.get("evidence", [])
+                    if value is not None
+                ],
+            }
+            status_transition_source["updates_applied"] += 1
+    task_board_tasks.append(item)
+if status_transition_source["updates_applied"]:
+    status_transition_source["status"] = "applied"
+
 task_board = {
     "schema_version": "ao2.ai-task-board.v1",
     "generated_at_utc": utc_now(),
@@ -623,6 +685,7 @@ task_board = {
     "release_train": release_train,
     "release_objective": release_objective,
     "source_recommendation": source_recommendation,
+    "status_transition_source": status_transition_source,
     "tasks": task_board_tasks,
     "control_plane_readback": {
         "role": control_plane_role,
@@ -650,6 +713,39 @@ previous_task_ids = [
     for item in (previous_board or {}).get("tasks", [])
     if isinstance(item, dict) and item.get("task_id")
 ]
+previous_tasks_by_id = {
+    str(item.get("task_id")): item
+    for item in (previous_board or {}).get("tasks", [])
+    if isinstance(item, dict) and item.get("task_id")
+}
+current_tasks_by_id = {item["task_id"]: item for item in task_board_tasks}
+field_diff_names = [
+    "title",
+    "objective",
+    "status",
+    "rationale",
+    "required_evidence",
+    "stop_conditions",
+]
+changed_tasks = []
+for task_id in sorted(set(current_task_ids).intersection(previous_task_ids)):
+    previous_task = previous_tasks_by_id.get(task_id, {})
+    current_task = current_tasks_by_id.get(task_id, {})
+    field_changes = {}
+    for field_name in field_diff_names:
+        previous_value = previous_task.get(field_name)
+        current_value = current_task.get(field_name)
+        if previous_value != current_value:
+            field_changes[field_name] = {
+                "previous": previous_value,
+                "current": current_value,
+            }
+    if field_changes:
+        changed_tasks.append({
+            "task_id": task_id,
+            "changed_fields": sorted(field_changes),
+            "field_changes": field_changes,
+        })
 task_board_diff = {
     "schema_version": "ao2.ai-task-board-diff.v1",
     "generated_at_utc": utc_now(),
@@ -662,6 +758,9 @@ task_board_diff = {
     "added_task_ids": sorted(set(current_task_ids).difference(previous_task_ids)),
     "removed_task_ids": sorted(set(previous_task_ids).difference(current_task_ids)),
     "unchanged_task_ids": sorted(set(current_task_ids).intersection(previous_task_ids)),
+    "changed_task_ids": [item["task_id"] for item in changed_tasks],
+    "changed_tasks": changed_tasks,
+    "field_diff_names": field_diff_names,
     "selection_changed": (previous_board or {}).get("source_recommendation", {}).get("selection") != source_recommendation["selection"] if previous_board else None,
     "release_objective_changed": (previous_board or {}).get("release_objective") != release_objective if previous_board else None,
     "trust_boundary": {"local_only": True, "stores_credentials": False},
@@ -682,7 +781,7 @@ task_board["diff"] = task_board_diff
 status_lanes = {}
 kind_lanes = {"product_code": [], "evidence_gate": []}
 for item in task_board_tasks:
-    status_lanes.setdefault(str(item["status"]).title(), []).append(item)
+    status_lanes.setdefault(str(item["status"]).replace("_", " ").title(), []).append(item)
     kind_lanes.setdefault(item["kind"], []).append(item)
 
 def task_md(item: dict) -> str:
@@ -691,6 +790,7 @@ def task_md(item: dict) -> str:
     return (
         f"- [ ] `{item['task_id']}` **{item['title']}**\n"
         f"  - Kind: `{item['kind']}`\n"
+        f"  - Status: `{item['status']}`\n"
         f"  - Required Evidence: {evidence}\n"
         f"  - Stop Conditions: {stops}\n"
     )
@@ -716,10 +816,19 @@ task_board_md = (
 def task_card(item: dict) -> str:
     evidence = "".join(f"<li><code>{html.escape(str(value))}</code></li>" for value in item["required_evidence"])
     stops = "".join(f"<li>{html.escape(str(value))}</li>" for value in item["stop_conditions"])
+    status_class = "status-" + html.escape(str(item["status"]).lower().replace(" ", "_"))
+    transition = item.get("status_transition") or {}
+    transition_reason = str(transition.get("reason") or "")
+    transition_html = (
+        f"<p class=\"status-reason\">{html.escape(transition_reason)}</p>"
+        if transition_reason
+        else ""
+    )
     return (
-        "<article class=\"task-card\">"
+        f"<article class=\"task-card {status_class}\">"
         f"<h3>{html.escape(item['title'])}</h3>"
-        f"<p><code>{html.escape(item['task_id'])}</code> - <code>{html.escape(item['kind'])}</code></p>"
+        f"<p><code>{html.escape(item['task_id'])}</code> - <code>{html.escape(item['kind'])}</code> - <span class=\"status-pill {status_class}\">{html.escape(str(item['status']).replace('_', ' ').title())}</span></p>"
+        + transition_html +
         f"<p>{html.escape(item['objective'])}</p>"
         "<h4>Required Evidence</h4><ul>" + evidence + "</ul>"
         "<h4>Stop Conditions</h4><ul>" + stops + "</ul>"
