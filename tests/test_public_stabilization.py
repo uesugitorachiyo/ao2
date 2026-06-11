@@ -889,6 +889,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     for needle in [
         "release-publication-closure-artifacts:",
         "name: Release publication closure artifacts",
+        "uses: dtolnay/rust-toolchain@stable",
         "release-readiness-artifact-consumer:",
         "name: Release readiness artifact consumer",
         "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts]",
@@ -905,6 +906,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "path: target/release-readiness-consumer/ao2-release-publication-closure",
         "AO2_RELEASE_PUBLICATION_DRY_RUN_CLOSURE_ROOT=target/release-publication-closure-ci",
         "npm run release:publication-dry-run-closure",
+        "if: always()",
         "schema_version') == 'ao2.release-readiness-local.v1'",
         "bridge_summary.get('schema_version') == 'ao2.release-train-control-plane-bridge.v1'",
         "task_board_bridge_summary.get('schema_version') == 'ao2.ai-task-board-control-plane-bridge.v1'",

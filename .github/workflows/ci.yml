@@ -690,6 +690,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.3
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
       - name: Setup Node
         uses: actions/setup-node@v6.4.0
         with:
@@ -725,6 +727,7 @@ jobs:
           test -f target/release-publication-closure-ci/release-sync-provenance-assets/summary.json
           test -f target/release-publication-closure-ci/stable-release-readiness/summary.json
       - name: Upload release publication closure evidence
+        if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
           name: ao2-release-publication-closure

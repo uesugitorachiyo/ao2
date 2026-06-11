@@ -171,8 +171,10 @@ release_publication_closure_artifacts_ok = (
     release_publication_closure_artifacts is not None
     and "ao2-release-publication-closure" in release_publication_closure_artifacts
     and "target/release-publication-closure-ci" in release_publication_closure_artifacts
+    and "dtolnay/rust-toolchain@stable" in release_publication_closure_artifacts
     and "AO2_RELEASE_PUBLICATION_DRY_RUN_CLOSURE_ROOT=target/release-publication-closure-ci" in release_publication_closure_artifacts
     and "npm run release:publication-dry-run-closure" in release_publication_closure_artifacts
+    and "if: always()" in release_publication_closure_artifacts
     and "ao2.release-publication-dry-run-closure.v1" in release_publication_closure_artifacts
     and "publication_ready" in release_publication_closure_artifacts
     and "stable_release_ready" in release_publication_closure_artifacts
