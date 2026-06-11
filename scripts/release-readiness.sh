@@ -149,10 +149,27 @@ add(
     "runs AI task board control-plane bridge and uploads read-only bridge evidence",
 )
 
+dual_repo_installed_smoke_artifacts = workflow_job_block("dual-repo-installed-release-smoke-artifacts")
+dual_repo_installed_smoke_artifacts_ok = (
+    dual_repo_installed_smoke_artifacts is not None
+    and "ao2-dual-repo-installed-release-smoke" in dual_repo_installed_smoke_artifacts
+    and "target/dual-repo-installed-release-smoke-ci" in dual_repo_installed_smoke_artifacts
+    and "ao2.dual-repo-installed-release-smoke.v1" in dual_repo_installed_smoke_artifacts
+    and "ao2.release-manifest.v1" in dual_repo_installed_smoke_artifacts
+    and "ao2-control-plane.release-manifest.v1" in dual_repo_installed_smoke_artifacts
+    and "ao2.cp-ai-task-board-readback.v1" in dual_repo_installed_smoke_artifacts
+    and "ao2.cp-ai-task-board-dashboard.v1" in dual_repo_installed_smoke_artifacts
+)
+add(
+    "ci_dual_repo_installed_release_smoke_artifact_job",
+    "passed" if dual_repo_installed_smoke_artifacts_ok else "failed",
+    "runs AO2 plus ao2-control-plane installed release archive smoke and uploads token-free evidence",
+)
+
 release_readiness_artifact_consumer = workflow_job_block("release-readiness-artifact-consumer")
 release_readiness_artifact_consumer_ok = (
     release_readiness_artifact_consumer is not None
-    and "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts]" in release_readiness_artifact_consumer
+    and "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, dual-repo-installed-release-smoke-artifacts]" in release_readiness_artifact_consumer
     and "actions/download-artifact@v8.0.1" in release_readiness_artifact_consumer
     and "name: ao2-release-readiness" in release_readiness_artifact_consumer
     and "target/release-readiness-consumer/ao2-release-readiness" in release_readiness_artifact_consumer
@@ -160,15 +177,19 @@ release_readiness_artifact_consumer_ok = (
     and "target/release-readiness-consumer/ao2-release-train-control-plane-bridge" in release_readiness_artifact_consumer
     and "name: ao2-ai-task-board-control-plane-bridge" in release_readiness_artifact_consumer
     and "target/release-readiness-consumer/ao2-ai-task-board-control-plane-bridge" in release_readiness_artifact_consumer
+    and "name: ao2-dual-repo-installed-release-smoke" in release_readiness_artifact_consumer
+    and "target/release-readiness-consumer/ao2-dual-repo-installed-release-smoke" in release_readiness_artifact_consumer
     and "ao2.release-readiness-local.v1" in release_readiness_artifact_consumer
     and "ao2.release-train-control-plane-bridge.v1" in release_readiness_artifact_consumer
     and "ao2.ai-task-board-control-plane-bridge.v1" in release_readiness_artifact_consumer
+    and "ao2.dual-repo-installed-release-smoke.v1" in release_readiness_artifact_consumer
     and "ci_job_required_os:verify" in release_readiness_artifact_consumer
     and "ci_job_required_os:release-archive-hosted-smoke" in release_readiness_artifact_consumer
     and "ci_job_required_os:workbench-operator-packet-control-plane-smoke" in release_readiness_artifact_consumer
     and "ci_release_readiness_static_artifact_job" in release_readiness_artifact_consumer
     and "ci_release_train_control_plane_bridge_artifact_job" in release_readiness_artifact_consumer
     and "ci_ai_task_board_control_plane_bridge_artifact_job" in release_readiness_artifact_consumer
+    and "ci_dual_repo_installed_release_smoke_artifact_job" in release_readiness_artifact_consumer
 )
 add(
     "ci_release_readiness_artifact_consumer_job",
@@ -287,6 +308,27 @@ artifact_closure_index = {
             "required_checks": ["ci_ai_task_board_control_plane_bridge_artifact_job"],
         },
         {
+            "id": "dual_repo_installed_release_smoke",
+            "artifact_name": "ao2-dual-repo-installed-release-smoke",
+            "producer_job": "dual-repo-installed-release-smoke-artifacts",
+            "required_files": [
+                "latest/summary.json",
+                "latest/smoke/ao2-version.json",
+                "latest/smoke/task-board.json",
+                "latest/smoke/ingest-receipt.json",
+                "latest/smoke/task-board-readback.json",
+                "latest/smoke/task-board-dashboard.json",
+            ],
+            "schema_versions": [
+                "ao2.dual-repo-installed-release-smoke.v1",
+                "ao2.release-manifest.v1",
+                "ao2-control-plane.release-manifest.v1",
+                "ao2.cp-ai-task-board-readback.v1",
+                "ao2.cp-ai-task-board-dashboard.v1",
+            ],
+            "required_checks": ["ci_dual_repo_installed_release_smoke_artifact_job"],
+        },
+        {
             "id": "release_readiness_artifact_consumer",
             "artifact_name": "ao2-release-readiness-consumer",
             "producer_job": "release-readiness-artifact-consumer",
@@ -297,6 +339,7 @@ artifact_closure_index = {
                 "ao2-release-readiness",
                 "ao2-release-train-control-plane-bridge",
                 "ao2-ai-task-board-control-plane-bridge",
+                "ao2-dual-repo-installed-release-smoke",
             ],
         },
     ],
