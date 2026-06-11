@@ -499,9 +499,13 @@ def test_release_asset_completeness_gate_covers_ao2_and_control_plane():
         "uesugitorachiyo/ao2-control-plane",
         "v0.4.80",
         "v0.1.12",
+        "ao2-0.4.80-linux-aarch64.tar.gz",
         "ao2-0.4.80-linux-x86_64.tar.gz",
         "ao2-0.4.80-macos-aarch64.tar.gz",
         "ao2-0.4.80-windows-x86_64.tar.gz",
+        "ao2-release-provenance.json",
+        "ao2-release-provenance.json.sig",
+        "ao2-release-signing-public.pem",
         "ao2-release-readiness-summary.json",
         "ao2-control-plane-0.1.12-macos-aarch64.tar.gz",
         "ao2-control-plane-release-train-bridge-windows-summary.json",
@@ -593,6 +597,37 @@ def test_release_sync_provenance_assets_is_guarded_and_documented():
     verification = read("docs/VERIFICATION.md")
     assert "npm run release:sync-provenance-assets" in verification
     assert "ao2.release-sync-provenance-assets.v1" in verification
+
+
+def test_stable_promotion_workflow_is_guarded_and_documented():
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["release:stable-promotion-workflow"]
+        == "node scripts/run-sh-script.js scripts/release-stable-promotion-workflow.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "release-stable-promotion-workflow.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+
+    for needle in [
+        "ao2.stable-promotion-workflow.v1",
+        "release:stable-readiness",
+        "AO2_STABLE_PROMOTION_CONFIRM",
+        "promote-stable-v0.4.80-v0.1.12",
+        "gh release edit",
+        "--prerelease=false",
+        "stable_channel_only",
+        "mutates_releases",
+        "uesugitorachiyo/ao2",
+        "uesugitorachiyo/ao2-control-plane",
+    ]:
+        assert needle in text
+
+    verification = read("docs/VERIFICATION.md")
+    assert "npm run release:stable-promotion-workflow" in verification
+    assert "ao2.stable-promotion-workflow.v1" in verification
 
 
 def test_evidence_control_plane_smoke_script_is_token_safe_and_exposed_by_npm():

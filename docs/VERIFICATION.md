@@ -624,6 +624,11 @@ Result:
   report, records prerelease-only and signed-provenance blockers, and emits
   `ao2.stable-release-readiness.v1` plus `dashboard.html` for stable promotion
   review
+- `npm run release:stable-promotion-workflow`: reruns stable readiness, emits
+  `ao2.stable-promotion-workflow.v1`, and stays in dry-run mode unless
+  `AO2_STABLE_PROMOTION_CONFIRM=promote-stable-<ao2-tag>-<control-plane-tag>`
+  is set before flipping the AO2 and ao2-control-plane GitHub Releases from
+  prerelease to stable
 - `npm run release:sync-provenance-assets`: queries the configured AO2 GitHub
   Release and local `dist-provenance` sidecars, emits
   `ao2.release-sync-provenance-assets.v1`, and stays in dry-run mode unless
@@ -633,10 +638,10 @@ Result:
   preflights, publishes to ao2-control-plane when
   `AO2_PHASE1_CONTROL_PLANE_URL` is set, and may capture a dashboard snapshot
   with `AO2_PHASE1_DASHBOARD_SNAPSHOT=1`
-- public alpha archives at v0.4.80 (macOS aarch64, Linux x86_64, Windows
-  x86_64) are SHA256 verified from the published `SHA256SUMS`; signed
-  provenance remains a separate full-release sidecar contract when the release
-  publishes `ao2-release-signing-public.pem` and signature files
+- public alpha archives at v0.4.80 (macOS aarch64, Linux aarch64, Linux
+  x86_64, Windows x86_64) are SHA256 verified from the published `SHA256SUMS`;
+  signed provenance sidecars are required before stable-promotion readiness can
+  pass
 - `npm run release:cross-os-attestation` emits
   `ao2.cross-os-release-attestation.v1` at
   `target/cross-os-release-artifact-attestation/latest/summary.json`; by
