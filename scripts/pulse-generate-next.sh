@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_ROOT="${AO2_PULSE_GENERATE_NEXT_ROOT:-$ROOT/target/pulse-generate-next/latest}"
 PACKET_ROOT="${AO2_PULSE_GENERATE_NEXT_PACKET_ROOT:-$ROOT/target/pulse-next-recommended-tasks}"
+TASK_BOARD_ROOT="${AO2_PULSE_TASK_BOARD_ROOT:-$ROOT/target/pulse-task-board/latest}"
 SUMMARY="$OUT_ROOT/summary.json"
 LOG_DIR="$OUT_ROOT/logs"
 CURSOR_FILE="${AO2_PULSE_GENERATE_NEXT_CURSOR:-$ROOT/.ao2-local/pulse/pulse-generate-next-cursor.json}"
@@ -12,10 +13,10 @@ LOCAL_ONLY="${AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY:-0}"
 DEFAULT_AUTO_ADVANCE_PROMPT="After each task batch, re-evaluate AO2 and ao2-control-plane at project level. Choose next tasks by highest long-term value, not similarity to last tasks. Prefer the Risky PR Run MVP product loop, local run record, static report/export, evaluator closure evidence, public reliability, Ubuntu/macOS/Windows correctness, CI confidence, evidence quality, security/safety boundaries, control-plane integration, release readiness, and developer/operator usability. Do not create new shell wrappers unless they directly unlock a product-slice or release-readiness bottleneck. Avoid narrow recursion or low-value daemon work unless it is the bottleneck. Generate next lengthy tasks with rationale, required evidence, and stop conditions, then register and continue through the AO2 event loop."
 AUTO_ADVANCE_PROMPT="${AO2_PULSE_AUTO_ADVANCE_PROMPT:-$DEFAULT_AUTO_ADVANCE_PROMPT}"
 
-rm -rf "$OUT_ROOT" "$PACKET_ROOT"
-mkdir -p "$OUT_ROOT" "$LOG_DIR" "$PACKET_ROOT" "$(dirname "$CURSOR_FILE")"
+rm -rf "$OUT_ROOT" "$PACKET_ROOT" "$TASK_BOARD_ROOT"
+mkdir -p "$OUT_ROOT" "$LOG_DIR" "$PACKET_ROOT" "$TASK_BOARD_ROOT" "$(dirname "$CURSOR_FILE")"
 
-python3 - "$ROOT" "$OUT_ROOT" "$PACKET_ROOT" "$SUMMARY" "$CURSOR_FILE" "$LOCAL_ONLY" <<'PY'
+python3 - "$ROOT" "$OUT_ROOT" "$PACKET_ROOT" "$TASK_BOARD_ROOT" "$SUMMARY" "$CURSOR_FILE" "$LOCAL_ONLY" <<'PY'
 import hashlib
 import json
 import sys
@@ -25,9 +26,10 @@ from pathlib import Path
 root = Path(sys.argv[1]).resolve()
 out_root = Path(sys.argv[2]).resolve()
 packet_root = Path(sys.argv[3]).resolve()
-summary_path = Path(sys.argv[4]).resolve()
-cursor_file = Path(sys.argv[5]).resolve()
-local_only_while_pr_blocked = sys.argv[6] == "1"
+task_board_root = Path(sys.argv[4]).resolve()
+summary_path = Path(sys.argv[5]).resolve()
+cursor_file = Path(sys.argv[6]).resolve()
+local_only_while_pr_blocked = sys.argv[7] == "1"
 generation_mode = "local_only_while_pr_blocked" if local_only_while_pr_blocked else "normal"
 
 def utc_now() -> str:
@@ -578,12 +580,80 @@ task_manifest = {
         "side_effects": "local_process_execution_and_packet_materialization",
     },
 }
+release_train = {
+    "version": "v0.4.81",
+    "theme": "AI task board control surface",
+}
+release_objective = (
+    "Expose Pulse's next recommended work as an operator-readable AI task board "
+    "with rationale, evidence requirements, stop conditions, and read-only "
+    "control-plane semantics."
+)
+control_plane_role = "read_only_observer"
+source_recommendation = {
+    "selection": selection["id"],
+    "title": selection["title"],
+    "generation": generation,
+    "generation_mode": generation_mode,
+    "strategic_score": selected_score["strategic_score"],
+}
+task_board_tasks = []
+for task in tasks:
+    task_board_tasks.append({
+        "task_id": task["id"],
+        "title": task["title"],
+        "kind": task["kind"],
+        "status": "proposed",
+        "objective": task.get("objective") or task.get("why") or selection["rationale"],
+        "confidence": "medium",
+        "rationale": task.get("rationale") or selection["rationale"],
+        "required_evidence": task.get("required_evidence") or selection["required_evidence"],
+        "stop_conditions": task.get("stop_conditions") or selection["stop_conditions"],
+        "source_recommendation": source_recommendation,
+        "release_train": release_train,
+    })
+task_board = {
+    "schema_version": "ao2.ai-task-board.v1",
+    "generated_at_utc": utc_now(),
+    "status": "ready",
+    "artifact_root": str(task_board_root),
+    "release_train": release_train,
+    "release_objective": release_objective,
+    "source_recommendation": source_recommendation,
+    "tasks": task_board_tasks,
+    "control_plane_readback": {
+        "role": control_plane_role,
+        "requires_credentials": False,
+        "can_mutate_ao2_artifacts": False,
+        "can_mutate_release_metadata": False,
+    },
+    "trust_boundary": {
+        "local_only": True,
+        "stores_credentials": False,
+        "side_effects": "local_artifact_materialization_only",
+    },
+}
+task_board_md = (
+    f"# AO2 AI Task Board {generation}\n\n"
+    f"Release train: `{release_train['version']}` - {release_train['theme']}\n\n"
+    f"{release_objective}\n\n"
+    f"Source recommendation: `{source_recommendation['selection']}`\n\n"
+    "Control plane role: read-only observer; no credential requirement; no release mutation authority.\n\n"
+    + "".join(
+        f"- [ ] `{item['task_id']}` {item['title']} "
+        f"({item['kind']}; evidence: {', '.join(item['required_evidence'])})\n"
+        for item in task_board_tasks
+    )
+)
 
 (packet_root / "packet.md").write_text(packet_md, encoding="utf-8")
 (packet_root / "board.md").write_text(board_md, encoding="utf-8")
 (packet_root / "executor-evidence.json").write_text(json.dumps(executor, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 (packet_root / "pulse-eval-loop.json").write_text(json.dumps(eval_loop, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 (packet_root / "pulse-task-manifest.json").write_text(json.dumps(task_manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+(task_board_root / "summary.json").write_text(json.dumps(task_board, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+(task_board_root / "board.md").write_text(task_board_md, encoding="utf-8")
+(packet_root / "task-board.json").write_text(json.dumps(task_board, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 files = []
 for path in sorted(packet_root.iterdir()):
@@ -599,6 +669,7 @@ packet_summary = {
     "selection": selection["id"],
     "generation_mode": generation_mode,
     "local_only_while_pr_blocked": local_only_while_pr_blocked,
+    "task_board_summary": str(task_board_root / "summary.json"),
     "project_level_reassessment": project_level_reassessment,
     "strategic_score": selected_score,
     "strategic_scores": strategic_scores,
@@ -607,6 +678,7 @@ packet_summary = {
     "stop_conditions": selection["stop_conditions"],
     "task_count": len(tasks),
     "tasks": tasks,
+    "task_board": str(packet_root / "task-board.json"),
     "files": files,
     "trust_boundary": {"local_only": True, "stores_credentials": False},
 }
@@ -623,6 +695,7 @@ summary = {
     "selection": selection["id"],
     "generation_mode": generation_mode,
     "local_only_while_pr_blocked": local_only_while_pr_blocked,
+    "task_board_summary": str(task_board_root / "summary.json"),
     "project_level_reassessment": project_level_reassessment,
     "strategic_score": selected_score,
     "strategic_scores": strategic_scores,
@@ -630,6 +703,7 @@ summary = {
     "required_evidence": selection["required_evidence"],
     "stop_conditions": selection["stop_conditions"],
     "recommended_tasks": tasks,
+    "task_board": str(packet_root / "task-board.json"),
     "files": files,
     "trust_boundary": {"local_only": True, "stores_credentials": False},
 }

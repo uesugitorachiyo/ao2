@@ -162,13 +162,19 @@ no tracked or untracked source changes, it exits successfully with
 
 `npm run pulse:generate-next` emits `ao2.pulse-generate-next.v1` at
 `target/pulse-generate-next/latest/summary.json` and writes a fresh
-`packet.md`, `board.md`, `executor-evidence.json`, `pulse-eval-loop.json`, and
+`packet.md`, `board.md`, `executor-evidence.json`,
+`pulse-eval-loop.json`, and
 `pulse-task-manifest.json` / `ao2.pulse-next-lengthy-tasks.v1` packet under
 `target/pulse-next-recommended-tasks`, which is also the default
-`pulse:local-mirror` source used by release-readiness gates. For the
-Risky PR product MVP selection, the manifest includes a product-code
-implementation packet for the report/evaluator closure UX before the supporting
-evidence gates. Generated product-code manifests include
+`pulse:local-mirror` source used by release-readiness gates. It also emits an
+operator-readable `ao2.ai-task-board.v1` control-surface artifact at
+`target/pulse-task-board/latest/summary.json`, plus a companion board markdown
+file. The board preserves the current release objective, source recommendation,
+rationale, required evidence, stop conditions, and read-only control-plane
+readback semantics without granting mutation authority. For the Risky PR
+product MVP and AI task-board selections, the manifest includes a product-code
+implementation packet before the supporting evidence gates. Generated
+product-code manifests include
 `product_code_execution.enabled=true` with `mode=dry_run` so the next executor
 pass validates code-agent runner packet compatibility without granting write
 execution. Generated packets use strategic scoring instead of blind
@@ -181,6 +187,13 @@ conditions, and per-candidate `strategic_score` metadata. `npm run
 pulse:daemon:start` runs the forever loop through launchctl or a detached tmux
 fallback; `npm run pulse:daemon:status` emits `ao2.pulse-daemon.v1` at
 `target/pulse-daemon/latest/summary.json`.
+
+The generated `task-board.json` uses `ao2.ai-task-board.v1` for the v0.4.81 AI
+task board/control-surface train. It records the release objective, selected
+task lane, recommended task statuses, rationale, evidence requirements, stop
+conditions, and a read-only control-plane trust boundary so Pulse can expose
+operator-visible work without giving the control plane release mutation
+authority.
 
 `npm run pulse:task-executor` reads an `ao2.pulse-task-manifest.v1` manifest
 from `.ao2-local/pulse/latest/pulse-task-manifest.json` by default and emits
