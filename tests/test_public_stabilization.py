@@ -890,6 +890,10 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "release-publication-closure-artifacts:",
         "name: Release publication closure artifacts",
         "uses: dtolnay/rust-toolchain@stable",
+        "Download published provenance sidecars",
+        "gh release download",
+        "AO2_RELEASE_PROVENANCE_DIR=target/release-publication-provenance",
+        "AO2_RELEASE_ASSET_PUBLICATION_READINESS_CI_SAFE=1",
         "release-readiness-artifact-consumer:",
         "name: Release readiness artifact consumer",
         "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts]",
@@ -923,6 +927,23 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_release_publication_closure_artifact_job",
     ]:
         assert needle in ci
+
+    asset_publication = read("scripts/release-asset-publication-readiness.sh")
+    public_ship_dry_run = read("scripts/public-ship-dry-run.sh")
+    public_ship_rehearsal = read("scripts/public-ship-rehearsal.sh")
+    release_train = read("scripts/public-release-train-drill.sh")
+    for text, needle in [
+        (asset_publication, "AO2_RELEASE_ASSET_PUBLICATION_READINESS_CI_SAFE"),
+        (asset_publication, "AO2_PUBLIC_SHIP_DRY_RUN_CI_SAFE"),
+        (public_ship_dry_run, "AO2_PUBLIC_SHIP_DRY_RUN_CI_SAFE"),
+        (public_ship_dry_run, "AO2_PUBLIC_SHIP_REHEARSAL_CI_SAFE"),
+        (public_ship_rehearsal, "AO2_PUBLIC_SHIP_REHEARSAL_CI_SAFE"),
+        (public_ship_rehearsal, "AO2_PUBLIC_RELEASE_TRAIN_CI_SAFE"),
+        (release_train, "AO2_PUBLIC_RELEASE_TRAIN_CI_SAFE"),
+        (release_train, "release_evidence_closure skipped in ci-safe mode"),
+        (release_train, "post_merge_canary skipped in ci-safe mode"),
+    ]:
+        assert needle in text
 
     verification = read("docs/VERIFICATION.md")
     for needle in [

@@ -6,6 +6,7 @@ OUT_ROOT="${AO2_PUBLIC_SHIP_DRY_RUN_ROOT:-$ROOT/target/public-ship-dry-run/lates
 SUMMARY="$OUT_ROOT/summary.json"
 LOG_DIR="$OUT_ROOT/logs"
 FIXTURE_DIR="${AO2_PUBLIC_SHIP_DRY_RUN_FIXTURE_DIR:-}"
+CI_SAFE="${AO2_PUBLIC_SHIP_DRY_RUN_CI_SAFE:-0}"
 
 rm -rf "$OUT_ROOT"
 mkdir -p "$LOG_DIR"
@@ -26,13 +27,14 @@ run_step public_ship_rehearsal \
     AO2_PUBLIC_SHIP_REHEARSAL_ROOT="$OUT_ROOT/public-ship-rehearsal" \
     AO2_PUBLIC_SHIP_REHEARSAL_FIXTURE_DIR="$FIXTURE_DIR" \
     AO2_PUBLIC_RELEASE_TRAIN_FIXTURE_DIR="$FIXTURE_DIR" \
+    AO2_PUBLIC_SHIP_REHEARSAL_CI_SAFE="$CI_SAFE" \
     npm run release:public-ship-rehearsal
 
 run_step install_update_rollback_contract \
   env AO2_REAL_RELEASE_INSTALL_UPDATE_ROOT="$OUT_ROOT/real-release-install-update-drill" \
     npm run release:real-install-update-drill
 
-python3 - "$OUT_ROOT" "$SUMMARY" "$FIXTURE_DIR" <<'PY'
+python3 - "$OUT_ROOT" "$SUMMARY" "$FIXTURE_DIR" "$CI_SAFE" <<'PY'
 import json
 import sys
 from datetime import datetime, timezone
@@ -41,6 +43,7 @@ from pathlib import Path
 out_root = Path(sys.argv[1]).resolve()
 summary_path = Path(sys.argv[2]).resolve()
 fixture_dir = sys.argv[3] or None
+ci_safe = sys.argv[4] == "1"
 log_dir = out_root / "logs"
 checks = []
 for name in ["public_ship_rehearsal", "install_update_rollback_contract"]:
@@ -63,6 +66,7 @@ payload = {
     "status": status,
     "artifact_root": str(out_root),
     "release_artifact_fixture": fixture_dir,
+    "ci_safe_mode": ci_safe,
     "checks": checks,
     "rollback_manifest": str(rollback_manifest),
     "component_summaries": {

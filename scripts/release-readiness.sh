@@ -172,6 +172,10 @@ release_publication_closure_artifacts_ok = (
     and "ao2-release-publication-closure" in release_publication_closure_artifacts
     and "target/release-publication-closure-ci" in release_publication_closure_artifacts
     and "dtolnay/rust-toolchain@stable" in release_publication_closure_artifacts
+    and "Download published provenance sidecars" in release_publication_closure_artifacts
+    and "gh release download" in release_publication_closure_artifacts
+    and "AO2_RELEASE_PROVENANCE_DIR=target/release-publication-provenance" in release_publication_closure_artifacts
+    and "AO2_RELEASE_ASSET_PUBLICATION_READINESS_CI_SAFE=1" in release_publication_closure_artifacts
     and "AO2_RELEASE_PUBLICATION_DRY_RUN_CLOSURE_ROOT=target/release-publication-closure-ci" in release_publication_closure_artifacts
     and "npm run release:publication-dry-run-closure" in release_publication_closure_artifacts
     and "if: always()" in release_publication_closure_artifacts

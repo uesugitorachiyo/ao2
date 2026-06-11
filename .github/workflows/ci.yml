@@ -696,11 +696,26 @@ jobs:
         uses: actions/setup-node@v6.4.0
         with:
           node-version: "22"
+      - name: Download published provenance sidecars
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p target/release-publication-provenance
+          gh release download "v$(scripts/current-version.sh)" \
+            --repo uesugitorachiyo/ao2 \
+            --pattern ao2-release-provenance.json \
+            --pattern ao2-release-provenance.json.sig \
+            --pattern ao2-release-signing-public.pem \
+            --dir target/release-publication-provenance \
+            --clobber
       - name: Run release publication dry-run closure
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          AO2_RELEASE_ASSET_PUBLICATION_READINESS_CI_SAFE=1 \
+          AO2_RELEASE_PROVENANCE_DIR=target/release-publication-provenance \
           AO2_RELEASE_PUBLICATION_DRY_RUN_CLOSURE_ROOT=target/release-publication-closure-ci \
             npm run release:publication-dry-run-closure
       - name: Verify release publication closure evidence
