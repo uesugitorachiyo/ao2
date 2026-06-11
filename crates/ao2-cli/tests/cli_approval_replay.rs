@@ -34438,6 +34438,25 @@ fn cli_workbench_queue_detail_reports_provider_failure_diagnostics() {
 }
 
 #[test]
+fn cli_workbench_queue_wait_timeout_message_reports_last_observed_job() {
+    let job = serde_json::json!({
+        "run_id": "queue-exec",
+        "status": "failed",
+        "error": "queued ao2 run failed: provider prompt missing",
+        "exit_code": 1,
+        "stderr_log": "/tmp/queue-exec.stderr.log"
+    });
+
+    let message = queue_wait_timeout_message("queue-exec", "accepted", Some(&job));
+
+    assert!(message.contains("job queue-exec did not reach status accepted"));
+    assert!(message.contains("last_status=failed"));
+    assert!(message.contains("exit_code=1"));
+    assert!(message.contains("error=queued ao2 run failed: provider prompt missing"));
+    assert!(message.contains("stderr_log=/tmp/queue-exec.stderr.log"));
+}
+
+#[test]
 fn cli_workbench_support_bundle_summarizes_queue_failure_diagnostics() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
@@ -48180,6 +48199,7 @@ fn start_queue_job(port: u16, run_id: &str, prompt_path: &Path) -> serde_json::V
 }
 
 fn wait_for_queue_job_status(port: u16, run_id: &str, expected_status: &str) -> serde_json::Value {
+    let mut last_job = None;
     for _ in 0..300 {
         let queue = get_queue(port);
         let job = queue["jobs"]
@@ -48192,10 +48212,52 @@ fn wait_for_queue_job_status(port: u16, run_id: &str, expected_status: &str) -> 
             if job["status"] == expected_status {
                 return job;
             }
+            last_job = Some(job);
         }
         std::thread::sleep(std::time::Duration::from_millis(100));
     }
-    panic!("job {run_id} did not reach status {expected_status}");
+    panic!(
+        "{}",
+        queue_wait_timeout_message(run_id, expected_status, last_job.as_ref())
+    );
+}
+
+fn queue_wait_timeout_message(
+    run_id: &str,
+    expected_status: &str,
+    last_job: Option<&serde_json::Value>,
+) -> String {
+    let mut message = format!("job {run_id} did not reach status {expected_status}");
+    let Some(job) = last_job else {
+        message.push_str("; last_observed_job=none");
+        return message;
+    };
+
+    let last_status = queue_wait_field(job, "status");
+    message.push_str(&format!(
+        "; last_status={}",
+        if last_status.is_empty() {
+            "<missing>"
+        } else {
+            &last_status
+        }
+    ));
+    for field in ["exit_code", "error", "stdout_log", "stderr_log"] {
+        let value = queue_wait_field(job, field);
+        if !value.is_empty() {
+            message.push_str(&format!("; {field}={value}"));
+        }
+    }
+    message
+}
+
+fn queue_wait_field(job: &serde_json::Value, field: &str) -> String {
+    match job.get(field) {
+        Some(serde_json::Value::String(value)) => value.clone(),
+        Some(serde_json::Value::Number(value)) => value.to_string(),
+        Some(serde_json::Value::Bool(value)) => value.to_string(),
+        _ => String::new(),
+    }
 }
 
 fn read_server_port(child: &mut std::process::Child) -> u16 {
