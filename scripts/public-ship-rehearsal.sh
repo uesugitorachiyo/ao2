@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_ROOT="${AO2_PUBLIC_SHIP_REHEARSAL_ROOT:-$ROOT/target/public-ship-rehearsal/latest}"
 SUMMARY="$OUT_ROOT/summary.json"
 LOG_DIR="$OUT_ROOT/logs"
+FIXTURE_DIR="${AO2_PUBLIC_SHIP_REHEARSAL_FIXTURE_DIR:-}"
 
 rm -rf "$OUT_ROOT"
 mkdir -p "$LOG_DIR"
@@ -21,14 +22,16 @@ run_step() {
 }
 
 run_step public_release_train \
-  env AO2_PUBLIC_RELEASE_TRAIN_DRILL_ROOT="$OUT_ROOT/public-release-train-drill" \
+  env \
+    AO2_PUBLIC_RELEASE_TRAIN_DRILL_ROOT="$OUT_ROOT/public-release-train-drill" \
+    AO2_PUBLIC_RELEASE_TRAIN_FIXTURE_DIR="$FIXTURE_DIR" \
     npm run release:train-drill
 
 run_step release_readiness_static \
   env AO2_RELEASE_READINESS_ROOT="$OUT_ROOT/release-readiness-static" \
     npm run release:readiness:static
 
-python3 - "$ROOT" "$OUT_ROOT" "$SUMMARY" <<'PY'
+python3 - "$ROOT" "$OUT_ROOT" "$SUMMARY" "$FIXTURE_DIR" <<'PY'
 import json
 import re
 import sys
@@ -38,6 +41,7 @@ from pathlib import Path
 root = Path(sys.argv[1]).resolve()
 out_root = Path(sys.argv[2]).resolve()
 summary_path = Path(sys.argv[3]).resolve()
+fixture_dir = sys.argv[4] or None
 log_dir = out_root / "logs"
 version = subprocess_version = None
 current_version_script = root / "scripts" / "current-version.sh"
@@ -64,6 +68,7 @@ payload = {
     "status": status,
     "artifact_root": str(out_root),
     "version": version,
+    "release_artifact_fixture": fixture_dir,
     "checks": checks,
     "component_summaries": {
         "public_release_train": str(out_root / "public-release-train-drill" / "summary.json"),

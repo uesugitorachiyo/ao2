@@ -615,6 +615,11 @@ Result:
   public prereleases, requires the expected release assets, downloads each
   `SHA256SUMS`, and emits `ao2.release-asset-completeness.v1` plus
   `dashboard.html` showing stable-vs-prerelease release state
+- `npm run release:asset-publication-readiness`: composes cross-OS attestation
+  and public ship dry-run evidence, using a local `release-artifact-fixture`
+  with `ao2-python-guard` / `ao2.python-guard-ci-artifacts.v1` so publication
+  readiness stays local-first instead of depending on live GitHub artifact
+  downloads
 - `npm run release:stable-readiness`: consumes the release asset completeness
   report, records prerelease-only and signed-provenance blockers, and emits
   `ao2.stable-release-readiness.v1` plus `dashboard.html` for stable promotion

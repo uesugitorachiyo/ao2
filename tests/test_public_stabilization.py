@@ -369,6 +369,27 @@ def test_public_release_publication_contract_matches_signed_sidecars_and_x86_art
     assert "provenance.json.signature" not in combined_contracts
 
 
+def test_release_asset_publication_readiness_uses_local_artifact_fixture():
+    publication_readiness = read("scripts/release-asset-publication-readiness.sh")
+    public_ship_dry_run = read("scripts/public-ship-dry-run.sh")
+    public_ship_rehearsal = read("scripts/public-ship-rehearsal.sh")
+    verification = read("docs/VERIFICATION.md")
+
+    for needle in [
+        "release-artifact-fixture",
+        "ao2-python-guard",
+        "ao2.python-guard-ci-artifacts.v1",
+        "AO2_PUBLIC_RELEASE_TRAIN_FIXTURE_DIR",
+        "AO2_PUBLIC_SHIP_DRY_RUN_FIXTURE_DIR",
+    ]:
+        assert needle in publication_readiness
+
+    assert "AO2_PUBLIC_SHIP_DRY_RUN_FIXTURE_DIR" in public_ship_dry_run
+    assert "AO2_PUBLIC_SHIP_REHEARSAL_FIXTURE_DIR" in public_ship_rehearsal
+    assert "AO2_PUBLIC_RELEASE_TRAIN_FIXTURE_DIR" in public_ship_rehearsal
+    assert "release-artifact-fixture" in verification
+
+
 def test_public_agent_coordination_doc_exists_and_matches_agents_contract():
     agents = read("AGENTS.md")
     assert "docs/AGENT-COORDINATION.md" in agents

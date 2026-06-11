@@ -5,9 +5,22 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_ROOT="${AO2_RELEASE_ASSET_PUBLICATION_READINESS_ROOT:-$ROOT/target/release-asset-publication-readiness/latest}"
 SUMMARY="$OUT_ROOT/summary.json"
 LOG_DIR="$OUT_ROOT/logs"
+FIXTURE_DIR="${AO2_RELEASE_ASSET_PUBLICATION_FIXTURE_DIR:-$OUT_ROOT/release-artifact-fixture}"
 
 rm -rf "$OUT_ROOT"
-mkdir -p "$LOG_DIR"
+mkdir -p "$LOG_DIR" "$FIXTURE_DIR/uesugitorachiyo-ao2/ao2-python-guard"
+
+cat >"$FIXTURE_DIR/uesugitorachiyo-ao2/ao2-python-guard/summary.json" <<'JSON'
+{
+  "schema_version": "ao2.python-guard-ci-artifacts.v1",
+  "status": "passed",
+  "fixture": "release-artifact-fixture",
+  "trust_boundary": {
+    "local_only": true,
+    "stores_credentials": false
+  }
+}
+JSON
 
 # shellcheck source=scripts/lib/pulse-gate-lib.sh
 . "$ROOT/scripts/lib/pulse-gate-lib.sh"
@@ -17,10 +30,13 @@ ao2_gate_run_step "$LOG_DIR" cross_os_attestation \
     npm run release:cross-os-attestation
 
 ao2_gate_run_step "$LOG_DIR" public_ship_dry_run \
-  env AO2_PUBLIC_SHIP_DRY_RUN_ROOT="$OUT_ROOT/public-ship-dry-run" \
+  env \
+    AO2_PUBLIC_SHIP_DRY_RUN_ROOT="$OUT_ROOT/public-ship-dry-run" \
+    AO2_PUBLIC_SHIP_DRY_RUN_FIXTURE_DIR="$FIXTURE_DIR" \
+    AO2_PUBLIC_RELEASE_TRAIN_FIXTURE_DIR="$FIXTURE_DIR" \
     npm run release:public-ship-dry-run
 
-python3 - "$ROOT" "$OUT_ROOT" "$SUMMARY" <<'PY'
+python3 - "$ROOT" "$OUT_ROOT" "$SUMMARY" "$FIXTURE_DIR" <<'PY'
 import json
 import subprocess
 import sys
@@ -30,6 +46,7 @@ from pathlib import Path
 root = Path(sys.argv[1]).resolve()
 out_root = Path(sys.argv[2]).resolve()
 summary_path = Path(sys.argv[3]).resolve()
+fixture_dir = Path(sys.argv[4]).resolve()
 log_dir = out_root / "logs"
 version = subprocess.check_output([str(root / "scripts" / "current-version.sh")], cwd=root, text=True).strip()
 tag = f"v{version}"
@@ -69,6 +86,7 @@ payload = {
     "release_tag": tag,
     "expected_release_assets": expected_release_assets,
     "asset_contract": str(asset_contract),
+    "release_artifact_fixture": str(fixture_dir),
     "release_not_found_gap": {
         "status": "tracked",
         "next_action": "publish release assets only after explicit human approval",
