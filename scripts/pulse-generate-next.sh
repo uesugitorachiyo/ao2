@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_ROOT="${AO2_PULSE_GENERATE_NEXT_ROOT:-$ROOT/target/pulse-generate-next/latest}"
 PACKET_ROOT="${AO2_PULSE_GENERATE_NEXT_PACKET_ROOT:-$ROOT/target/pulse-next-recommended-tasks}"
 TASK_BOARD_ROOT="${AO2_PULSE_TASK_BOARD_ROOT:-$ROOT/target/pulse-task-board/latest}"
+TASK_BOARD_HISTORY_ROOT="${AO2_PULSE_TASK_BOARD_HISTORY_ROOT:-$ROOT/.ao2-local/pulse/task-board-history}"
 SUMMARY="$OUT_ROOT/summary.json"
 LOG_DIR="$OUT_ROOT/logs"
 CURSOR_FILE="${AO2_PULSE_GENERATE_NEXT_CURSOR:-$ROOT/.ao2-local/pulse/pulse-generate-next-cursor.json}"
@@ -14,9 +15,10 @@ DEFAULT_AUTO_ADVANCE_PROMPT="After each task batch, re-evaluate AO2 and ao2-cont
 AUTO_ADVANCE_PROMPT="${AO2_PULSE_AUTO_ADVANCE_PROMPT:-$DEFAULT_AUTO_ADVANCE_PROMPT}"
 
 rm -rf "$OUT_ROOT" "$PACKET_ROOT" "$TASK_BOARD_ROOT"
-mkdir -p "$OUT_ROOT" "$LOG_DIR" "$PACKET_ROOT" "$TASK_BOARD_ROOT" "$(dirname "$CURSOR_FILE")"
+mkdir -p "$OUT_ROOT" "$LOG_DIR" "$PACKET_ROOT" "$TASK_BOARD_ROOT" "$TASK_BOARD_HISTORY_ROOT" "$(dirname "$CURSOR_FILE")"
 
-python3 - "$ROOT" "$OUT_ROOT" "$PACKET_ROOT" "$TASK_BOARD_ROOT" "$SUMMARY" "$CURSOR_FILE" "$LOCAL_ONLY" <<'PY'
+python3 - "$ROOT" "$OUT_ROOT" "$PACKET_ROOT" "$TASK_BOARD_ROOT" "$TASK_BOARD_HISTORY_ROOT" "$SUMMARY" "$CURSOR_FILE" "$LOCAL_ONLY" <<'PY'
+import html
 import hashlib
 import json
 import sys
@@ -27,9 +29,10 @@ root = Path(sys.argv[1]).resolve()
 out_root = Path(sys.argv[2]).resolve()
 packet_root = Path(sys.argv[3]).resolve()
 task_board_root = Path(sys.argv[4]).resolve()
-summary_path = Path(sys.argv[5]).resolve()
-cursor_file = Path(sys.argv[6]).resolve()
-local_only_while_pr_blocked = sys.argv[7] == "1"
+task_board_history_root = Path(sys.argv[5]).resolve()
+summary_path = Path(sys.argv[6]).resolve()
+cursor_file = Path(sys.argv[7]).resolve()
+local_only_while_pr_blocked = sys.argv[8] == "1"
 generation_mode = "local_only_while_pr_blocked" if local_only_while_pr_blocked else "normal"
 
 def utc_now() -> str:
@@ -633,17 +636,118 @@ task_board = {
         "side_effects": "local_artifact_materialization_only",
     },
 }
+previous_path = task_board_history_root / "latest.json"
+previous_board = None
+if previous_path.is_file():
+    try:
+        previous_board = json.loads(previous_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        previous_board = None
+
+current_task_ids = [item["task_id"] for item in task_board_tasks]
+previous_task_ids = [
+    str(item.get("task_id"))
+    for item in (previous_board or {}).get("tasks", [])
+    if isinstance(item, dict) and item.get("task_id")
+]
+task_board_diff = {
+    "schema_version": "ao2.ai-task-board-diff.v1",
+    "generated_at_utc": utc_now(),
+    "status": "ready",
+    "previous_present": previous_board is not None,
+    "previous": str(previous_path) if previous_board is not None else None,
+    "current": str(task_board_history_root / f"generation-{generation}.json"),
+    "previous_task_ids": previous_task_ids,
+    "current_task_ids": current_task_ids,
+    "added_task_ids": sorted(set(current_task_ids).difference(previous_task_ids)),
+    "removed_task_ids": sorted(set(previous_task_ids).difference(current_task_ids)),
+    "unchanged_task_ids": sorted(set(current_task_ids).intersection(previous_task_ids)),
+    "selection_changed": (previous_board or {}).get("source_recommendation", {}).get("selection") != source_recommendation["selection"] if previous_board else None,
+    "release_objective_changed": (previous_board or {}).get("release_objective") != release_objective if previous_board else None,
+    "trust_boundary": {"local_only": True, "stores_credentials": False},
+}
+task_board["exports"] = {
+    "markdown": str(task_board_root / "board.md"),
+    "html": str(task_board_root / "board.html"),
+}
+task_board["history"] = {
+    "root": str(task_board_history_root),
+    "current": str(task_board_history_root / f"generation-{generation}.json"),
+    "latest": str(task_board_history_root / "latest.json"),
+    "diff": str(task_board_root / "task-board-diff.json"),
+    "previous_present": previous_board is not None,
+}
+task_board["diff"] = task_board_diff
+
+status_lanes = {}
+kind_lanes = {"product_code": [], "evidence_gate": []}
+for item in task_board_tasks:
+    status_lanes.setdefault(str(item["status"]).title(), []).append(item)
+    kind_lanes.setdefault(item["kind"], []).append(item)
+
+def task_md(item: dict) -> str:
+    evidence = ", ".join(f"`{value}`" for value in item["required_evidence"])
+    stops = "; ".join(item["stop_conditions"])
+    return (
+        f"- [ ] `{item['task_id']}` **{item['title']}**\n"
+        f"  - Kind: `{item['kind']}`\n"
+        f"  - Required Evidence: {evidence}\n"
+        f"  - Stop Conditions: {stops}\n"
+    )
+
 task_board_md = (
     f"# AO2 AI Task Board {generation}\n\n"
     f"Release train: `{release_train['version']}` - {release_train['theme']}\n\n"
     f"{release_objective}\n\n"
     f"Source recommendation: `{source_recommendation['selection']}`\n\n"
     "Control plane role: read-only observer; no credential requirement; no release mutation authority.\n\n"
+    "## Status Lanes\n\n"
     + "".join(
-        f"- [ ] `{item['task_id']}` {item['title']} "
-        f"({item['kind']}; evidence: {', '.join(item['required_evidence'])})\n"
-        for item in task_board_tasks
+        f"### {status}\n\n" + "".join(task_md(item) for item in items) + "\n"
+        for status, items in sorted(status_lanes.items())
     )
+    + "## Work Type Lanes\n\n"
+    + "### Product Code\n\n"
+    + "".join(task_md(item) for item in kind_lanes.get("product_code", []))
+    + "\n### Evidence Gates\n\n"
+    + "".join(task_md(item) for item in kind_lanes.get("evidence_gate", []))
+)
+
+def task_card(item: dict) -> str:
+    evidence = "".join(f"<li><code>{html.escape(str(value))}</code></li>" for value in item["required_evidence"])
+    stops = "".join(f"<li>{html.escape(str(value))}</li>" for value in item["stop_conditions"])
+    return (
+        "<article class=\"task-card\">"
+        f"<h3>{html.escape(item['title'])}</h3>"
+        f"<p><code>{html.escape(item['task_id'])}</code> - <code>{html.escape(item['kind'])}</code></p>"
+        f"<p>{html.escape(item['objective'])}</p>"
+        "<h4>Required Evidence</h4><ul>" + evidence + "</ul>"
+        "<h4>Stop Conditions</h4><ul>" + stops + "</ul>"
+        "</article>"
+    )
+
+task_board_html = (
+    "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+    "<title>AO2 AI Task Board</title>"
+    "<style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;margin:32px;color:#17202a}"
+    ".status-lane{border:1px solid #d7dde2;border-radius:6px;padding:16px;margin:16px 0}"
+    ".task-card{border-top:1px solid #e6eaee;padding:12px 0}.task-card:first-child{border-top:0}"
+    "code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#f4f6f8;padding:1px 4px;border-radius:4px}"
+    "</style></head><body>"
+    f"<h1>AO2 AI Task Board</h1><p>{html.escape(release_objective)}</p>"
+    f"<p>Release train: <code>{html.escape(release_train['version'])}</code> - {html.escape(release_train['theme'])}</p>"
+    "<h2>Status Lanes</h2>"
+    + "".join(
+        f"<section class=\"status-lane\"><h2>{html.escape(status)}</h2>"
+        + "".join(task_card(item) for item in items)
+        + "</section>"
+        for status, items in sorted(status_lanes.items())
+    )
+    + "<h2>Product Code</h2>"
+    + "".join(task_card(item) for item in kind_lanes.get("product_code", []))
+    + "<h2>Evidence Gates</h2>"
+    + "".join(task_card(item) for item in kind_lanes.get("evidence_gate", []))
+    + "</body></html>\n"
 )
 
 (packet_root / "packet.md").write_text(packet_md, encoding="utf-8")
@@ -653,6 +757,10 @@ task_board_md = (
 (packet_root / "pulse-task-manifest.json").write_text(json.dumps(task_manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 (task_board_root / "summary.json").write_text(json.dumps(task_board, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 (task_board_root / "board.md").write_text(task_board_md, encoding="utf-8")
+(task_board_root / "board.html").write_text(task_board_html, encoding="utf-8")
+(task_board_root / "task-board-diff.json").write_text(json.dumps(task_board_diff, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+(task_board_history_root / f"generation-{generation}.json").write_text(json.dumps(task_board, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+(task_board_history_root / "latest.json").write_text(json.dumps(task_board, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 (packet_root / "task-board.json").write_text(json.dumps(task_board, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 files = []

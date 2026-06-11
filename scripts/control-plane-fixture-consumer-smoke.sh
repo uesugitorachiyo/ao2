@@ -34,15 +34,26 @@ catalog_path = Path(component_data.get("control_plane_fixture_catalog", ""))
 catalog = json.loads(catalog_path.read_text(encoding="utf-8")) if catalog_path.is_file() else {}
 fixtures = catalog.get("control_plane_fixture_catalog", [])
 fixture_catalog_read = bool(fixtures)
+catalog_task_board_path = None
+for item in fixtures:
+    if item.get("source_schema") != "ao2.ai-task-board.v1":
+        continue
+    candidate = Path(str(item.get("task_board_fixture") or item.get("source_summary") or "")).expanduser()
+    if candidate.is_file():
+        catalog_task_board_path = candidate.resolve()
+        break
+
+task_board_source = "direct_path" if task_board_path.is_file() else "fixture_catalog"
+effective_task_board_path = task_board_path if task_board_path.is_file() else catalog_task_board_path
 task_board_readback = {"status": "skipped", "path": str(task_board_path)}
-if task_board_path.is_file():
+if effective_task_board_path and effective_task_board_path.is_file():
     try:
-        task_board = json.loads(task_board_path.read_text(encoding="utf-8"))
+        task_board = json.loads(effective_task_board_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         task_board = {}
         task_board_readback = {
             "status": "failed",
-            "path": str(task_board_path),
+            "path": str(effective_task_board_path),
             "reason": f"invalid_json:{exc.lineno}",
         }
     if task_board:
@@ -68,6 +79,9 @@ if task_board_path.is_file():
             "requires_credentials": requires_credentials,
             "mutates_releases": mutates_releases,
         }
+        if task_board_source == "fixture_catalog":
+            task_board_readback["source"] = "fixture_catalog"
+            task_board_readback["path"] = str(effective_task_board_path)
 consumer_smoke_cases = [
     {"name": "valid_catalog_read", "status": "passed" if fixture_catalog_read else "failed"},
     {"name": "fail_closed_missing_receipt", "status": "passed", "input": {"source_schema": "ao2.control-plane-fixture-catalog.v1"}},
