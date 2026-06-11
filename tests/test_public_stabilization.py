@@ -5131,11 +5131,24 @@ def test_post_stable_release_verification_workflow_runs_hosted_consumer_smoke():
         "windows-latest",
         "AO2_RELEASE_TAG: v0.4.80",
         "ao2-0.4.80-linux-x86_64.tar.gz",
+        "ao2-0.4.80-linux-x86_64.tar.gz.sha256",
+        "ao2-0.4.80-linux-x86_64.tar.gz.sig",
         "ao2-0.4.80-macos-aarch64.tar.gz",
+        "ao2-0.4.80-macos-aarch64.tar.gz.sha256",
+        "ao2-0.4.80-macos-aarch64.tar.gz.sig",
         "ao2-0.4.80-windows-x86_64.tar.gz",
+        "ao2-0.4.80-windows-x86_64.tar.gz.sha256",
+        "ao2-0.4.80-windows-x86_64.tar.gz.sig",
+        "ao2-release-provenance.json",
+        "ao2-release-provenance.json.sig",
+        "ao2-release-signing-public.pem",
         "gh release download",
         "SHA256SUMS",
         "AO2_INSTALL_DIR",
+        "install update",
+        "--provenance-dir",
+        "signature_verified",
+        '"status": "installed"',
         "version --json",
         "doctor --json",
         "adapter doctor --provider scripted",
@@ -5196,6 +5209,7 @@ def test_release_immutability_audit_composes_stable_asset_and_download_checks():
     assert "ao2.release-immutability-audit.v1" in verification
     assert "stable public release" in readme
     assert "v0.4.80" in readme
+    assert "ao2-0.4.80-linux-aarch64.tar.gz" in readme
     assert "https://youtu.be/p222b0iCpbg" in readme
     assert "stable public release" in install
     assert "v0.4.81" in next_patch
