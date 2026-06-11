@@ -106,6 +106,7 @@ npm run pulse:auto-advance -- --forever
 npm run pulse:pr-ci-gate:update
 npm run pulse:generate-next
 npm run pulse:task-board-state
+npm run pulse:next-actions
 npm run pulse:daemon:start
 npm run pulse:daemon:status
 ```
@@ -199,7 +200,13 @@ status counts and next actions for dashboard/control-plane ingestion.
 and emits `ao2.pulse-task-board-state.v1` at
 `target/pulse-task-board-state/latest/summary.json` for local dashboards,
 operator scripts, or any standalone AO2 install that only needs the current
-task state.
+task state. `npm run pulse:next-actions` reads the same current board and emits
+`ao2.pulse-next-actions.v1` plus
+`target/pulse-next-actions/latest/next-actions.md`, giving standalone AO2
+operators a compact command for the current actionable task list. Both commands
+write failed summaries for missing, invalid-schema, or invalid-JSON board
+inputs so local operators can diagnose stale or malformed board artifacts
+without regenerating.
 The board preserves the current release objective, source recommendation,
 rationale, required evidence, stop conditions, and read-only control-plane
 readback semantics without granting mutation authority. For the Risky PR
@@ -235,7 +242,9 @@ unknown task ids or stale `task_board_generation` values and records
 `status_evidence_gate` plus `status_evidence_blockers`. Evidence keys may use
 the generated `task_id` or the task's stable `stable_task_id`, matching
 `pulse:generate-next` status carryover semantics without accepting arbitrary
-unknown IDs.
+unknown IDs. The quality-filter summary records `status_evidence_matches` and
+`status_evidence_match_counts` so operators can see whether evidence matched by
+generated or stable task id.
 `npm run control-plane:fixture-consumer-smoke` can also read the task board
 through `AO2_CP_FIXTURE_CONSUMER_TASK_BOARD`, or through the fixture catalog produced by
 `evidence:operator-index-control-plane-fixture-ingest` when
