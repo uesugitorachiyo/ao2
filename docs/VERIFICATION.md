@@ -737,6 +737,14 @@ Result:
   `ao2.stable-promotion-evidence-gate.v1` with
   `post-release verification evidence gate` status before any release mutation
   is attempted
+- `npm run release:operator-evidence-bundle`: downloads the operator-facing
+  release evidence set into one local folder and emits
+  `ao2.operator-release-evidence-bundle.v1`. It verifies the AO2
+  `ao2-dual-repo-release-publication-closure-index`, AO2 Linux/macOS/Windows
+  post-stable install/update evidence, and ao2-control-plane
+  Ubuntu/macOS/Windows post-release summaries with checksum and trust-boundary
+  checks. Use `AO2_OPERATOR_RELEASE_EVIDENCE_FIXTURE_DIR=<path>` for offline
+  fixture verification.
 - `npm run release:immutability-audit`: composes asset completeness, stable
   readiness, full release download verification, checksum validation, signed
   provenance verification, GitHub asset digest checks, and release metadata
