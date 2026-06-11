@@ -117,6 +117,9 @@ if task_board_path.is_file():
                 continue
             task_id = str(task.get("task_id") or task.get("id") or f"index-{index}")
             task_board_task_ids.add(task_id)
+            stable_task_id = str(task.get("stable_task_id") or "").strip()
+            if stable_task_id:
+                task_board_task_ids.add(stable_task_id)
             required_evidence = task.get("required_evidence") or task.get("evidence_requirements")
             stop_conditions = task.get("stop_conditions")
             if not isinstance(required_evidence, list) or not any(str(item).strip() for item in required_evidence):

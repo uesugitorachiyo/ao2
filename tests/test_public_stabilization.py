@@ -2346,6 +2346,15 @@ def test_pulse_generate_next_auto_registration_contract():
     ]:
         assert needle in runner
 
+    quality_filter = read("scripts/pulse-next-task-quality-filter.sh")
+    for needle in [
+        "AO2_PULSE_NEXT_TASK_QUALITY_STATUS_EVIDENCE",
+        "stable_task_id",
+        "status_evidence_unknown_task_id",
+        "status_evidence_stale_generation",
+    ]:
+        assert needle in quality_filter
+
     for needle in [
         "npm run pulse:generate-next",
         "npm run pulse:generate-next:contract",
@@ -2353,6 +2362,7 @@ def test_pulse_generate_next_auto_registration_contract():
         "ao2.pulse-generate-next.v1",
         "ao2.pulse-task-board-state.v1",
         "ao2.ai-task-board.v1",
+        "stable_task_id",
         "task-board.json",
         "AO2_PULSE_AUTO_ADVANCE_LOCAL_ONLY_WHILE_PR_BLOCKED=1",
         "local-only while PR-blocked mode",
@@ -4324,6 +4334,86 @@ def test_pulse_next_task_quality_filter_rejects_unknown_status_evidence_task_id(
     assert summary["status_evidence_blockers"] == [
         "status_evidence_unknown_task_id:ghost-task"
     ]
+
+
+def test_pulse_next_task_quality_filter_accepts_stable_status_evidence_task_id(tmp_path):
+    packet = tmp_path / "packet.md"
+    task_board = tmp_path / "task-board.json"
+    status_evidence = tmp_path / "status-evidence.json"
+    out_root = tmp_path / "quality"
+    packet.write_text(
+        "# Packet\n\n"
+        "## 1. AI task board control surface\n\n"
+        "Build operator-visible product evidence for the control-plane task board.\n",
+        encoding="utf-8",
+    )
+    task_board.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.ai-task-board.v1",
+                "status": "ready",
+                "release_objective": "Expose Pulse work as an operator-readable task board.",
+                "source_recommendation": {"generation": 7},
+                "tasks": [
+                    {
+                        "task_id": "complete-task-g7",
+                        "stable_task_id": "complete-task",
+                        "title": "Complete task",
+                        "status": "proposed",
+                        "required_evidence": ["ao2.ai-task-board.v1"],
+                        "stop_conditions": ["Stop if readback requires credentials."],
+                    }
+                ],
+                "trust_boundary": {"local_only": True, "stores_credentials": False},
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    status_evidence.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.ai-task-board-status-evidence.v1",
+                "status": "ready",
+                "task_board_generation": 7,
+                "task_statuses": {
+                    "complete-task": {
+                        "status": "passed",
+                        "status_reason": "Stable task id should match the generated board task.",
+                        "evidence": ["target/pulse-task-executor/latest/summary.json"],
+                    }
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:next-task-quality-filter"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_NEXT_TASK_QUALITY_PACKET": str(packet),
+            "AO2_PULSE_NEXT_TASK_QUALITY_TASK_BOARD": str(task_board),
+            "AO2_PULSE_NEXT_TASK_QUALITY_STATUS_EVIDENCE": str(status_evidence),
+            "AO2_PULSE_NEXT_TASK_QUALITY_ROOT": str(out_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "passed"
+    assert summary["task_board_drift_gate"] == "passed"
+    assert summary["status_evidence_gate"] == "passed"
+    assert summary["status_evidence_blockers"] == []
 
 
 def test_pulse_next_task_quality_filter_rejects_stale_status_evidence_generation(tmp_path):
