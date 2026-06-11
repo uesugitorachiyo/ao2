@@ -684,6 +684,20 @@ jobs:
           path: target/release-readiness-ci
           if-no-files-found: error
 
+  operator-release-evidence-workflow-contract:
+    name: Operator release evidence workflow contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+      - name: Verify operator release evidence workflow contract
+        run: npm run release:operator-evidence-workflow-contract
+
   release-publication-closure-artifacts:
     name: Release publication closure artifacts
     runs-on: ubuntu-latest

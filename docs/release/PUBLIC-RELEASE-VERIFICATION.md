@@ -102,6 +102,16 @@ operator-facing release evidence set into
 Use `AO2_OPERATOR_RELEASE_EVIDENCE_FIXTURE_DIR=<path>` or
 `--fixture-dir <path>` for offline fixture verification.
 
+The `Operator Release Evidence Audit` workflow runs this bundle assembly on a
+weekly schedule and by manual dispatch. It uploads the complete
+`ao2-operator-release-evidence-bundle` artifact, including `summary.json`, as a
+read-only hosted baseline. To inspect it from `ao2-control-plane`, download that
+artifact and start the server with
+`AO2_CP_OPERATOR_RELEASE_EVIDENCE_SUMMARY=<downloaded-artifact>/summary.json`;
+the control-plane `/api/v1/release/operator-evidence` and
+`/api/v1/release/operator-evidence.json` routes then render the same seven
+checks without approving releases or mutating AO2 artifacts.
+
 ## Stable promotion evidence gate
 
 `npm run release:stable-promotion-workflow` uses this hosted evidence before it
