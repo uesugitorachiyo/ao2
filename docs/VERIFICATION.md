@@ -105,6 +105,7 @@ npm run pulse:auto-advance
 npm run pulse:auto-advance -- --forever
 npm run pulse:pr-ci-gate:update
 npm run pulse:generate-next
+npm run pulse:task-board-state
 npm run pulse:daemon:start
 npm run pulse:daemon:status
 ```
@@ -170,14 +171,20 @@ no tracked or untracked source changes, it exits successfully with
 operator-readable `ao2.ai-task-board.v1` control-surface artifact at
 `target/pulse-task-board/latest/summary.json`, plus companion
 `board.md` and `board.html` exports grouped into status and work-type lanes.
-It also writes `target/pulse-task-board/latest/task-board-diff.json` and keeps
+Tasks include generation-specific `task_id` values plus stable `stable_task_id`
+values so status evidence can carry across board generations without binding
+operators to a stale generated identifier. It also writes
+`target/pulse-task-board/latest/task-board-diff.json` and keeps
 generation snapshots under
 `${AO2_PULSE_TASK_BOARD_HISTORY_ROOT:-.ao2-local/pulse/task-board-history}` so
 operators can see whether the selected work changed between Pulse generations.
 When `AO2_PULSE_TASK_BOARD_STATUS_EVIDENCE` points at an
 `ao2.ai-task-board-status-evidence.v1` JSON file, the generated board applies
-task-id keyed status transitions and records `status_transition_source` plus
-per-task `status_transition` evidence. The diff now includes
+task-id or stable-task-id keyed status transitions and records
+`status_transition_source` plus per-task `status_transition` evidence. Evidence
+from a mismatched generation is ignored with a visible `stale_generation`
+warning rendered in `board.md` and `board.html` so old executor output cannot
+silently influence the current board. The diff now includes
 `changed_task_ids`, `changed_tasks`, and field-level `field_changes` for task
 title, objective, status, rationale, required evidence, and stop conditions.
 If `AO2_PULSE_TASK_BOARD_STATUS_EVIDENCE` is not set, `pulse:generate-next`
@@ -188,6 +195,11 @@ The generator also writes
 `target/pulse-task-board/latest/board-state-summary.json` using
 `ao2.ai-task-board-state-summary.v1`, a compact read-only summary with task
 status counts and next actions for dashboard/control-plane ingestion.
+`npm run pulse:task-board-state` reads the current board without regeneration
+and emits `ao2.pulse-task-board-state.v1` at
+`target/pulse-task-board-state/latest/summary.json` for local dashboards,
+operator scripts, or any standalone AO2 install that only needs the current
+task state.
 The board preserves the current release objective, source recommendation,
 rationale, required evidence, stop conditions, and read-only control-plane
 readback semantics without granting mutation authority. For the Risky PR
