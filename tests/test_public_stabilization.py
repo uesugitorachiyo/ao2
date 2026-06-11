@@ -813,17 +813,21 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_release_readiness_static_artifact_job",
         "ci_release_readiness_artifact_consumer_job",
         "ci_ai_task_board_control_plane_bridge_artifact_job",
+        "ci_dual_repo_installed_release_smoke_artifact_job",
         "target/release-readiness-consumer/ao2-release-readiness",
         "target/release-readiness-consumer/ao2-release-train-control-plane-bridge",
         "target/release-readiness-consumer/ao2-ai-task-board-control-plane-bridge",
+        "target/release-readiness-consumer/ao2-dual-repo-installed-release-smoke",
         "ao2.release-readiness-local.v1",
         "ao2.release-train-control-plane-bridge.v1",
         "ao2.ai-task-board-control-plane-bridge.v1",
+        "ao2.dual-repo-installed-release-smoke.v1",
         "ao2.release-artifact-closure-index.v1",
         "artifact-closure-index.json",
         "release_readiness_artifact_consumer",
         "release_train_control_plane_bridge",
         "ai_task_board_control_plane_bridge",
+        "dual_repo_installed_release_smoke",
     ]:
         assert needle in script
 
@@ -831,7 +835,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     for needle in [
         "release-readiness-artifact-consumer:",
         "name: Release readiness artifact consumer",
-        "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts]",
+        "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, dual-repo-installed-release-smoke-artifacts]",
         "uses: actions/download-artifact@v8.0.1",
         "name: ao2-release-readiness",
         "path: target/release-readiness-consumer/ao2-release-readiness",
@@ -839,14 +843,18 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "path: target/release-readiness-consumer/ao2-release-train-control-plane-bridge",
         "name: ao2-ai-task-board-control-plane-bridge",
         "path: target/release-readiness-consumer/ao2-ai-task-board-control-plane-bridge",
+        "name: ao2-dual-repo-installed-release-smoke",
+        "path: target/release-readiness-consumer/ao2-dual-repo-installed-release-smoke",
         "schema_version') == 'ao2.release-readiness-local.v1'",
         "bridge_summary.get('schema_version') == 'ao2.release-train-control-plane-bridge.v1'",
         "task_board_bridge_summary.get('schema_version') == 'ao2.ai-task-board-control-plane-bridge.v1'",
+        "dual_repo_summary.get('schema_version') == 'ao2.dual-repo-installed-release-smoke.v1'",
         "ci_job_required_os:verify",
         "ci_job_required_os:release-archive-hosted-smoke",
         "ci_job_required_os:workbench-operator-packet-control-plane-smoke",
         "ci_release_readiness_static_artifact_job",
         "ci_ai_task_board_control_plane_bridge_artifact_job",
+        "ci_dual_repo_installed_release_smoke_artifact_job",
     ]:
         assert needle in ci
 
@@ -891,6 +899,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_release_readiness_artifact_consumer_job",
         "ci_release_train_control_plane_bridge_artifact_job",
         "ci_ai_task_board_control_plane_bridge_artifact_job",
+        "ci_dual_repo_installed_release_smoke_artifact_job",
     ]:
         assert checks[name]["status"] == "passed"
     closure = json.loads(
@@ -934,8 +943,92 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.cp-ai-task-board-readback.v1",
         "ao2.cp-ai-task-board-dashboard.v1",
     ]
+    assert artifacts["dual_repo_installed_release_smoke"]["artifact_name"] == (
+        "ao2-dual-repo-installed-release-smoke"
+    )
+    assert artifacts["dual_repo_installed_release_smoke"]["producer_job"] == (
+        "dual-repo-installed-release-smoke-artifacts"
+    )
+    assert artifacts["dual_repo_installed_release_smoke"]["schema_versions"] == [
+        "ao2.dual-repo-installed-release-smoke.v1",
+        "ao2.release-manifest.v1",
+        "ao2-control-plane.release-manifest.v1",
+        "ao2.cp-ai-task-board-readback.v1",
+        "ao2.cp-ai-task-board-dashboard.v1",
+    ]
     assert closure["trust_boundary"]["local_only"] is True
     assert closure["trust_boundary"]["stores_credentials"] is False
+
+
+def test_dual_repo_installed_release_smoke_contract():
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["release:dual-repo-installed-smoke"]
+        == "node scripts/run-sh-script.js scripts/dual-repo-installed-release-smoke.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "dual-repo-installed-release-smoke.sh"
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.dual-repo-installed-release-smoke.v1",
+        "ao2.release-manifest.v1",
+        "ao2-control-plane.release-manifest.v1",
+        "ao2.ai-task-board.v1",
+        "ao2.cp-ai-task-board-readback.v1",
+        "ao2.cp-ai-task-board-dashboard.v1",
+        "AO2_DUAL_REPO_INSTALLED_SMOKE_ROOT",
+        "AO2_DUAL_REPO_INSTALLED_SMOKE_BIND",
+        "AO2_CONTROL_PLANE_ROOT",
+        "Authorization: Bearer",
+        "auth_value_stored",
+        "credential_material_included",
+        "control_plane_approves_release",
+        "mutates_releases",
+        "stores_credentials",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "release package",
+        "scripts/package-local.sh",
+    ]:
+        assert needle in text
+
+    for forbidden in [
+        "/Users/torachiyouesugi/Documents/private",
+        "target/long-lived-control-plane/api-token",
+        "gh release create",
+        "git push origin",
+        "npm publish",
+    ]:
+        assert forbidden not in text
+
+
+def test_dual_repo_installed_release_smoke_ci_and_release_note_contract():
+    ci = read(".github/workflows/ci.yml")
+    for needle in [
+        "dual-repo-installed-release-smoke-artifacts:",
+        "name: Dual-repo installed release smoke artifacts",
+        "repository: uesugitorachiyo/ao2-control-plane",
+        "AO2_DUAL_REPO_INSTALLED_SMOKE_ROOT=target/dual-repo-installed-release-smoke-ci",
+        "npm run release:dual-repo-installed-smoke -- --control-plane-root ao2-control-plane",
+        "ao2.dual-repo-installed-release-smoke.v1",
+        "ao2.cp-ai-task-board-readback.v1",
+        "ao2.cp-ai-task-board-dashboard.v1",
+        "name: ao2-dual-repo-installed-release-smoke",
+        "target/dual-repo-installed-release-smoke-ci/latest/summary.json",
+        "target/release-readiness-consumer/ao2-dual-repo-installed-release-smoke",
+    ]:
+        assert needle in ci
+
+    release_doc = read("docs/release/v0.4.81-ai-task-board-control-surface.md")
+    for needle in [
+        "npm run release:dual-repo-installed-smoke",
+        "ao2.dual-repo-installed-release-smoke.v1",
+        "installed AO2 archive",
+        "installed ao2-control-plane archive",
+        "ao2.cp-ai-task-board-readback.v1",
+    ]:
+        assert needle in release_doc
 
 
 def test_ai_task_board_control_plane_bridge_script_contract():
