@@ -185,6 +185,11 @@ For codex-cron event-loop handoff, the packet also includes
 `codex-cron.event-loop-decision.v1` at the top level and AO2 metadata under
 `ao2.pulse-codex-cron-event-loop-decision.v1`, allowing event-loop jobs to
 consume a structured continue/backoff decision without prompt scraping.
+`npm run pulse:codex-cron-event-loop-smoke` builds or uses an installed
+codex-cron binary, runs `npm run pulse:generate-next` through a bounded
+codex-cron event-loop job configured with `--event-loop-decision-file`, and
+emits `ao2.pulse-codex-cron-event-loop-smoke.v1` evidence proving
+`decision_source=file` for the generated `codex-cron-event-loop-decision.json`.
 When `AO2_PULSE_TASK_BOARD_STATUS_EVIDENCE` points at an
 `ao2.ai-task-board-status-evidence.v1` JSON file, the generated board applies
 task-id or stable-task-id keyed status transitions and records

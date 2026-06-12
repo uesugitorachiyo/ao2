@@ -1458,6 +1458,72 @@ def test_dual_repo_installed_release_smoke_ci_and_release_note_contract():
         assert needle in release_doc
 
 
+def test_pulse_codex_cron_event_loop_smoke_contract():
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["pulse:codex-cron-event-loop-smoke"]
+        == "node scripts/run-sh-script.js scripts/pulse-codex-cron-event-loop-smoke.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "pulse-codex-cron-event-loop-smoke.sh"
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.pulse-codex-cron-event-loop-smoke.v1",
+        "AO2_PULSE_CODEX_CRON_SMOKE_ROOT",
+        "AO2_CODEX_CRON_BIN",
+        "AO2_CODEX_CRON_ROOT",
+        "codex-cron-event-loop-decision.json",
+        "codex-cron.event-loop-decision.v1",
+        "ao2.pulse-codex-cron-event-loop-decision.v1",
+        "--event-loop-decision-file",
+        'generator_summary_path = root / pulse_generate_root_rel / "summary.json"',
+        "decision_source",
+        "file",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "stores_credentials",
+        "provider_execution",
+    ]:
+        assert needle in text
+
+    for forbidden in [
+        "/Users/torachiyouesugi/Documents/private",
+        "target/long-lived-control-plane/api-token",
+        'generator_summary_path = root / "target/pulse-codex-cron-event-loop-smoke/latest/pulse-generate-next/summary.json"',
+        "gh release create",
+        "git push origin",
+        "npm publish",
+    ]:
+        assert forbidden not in text
+
+
+def test_pulse_codex_cron_event_loop_smoke_ci_contract():
+    ci = read(".github/workflows/ci.yml")
+    for needle in [
+        "pulse-codex-cron-event-loop-smoke-artifacts:",
+        "name: Pulse codex-cron event-loop smoke artifacts",
+        "repository: uesugitorachiyo/codex-cron",
+        "AO2_PULSE_CODEX_CRON_SMOKE_ROOT=target/pulse-codex-cron-event-loop-smoke-ci",
+        "npm run pulse:codex-cron-event-loop-smoke -- --codex-cron-root codex-cron",
+        "ao2.pulse-codex-cron-event-loop-smoke.v1",
+        "codex-cron.event-loop-decision.v1",
+        "decision_source",
+        "name: ao2-pulse-codex-cron-event-loop-smoke",
+        "target/pulse-codex-cron-event-loop-smoke-ci/latest/summary.json",
+    ]:
+        assert needle in ci
+
+    verification = read("docs/VERIFICATION.md")
+    for needle in [
+        "npm run pulse:codex-cron-event-loop-smoke",
+        "ao2.pulse-codex-cron-event-loop-smoke.v1",
+        "codex-cron-event-loop-decision.json",
+        "decision_source=file",
+    ]:
+        assert needle in verification
+
+
 def test_dual_public_release_smoke_contract():
     package_json = json.loads(read("package.json"))
     assert (
