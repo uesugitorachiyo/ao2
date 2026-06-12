@@ -79,6 +79,7 @@ $AO2_RELEASE_REPO|CI|ao2-dual-repo-release-publication-closure-index|ao2-dual-re
 $AO2_RELEASE_REPO|Post Stable Release Verification|post-stable-release-smoke-Linux|ao2-linux
 $AO2_RELEASE_REPO|Post Stable Release Verification|post-stable-release-smoke-macOS|ao2-macos
 $AO2_RELEASE_REPO|Post Stable Release Verification|post-stable-release-smoke-Windows|ao2-windows
+$AO2_RELEASE_REPO|Post Stable Release Verification|ao2-dual-public-release-smoke|dual-public-release-smoke
 $AO2_CP_RELEASE_REPO|Post Release Verification|ao2-control-plane-post-release-verification-ubuntu|control-plane-ubuntu
 $AO2_CP_RELEASE_REPO|Post Release Verification|ao2-control-plane-post-release-verification-macos|control-plane-macos
 $AO2_CP_RELEASE_REPO|Post Release Verification|ao2-control-plane-post-release-verification-windows|control-plane-windows
@@ -126,6 +127,13 @@ required = [
         "artifact": "post-stable-release-smoke-Windows",
         "path": download_root / "ao2-windows",
         "kind": "ao2-post-stable",
+    },
+    {
+        "component": "ao2",
+        "platform": "public-release-pair",
+        "artifact": "ao2-dual-public-release-smoke",
+        "path": download_root / "dual-public-release-smoke",
+        "kind": "ao2-dual-public-release-smoke",
     },
     {
         "component": "ao2-control-plane",
@@ -204,6 +212,48 @@ for item in required:
             details["signature_verified"] = payload.get("signature_verified")
             details["install_status"] = payload.get("status")
             if payload.get("signature_verified") is not True or payload.get("status") != "installed":
+                status = "failed"
+    elif item["kind"] == "ao2-dual-public-release-smoke":
+        summary = item["path"] / "latest" / "summary.json"
+        readback = item["path"] / "latest" / "smoke" / "task-board-readback.json"
+        dashboard = item["path"] / "latest" / "smoke" / "task-board-dashboard.json"
+        if not summary.is_file():
+            status = "missing"
+            details["missing"] = "latest/summary.json"
+        elif not readback.is_file():
+            status = "missing"
+            details["missing"] = "latest/smoke/task-board-readback.json"
+        elif not dashboard.is_file():
+            status = "missing"
+            details["missing"] = "latest/smoke/task-board-dashboard.json"
+        else:
+            payload = load_json(summary)
+            readback_payload = load_json(readback)
+            dashboard_payload = load_json(dashboard)
+            trust = payload.get("trust_boundary", {})
+            details["summary"] = str(summary)
+            details["schema_version"] = payload.get("schema_version")
+            details["summary_status"] = payload.get("status")
+            details["readback"] = str(readback)
+            details["task_board_readback_schema"] = readback_payload.get("schema_version")
+            details["dashboard"] = str(dashboard)
+            details["task_board_dashboard_schema"] = dashboard_payload.get("schema_version")
+            details["auth_value_stored"] = trust.get("auth_value_stored")
+            details["credential_material_in_urls"] = trust.get("credential_material_in_urls")
+            details["credential_material_included"] = trust.get("credential_material_included")
+            details["mutates_github_releases"] = trust.get("mutates_github_releases")
+            details["control_plane_approves_release"] = trust.get("control_plane_approves_release")
+            if (
+                payload.get("schema_version") != "ao2.dual-public-release-smoke.v1"
+                or payload.get("status") != "passed"
+                or readback_payload.get("schema_version") != "ao2.cp-ai-task-board-readback.v1"
+                or dashboard_payload.get("schema_version") != "ao2.cp-ai-task-board-dashboard.v1"
+                or trust.get("auth_value_stored") is not False
+                or trust.get("credential_material_in_urls") is not False
+                or trust.get("credential_material_included") is not False
+                or trust.get("mutates_github_releases") is not False
+                or trust.get("control_plane_approves_release") is not False
+            ):
                 status = "failed"
     else:
         summary = find_json_with_schema(item["path"], "ao2.cp-release-publication-closure.v1")
