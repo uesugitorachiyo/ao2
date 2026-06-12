@@ -1116,6 +1116,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_release_readiness_artifact_consumer_job",
         "ci_ai_task_board_control_plane_bridge_artifact_job",
         "ci_pulse_task_board_closure_packet_artifact_job",
+        "ci_pulse_codex_cron_event_loop_smoke_artifact_job",
         "ci_dual_repo_installed_release_smoke_artifact_job",
         "ci_release_publication_closure_artifact_job",
         "ci_dual_repo_release_publication_closure_index_job",
@@ -1126,6 +1127,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "target/release-readiness-consumer/ao2-release-train-control-plane-bridge",
         "target/release-readiness-consumer/ao2-ai-task-board-control-plane-bridge",
         "target/release-readiness-consumer/ao2-pulse-task-board-closure-packet",
+        "target/release-readiness-consumer/ao2-pulse-codex-cron-event-loop-smoke",
         "target/release-readiness-consumer/ao2-dual-repo-installed-release-smoke",
         "target/release-readiness-consumer/ao2-release-publication-closure",
         "target/release-readiness-consumer/ao2-dual-repo-release-publication-closure-index",
@@ -1133,6 +1135,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.release-train-control-plane-bridge.v1",
         "ao2.ai-task-board-control-plane-bridge.v1",
         "ao2.pulse-task-board-closure-packet.v1",
+        "ao2.pulse-codex-cron-event-loop-smoke.v1",
+        "codex-cron.event-loop-decision.v1",
         "ao2.dual-repo-installed-release-smoke.v1",
         "ao2.release-publication-dry-run-closure.v1",
         "ao2.cp-release-publication-closure.v1",
@@ -1144,6 +1148,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "release_train_control_plane_bridge",
         "ai_task_board_control_plane_bridge",
         "pulse_task_board_closure_packet",
+        "pulse_codex_cron_event_loop_smoke",
         "dual_repo_installed_release_smoke",
         "release_publication_closure",
         "dual_repo_release_publication_closure_index",
@@ -1174,9 +1179,12 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "npm run pulse:task-board-closure-packet",
         "ao2.pulse-task-board-closure-packet.v1",
         "ao2-pulse-task-board-closure-packet",
+        "pulse-codex-cron-event-loop-smoke-artifacts:",
+        "name: Pulse codex-cron event-loop smoke artifacts",
+        "ao2-pulse-codex-cron-event-loop-smoke",
         "release-readiness-artifact-consumer:",
         "name: Release readiness artifact consumer",
-        "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index]",
+        "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-codex-cron-event-loop-smoke-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index]",
         "uses: actions/download-artifact@v8.0.1",
         "name: ao2-release-readiness",
         "path: target/release-readiness-consumer/ao2-release-readiness",
@@ -1186,6 +1194,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "path: target/release-readiness-consumer/ao2-ai-task-board-control-plane-bridge",
         "name: ao2-pulse-task-board-closure-packet",
         "path: target/release-readiness-consumer/ao2-pulse-task-board-closure-packet",
+        "name: ao2-pulse-codex-cron-event-loop-smoke",
+        "path: target/release-readiness-consumer/ao2-pulse-codex-cron-event-loop-smoke",
         "name: ao2-dual-repo-installed-release-smoke",
         "path: target/release-readiness-consumer/ao2-dual-repo-installed-release-smoke",
         "name: ao2-release-publication-closure",
@@ -1200,6 +1210,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "task_board_bridge_summary.get('schema_version') == 'ao2.ai-task-board-control-plane-bridge.v1'",
         "pulse_task_board_closure_summary.get('schema_version') == 'ao2.pulse-task-board-closure-packet.v1'",
         "pulse_task_board_closure_summary.get('alignment', {}).get('safety_fields_preserved') is True",
+        "pulse_codex_cron_smoke_summary.get('schema_version') == 'ao2.pulse-codex-cron-event-loop-smoke.v1'",
+        "pulse_codex_cron_smoke_summary.get('codex_cron', {}).get('decision_source') == 'file'",
         "dual_repo_summary.get('schema_version') == 'ao2.dual-repo-installed-release-smoke.v1'",
         "publication_closure_summary.get('schema_version') == 'ao2.release-publication-dry-run-closure.v1'",
         "dual_repo_publication_closure_summary.get('schema_version') == 'ao2.dual-repo-release-publication-closure-index.v1'",
@@ -1244,6 +1256,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.release-train-control-plane-bridge.v1",
         "ao2-pulse-task-board-closure-packet",
         "ao2.pulse-task-board-closure-packet.v1",
+        "ao2-pulse-codex-cron-event-loop-smoke",
+        "ao2.pulse-codex-cron-event-loop-smoke.v1",
         "ao2-release-publication-closure",
         "ao2.release-publication-dry-run-closure.v1",
         "ao2-control-plane-release-publication-closure",
@@ -1285,6 +1299,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_release_train_control_plane_bridge_artifact_job",
         "ci_ai_task_board_control_plane_bridge_artifact_job",
         "ci_pulse_task_board_closure_packet_artifact_job",
+        "ci_pulse_codex_cron_event_loop_smoke_artifact_job",
         "ci_dual_repo_installed_release_smoke_artifact_job",
         "ci_release_publication_closure_artifact_job",
         "ci_dual_repo_release_publication_closure_index_job",
@@ -1309,6 +1324,9 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     assert artifacts["release_readiness_artifact_consumer"]["schema_versions"] == [
         "ao2.release-readiness-artifact-consumer.v1"
     ]
+    assert "ao2-pulse-codex-cron-event-loop-smoke" in artifacts[
+        "release_readiness_artifact_consumer"
+    ]["consumes"]
     assert artifacts["release_train_control_plane_bridge"]["artifact_name"] == (
         "ao2-release-train-control-plane-bridge"
     )
@@ -1342,6 +1360,27 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.pulse-next-actions.v1",
         "ao2.pulse-task-board-state.v1",
         "ao2.control-plane-fixture-consumer-smoke.v1",
+    ]
+    assert artifacts["pulse_codex_cron_event_loop_smoke"]["artifact_name"] == (
+        "ao2-pulse-codex-cron-event-loop-smoke"
+    )
+    assert artifacts["pulse_codex_cron_event_loop_smoke"]["producer_job"] == (
+        "pulse-codex-cron-event-loop-smoke-artifacts"
+    )
+    assert artifacts["pulse_codex_cron_event_loop_smoke"]["required_files"] == [
+        "latest/summary.json",
+        "latest/pulse-generate-next/summary.json",
+        "latest/pulse-next-recommended-tasks/codex-cron-event-loop-decision.json",
+        "latest/codex-cron-run-loop.stdout",
+    ]
+    assert artifacts["pulse_codex_cron_event_loop_smoke"]["schema_versions"] == [
+        "ao2.pulse-codex-cron-event-loop-smoke.v1",
+        "codex-cron.event-loop-decision.v1",
+        "ao2.pulse-codex-cron-event-loop-decision.v1",
+        "ao2.pulse-generate-next.v1",
+    ]
+    assert artifacts["pulse_codex_cron_event_loop_smoke"]["required_checks"] == [
+        "ci_pulse_codex_cron_event_loop_smoke_artifact_job"
     ]
     assert artifacts["dual_repo_installed_release_smoke"]["artifact_name"] == (
         "ao2-dual-repo-installed-release-smoke"

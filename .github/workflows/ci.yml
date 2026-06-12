@@ -876,7 +876,7 @@ jobs:
   release-readiness-artifact-consumer:
     name: Release readiness artifact consumer
     runs-on: ubuntu-latest
-    needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index]
+    needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-codex-cron-event-loop-smoke-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index]
     timeout-minutes: 5
     steps:
       - name: Download release-readiness artifact
@@ -899,6 +899,11 @@ jobs:
         with:
           name: ao2-pulse-task-board-closure-packet
           path: target/release-readiness-consumer/ao2-pulse-task-board-closure-packet
+      - name: Download Pulse codex-cron event-loop smoke artifact
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: ao2-pulse-codex-cron-event-loop-smoke
+          path: target/release-readiness-consumer/ao2-pulse-codex-cron-event-loop-smoke
       - name: Download dual-repo installed release smoke artifact
         uses: actions/download-artifact@v8.0.1
         with:
@@ -950,6 +955,18 @@ jobs:
           assert pulse_task_board_closure_summary.get('alignment', {}).get('task_ids_match') is True, pulse_task_board_closure_summary
           assert pulse_task_board_closure_summary.get('alignment', {}).get('safety_fields_preserved') is True, pulse_task_board_closure_summary
           assert pulse_task_board_closure_summary.get("checks", {}).get("control_plane_fixture_consumer", {}).get("operator_task_board_view_status") == "passed", pulse_task_board_closure_summary
+          pulse_codex_cron_smoke_artifact_root = Path("target/release-readiness-consumer/ao2-pulse-codex-cron-event-loop-smoke")
+          pulse_codex_cron_smoke_summary_path = pulse_codex_cron_smoke_artifact_root / "latest" / "summary.json"
+          pulse_codex_cron_smoke_summary = json.loads(pulse_codex_cron_smoke_summary_path.read_text(encoding="utf-8"))
+          assert pulse_codex_cron_smoke_summary.get('schema_version') == 'ao2.pulse-codex-cron-event-loop-smoke.v1', pulse_codex_cron_smoke_summary
+          assert pulse_codex_cron_smoke_summary.get("status") == "passed", pulse_codex_cron_smoke_summary
+          assert pulse_codex_cron_smoke_summary.get('codex_cron', {}).get('decision_source') == 'file', pulse_codex_cron_smoke_summary
+          assert pulse_codex_cron_smoke_summary.get("ao2", {}).get("decision_schema") == "codex-cron.event-loop-decision.v1", pulse_codex_cron_smoke_summary
+          assert pulse_codex_cron_smoke_summary.get("ao2", {}).get("ao2_decision_schema") == "ao2.pulse-codex-cron-event-loop-decision.v1", pulse_codex_cron_smoke_summary
+          assert pulse_codex_cron_smoke_summary.get("trust_boundary", {}).get("provider_execution") is False, pulse_codex_cron_smoke_summary
+          assert (pulse_codex_cron_smoke_artifact_root / "latest" / "pulse-generate-next" / "summary.json").is_file(), pulse_codex_cron_smoke_summary
+          assert (pulse_codex_cron_smoke_artifact_root / "latest" / "pulse-next-recommended-tasks" / "codex-cron-event-loop-decision.json").is_file(), pulse_codex_cron_smoke_summary
+          assert (pulse_codex_cron_smoke_artifact_root / "latest" / "codex-cron-run-loop.stdout").is_file(), pulse_codex_cron_smoke_summary
           dual_repo_artifact_root = Path("target/release-readiness-consumer/ao2-dual-repo-installed-release-smoke")
           dual_repo_summary_path = dual_repo_artifact_root / "latest" / "summary.json"
           dual_repo_summary = json.loads(dual_repo_summary_path.read_text(encoding="utf-8"))
@@ -988,6 +1005,7 @@ jobs:
               "ci_release_train_control_plane_bridge_artifact_job",
               "ci_ai_task_board_control_plane_bridge_artifact_job",
               "ci_pulse_task_board_closure_packet_artifact_job",
+              "ci_pulse_codex_cron_event_loop_smoke_artifact_job",
               "ci_dual_repo_installed_release_smoke_artifact_job",
               "ci_release_publication_closure_artifact_job",
               "ci_dual_repo_release_publication_closure_index_job",
@@ -1007,11 +1025,12 @@ jobs:
                   "ao2-release-train-control-plane-bridge",
                   "ao2-ai-task-board-control-plane-bridge",
                   "ao2-pulse-task-board-closure-packet",
+                  "ao2-pulse-codex-cron-event-loop-smoke",
                   "ao2-dual-repo-installed-release-smoke",
                   "ao2-release-publication-closure",
                   "ao2-dual-repo-release-publication-closure-index",
               ],
-              "source_summaries": [str(summary_path), str(bridge_summary_path), str(task_board_bridge_summary_path), str(pulse_task_board_closure_summary_path), str(dual_repo_summary_path), str(publication_closure_summary_path), str(dual_repo_publication_closure_summary_path)],
+              "source_summaries": [str(summary_path), str(bridge_summary_path), str(task_board_bridge_summary_path), str(pulse_task_board_closure_summary_path), str(pulse_codex_cron_smoke_summary_path), str(dual_repo_summary_path), str(publication_closure_summary_path), str(dual_repo_publication_closure_summary_path)],
               "required_checks": required_checks,
               "trust_boundary": {
                   "local_only": True,
