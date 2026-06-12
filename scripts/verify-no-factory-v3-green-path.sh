@@ -123,6 +123,8 @@ def classify(rel: str, line: str) -> tuple[bool, str]:
         return True, "evaluator_closer_owner"
     if "factory_v3_evaluator_closer_verified" in line:
         return True, "evaluator_closer_owner"
+    if "factory_v3_evaluator_closer_required" in line:
+        return True, "evaluator_closer_owner"
     if "boundary roles" in normalized and "workflow driver" in normalized:
         return True, "ao2_replacement_driver_contract"
     if "factory_v3_role" in line and (
