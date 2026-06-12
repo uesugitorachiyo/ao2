@@ -588,6 +588,36 @@ task_manifest = {
         "side_effects": "local_process_execution_and_packet_materialization",
     },
 }
+codex_cron_event_loop_decision = {
+    "schema_version": "codex-cron.event-loop-decision.v1",
+    "event_loop": {
+        "action": "continue" if tasks else "backoff",
+        "reason": (
+            f"AO2 Pulse generated {len(tasks)} next task(s) for {selection['id']}"
+            if tasks
+            else "AO2 Pulse generated no actionable tasks"
+        ),
+        "next_task_id": tasks[0]["id"] if tasks else None,
+    },
+    "ao2": {
+        "schema_version": "ao2.pulse-codex-cron-event-loop-decision.v1",
+        "generated_at_utc": utc_now(),
+        "status": "ready" if tasks else "backoff",
+        "selection": selection["id"],
+        "generation_mode": generation_mode,
+        "local_only_while_pr_blocked": local_only_while_pr_blocked,
+        "task_count": len(tasks),
+        "task_board_summary": str(task_board_root / "summary.json"),
+        "packet_summary": str(packet_root / "summary.json"),
+        "pulse_eval_loop": str(packet_root / "pulse-eval-loop.json"),
+        "task_manifest": str(packet_root / "pulse-task-manifest.json"),
+        "trust_boundary": {
+            "local_only": True,
+            "stores_credentials": False,
+            "side_effects": "local_artifact_materialization_only",
+        },
+    },
+}
 release_train = {
     "version": "v0.4.81",
     "theme": "AI task board control surface",
@@ -958,6 +988,7 @@ task_board_html = (
 (packet_root / "executor-evidence.json").write_text(json.dumps(executor, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 (packet_root / "pulse-eval-loop.json").write_text(json.dumps(eval_loop, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 (packet_root / "pulse-task-manifest.json").write_text(json.dumps(task_manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+(packet_root / "codex-cron-event-loop-decision.json").write_text(json.dumps(codex_cron_event_loop_decision, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 (task_board_root / "summary.json").write_text(json.dumps(task_board, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 (task_board_root / "board-state-summary.json").write_text(json.dumps(task_board_state_summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 (task_board_root / "board.md").write_text(task_board_md, encoding="utf-8")
@@ -982,6 +1013,7 @@ packet_summary = {
     "generation_mode": generation_mode,
     "local_only_while_pr_blocked": local_only_while_pr_blocked,
     "task_board_summary": str(task_board_root / "summary.json"),
+    "codex_cron_event_loop_decision": str(packet_root / "codex-cron-event-loop-decision.json"),
     "project_level_reassessment": project_level_reassessment,
     "strategic_score": selected_score,
     "strategic_scores": strategic_scores,
@@ -1008,6 +1040,7 @@ summary = {
     "generation_mode": generation_mode,
     "local_only_while_pr_blocked": local_only_while_pr_blocked,
     "task_board_summary": str(task_board_root / "summary.json"),
+    "codex_cron_event_loop_decision": str(packet_root / "codex-cron-event-loop-decision.json"),
     "project_level_reassessment": project_level_reassessment,
     "strategic_score": selected_score,
     "strategic_scores": strategic_scores,

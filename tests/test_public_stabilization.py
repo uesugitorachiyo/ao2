@@ -3241,6 +3241,10 @@ def test_pulse_generate_next_auto_registration_contract():
         "pulse-eval-loop.json",
         "pulse-task-manifest.json",
         "ao2.pulse-task-manifest.v1",
+        "codex-cron-event-loop-decision.json",
+        "codex_cron_event_loop_decision",
+        "codex-cron.event-loop-decision.v1",
+        "ao2.pulse-codex-cron-event-loop-decision.v1",
         "product_code_execution",
         "packet.md",
         "board.md",
@@ -3305,6 +3309,8 @@ def test_pulse_generate_next_auto_registration_contract():
         "AO2_PULSE_AUTO_ADVANCE_LOCAL_ONLY_WHILE_PR_BLOCKED=1",
         "local-only while PR-blocked mode",
         "target/pulse-generate-next/latest/summary.json",
+        "codex-cron.event-loop-decision.v1",
+        "ao2.pulse-codex-cron-event-loop-decision.v1",
     ]:
         assert needle in verification
 
@@ -3356,6 +3362,53 @@ def test_pulse_generate_next_writes_structured_task_manifest(tmp_path):
     summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
     assert any(item["path"] == "pulse-task-manifest.json" for item in summary["files"])
     assert summary["task_board_summary"] == str(task_board_root / "summary.json")
+
+
+def test_pulse_generate_next_writes_codex_cron_event_loop_decision(tmp_path):
+    out_root = tmp_path / "generate-next"
+    packet_root = tmp_path / "packet"
+    task_board_root = tmp_path / "task-board"
+    cursor = tmp_path / "cursor.json"
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:generate-next"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_GENERATE_NEXT_REGISTER": "0",
+            "AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY": "0",
+            "AO2_PULSE_GENERATE_NEXT_ROOT": str(out_root),
+            "AO2_PULSE_GENERATE_NEXT_PACKET_ROOT": str(packet_root),
+            "AO2_PULSE_TASK_BOARD_ROOT": str(task_board_root),
+            "AO2_PULSE_GENERATE_NEXT_CURSOR": str(cursor),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    decision_path = packet_root / "codex-cron-event-loop-decision.json"
+    decision = json.loads(decision_path.read_text(encoding="utf-8"))
+    assert decision["schema_version"] == "codex-cron.event-loop-decision.v1"
+    assert decision["event_loop"]["action"] == "continue"
+    assert decision["event_loop"]["reason"]
+    assert decision["event_loop"]["next_task_id"]
+    assert decision["ao2"]["schema_version"] == "ao2.pulse-codex-cron-event-loop-decision.v1"
+    assert decision["ao2"]["task_count"] > 0
+    assert decision["ao2"]["task_board_summary"] == str(task_board_root / "summary.json")
+    assert decision["ao2"]["trust_boundary"] == {
+        "local_only": True,
+        "stores_credentials": False,
+        "side_effects": "local_artifact_materialization_only",
+    }
+
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    packet_summary = json.loads((packet_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["codex_cron_event_loop_decision"] == str(decision_path)
+    assert packet_summary["codex_cron_event_loop_decision"] == str(decision_path)
+    assert any(item["path"] == "codex-cron-event-loop-decision.json" for item in summary["files"])
+    assert any(item["path"] == "codex-cron-event-loop-decision.json" for item in packet_summary["files"])
 
 
 def test_pulse_generate_next_emits_ai_task_board_control_surface(tmp_path):

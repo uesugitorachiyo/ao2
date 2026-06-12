@@ -180,6 +180,11 @@ operators to a stale generated identifier. It also writes
 generation snapshots under
 `${AO2_PULSE_TASK_BOARD_HISTORY_ROOT:-.ao2-local/pulse/task-board-history}` so
 operators can see whether the selected work changed between Pulse generations.
+For codex-cron event-loop handoff, the packet also includes
+`codex-cron-event-loop-decision.json` with
+`codex-cron.event-loop-decision.v1` at the top level and AO2 metadata under
+`ao2.pulse-codex-cron-event-loop-decision.v1`, allowing event-loop jobs to
+consume a structured continue/backoff decision without prompt scraping.
 When `AO2_PULSE_TASK_BOARD_STATUS_EVIDENCE` points at an
 `ao2.ai-task-board-status-evidence.v1` JSON file, the generated board applies
 task-id or stable-task-id keyed status transitions and records
