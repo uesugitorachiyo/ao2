@@ -583,6 +583,46 @@ def test_stable_release_readiness_reports_prerelease_blockers():
     assert "ao2.stable-release-readiness.v1" in verification
 
 
+def test_release_metadata_drift_audit_is_exposed_and_documented():
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["release:metadata-drift-audit"]
+        == "node scripts/run-sh-script.js scripts/release-metadata-drift-audit.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "release-metadata-drift-audit.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+
+    for needle in [
+        "ao2.release-metadata-drift-audit.v1",
+        "uesugitorachiyo/ao2",
+        "uesugitorachiyo/ao2-control-plane",
+        "v0.4.80",
+        "v0.1.12",
+        "AO2 v0.4.80 stable",
+        "ao2-control-plane v0.1.12 stable",
+        "docs/release/PUBLIC-RELEASE-VERIFICATION.md",
+        "docs/INSTALL.md",
+        "gh release view",
+        "release_name_drift",
+        "release_channel_drift",
+        "doc_channel_drift",
+        "mutates_releases",
+        "stores_credentials",
+    ]:
+        assert needle in text
+
+    verification = read("docs/VERIFICATION.md")
+    assert "npm run release:metadata-drift-audit" in verification
+    assert "ao2.release-metadata-drift-audit.v1" in verification
+
+    public_release_index = read("docs/release/PUBLIC-RELEASE-VERIFICATION.md")
+    assert "AO2 control-plane stable release: `v0.1.12`" in public_release_index
+    assert "AO2 control-plane prerelease" not in public_release_index
+
+
 def test_release_sync_provenance_assets_is_guarded_and_documented():
     package_json = json.loads(read("package.json"))
     assert (
@@ -990,6 +1030,8 @@ def test_release_readiness_script_is_local_only_and_checks_repo_guardrails():
         "report.html",
         "uesugitorachiyo/ao2",
         "uesugitorachiyo/ao2-control-plane",
+        "release:metadata-drift-audit",
+        "ao2.release-metadata-drift-audit.v1",
     ]
     for needle in required:
         assert needle in text
@@ -1012,6 +1054,9 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_dual_repo_installed_release_smoke_artifact_job",
         "ci_release_publication_closure_artifact_job",
         "ci_dual_repo_release_publication_closure_index_job",
+        "release_metadata_drift_audit",
+        "release_metadata_drift_audit_summary",
+        "release_metadata_drift_audit_status",
         "target/release-readiness-consumer/ao2-release-readiness",
         "target/release-readiness-consumer/ao2-release-train-control-plane-bridge",
         "target/release-readiness-consumer/ao2-ai-task-board-control-plane-bridge",
@@ -1027,6 +1072,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.release-publication-dry-run-closure.v1",
         "ao2.cp-release-publication-closure.v1",
         "ao2.dual-repo-release-publication-closure-index.v1",
+        "ao2.release-metadata-drift-audit.v1",
         "ao2.release-artifact-closure-index.v1",
         "artifact-closure-index.json",
         "release_readiness_artifact_consumer",
@@ -1036,6 +1082,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "dual_repo_installed_release_smoke",
         "release_publication_closure",
         "dual_repo_release_publication_closure_index",
+        "release_metadata_drift_audit",
     ]:
         assert needle in script
 

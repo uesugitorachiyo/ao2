@@ -785,6 +785,11 @@ Result:
   provenance verification, GitHub asset digest checks, and release metadata
   coherence into `ao2.release-immutability-audit.v1` at
   `target/release-immutability-audit/latest/summary.json`
+- `npm run release:metadata-drift-audit`: compares AO2 and ao2-control-plane
+  public GitHub Release tags, stable/prerelease flags, release titles, and
+  public release docs, then emits `ao2.release-metadata-drift-audit.v1` at
+  `target/release-metadata-drift-audit/latest/summary.json` without mutating
+  releases or storing credentials
 - `npm run release:sync-provenance-assets`: queries the configured AO2 GitHub
   Release and local `dist-provenance` sidecars, emits
   `ao2.release-sync-provenance-assets.v1`, and stays in dry-run mode unless
