@@ -133,14 +133,20 @@ checks without approving releases or mutating AO2 artifacts.
 `npm run release:stable-promotion-workflow` uses this hosted evidence before it
 can promote AO2 and `ao2-control-plane` releases from prerelease to stable. The
 workflow downloads the latest successful AO2 `Post Stable Release Verification`
-artifacts and the latest successful control-plane `Post Release Verification`
-artifacts, then emits `ao2.stable-promotion-evidence-gate.v1`.
+artifacts, including `ao2-dual-public-release-smoke`, and the latest successful
+control-plane `Post Release Verification` artifacts, then emits
+`ao2.stable-promotion-evidence-gate.v1`.
 
 The gate requires:
 
 - AO2 `post-stable-release-smoke-Linux`, `post-stable-release-smoke-macOS`,
   and `post-stable-release-smoke-Windows` artifacts with
   `signature_verified=true` install/update evidence;
+- AO2 `ao2-dual-public-release-smoke` with
+  `ao2.dual-public-release-smoke.v1`, passed task-board readback/dashboard
+  schemas, `auth_value_stored=false`, `credential_material_in_urls=false`,
+  `mutates_github_releases=false`, and
+  `control_plane_approves_release=false`;
 - control-plane `ao2-control-plane-post-release-verification-ubuntu`,
   `ao2-control-plane-post-release-verification-macos`, and
   `ao2-control-plane-post-release-verification-windows` artifacts with
