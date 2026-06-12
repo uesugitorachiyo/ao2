@@ -6,7 +6,7 @@ This is the operator index for verifying public release evidence across
 The current public release pair is:
 
 - AO2 stable release: `v0.4.80`
-- AO2 control-plane prerelease: `v0.1.12`
+- AO2 control-plane stable release: `v0.1.12`
 
 All checks below are read-only. They download release assets or GitHub Actions
 artifacts, verify checksums and summaries, and do not approve AO2 runs, mutate

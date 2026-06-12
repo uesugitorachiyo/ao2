@@ -90,6 +90,7 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 download_root = Path(sys.argv[1]).resolve()
 summary_path = Path(sys.argv[2]).resolve()
@@ -154,7 +155,7 @@ def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def find_json_with_schema(root: Path, schema_version: str) -> Path | None:
+def find_json_with_schema(root: Path, schema_version: str) -> Optional[Path]:
     for path in sorted(root.rglob("*.json")):
         try:
             payload = load_json(path)

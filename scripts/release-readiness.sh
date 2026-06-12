@@ -32,6 +32,7 @@ echo "mode=$MODE"
 python3 - "$ROOT" "$CP_ROOT" "$MODE" "$SUMMARY" <<'PY'
 import json
 import html
+import os
 import re
 import subprocess
 import sys
@@ -60,6 +61,7 @@ for name in [
     "release:readiness",
     "release:readiness:static",
     "release:readiness:regression-gate",
+    "release:metadata-drift-audit",
     "smoke:evidence-control-plane",
 ]:
     add(f"package_script:{name}", "passed" if name in scripts else "failed", scripts.get(name, "missing"))
@@ -285,6 +287,24 @@ add(
     "downloads release-readiness plus control-plane bridge artifacts and validates schema/status/core cross-OS checks",
 )
 
+release_metadata_drift_audit_script = read("scripts/release-metadata-drift-audit.sh")
+release_metadata_drift_audit_contract_ok = (
+    "ao2.release-metadata-drift-audit.v1" in release_metadata_drift_audit_script
+    and "gh" in release_metadata_drift_audit_script
+    and "release" in release_metadata_drift_audit_script
+    and "view" in release_metadata_drift_audit_script
+    and "release_name_drift" in release_metadata_drift_audit_script
+    and "release_channel_drift" in release_metadata_drift_audit_script
+    and "doc_channel_drift" in release_metadata_drift_audit_script
+    and "mutates_releases" in release_metadata_drift_audit_script
+    and "stores_credentials" in release_metadata_drift_audit_script
+)
+add(
+    "release_metadata_drift_audit_contract",
+    "passed" if release_metadata_drift_audit_contract_ok else "failed",
+    "validates release names, stable/prerelease channel flags, and public docs without mutation",
+)
+
 for workflow in [".github/workflows/release-gate.yml", ".github/workflows/public-release-build.yml"]:
     text = read(workflow)
     manual_only = (
@@ -294,7 +314,12 @@ for workflow in [".github/workflows/release-gate.yml", ".github/workflows/public
     )
     add(f"manual_release_workflow:{workflow}", "passed" if manual_only else "failed")
 
-for script in ["scripts/risky-pr-golden-path.sh", "scripts/release-readiness.sh", "scripts/smoke-evidence-pack-control-plane.sh"]:
+for script in [
+    "scripts/risky-pr-golden-path.sh",
+    "scripts/release-readiness.sh",
+    "scripts/smoke-evidence-pack-control-plane.sh",
+    "scripts/release-metadata-drift-audit.sh",
+]:
     path = root / script
     add(f"script_present:{script}", "passed" if path.is_file() else "failed")
     add(f"script_executable:{script}", "passed" if path.exists() and path.stat().st_mode & 0o100 else "failed")
@@ -304,10 +329,39 @@ for forbidden in ["OPENAI_API_" + "KEY=", "ANTHROPIC_API_" + "KEY=", "cat target
         "scripts/risky-pr-golden-path.sh",
         "scripts/release-readiness.sh",
         "scripts/smoke-evidence-pack-control-plane.sh",
+        "scripts/release-metadata-drift-audit.sh",
     ])
     add(f"provider_key_or_token_literal_absent:{forbidden}", "passed" if forbidden not in combined else "failed")
 
 if mode != "static-only":
+    release_metadata_drift_audit_summary = summary_path.with_name("release-metadata-drift-audit") / "summary.json"
+    audit_env = os.environ.copy()
+    audit_env["AO2_RELEASE_METADATA_DRIFT_AUDIT_ROOT"] = str(release_metadata_drift_audit_summary.parent)
+    result = subprocess.run(
+        ["npm", "run", "release:metadata-drift-audit"],
+        cwd=root,
+        env=audit_env,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    release_metadata_drift_audit_status = "missing"
+    if release_metadata_drift_audit_summary.is_file():
+        release_metadata_drift_audit_payload = json.loads(
+            release_metadata_drift_audit_summary.read_text(encoding="utf-8")
+        )
+        release_metadata_drift_audit_status = str(
+            release_metadata_drift_audit_payload.get("status")
+        )
+    add(
+        "release_metadata_drift_audit",
+        "passed"
+        if result.returncode == 0 and release_metadata_drift_audit_status == "passed"
+        else "failed",
+        f"release_metadata_drift_audit_summary={release_metadata_drift_audit_summary} "
+        f"release_metadata_drift_audit_status={release_metadata_drift_audit_status}",
+    )
+
     for repo, expected_min in [("uesugitorachiyo/ao2", 1), ("uesugitorachiyo/ao2-control-plane", 1)]:
         result = run(["gh", "api", f"repos/{repo}/branches/main/protection"])
         if result.returncode != 0:
