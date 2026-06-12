@@ -130,6 +130,7 @@
     "pulse:generate-next:contract": "node scripts/run-sh-script.js scripts/pulse-generate-next-contract.sh",
     "pulse:task-board-state": "node scripts/run-sh-script.js scripts/pulse-task-board-state.sh",
     "pulse:next-actions": "node scripts/run-sh-script.js scripts/pulse-next-actions.sh",
+    "pulse:task-board-closure-packet": "node scripts/run-sh-script.js scripts/pulse-task-board-closure-packet.sh",
     "pulse:code-agent-runner": "node scripts/run-sh-script.js scripts/pulse-code-agent-runner.sh",
     "pulse:task-executor": "node scripts/run-sh-script.js scripts/pulse-task-executor.sh",
     "pulse:next-task-quality-filter": "node scripts/run-sh-script.js scripts/pulse-next-task-quality-filter.sh",

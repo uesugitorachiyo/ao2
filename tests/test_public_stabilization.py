@@ -1005,18 +1005,21 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_release_readiness_static_artifact_job",
         "ci_release_readiness_artifact_consumer_job",
         "ci_ai_task_board_control_plane_bridge_artifact_job",
+        "ci_pulse_task_board_closure_packet_artifact_job",
         "ci_dual_repo_installed_release_smoke_artifact_job",
         "ci_release_publication_closure_artifact_job",
         "ci_dual_repo_release_publication_closure_index_job",
         "target/release-readiness-consumer/ao2-release-readiness",
         "target/release-readiness-consumer/ao2-release-train-control-plane-bridge",
         "target/release-readiness-consumer/ao2-ai-task-board-control-plane-bridge",
+        "target/release-readiness-consumer/ao2-pulse-task-board-closure-packet",
         "target/release-readiness-consumer/ao2-dual-repo-installed-release-smoke",
         "target/release-readiness-consumer/ao2-release-publication-closure",
         "target/release-readiness-consumer/ao2-dual-repo-release-publication-closure-index",
         "ao2.release-readiness-local.v1",
         "ao2.release-train-control-plane-bridge.v1",
         "ao2.ai-task-board-control-plane-bridge.v1",
+        "ao2.pulse-task-board-closure-packet.v1",
         "ao2.dual-repo-installed-release-smoke.v1",
         "ao2.release-publication-dry-run-closure.v1",
         "ao2.cp-release-publication-closure.v1",
@@ -1026,6 +1029,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "release_readiness_artifact_consumer",
         "release_train_control_plane_bridge",
         "ai_task_board_control_plane_bridge",
+        "pulse_task_board_closure_packet",
         "dual_repo_installed_release_smoke",
         "release_publication_closure",
         "dual_repo_release_publication_closure_index",
@@ -1049,9 +1053,15 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "gh release download",
         "AO2_RELEASE_PROVENANCE_DIR=target/release-publication-provenance",
         "AO2_RELEASE_ASSET_PUBLICATION_READINESS_CI_SAFE=1",
+        "pulse-task-board-closure-packet-artifacts:",
+        "name: Pulse task-board closure packet artifacts",
+        "AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_ROOT=target/pulse-task-board-closure-packet-ci",
+        "npm run pulse:task-board-closure-packet",
+        "ao2.pulse-task-board-closure-packet.v1",
+        "ao2-pulse-task-board-closure-packet",
         "release-readiness-artifact-consumer:",
         "name: Release readiness artifact consumer",
-        "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index]",
+        "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index]",
         "uses: actions/download-artifact@v8.0.1",
         "name: ao2-release-readiness",
         "path: target/release-readiness-consumer/ao2-release-readiness",
@@ -1059,6 +1069,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "path: target/release-readiness-consumer/ao2-release-train-control-plane-bridge",
         "name: ao2-ai-task-board-control-plane-bridge",
         "path: target/release-readiness-consumer/ao2-ai-task-board-control-plane-bridge",
+        "name: ao2-pulse-task-board-closure-packet",
+        "path: target/release-readiness-consumer/ao2-pulse-task-board-closure-packet",
         "name: ao2-dual-repo-installed-release-smoke",
         "path: target/release-readiness-consumer/ao2-dual-repo-installed-release-smoke",
         "name: ao2-release-publication-closure",
@@ -1071,6 +1083,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "schema_version') == 'ao2.release-readiness-local.v1'",
         "bridge_summary.get('schema_version') == 'ao2.release-train-control-plane-bridge.v1'",
         "task_board_bridge_summary.get('schema_version') == 'ao2.ai-task-board-control-plane-bridge.v1'",
+        "pulse_task_board_closure_summary.get('schema_version') == 'ao2.pulse-task-board-closure-packet.v1'",
+        "pulse_task_board_closure_summary.get('alignment', {}).get('safety_fields_preserved') is True",
         "dual_repo_summary.get('schema_version') == 'ao2.dual-repo-installed-release-smoke.v1'",
         "publication_closure_summary.get('schema_version') == 'ao2.release-publication-dry-run-closure.v1'",
         "dual_repo_publication_closure_summary.get('schema_version') == 'ao2.dual-repo-release-publication-closure-index.v1'",
@@ -1082,6 +1096,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_job_required_os:workbench-operator-packet-control-plane-smoke",
         "ci_release_readiness_static_artifact_job",
         "ci_ai_task_board_control_plane_bridge_artifact_job",
+        "ci_pulse_task_board_closure_packet_artifact_job",
         "ci_dual_repo_installed_release_smoke_artifact_job",
         "ci_release_publication_closure_artifact_job",
         "ci_dual_repo_release_publication_closure_index_job",
@@ -1112,6 +1127,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.release-readiness-artifact-consumer.v1",
         "ao2-release-train-control-plane-bridge",
         "ao2.release-train-control-plane-bridge.v1",
+        "ao2-pulse-task-board-closure-packet",
+        "ao2.pulse-task-board-closure-packet.v1",
         "ao2-release-publication-closure",
         "ao2.release-publication-dry-run-closure.v1",
         "ao2-control-plane-release-publication-closure",
@@ -1152,6 +1169,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_release_readiness_artifact_consumer_job",
         "ci_release_train_control_plane_bridge_artifact_job",
         "ci_ai_task_board_control_plane_bridge_artifact_job",
+        "ci_pulse_task_board_closure_packet_artifact_job",
         "ci_dual_repo_installed_release_smoke_artifact_job",
         "ci_release_publication_closure_artifact_job",
         "ci_dual_repo_release_publication_closure_index_job",
@@ -1197,6 +1215,18 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.ai-task-board-control-plane-bridge-smoke.v1",
         "ao2.cp-ai-task-board-readback.v1",
         "ao2.cp-ai-task-board-dashboard.v1",
+    ]
+    assert artifacts["pulse_task_board_closure_packet"]["artifact_name"] == (
+        "ao2-pulse-task-board-closure-packet"
+    )
+    assert artifacts["pulse_task_board_closure_packet"]["producer_job"] == (
+        "pulse-task-board-closure-packet-artifacts"
+    )
+    assert artifacts["pulse_task_board_closure_packet"]["schema_versions"] == [
+        "ao2.pulse-task-board-closure-packet.v1",
+        "ao2.pulse-next-actions.v1",
+        "ao2.pulse-task-board-state.v1",
+        "ao2.control-plane-fixture-consumer-smoke.v1",
     ]
     assert artifacts["dual_repo_installed_release_smoke"]["artifact_name"] == (
         "ao2-dual-repo-installed-release-smoke"
@@ -1394,6 +1424,85 @@ def test_ai_task_board_control_plane_bridge_release_note_evidence():
         "ao2.cp-ai-task-board-dashboard.v1",
     ]:
         assert needle in release_doc
+
+
+def test_pulse_task_board_closure_packet_contract():
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["pulse:task-board-closure-packet"]
+        == "node scripts/run-sh-script.js scripts/pulse-task-board-closure-packet.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "pulse-task-board-closure-packet.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.pulse-task-board-closure-packet.v1",
+        "AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_ROOT",
+        "AO2_PULSE_GENERATE_NEXT_REGISTER=0",
+        "AO2_PULSE_TASK_BOARD_ROOT",
+        "AO2_PULSE_NEXT_ACTIONS_BOARD",
+        "AO2_PULSE_TASK_BOARD_STATE_BOARD",
+        "AO2_CP_FIXTURE_CONSUMER_TASK_BOARD",
+        "npm run pulse:generate-next",
+        "npm run pulse:next-actions",
+        "npm run pulse:task-board-state",
+        "npm run control-plane:fixture-consumer-smoke",
+        "required_evidence",
+        "stop_conditions",
+        "operator_task_board_view",
+        "stores_credentials",
+        "mutates_releases",
+    ]:
+        assert needle in text
+
+    for forbidden in [
+        "/Users/torachiyouesugi/Documents/private",
+        "target/long-lived-control-plane/api-token",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "gh release create",
+        "git push origin",
+        "npm publish",
+    ]:
+        assert forbidden not in text
+
+
+def test_pulse_task_board_closure_packet_executes_with_safety_fields(tmp_path):
+    out_root = tmp_path / "closure-packet"
+    result = subprocess.run(
+        ["npm", "run", "pulse:task-board-closure-packet"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_ROOT": str(out_root),
+        },
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "latest" / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.pulse-task-board-closure-packet.v1"
+    assert summary["status"] == "passed"
+    assert summary["task_count"] >= 1
+    assert summary["alignment"]["task_ids_match"] is True
+    assert summary["alignment"]["safety_fields_preserved"] is True
+    assert summary["checks"]["task_board"]["schema_version"] == "ao2.ai-task-board.v1"
+    assert summary["checks"]["next_actions"]["schema_version"] == "ao2.pulse-next-actions.v1"
+    assert summary["checks"]["task_board_state"]["schema_version"] == "ao2.pulse-task-board-state.v1"
+    assert summary["checks"]["control_plane_fixture_consumer"]["schema_version"] == "ao2.control-plane-fixture-consumer-smoke.v1"
+    assert summary["checks"]["control_plane_fixture_consumer"]["operator_task_board_view_status"] == "passed"
+    assert summary["trust_boundary"]["local_only"] is True
+    assert summary["trust_boundary"]["stores_credentials"] is False
+    assert summary["trust_boundary"]["mutates_releases"] is False
+
+    first_action = summary["next_actions"][0]
+    assert first_action["required_evidence_count"] >= 1
+    assert first_action["stop_conditions_count"] >= 1
+    assert (out_root / "latest" / "closure-packet.md").is_file()
 
 
 def test_verification_docs_include_next_length_task_commands():

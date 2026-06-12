@@ -107,6 +107,7 @@ npm run pulse:pr-ci-gate:update
 npm run pulse:generate-next
 npm run pulse:task-board-state
 npm run pulse:next-actions
+npm run pulse:task-board-closure-packet
 npm run pulse:daemon:start
 npm run pulse:daemon:status
 ```
@@ -210,6 +211,15 @@ operators can see why the action is safe and when to stop. Set
 statuses. Both commands write failed summaries for missing, invalid-schema, or
 invalid-JSON board inputs so local operators can diagnose stale or malformed
 board artifacts without regenerating.
+`npm run pulse:task-board-closure-packet` regenerates a local task board and
+then composes `pulse:next-actions`, `pulse:task-board-state`, and
+`control-plane:fixture-consumer-smoke` into
+`ao2.pulse-task-board-closure-packet.v1` at
+`target/pulse-task-board-closure-packet/latest/summary.json`. The packet fails
+closed unless task IDs align across the board/state/next-action artifacts,
+required evidence and stop conditions survive into the compact next-action
+view, and the read-only control-plane fixture view passes without credential or
+release mutation authority.
 The board preserves the current release objective, source recommendation,
 rationale, required evidence, stop conditions, and read-only control-plane
 readback semantics without granting mutation authority. For the Risky PR
@@ -496,21 +506,26 @@ Result:
   `ao2.release-artifact-closure-index.v1` coverage for
   `ao2-release-readiness`, `ao2-release-train-control-plane-bridge`,
   `ao2-ai-task-board-control-plane-bridge`,
+  `ao2-pulse-task-board-closure-packet`,
   `ao2-dual-repo-installed-release-smoke`,
   `ao2-release-publication-closure`,
   `ao2-dual-repo-release-publication-closure-index`, and
   `ao2-release-readiness-consumer`
 - `Release readiness artifact consumer`: CI job that depends on
   `Release readiness artifacts` and `Release train control-plane bridge
-  artifacts`, the AI task-board bridge, dual-repo installed release smoke, and
-  `Release publication closure artifacts`, plus the dual-repo publication
-  closure index; downloads `ao2-release-readiness`,
+  artifacts`, the AI task-board bridge, Pulse task-board closure packet,
+  dual-repo installed release smoke, and `Release publication closure
+  artifacts`, plus the dual-repo publication closure index; downloads
+  `ao2-release-readiness`,
   `ao2-release-train-control-plane-bridge`,
   `ao2-ai-task-board-control-plane-bridge`,
+  `ao2-pulse-task-board-closure-packet`,
   `ao2-dual-repo-installed-release-smoke`, and
   `ao2-release-publication-closure`; validates the
   `ao2.release-readiness-local.v1` summary/status/core cross-OS checks, the
-  control-plane bridge/readback schemas, and the
+  control-plane bridge/readback schemas, the
+  `ao2.pulse-task-board-closure-packet.v1` task alignment and safety-field
+  preservation checks, and the
   `ao2.release-publication-dry-run-closure.v1` publication/stable readiness
   fields. The companion `Dual-repo release publication closure index` job
   downloads AO2's `ao2-release-publication-closure` and the latest successful
