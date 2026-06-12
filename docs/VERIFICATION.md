@@ -547,7 +547,10 @@ Result:
   `ao2.pulse-task-board-closure-packet.v1` task alignment and safety-field
   preservation checks, the
   `ao2.pulse-codex-cron-event-loop-smoke.v1` event-loop handoff with
-  `decision_source=file`, and the
+  `decision_source=file`, the nested ready
+  `ao2.pulse-generate-next.v1` summary, the
+  `codex-cron.event-loop-decision.v1` decision file, the embedded
+  `ao2.pulse-codex-cron-event-loop-decision.v1` metadata, and the
   `ao2.release-publication-dry-run-closure.v1` publication/stable readiness
   fields. The companion `Dual-repo release publication closure index` job
   downloads AO2's `ao2-release-publication-closure` and the latest successful
