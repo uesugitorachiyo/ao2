@@ -42,7 +42,7 @@ fn handle_request(stream: &mut TcpStream, body: &str, content_type: &str, status
     stream
         .write_all(response.as_bytes())
         .expect("write response");
-    let _ = stream.shutdown(std::net::Shutdown::Both);
+    stream.flush().expect("flush response");
 }
 
 fn accept_one(listener: &TcpListener) -> TcpStream {
@@ -270,8 +270,10 @@ fn cp_release_snapshot_sends_bearer_authorization_header() {
                 body.len(),
                 body
             );
-            let _ = stream.write_all(response.as_bytes());
-            let _ = stream.shutdown(std::net::Shutdown::Both);
+            stream
+                .write_all(response.as_bytes())
+                .expect("write response");
+            stream.flush().expect("flush response");
         }
     });
 
