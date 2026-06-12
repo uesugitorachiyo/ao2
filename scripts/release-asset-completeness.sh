@@ -136,6 +136,7 @@ for component in components:
             "repo": component["repo"],
             "tag": component["tag"],
             "release_url": release.get("url"),
+            "release_name": release.get("name"),
             "is_prerelease": is_prerelease,
             "stable_release_present": stable_release_present,
             "release_channel": release_channel,
@@ -172,6 +173,7 @@ for item in results:
     rows.append(
         "<tr>"
         f"<td>{html.escape(item['name'])}</td>"
+        f"<td>{html.escape(str(item['release_name']))}</td>"
         f"<td><a href=\"{html.escape(str(item['release_url']))}\">{html.escape(item['tag'])}</a></td>"
         f"<td>{html.escape(item['release_channel'])}</td>"
         f"<td>{html.escape(stable_label)}</td>"
@@ -190,7 +192,7 @@ dashboard_path.write_text(
     "</head><body><h1>AO2 Release State Dashboard</h1>"
     f"<p>Status: <code>{html.escape(payload['status'])}</code></p>"
     "<p>Stable release absent means the current public artifact is intentionally a prerelease, not a full stable release.</p>"
-    "<table><thead><tr><th>Component</th><th>Tag</th><th>Channel</th><th>Stable</th><th>Prerelease</th>"
+    "<table><thead><tr><th>Component</th><th>Release Name</th><th>Tag</th><th>Channel</th><th>Stable</th><th>Prerelease</th>"
     "<th>Asset Gate</th><th>Missing Assets</th><th>Missing Checksums</th></tr></thead>"
     f"<tbody>{''.join(rows)}</tbody></table></body></html>\n",
     encoding="utf-8",
