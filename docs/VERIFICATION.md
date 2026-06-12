@@ -818,6 +818,11 @@ Result:
   temporary bin directory, require `signature_verified` install-update evidence,
   then run `ao2 version --json`, `ao2 doctor --json`, and
   `ao2 adapter doctor --provider scripted`
+- `npm run release:dual-public-smoke`: downloads the published AO2 and control-plane archives
+  for Linux x86_64, verifies both public `SHA256SUMS`
+  manifests, starts the published control-plane server, and emits
+  `ao2.dual-public-release-smoke.v1` evidence with task-board readback schemas
+  proving the release pair interoperates without mutating GitHub releases
 - `npm run release:cross-os-attestation` emits
   `ao2.cross-os-release-attestation.v1` at
   `target/cross-os-release-artifact-attestation/latest/summary.json`; by

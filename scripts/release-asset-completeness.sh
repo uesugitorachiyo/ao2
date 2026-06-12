@@ -51,14 +51,13 @@ components = [
     {
         "name": "ao2-control-plane",
         "repo": "uesugitorachiyo/ao2-control-plane",
-        "tag": "v0.1.12",
+        "tag": "v0.1.13",
         "expected_assets": [
-            "ao2-control-plane-0.1.12-macos-aarch64.tar.gz",
-            "ao2-control-plane-release-support-fixture-parity-summary.json",
-            "ao2-control-plane-release-train-bridge-macos-summary.json",
-            "ao2-control-plane-release-train-bridge-ubuntu-summary.json",
-            "ao2-control-plane-release-train-bridge-windows-summary.json",
+            "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
+            "ao2-control-plane-0.1.13-macos-aarch64.tar.gz",
+            "ao2-control-plane-0.1.13-windows-x86_64.tar.gz",
             "SHA256SUMS",
+            "summary.json",
         ],
     },
 ]

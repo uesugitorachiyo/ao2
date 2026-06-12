@@ -152,3 +152,63 @@ jobs:
             smoke/doctor.json
             smoke/scripted-doctor.txt
           if-no-files-found: error
+
+  dual-public-release-smoke:
+    name: Dual public release smoke
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout smoke helpers
+        uses: actions/checkout@v6.0.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+
+      - name: Run dual public release smoke
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          AO2_PUBLIC_RELEASE_SMOKE_ROOT=target/dual-public-release-smoke \
+            npm run release:dual-public-smoke
+
+      - name: Validate dual public release smoke evidence
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("target/dual-public-release-smoke/latest")
+          summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
+          assert summary["schema_version"] == "ao2.dual-public-release-smoke.v1", summary
+          assert summary["status"] == "passed", summary
+          assert summary["release_pair"]["ao2"]["repo"] == "uesugitorachiyo/ao2", summary
+          assert summary["release_pair"]["ao2_control_plane"]["repo"] == "uesugitorachiyo/ao2-control-plane", summary
+          assert summary["archives"]["ao2"]["manifest_schema"] == "ao2.release-manifest.v1", summary
+          assert summary["archives"]["ao2_control_plane"]["manifest_schema"] == "ao2-control-plane.release-manifest.v1", summary
+          trust_boundary = summary["trust_boundary"]
+          assert trust_boundary["downloads_public_release_archives"] is True, summary
+          assert trust_boundary["auth_value_stored"] is False, summary
+          assert trust_boundary["credential_material_included"] is False, summary
+          assert trust_boundary["mutates_github_releases"] is False, summary
+          assert trust_boundary["control_plane_approves_release"] is False, summary
+          readback = json.loads((root / "smoke" / "task-board-readback.json").read_text(encoding="utf-8"))
+          dashboard = json.loads((root / "smoke" / "task-board-dashboard.json").read_text(encoding="utf-8"))
+          assert readback["schema_version"] == "ao2.cp-ai-task-board-readback.v1", readback
+          assert dashboard["schema_version"] == "ao2.cp-ai-task-board-dashboard.v1", dashboard
+          PY
+          test -f target/dual-public-release-smoke/latest/summary.json
+          test -f target/dual-public-release-smoke/latest/smoke/ao2-version.json
+          test -f target/dual-public-release-smoke/latest/smoke/task-board.json
+          test -f target/dual-public-release-smoke/latest/smoke/ingest-receipt.json
+          test -f target/dual-public-release-smoke/latest/smoke/task-board-readback.json
+          test -f target/dual-public-release-smoke/latest/smoke/task-board-dashboard.json
+
+      - name: Upload dual public release smoke evidence
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-dual-public-release-smoke
+          path: target/dual-public-release-smoke
+          if-no-files-found: error
