@@ -1406,6 +1406,170 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     assert closure["trust_boundary"]["stores_credentials"] is False
 
 
+def _write_release_readiness_consumer_json(root: Path, rel_path: str, payload):
+    path = root / rel_path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _write_release_readiness_consumer_fixture(root: Path):
+    required_checks = [
+        "ci_job_required_os:verify",
+        "ci_job_required_os:release-archive-hosted-smoke",
+        "ci_job_required_os:workbench-operator-packet-control-plane-smoke",
+        "ci_release_readiness_static_artifact_job",
+        "ci_release_train_control_plane_bridge_artifact_job",
+        "ci_ai_task_board_control_plane_bridge_artifact_job",
+        "ci_pulse_task_board_closure_packet_artifact_job",
+        "ci_pulse_codex_cron_event_loop_smoke_artifact_job",
+        "ci_dual_repo_installed_release_smoke_artifact_job",
+        "ci_release_publication_closure_artifact_job",
+        "ci_dual_repo_release_publication_closure_index_job",
+    ]
+    _write_release_readiness_consumer_json(
+        root,
+        "ao2-release-readiness/summary.json",
+        {
+            "schema_version": "ao2.release-readiness-local.v1",
+            "status": "passed",
+            "checks": [{"name": name, "status": "passed"} for name in required_checks],
+        },
+    )
+    _write_release_readiness_consumer_json(
+        root,
+        "ao2-release-train-control-plane-bridge/latest/summary.json",
+        {
+            "schema_version": "ao2.release-train-control-plane-bridge.v1",
+            "status": "passed",
+            "control_plane": {"smoke": "passed"},
+        },
+    )
+    _write_release_readiness_consumer_json(
+        root,
+        "ao2-ai-task-board-control-plane-bridge/latest/summary.json",
+        {
+            "schema_version": "ao2.ai-task-board-control-plane-bridge.v1",
+            "status": "passed",
+            "control_plane": {"smoke": "passed"},
+        },
+    )
+    _write_release_readiness_consumer_json(
+        root,
+        "ao2-ai-task-board-control-plane-bridge/latest/control-plane-smoke/summary.json",
+        {
+            "latest": {"schema_version": "ao2.cp-ai-task-board-readback.v1"},
+            "dashboard": {"schema_version": "ao2.cp-ai-task-board-dashboard.v1"},
+        },
+    )
+    _write_release_readiness_consumer_json(
+        root,
+        "ao2-pulse-task-board-closure-packet/latest/summary.json",
+        {
+            "schema_version": "ao2.pulse-task-board-closure-packet.v1",
+            "status": "passed",
+            "alignment": {"task_ids_match": True, "safety_fields_preserved": True},
+            "checks": {
+                "control_plane_fixture_consumer": {
+                    "operator_task_board_view_status": "passed"
+                }
+            },
+        },
+    )
+    _write_release_readiness_consumer_json(
+        root,
+        "ao2-pulse-codex-cron-event-loop-smoke/latest/summary.json",
+        {
+            "schema_version": "ao2.pulse-codex-cron-event-loop-smoke.v1",
+            "status": "passed",
+            "codex_cron": {"decision_source": "file"},
+            "ao2": {
+                "decision_schema": "codex-cron.event-loop-decision.v1",
+                "ao2_decision_schema": "ao2.pulse-codex-cron-event-loop-decision.v1",
+            },
+            "trust_boundary": {"provider_execution": False},
+        },
+    )
+    _write_release_readiness_consumer_json(
+        root,
+        "ao2-pulse-codex-cron-event-loop-smoke/latest/pulse-generate-next/summary.json",
+        {"schema_version": "ao2.pulse-generate-next.v1", "status": "ready"},
+    )
+    _write_release_readiness_consumer_json(
+        root,
+        "ao2-pulse-codex-cron-event-loop-smoke/latest/pulse-next-recommended-tasks/codex-cron-event-loop-decision.json",
+        {
+            "schema_version": "codex-cron.event-loop-decision.v1",
+            "ao2": {
+                "schema_version": "ao2.pulse-codex-cron-event-loop-decision.v1"
+            },
+        },
+    )
+    stdout_path = (
+        root
+        / "ao2-pulse-codex-cron-event-loop-smoke/latest/codex-cron-run-loop.stdout"
+    )
+    stdout_path.parent.mkdir(parents=True, exist_ok=True)
+    stdout_path.write_text("ok\n", encoding="utf-8")
+    _write_release_readiness_consumer_json(
+        root,
+        "ao2-dual-repo-installed-release-smoke/latest/summary.json",
+        {
+            "schema_version": "ao2.dual-repo-installed-release-smoke.v1",
+            "status": "passed",
+            "archives": {
+                "ao2": {"manifest_schema": "ao2.release-manifest.v1"},
+                "ao2_control_plane": {
+                    "manifest_schema": "ao2-control-plane.release-manifest.v1"
+                },
+            },
+            "trust_boundary": {"auth_value_stored": False},
+        },
+    )
+    _write_release_readiness_consumer_json(
+        root,
+        "ao2-release-publication-closure/summary.json",
+        {
+            "schema_version": "ao2.release-publication-dry-run-closure.v1",
+            "status": "passed",
+            "publication_ready": True,
+            "stable_release_ready": True,
+            "publication_state": {"dry_run": True, "upload_status": "not_attempted"},
+            "trust_boundary": {"mutates_releases": False, "stores_credentials": False},
+        },
+    )
+    _write_release_readiness_consumer_json(
+        root,
+        "ao2-dual-repo-release-publication-closure-index/summary.json",
+        {
+            "schema_version": "ao2.dual-repo-release-publication-closure-index.v1",
+            "status": "passed",
+            "ao2": {"schema_version": "ao2.release-publication-dry-run-closure.v1"},
+            "control_plane": {
+                "schema_version": "ao2.cp-release-publication-closure.v1",
+                "checksum_verified": True,
+            },
+            "trust_boundary": {
+                "mutates_releases": False,
+                "mutates_github_releases": False,
+            },
+        },
+    )
+
+
+def _run_release_readiness_artifact_consumer(root: Path):
+    return subprocess.run(
+        ["npm", "run", "release:readiness:artifact-consumer"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        env={**os.environ, "AO2_RELEASE_READINESS_CONSUMER_ROOT": str(root)},
+        check=False,
+    )
+
+
 def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_path):
     package_json = json.loads(read("package.json"))
     assert package_json["scripts"]["release:readiness:artifact-consumer"] == (
@@ -1439,141 +1603,9 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
     assert "python3 - <<'PY'" not in consumer_ci
 
     root = tmp_path / "release-readiness-consumer"
+    _write_release_readiness_consumer_fixture(root)
 
-    def write_json(rel_path, payload):
-        path = root / rel_path
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-
-    required_checks = [
-        "ci_job_required_os:verify",
-        "ci_job_required_os:release-archive-hosted-smoke",
-        "ci_job_required_os:workbench-operator-packet-control-plane-smoke",
-        "ci_release_readiness_static_artifact_job",
-        "ci_release_train_control_plane_bridge_artifact_job",
-        "ci_ai_task_board_control_plane_bridge_artifact_job",
-        "ci_pulse_task_board_closure_packet_artifact_job",
-        "ci_pulse_codex_cron_event_loop_smoke_artifact_job",
-        "ci_dual_repo_installed_release_smoke_artifact_job",
-        "ci_release_publication_closure_artifact_job",
-        "ci_dual_repo_release_publication_closure_index_job",
-    ]
-    write_json(
-        "ao2-release-readiness/summary.json",
-        {
-            "schema_version": "ao2.release-readiness-local.v1",
-            "status": "passed",
-            "checks": [{"name": name, "status": "passed"} for name in required_checks],
-        },
-    )
-    write_json(
-        "ao2-release-train-control-plane-bridge/latest/summary.json",
-        {
-            "schema_version": "ao2.release-train-control-plane-bridge.v1",
-            "status": "passed",
-            "control_plane": {"smoke": "passed"},
-        },
-    )
-    write_json(
-        "ao2-ai-task-board-control-plane-bridge/latest/summary.json",
-        {
-            "schema_version": "ao2.ai-task-board-control-plane-bridge.v1",
-            "status": "passed",
-            "control_plane": {"smoke": "passed"},
-        },
-    )
-    write_json(
-        "ao2-ai-task-board-control-plane-bridge/latest/control-plane-smoke/summary.json",
-        {
-            "latest": {"schema_version": "ao2.cp-ai-task-board-readback.v1"},
-            "dashboard": {"schema_version": "ao2.cp-ai-task-board-dashboard.v1"},
-        },
-    )
-    write_json(
-        "ao2-pulse-task-board-closure-packet/latest/summary.json",
-        {
-            "schema_version": "ao2.pulse-task-board-closure-packet.v1",
-            "status": "passed",
-            "alignment": {"task_ids_match": True, "safety_fields_preserved": True},
-            "checks": {
-                "control_plane_fixture_consumer": {
-                    "operator_task_board_view_status": "passed"
-                }
-            },
-        },
-    )
-    write_json(
-        "ao2-pulse-codex-cron-event-loop-smoke/latest/summary.json",
-        {
-            "schema_version": "ao2.pulse-codex-cron-event-loop-smoke.v1",
-            "status": "passed",
-            "codex_cron": {"decision_source": "file"},
-            "ao2": {
-                "decision_schema": "codex-cron.event-loop-decision.v1",
-                "ao2_decision_schema": "ao2.pulse-codex-cron-event-loop-decision.v1",
-            },
-            "trust_boundary": {"provider_execution": False},
-        },
-    )
-    write_json(
-        "ao2-pulse-codex-cron-event-loop-smoke/latest/pulse-generate-next/summary.json",
-        {"schema_version": "ao2.pulse-generate-next.v1", "status": "passed"},
-    )
-    write_json(
-        "ao2-pulse-codex-cron-event-loop-smoke/latest/pulse-next-recommended-tasks/codex-cron-event-loop-decision.json",
-        {"schema_version": "codex-cron.event-loop-decision.v1"},
-    )
-    stdout_path = root / "ao2-pulse-codex-cron-event-loop-smoke/latest/codex-cron-run-loop.stdout"
-    stdout_path.parent.mkdir(parents=True, exist_ok=True)
-    stdout_path.write_text("ok\n", encoding="utf-8")
-    write_json(
-        "ao2-dual-repo-installed-release-smoke/latest/summary.json",
-        {
-            "schema_version": "ao2.dual-repo-installed-release-smoke.v1",
-            "status": "passed",
-            "archives": {
-                "ao2": {"manifest_schema": "ao2.release-manifest.v1"},
-                "ao2_control_plane": {"manifest_schema": "ao2-control-plane.release-manifest.v1"},
-            },
-            "trust_boundary": {"auth_value_stored": False},
-        },
-    )
-    write_json(
-        "ao2-release-publication-closure/summary.json",
-        {
-            "schema_version": "ao2.release-publication-dry-run-closure.v1",
-            "status": "passed",
-            "publication_ready": True,
-            "stable_release_ready": True,
-            "publication_state": {"dry_run": True, "upload_status": "not_attempted"},
-            "trust_boundary": {"mutates_releases": False, "stores_credentials": False},
-        },
-    )
-    write_json(
-        "ao2-dual-repo-release-publication-closure-index/summary.json",
-        {
-            "schema_version": "ao2.dual-repo-release-publication-closure-index.v1",
-            "status": "passed",
-            "ao2": {"schema_version": "ao2.release-publication-dry-run-closure.v1"},
-            "control_plane": {
-                "schema_version": "ao2.cp-release-publication-closure.v1",
-                "checksum_verified": True,
-            },
-            "trust_boundary": {
-                "mutates_releases": False,
-                "mutates_github_releases": False,
-            },
-        },
-    )
-
-    result = subprocess.run(
-        ["npm", "run", "release:readiness:artifact-consumer"],
-        cwd=REPO_ROOT,
-        text=True,
-        capture_output=True,
-        env={**os.environ, "AO2_RELEASE_READINESS_CONSUMER_ROOT": str(root)},
-        check=False,
-    )
+    result = _run_release_readiness_artifact_consumer(root)
     assert result.returncode == 0, result.stderr + result.stdout
     summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
     assert summary["schema_version"] == "ao2.release-readiness-artifact-consumer.v1"
@@ -1581,6 +1613,94 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
     assert "ao2-pulse-codex-cron-event-loop-smoke" in summary["source_artifacts"]
     assert "ci_pulse_codex_cron_event_loop_smoke_artifact_job" in summary["required_checks"]
     assert summary["trust_boundary"]["stores_credentials"] is False
+
+
+def test_release_readiness_artifact_consumer_rejects_bad_fixture_evidence(tmp_path):
+    cases = [
+        (
+            "missing_codex_cron_decision",
+            lambda root: (
+                root
+                / "ao2-pulse-codex-cron-event-loop-smoke/latest/pulse-next-recommended-tasks/codex-cron-event-loop-decision.json"
+            ).unlink(),
+            "missing Pulse codex-cron smoke file",
+        ),
+        (
+            "wrong_pulse_generate_next_schema",
+            lambda root: _write_release_readiness_consumer_json(
+                root,
+                "ao2-pulse-codex-cron-event-loop-smoke/latest/pulse-generate-next/summary.json",
+                {"schema_version": "ao2.wrong-pulse-generate-next.v1"},
+            ),
+            "unexpected Pulse generate-next schema",
+        ),
+        (
+            "wrong_codex_cron_decision_schema",
+            lambda root: _write_release_readiness_consumer_json(
+                root,
+                "ao2-pulse-codex-cron-event-loop-smoke/latest/pulse-next-recommended-tasks/codex-cron-event-loop-decision.json",
+                {
+                    "schema_version": "codex-cron.wrong-event-loop-decision.v1",
+                    "ao2": {
+                        "schema_version": "ao2.pulse-codex-cron-event-loop-decision.v1"
+                    },
+                },
+            ),
+            "unexpected codex-cron decision file schema",
+        ),
+        (
+            "blocked_pulse_generate_next_status",
+            lambda root: _write_release_readiness_consumer_json(
+                root,
+                "ao2-pulse-codex-cron-event-loop-smoke/latest/pulse-generate-next/summary.json",
+                {"schema_version": "ao2.pulse-generate-next.v1", "status": "blocked"},
+            ),
+            "Pulse generate-next was not ready",
+        ),
+        (
+            "provider_execution_enabled",
+            lambda root: _write_release_readiness_consumer_json(
+                root,
+                "ao2-pulse-codex-cron-event-loop-smoke/latest/summary.json",
+                {
+                    "schema_version": "ao2.pulse-codex-cron-event-loop-smoke.v1",
+                    "status": "passed",
+                    "codex_cron": {"decision_source": "file"},
+                    "ao2": {
+                        "decision_schema": "codex-cron.event-loop-decision.v1",
+                        "ao2_decision_schema": (
+                            "ao2.pulse-codex-cron-event-loop-decision.v1"
+                        ),
+                    },
+                    "trust_boundary": {"provider_execution": True},
+                },
+            ),
+            "Pulse codex-cron smoke must not execute providers",
+        ),
+        (
+            "missing_required_check",
+            lambda root: _write_release_readiness_consumer_json(
+                root,
+                "ao2-release-readiness/summary.json",
+                {
+                    "schema_version": "ao2.release-readiness-local.v1",
+                    "status": "passed",
+                    "checks": [],
+                },
+            ),
+            "release-readiness artifact missing passed checks",
+        ),
+    ]
+
+    for case_name, mutate, expected in cases:
+        root = tmp_path / case_name
+        _write_release_readiness_consumer_fixture(root)
+        mutate(root)
+
+        result = _run_release_readiness_artifact_consumer(root)
+
+        assert result.returncode != 0, case_name
+        assert expected in result.stderr + result.stdout
 
 
 def test_dual_repo_installed_release_smoke_contract():
