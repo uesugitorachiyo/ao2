@@ -525,6 +525,7 @@ Result:
   `ao2-release-readiness`, `ao2-release-train-control-plane-bridge`,
   `ao2-ai-task-board-control-plane-bridge`,
   `ao2-pulse-task-board-closure-packet`,
+  `ao2-pulse-codex-cron-event-loop-smoke`,
   `ao2-dual-repo-installed-release-smoke`,
   `ao2-release-publication-closure`,
   `ao2-dual-repo-release-publication-closure-index`, and
@@ -538,12 +539,15 @@ Result:
   `ao2-release-train-control-plane-bridge`,
   `ao2-ai-task-board-control-plane-bridge`,
   `ao2-pulse-task-board-closure-packet`,
+  `ao2-pulse-codex-cron-event-loop-smoke`,
   `ao2-dual-repo-installed-release-smoke`, and
   `ao2-release-publication-closure`; validates the
   `ao2.release-readiness-local.v1` summary/status/core cross-OS checks, the
   control-plane bridge/readback schemas, the
   `ao2.pulse-task-board-closure-packet.v1` task alignment and safety-field
-  preservation checks, and the
+  preservation checks, the
+  `ao2.pulse-codex-cron-event-loop-smoke.v1` event-loop handoff with
+  `decision_source=file`, and the
   `ao2.release-publication-dry-run-closure.v1` publication/stable readiness
   fields. The companion `Dual-repo release publication closure index` job
   downloads AO2's `ao2-release-publication-closure` and the latest successful
