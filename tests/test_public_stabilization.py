@@ -1440,6 +1440,11 @@ def test_pulse_task_board_closure_packet_contract():
     for needle in [
         "ao2.pulse-task-board-closure-packet.v1",
         "AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_ROOT",
+        "AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_VERIFY_ONLY",
+        "AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_TASK_BOARD",
+        "AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_NEXT_ACTIONS",
+        "AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_TASK_BOARD_STATE",
+        "AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_CONTROL_PLANE",
         "AO2_PULSE_GENERATE_NEXT_REGISTER=0",
         "AO2_PULSE_TASK_BOARD_ROOT",
         "AO2_PULSE_NEXT_ACTIONS_BOARD",
@@ -1451,6 +1456,10 @@ def test_pulse_task_board_closure_packet_contract():
         "npm run control-plane:fixture-consumer-smoke",
         "required_evidence",
         "stop_conditions",
+        "blockers",
+        "safety_fields_missing",
+        "task_id_alignment_mismatch",
+        "control_plane_readback_failed",
         "operator_task_board_view",
         "stores_credentials",
         "mutates_releases",
@@ -1503,6 +1512,137 @@ def test_pulse_task_board_closure_packet_executes_with_safety_fields(tmp_path):
     assert first_action["required_evidence_count"] >= 1
     assert first_action["stop_conditions_count"] >= 1
     assert (out_root / "latest" / "closure-packet.md").is_file()
+
+
+def _write_closure_packet_fixture(root: Path, *, case: str) -> dict:
+    root.mkdir(parents=True, exist_ok=True)
+    task_id = "ao2-test-task-g1"
+    board = {
+        "schema_version": "ao2.ai-task-board.v1",
+        "release_objective": "Test closure packet fail-closed behavior.",
+        "tasks": [
+            {
+                "task_id": task_id,
+                "stable_task_id": "ao2-test-task",
+                "title": "Test task",
+                "status": "proposed",
+                "next_action": "npm test",
+                "required_evidence": ["ao2.test.evidence.v1"],
+                "stop_conditions": ["Stop if evidence is missing."],
+            }
+        ],
+        "trust_boundary": {"local_only": True, "stores_credentials": False},
+    }
+    next_actions = {
+        "schema_version": "ao2.pulse-next-actions.v1",
+        "status": "passed",
+        "next_actions": [
+            {
+                "task_id": task_id,
+                "stable_task_id": "ao2-test-task",
+                "status": "proposed",
+                "next_action": "npm test",
+                "required_evidence": ["ao2.test.evidence.v1"],
+                "stop_conditions": ["Stop if evidence is missing."],
+            }
+        ],
+    }
+    task_board_state = {
+        "schema_version": "ao2.pulse-task-board-state.v1",
+        "status": "passed",
+        "next_actions": [
+            {
+                "task_id": task_id,
+                "stable_task_id": "ao2-test-task",
+                "status": "proposed",
+                "next_action": "npm test",
+            }
+        ],
+    }
+    control_plane = {
+        "schema_version": "ao2.control-plane-fixture-consumer-smoke.v1",
+        "status": "passed",
+        "task_board_readback": {"status": "passed"},
+        "operator_task_board_view": {"status": "passed"},
+    }
+    if case == "missing_safety_fields":
+        next_actions["next_actions"][0]["required_evidence"] = []
+        next_actions["next_actions"][0]["stop_conditions"] = []
+    elif case == "mismatched_task_ids":
+        task_board_state["next_actions"][0]["task_id"] = "ao2-different-task-g1"
+    elif case == "control_plane_failed":
+        control_plane["status"] = "failed"
+        control_plane["task_board_readback"] = {"status": "failed"}
+        control_plane["operator_task_board_view"] = {"status": "skipped"}
+    else:
+        raise AssertionError(f"unknown fixture case: {case}")
+
+    paths = {
+        "task_board": root / "task-board.json",
+        "next_actions": root / "next-actions.json",
+        "task_board_state": root / "task-board-state.json",
+        "control_plane": root / "control-plane.json",
+    }
+    payloads = {
+        "task_board": board,
+        "next_actions": next_actions,
+        "task_board_state": task_board_state,
+        "control_plane": control_plane,
+    }
+    for name, payload in payloads.items():
+        paths[name].write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return paths
+
+
+def _run_closure_packet_verify_only(tmp_path: Path, *, case: str) -> tuple[subprocess.CompletedProcess[str], dict]:
+    fixture_root = tmp_path / "fixtures" / case
+    out_root = tmp_path / "out" / case
+    paths = _write_closure_packet_fixture(fixture_root, case=case)
+    result = subprocess.run(
+        ["npm", "run", "pulse:task-board-closure-packet"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_ROOT": str(out_root),
+            "AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_VERIFY_ONLY": "1",
+            "AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_TASK_BOARD": str(paths["task_board"]),
+            "AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_NEXT_ACTIONS": str(paths["next_actions"]),
+            "AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_TASK_BOARD_STATE": str(paths["task_board_state"]),
+            "AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_CONTROL_PLANE": str(paths["control_plane"]),
+        },
+        check=False,
+    )
+    summary = json.loads((out_root / "latest" / "summary.json").read_text(encoding="utf-8"))
+    return result, summary
+
+
+def test_pulse_task_board_closure_packet_rejects_missing_safety_fields(tmp_path):
+    result, summary = _run_closure_packet_verify_only(tmp_path, case="missing_safety_fields")
+
+    assert result.returncode != 0
+    assert summary["status"] == "failed"
+    assert summary["alignment"]["safety_fields_preserved"] is False
+    assert "safety_fields_missing" in summary["blockers"]
+
+
+def test_pulse_task_board_closure_packet_rejects_mismatched_task_ids(tmp_path):
+    result, summary = _run_closure_packet_verify_only(tmp_path, case="mismatched_task_ids")
+
+    assert result.returncode != 0
+    assert summary["status"] == "failed"
+    assert summary["alignment"]["task_ids_match"] is False
+    assert "task_id_alignment_mismatch" in summary["blockers"]
+
+
+def test_pulse_task_board_closure_packet_rejects_failed_control_plane_readback(tmp_path):
+    result, summary = _run_closure_packet_verify_only(tmp_path, case="control_plane_failed")
+
+    assert result.returncode != 0
+    assert summary["status"] == "failed"
+    assert summary["checks"]["control_plane_fixture_consumer"]["status"] == "failed"
+    assert "control_plane_readback_failed" in summary["blockers"]
 
 
 def test_verification_docs_include_next_length_task_commands():

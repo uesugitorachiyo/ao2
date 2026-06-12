@@ -219,7 +219,15 @@ then composes `pulse:next-actions`, `pulse:task-board-state`, and
 closed unless task IDs align across the board/state/next-action artifacts,
 required evidence and stop conditions survive into the compact next-action
 view, and the read-only control-plane fixture view passes without credential or
-release mutation authority.
+release mutation authority. Set
+`AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_VERIFY_ONLY=1` with
+`AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_TASK_BOARD`,
+`AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_NEXT_ACTIONS`,
+`AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_TASK_BOARD_STATE`, and
+`AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_CONTROL_PLANE` to validate supplied
+fixtures without regenerating them. Failed summaries include blocker names such
+as `safety_fields_missing`, `task_id_alignment_mismatch`, and
+`control_plane_readback_failed`.
 The board preserves the current release objective, source recommendation,
 rationale, required evidence, stop conditions, and read-only control-plane
 readback semantics without granting mutation authority. For the Risky PR
