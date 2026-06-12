@@ -203,7 +203,9 @@ operator scripts, or any standalone AO2 install that only needs the current
 task state. `npm run pulse:next-actions` reads the same current board and emits
 `ao2.pulse-next-actions.v1` plus
 `target/pulse-next-actions/latest/next-actions.md`, giving standalone AO2
-operators a compact command for the current actionable task list. Set
+operators a compact command for the current actionable task list. Each action
+preserves rationale, required evidence, and stop conditions so unattended
+operators can see why the action is safe and when to stop. Set
 `AO2_PULSE_NEXT_ACTIONS_STATUS=proposed,in_progress` to show only specific task
 statuses. Both commands write failed summaries for missing, invalid-schema, or
 invalid-JSON board inputs so local operators can diagnose stale or malformed
