@@ -3544,6 +3544,71 @@ def test_pulse_next_actions_reads_current_board_actions(tmp_path):
     assert "next_action" in actions_result.stdout
 
 
+def test_pulse_next_actions_includes_evidence_and_stop_conditions(tmp_path):
+    actions_root = tmp_path / "next-actions"
+    board = tmp_path / "summary.json"
+    board.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.ai-task-board.v1",
+                "tasks": [
+                    {
+                        "task_id": "safe-task-g507",
+                        "stable_task_id": "safe-task",
+                        "title": "Safe operator action",
+                        "status": "proposed",
+                        "next_action": "npm run safe:proof",
+                        "rationale": "Keep unattended operators anchored to evidence.",
+                        "required_evidence": [
+                            "ao2.ai-task-board.v1",
+                            "ao2.control-plane-fixture-consumer-smoke.v1",
+                        ],
+                        "stop_conditions": [
+                            "Stop if control-plane readback requires credentials.",
+                            "Stop if generated tasks lack evidence requirements.",
+                        ],
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:next-actions"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_NEXT_ACTIONS_ROOT": str(actions_root),
+            "AO2_PULSE_NEXT_ACTIONS_BOARD": str(board),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((actions_root / "summary.json").read_text(encoding="utf-8"))
+    markdown = (actions_root / "next-actions.md").read_text(encoding="utf-8")
+    action = summary["next_actions"][0]
+    assert action["required_evidence"] == [
+        "ao2.ai-task-board.v1",
+        "ao2.control-plane-fixture-consumer-smoke.v1",
+    ]
+    assert action["stop_conditions"] == [
+        "Stop if control-plane readback requires credentials.",
+        "Stop if generated tasks lack evidence requirements.",
+    ]
+    assert action["rationale"] == "Keep unattended operators anchored to evidence."
+    assert "Required evidence" in markdown
+    assert "`ao2.control-plane-fixture-consumer-smoke.v1`" in markdown
+    assert "Stop conditions" in markdown
+    assert "Stop if control-plane readback requires credentials." in markdown
+
+
 def test_pulse_next_actions_reports_missing_board(tmp_path):
     actions_root = tmp_path / "next-actions"
     missing_board = tmp_path / "missing-summary.json"

@@ -66,6 +66,9 @@ else:
                 "title": item.get("title"),
                 "status": status,
                 "next_action": item.get("next_action"),
+                "rationale": item.get("rationale"),
+                "required_evidence": item.get("required_evidence") if isinstance(item.get("required_evidence"), list) else [],
+                "stop_conditions": item.get("stop_conditions") if isinstance(item.get("stop_conditions"), list) else [],
             })
         payload.update({
             "status": "passed",
@@ -83,6 +86,16 @@ for item in payload["next_actions"]:
         f"- `{item.get('task_id')}` [{item.get('status')}]: "
         f"{item.get('title')} -> next_action: `{item.get('next_action')}`"
     )
+    if item.get("rationale"):
+        lines.append(f"  - Rationale: {item.get('rationale')}")
+    if item.get("required_evidence"):
+        lines.append("  - Required evidence:")
+        for evidence in item.get("required_evidence") or []:
+            lines.append(f"    - `{evidence}`")
+    if item.get("stop_conditions"):
+        lines.append("  - Stop conditions:")
+        for condition in item.get("stop_conditions") or []:
+            lines.append(f"    - {condition}")
 markdown_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
