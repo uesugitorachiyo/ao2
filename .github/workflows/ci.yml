@@ -1241,6 +1241,56 @@ jobs:
           path: target/pulse-task-board-closure-packet-ci
           if-no-files-found: error
 
+  pulse-codex-cron-event-loop-smoke-artifacts:
+    name: Pulse codex-cron event-loop smoke artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+      - name: Checkout codex-cron
+        uses: actions/checkout@v6.0.3
+        with:
+          repository: uesugitorachiyo/codex-cron
+          path: codex-cron
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+      - name: Run Pulse codex-cron event-loop smoke
+        shell: bash
+        run: |
+          AO2_PULSE_CODEX_CRON_SMOKE_ROOT=target/pulse-codex-cron-event-loop-smoke-ci \
+            npm run pulse:codex-cron-event-loop-smoke -- --codex-cron-root codex-cron
+      - name: Verify Pulse codex-cron event-loop evidence
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("target/pulse-codex-cron-event-loop-smoke-ci/latest")
+          summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
+          assert summary["schema_version"] == "ao2.pulse-codex-cron-event-loop-smoke.v1", summary
+          assert summary["status"] == "passed", summary
+          assert summary["codex_cron"]["decision_source"] == "file", summary
+          assert summary["ao2"]["decision_schema"] == "codex-cron.event-loop-decision.v1", summary
+          assert summary["ao2"]["ao2_decision_schema"] == "ao2.pulse-codex-cron-event-loop-decision.v1", summary
+          assert summary["trust_boundary"]["stores_credentials"] is False, summary
+          assert summary["trust_boundary"]["provider_execution"] is False, summary
+          PY
+          test -f target/pulse-codex-cron-event-loop-smoke-ci/latest/summary.json
+          test -f target/pulse-codex-cron-event-loop-smoke-ci/latest/pulse-next-recommended-tasks/codex-cron-event-loop-decision.json
+          test -f target/pulse-codex-cron-event-loop-smoke-ci/latest/codex-cron-run-loop.stdout
+      - name: Upload Pulse codex-cron event-loop smoke evidence
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-pulse-codex-cron-event-loop-smoke
+          path: target/pulse-codex-cron-event-loop-smoke-ci
+          if-no-files-found: error
+
   dual-repo-installed-release-smoke-artifacts:
     name: Dual-repo installed release smoke artifacts
     runs-on: ubuntu-latest
