@@ -879,6 +879,8 @@ jobs:
     needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-codex-cron-event-loop-smoke-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index]
     timeout-minutes: 5
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
       - name: Download release-readiness artifact
         uses: actions/download-artifact@v8.0.1
         with:
@@ -920,128 +922,7 @@ jobs:
           name: ao2-dual-repo-release-publication-closure-index
           path: target/release-readiness-consumer/ao2-dual-repo-release-publication-closure-index
       - name: Validate release-readiness artifact contract
-        shell: bash
-        run: |
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          artifact_root = Path("target/release-readiness-consumer/ao2-release-readiness")
-          summary_path = artifact_root / "summary.json"
-          summary = json.loads(summary_path.read_text(encoding="utf-8"))
-          assert summary.get('schema_version') == 'ao2.release-readiness-local.v1', summary
-          assert summary.get("status") == "passed", summary
-          bridge_artifact_root = Path("target/release-readiness-consumer/ao2-release-train-control-plane-bridge")
-          bridge_summary_path = bridge_artifact_root / "latest" / "summary.json"
-          bridge_summary = json.loads(bridge_summary_path.read_text(encoding="utf-8"))
-          assert bridge_summary.get('schema_version') == 'ao2.release-train-control-plane-bridge.v1', bridge_summary
-          assert bridge_summary.get("status") == "passed", bridge_summary
-          assert bridge_summary.get("control_plane", {}).get("smoke") == "passed", bridge_summary
-          task_board_bridge_artifact_root = Path("target/release-readiness-consumer/ao2-ai-task-board-control-plane-bridge")
-          task_board_bridge_summary_path = task_board_bridge_artifact_root / "latest" / "summary.json"
-          task_board_bridge_summary = json.loads(task_board_bridge_summary_path.read_text(encoding="utf-8"))
-          assert task_board_bridge_summary.get('schema_version') == 'ao2.ai-task-board-control-plane-bridge.v1', task_board_bridge_summary
-          assert task_board_bridge_summary.get("status") == "passed", task_board_bridge_summary
-          assert task_board_bridge_summary.get("control_plane", {}).get("smoke") == "passed", task_board_bridge_summary
-          task_board_smoke_path = task_board_bridge_artifact_root / "latest" / "control-plane-smoke" / "summary.json"
-          task_board_smoke = json.loads(task_board_smoke_path.read_text(encoding="utf-8"))
-          assert task_board_smoke.get("latest", {}).get("schema_version") == "ao2.cp-ai-task-board-readback.v1", task_board_smoke
-          assert task_board_smoke.get("dashboard", {}).get("schema_version") == "ao2.cp-ai-task-board-dashboard.v1", task_board_smoke
-          pulse_task_board_closure_artifact_root = Path("target/release-readiness-consumer/ao2-pulse-task-board-closure-packet")
-          pulse_task_board_closure_summary_path = pulse_task_board_closure_artifact_root / "latest" / "summary.json"
-          pulse_task_board_closure_summary = json.loads(pulse_task_board_closure_summary_path.read_text(encoding="utf-8"))
-          assert pulse_task_board_closure_summary.get('schema_version') == 'ao2.pulse-task-board-closure-packet.v1', pulse_task_board_closure_summary
-          assert pulse_task_board_closure_summary.get("status") == "passed", pulse_task_board_closure_summary
-          assert pulse_task_board_closure_summary.get('alignment', {}).get('task_ids_match') is True, pulse_task_board_closure_summary
-          assert pulse_task_board_closure_summary.get('alignment', {}).get('safety_fields_preserved') is True, pulse_task_board_closure_summary
-          assert pulse_task_board_closure_summary.get("checks", {}).get("control_plane_fixture_consumer", {}).get("operator_task_board_view_status") == "passed", pulse_task_board_closure_summary
-          pulse_codex_cron_smoke_artifact_root = Path("target/release-readiness-consumer/ao2-pulse-codex-cron-event-loop-smoke")
-          pulse_codex_cron_smoke_summary_path = pulse_codex_cron_smoke_artifact_root / "latest" / "summary.json"
-          pulse_codex_cron_smoke_summary = json.loads(pulse_codex_cron_smoke_summary_path.read_text(encoding="utf-8"))
-          assert pulse_codex_cron_smoke_summary.get('schema_version') == 'ao2.pulse-codex-cron-event-loop-smoke.v1', pulse_codex_cron_smoke_summary
-          assert pulse_codex_cron_smoke_summary.get("status") == "passed", pulse_codex_cron_smoke_summary
-          assert pulse_codex_cron_smoke_summary.get('codex_cron', {}).get('decision_source') == 'file', pulse_codex_cron_smoke_summary
-          assert pulse_codex_cron_smoke_summary.get("ao2", {}).get("decision_schema") == "codex-cron.event-loop-decision.v1", pulse_codex_cron_smoke_summary
-          assert pulse_codex_cron_smoke_summary.get("ao2", {}).get("ao2_decision_schema") == "ao2.pulse-codex-cron-event-loop-decision.v1", pulse_codex_cron_smoke_summary
-          assert pulse_codex_cron_smoke_summary.get("trust_boundary", {}).get("provider_execution") is False, pulse_codex_cron_smoke_summary
-          assert (pulse_codex_cron_smoke_artifact_root / "latest" / "pulse-generate-next" / "summary.json").is_file(), pulse_codex_cron_smoke_summary
-          assert (pulse_codex_cron_smoke_artifact_root / "latest" / "pulse-next-recommended-tasks" / "codex-cron-event-loop-decision.json").is_file(), pulse_codex_cron_smoke_summary
-          assert (pulse_codex_cron_smoke_artifact_root / "latest" / "codex-cron-run-loop.stdout").is_file(), pulse_codex_cron_smoke_summary
-          dual_repo_artifact_root = Path("target/release-readiness-consumer/ao2-dual-repo-installed-release-smoke")
-          dual_repo_summary_path = dual_repo_artifact_root / "latest" / "summary.json"
-          dual_repo_summary = json.loads(dual_repo_summary_path.read_text(encoding="utf-8"))
-          assert dual_repo_summary.get('schema_version') == 'ao2.dual-repo-installed-release-smoke.v1', dual_repo_summary
-          assert dual_repo_summary.get("status") == "passed", dual_repo_summary
-          assert dual_repo_summary.get("archives", {}).get("ao2", {}).get("manifest_schema") == "ao2.release-manifest.v1", dual_repo_summary
-          assert dual_repo_summary.get("archives", {}).get("ao2_control_plane", {}).get("manifest_schema") == "ao2-control-plane.release-manifest.v1", dual_repo_summary
-          assert dual_repo_summary.get("trust_boundary", {}).get("auth_value_stored") is False, dual_repo_summary
-          publication_closure_artifact_root = Path("target/release-readiness-consumer/ao2-release-publication-closure")
-          publication_closure_summary_path = publication_closure_artifact_root / "summary.json"
-          publication_closure_summary = json.loads(publication_closure_summary_path.read_text(encoding="utf-8"))
-          assert publication_closure_summary.get('schema_version') == 'ao2.release-publication-dry-run-closure.v1', publication_closure_summary
-          assert publication_closure_summary.get("status") == "passed", publication_closure_summary
-          assert publication_closure_summary.get('publication_ready') is True, publication_closure_summary
-          assert publication_closure_summary.get('stable_release_ready') is True, publication_closure_summary
-          assert publication_closure_summary.get("publication_state", {}).get("dry_run") is True, publication_closure_summary
-          assert publication_closure_summary.get("publication_state", {}).get("upload_status") == "not_attempted", publication_closure_summary
-          assert publication_closure_summary.get("trust_boundary", {}).get("mutates_releases") is False, publication_closure_summary
-          assert publication_closure_summary.get("trust_boundary", {}).get("stores_credentials") is False, publication_closure_summary
-          dual_repo_publication_closure_artifact_root = Path("target/release-readiness-consumer/ao2-dual-repo-release-publication-closure-index")
-          dual_repo_publication_closure_summary_path = dual_repo_publication_closure_artifact_root / "summary.json"
-          dual_repo_publication_closure_summary = json.loads(dual_repo_publication_closure_summary_path.read_text(encoding="utf-8"))
-          assert dual_repo_publication_closure_summary.get('schema_version') == 'ao2.dual-repo-release-publication-closure-index.v1', dual_repo_publication_closure_summary
-          assert dual_repo_publication_closure_summary.get("status") == "passed", dual_repo_publication_closure_summary
-          assert dual_repo_publication_closure_summary.get("ao2", {}).get("schema_version") == "ao2.release-publication-dry-run-closure.v1", dual_repo_publication_closure_summary
-          assert dual_repo_publication_closure_summary.get('control_plane', {}).get('schema_version') == 'ao2.cp-release-publication-closure.v1', dual_repo_publication_closure_summary
-          assert dual_repo_publication_closure_summary.get("control_plane", {}).get("checksum_verified") is True, dual_repo_publication_closure_summary
-          assert dual_repo_publication_closure_summary.get("trust_boundary", {}).get("mutates_releases") is False, dual_repo_publication_closure_summary
-          assert dual_repo_publication_closure_summary.get("trust_boundary", {}).get("mutates_github_releases") is False, dual_repo_publication_closure_summary
-          checks = {item.get("name"): item for item in summary.get("checks", [])}
-          required_checks = [
-              "ci_job_required_os:verify",
-              "ci_job_required_os:release-archive-hosted-smoke",
-              "ci_job_required_os:workbench-operator-packet-control-plane-smoke",
-              "ci_release_readiness_static_artifact_job",
-              "ci_release_train_control_plane_bridge_artifact_job",
-              "ci_ai_task_board_control_plane_bridge_artifact_job",
-              "ci_pulse_task_board_closure_packet_artifact_job",
-              "ci_pulse_codex_cron_event_loop_smoke_artifact_job",
-              "ci_dual_repo_installed_release_smoke_artifact_job",
-              "ci_release_publication_closure_artifact_job",
-              "ci_dual_repo_release_publication_closure_index_job",
-          ]
-          missing = [
-              name
-              for name in required_checks
-              if checks.get(name, {}).get("status") != "passed"
-          ]
-          if missing:
-              raise SystemExit(f"release-readiness artifact missing passed checks: {missing}")
-          consumer_summary = {
-              "schema_version": "ao2.release-readiness-artifact-consumer.v1",
-              "status": "passed",
-              "source_artifacts": [
-                  "ao2-release-readiness",
-                  "ao2-release-train-control-plane-bridge",
-                  "ao2-ai-task-board-control-plane-bridge",
-                  "ao2-pulse-task-board-closure-packet",
-                  "ao2-pulse-codex-cron-event-loop-smoke",
-                  "ao2-dual-repo-installed-release-smoke",
-                  "ao2-release-publication-closure",
-                  "ao2-dual-repo-release-publication-closure-index",
-              ],
-              "source_summaries": [str(summary_path), str(bridge_summary_path), str(task_board_bridge_summary_path), str(pulse_task_board_closure_summary_path), str(pulse_codex_cron_smoke_summary_path), str(dual_repo_summary_path), str(publication_closure_summary_path), str(dual_repo_publication_closure_summary_path)],
-              "required_checks": required_checks,
-              "trust_boundary": {
-                  "local_only": True,
-                  "stores_credentials": False,
-                  "source": "github_actions_artifact_download",
-              },
-          }
-          out_path = Path("target/release-readiness-consumer/summary.json")
-          out_path.write_text(json.dumps(consumer_summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-          print(f"summary={out_path}")
-          PY
+        run: npm run release:readiness:artifact-consumer
       - name: Upload release-readiness consumer evidence
         uses: actions/upload-artifact@v7.0.1
         with:

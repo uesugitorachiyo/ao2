@@ -60,6 +60,7 @@ for name in [
     "risky-pr:golden",
     "release:readiness",
     "release:readiness:static",
+    "release:readiness:artifact-consumer",
     "release:readiness:regression-gate",
     "release:metadata-drift-audit",
     "smoke:evidence-control-plane",
@@ -260,10 +261,13 @@ add(
 )
 
 release_readiness_artifact_consumer = workflow_job_block("release-readiness-artifact-consumer")
+release_readiness_artifact_consumer_script = read("scripts/release-readiness-artifact-consumer.sh")
 release_readiness_artifact_consumer_ok = (
     release_readiness_artifact_consumer is not None
     and "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-codex-cron-event-loop-smoke-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index]" in release_readiness_artifact_consumer
     and "actions/download-artifact@v8.0.1" in release_readiness_artifact_consumer
+    and "npm run release:readiness:artifact-consumer" in release_readiness_artifact_consumer
+    and scripts.get("release:readiness:artifact-consumer") == "node scripts/run-sh-script.js scripts/release-readiness-artifact-consumer.sh"
     and "name: ao2-release-readiness" in release_readiness_artifact_consumer
     and "target/release-readiness-consumer/ao2-release-readiness" in release_readiness_artifact_consumer
     and "name: ao2-release-train-control-plane-bridge" in release_readiness_artifact_consumer
@@ -280,29 +284,29 @@ release_readiness_artifact_consumer_ok = (
     and "target/release-readiness-consumer/ao2-release-publication-closure" in release_readiness_artifact_consumer
     and "name: ao2-dual-repo-release-publication-closure-index" in release_readiness_artifact_consumer
     and "target/release-readiness-consumer/ao2-dual-repo-release-publication-closure-index" in release_readiness_artifact_consumer
-    and "ao2.release-readiness-local.v1" in release_readiness_artifact_consumer
-    and "ao2.release-train-control-plane-bridge.v1" in release_readiness_artifact_consumer
-    and "ao2.ai-task-board-control-plane-bridge.v1" in release_readiness_artifact_consumer
-    and "ao2.pulse-task-board-closure-packet.v1" in release_readiness_artifact_consumer
-    and "ao2.pulse-codex-cron-event-loop-smoke.v1" in release_readiness_artifact_consumer
-    and "codex-cron.event-loop-decision.v1" in release_readiness_artifact_consumer
-    and "ao2.dual-repo-installed-release-smoke.v1" in release_readiness_artifact_consumer
-    and "ao2.release-publication-dry-run-closure.v1" in release_readiness_artifact_consumer
-    and "ao2.dual-repo-release-publication-closure-index.v1" in release_readiness_artifact_consumer
-    and "ao2.cp-release-publication-closure.v1" in release_readiness_artifact_consumer
-    and "publication_ready" in release_readiness_artifact_consumer
-    and "stable_release_ready" in release_readiness_artifact_consumer
-    and "ci_job_required_os:verify" in release_readiness_artifact_consumer
-    and "ci_job_required_os:release-archive-hosted-smoke" in release_readiness_artifact_consumer
-    and "ci_job_required_os:workbench-operator-packet-control-plane-smoke" in release_readiness_artifact_consumer
-    and "ci_release_readiness_static_artifact_job" in release_readiness_artifact_consumer
-    and "ci_release_train_control_plane_bridge_artifact_job" in release_readiness_artifact_consumer
-    and "ci_ai_task_board_control_plane_bridge_artifact_job" in release_readiness_artifact_consumer
-    and "ci_pulse_task_board_closure_packet_artifact_job" in release_readiness_artifact_consumer
-    and "ci_pulse_codex_cron_event_loop_smoke_artifact_job" in release_readiness_artifact_consumer
-    and "ci_dual_repo_installed_release_smoke_artifact_job" in release_readiness_artifact_consumer
-    and "ci_release_publication_closure_artifact_job" in release_readiness_artifact_consumer
-    and "ci_dual_repo_release_publication_closure_index_job" in release_readiness_artifact_consumer
+    and "ao2.release-readiness-local.v1" in release_readiness_artifact_consumer_script
+    and "ao2.release-train-control-plane-bridge.v1" in release_readiness_artifact_consumer_script
+    and "ao2.ai-task-board-control-plane-bridge.v1" in release_readiness_artifact_consumer_script
+    and "ao2.pulse-task-board-closure-packet.v1" in release_readiness_artifact_consumer_script
+    and "ao2.pulse-codex-cron-event-loop-smoke.v1" in release_readiness_artifact_consumer_script
+    and "codex-cron.event-loop-decision.v1" in release_readiness_artifact_consumer_script
+    and "ao2.dual-repo-installed-release-smoke.v1" in release_readiness_artifact_consumer_script
+    and "ao2.release-publication-dry-run-closure.v1" in release_readiness_artifact_consumer_script
+    and "ao2.dual-repo-release-publication-closure-index.v1" in release_readiness_artifact_consumer_script
+    and "ao2.cp-release-publication-closure.v1" in release_readiness_artifact_consumer_script
+    and "publication_ready" in release_readiness_artifact_consumer_script
+    and "stable_release_ready" in release_readiness_artifact_consumer_script
+    and "ci_job_required_os:verify" in release_readiness_artifact_consumer_script
+    and "ci_job_required_os:release-archive-hosted-smoke" in release_readiness_artifact_consumer_script
+    and "ci_job_required_os:workbench-operator-packet-control-plane-smoke" in release_readiness_artifact_consumer_script
+    and "ci_release_readiness_static_artifact_job" in release_readiness_artifact_consumer_script
+    and "ci_release_train_control_plane_bridge_artifact_job" in release_readiness_artifact_consumer_script
+    and "ci_ai_task_board_control_plane_bridge_artifact_job" in release_readiness_artifact_consumer_script
+    and "ci_pulse_task_board_closure_packet_artifact_job" in release_readiness_artifact_consumer_script
+    and "ci_pulse_codex_cron_event_loop_smoke_artifact_job" in release_readiness_artifact_consumer_script
+    and "ci_dual_repo_installed_release_smoke_artifact_job" in release_readiness_artifact_consumer_script
+    and "ci_release_publication_closure_artifact_job" in release_readiness_artifact_consumer_script
+    and "ci_dual_repo_release_publication_closure_index_job" in release_readiness_artifact_consumer_script
 )
 add(
     "ci_release_readiness_artifact_consumer_job",
@@ -340,6 +344,7 @@ for workflow in [".github/workflows/release-gate.yml", ".github/workflows/public
 for script in [
     "scripts/risky-pr-golden-path.sh",
     "scripts/release-readiness.sh",
+    "scripts/release-readiness-artifact-consumer.sh",
     "scripts/smoke-evidence-pack-control-plane.sh",
     "scripts/release-metadata-drift-audit.sh",
 ]:

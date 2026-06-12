@@ -1185,6 +1185,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "release-readiness-artifact-consumer:",
         "name: Release readiness artifact consumer",
         "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-codex-cron-event-loop-smoke-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index]",
+        "uses: actions/checkout@v6.0.3",
         "uses: actions/download-artifact@v8.0.1",
         "name: ao2-release-readiness",
         "path: target/release-readiness-consumer/ao2-release-readiness",
@@ -1205,28 +1206,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "AO2_RELEASE_PUBLICATION_DRY_RUN_CLOSURE_ROOT=target/release-publication-closure-ci",
         "npm run release:publication-dry-run-closure",
         "if: always()",
-        "schema_version') == 'ao2.release-readiness-local.v1'",
-        "bridge_summary.get('schema_version') == 'ao2.release-train-control-plane-bridge.v1'",
-        "task_board_bridge_summary.get('schema_version') == 'ao2.ai-task-board-control-plane-bridge.v1'",
-        "pulse_task_board_closure_summary.get('schema_version') == 'ao2.pulse-task-board-closure-packet.v1'",
-        "pulse_task_board_closure_summary.get('alignment', {}).get('safety_fields_preserved') is True",
-        "pulse_codex_cron_smoke_summary.get('schema_version') == 'ao2.pulse-codex-cron-event-loop-smoke.v1'",
-        "pulse_codex_cron_smoke_summary.get('codex_cron', {}).get('decision_source') == 'file'",
-        "dual_repo_summary.get('schema_version') == 'ao2.dual-repo-installed-release-smoke.v1'",
-        "publication_closure_summary.get('schema_version') == 'ao2.release-publication-dry-run-closure.v1'",
-        "dual_repo_publication_closure_summary.get('schema_version') == 'ao2.dual-repo-release-publication-closure-index.v1'",
-        "dual_repo_publication_closure_summary.get('control_plane', {}).get('schema_version') == 'ao2.cp-release-publication-closure.v1'",
-        "publication_closure_summary.get('publication_ready') is True",
-        "publication_closure_summary.get('stable_release_ready') is True",
-        "ci_job_required_os:verify",
-        "ci_job_required_os:release-archive-hosted-smoke",
-        "ci_job_required_os:workbench-operator-packet-control-plane-smoke",
-        "ci_release_readiness_static_artifact_job",
-        "ci_ai_task_board_control_plane_bridge_artifact_job",
-        "ci_pulse_task_board_closure_packet_artifact_job",
-        "ci_dual_repo_installed_release_smoke_artifact_job",
-        "ci_release_publication_closure_artifact_job",
-        "ci_dual_repo_release_publication_closure_index_job",
+        "npm run release:readiness:artifact-consumer",
     ]:
         assert needle in ci
 
@@ -1424,6 +1404,183 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     ]
     assert closure["trust_boundary"]["local_only"] is True
     assert closure["trust_boundary"]["stores_credentials"] is False
+
+
+def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_path):
+    package_json = json.loads(read("package.json"))
+    assert package_json["scripts"]["release:readiness:artifact-consumer"] == (
+        "node scripts/run-sh-script.js scripts/release-readiness-artifact-consumer.sh"
+    )
+
+    script_path = REPO_ROOT / "scripts" / "release-readiness-artifact-consumer.sh"
+    assert script_path.is_file()
+    assert script_path.stat().st_mode & stat.S_IXUSR
+    script = script_path.read_text(encoding="utf-8")
+    for needle in [
+        "AO2_RELEASE_READINESS_CONSUMER_ROOT",
+        "ao2.release-readiness-artifact-consumer.v1",
+        "ao2.pulse-codex-cron-event-loop-smoke.v1",
+        "codex-cron.event-loop-decision.v1",
+        "ci_pulse_codex_cron_event_loop_smoke_artifact_job",
+        "github_actions_artifact_download",
+        "provider_execution",
+    ]:
+        assert needle in script
+
+    ci = read(".github/workflows/ci.yml")
+    consumer_block = re.search(
+        r"(?ms)^  release-readiness-artifact-consumer:\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)",
+        ci,
+    )
+    assert consumer_block
+    consumer_ci = consumer_block.group("body")
+    assert "uses: actions/checkout@v6.0.3" in consumer_ci
+    assert "npm run release:readiness:artifact-consumer" in consumer_ci
+    assert "python3 - <<'PY'" not in consumer_ci
+
+    root = tmp_path / "release-readiness-consumer"
+
+    def write_json(rel_path, payload):
+        path = root / rel_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+    required_checks = [
+        "ci_job_required_os:verify",
+        "ci_job_required_os:release-archive-hosted-smoke",
+        "ci_job_required_os:workbench-operator-packet-control-plane-smoke",
+        "ci_release_readiness_static_artifact_job",
+        "ci_release_train_control_plane_bridge_artifact_job",
+        "ci_ai_task_board_control_plane_bridge_artifact_job",
+        "ci_pulse_task_board_closure_packet_artifact_job",
+        "ci_pulse_codex_cron_event_loop_smoke_artifact_job",
+        "ci_dual_repo_installed_release_smoke_artifact_job",
+        "ci_release_publication_closure_artifact_job",
+        "ci_dual_repo_release_publication_closure_index_job",
+    ]
+    write_json(
+        "ao2-release-readiness/summary.json",
+        {
+            "schema_version": "ao2.release-readiness-local.v1",
+            "status": "passed",
+            "checks": [{"name": name, "status": "passed"} for name in required_checks],
+        },
+    )
+    write_json(
+        "ao2-release-train-control-plane-bridge/latest/summary.json",
+        {
+            "schema_version": "ao2.release-train-control-plane-bridge.v1",
+            "status": "passed",
+            "control_plane": {"smoke": "passed"},
+        },
+    )
+    write_json(
+        "ao2-ai-task-board-control-plane-bridge/latest/summary.json",
+        {
+            "schema_version": "ao2.ai-task-board-control-plane-bridge.v1",
+            "status": "passed",
+            "control_plane": {"smoke": "passed"},
+        },
+    )
+    write_json(
+        "ao2-ai-task-board-control-plane-bridge/latest/control-plane-smoke/summary.json",
+        {
+            "latest": {"schema_version": "ao2.cp-ai-task-board-readback.v1"},
+            "dashboard": {"schema_version": "ao2.cp-ai-task-board-dashboard.v1"},
+        },
+    )
+    write_json(
+        "ao2-pulse-task-board-closure-packet/latest/summary.json",
+        {
+            "schema_version": "ao2.pulse-task-board-closure-packet.v1",
+            "status": "passed",
+            "alignment": {"task_ids_match": True, "safety_fields_preserved": True},
+            "checks": {
+                "control_plane_fixture_consumer": {
+                    "operator_task_board_view_status": "passed"
+                }
+            },
+        },
+    )
+    write_json(
+        "ao2-pulse-codex-cron-event-loop-smoke/latest/summary.json",
+        {
+            "schema_version": "ao2.pulse-codex-cron-event-loop-smoke.v1",
+            "status": "passed",
+            "codex_cron": {"decision_source": "file"},
+            "ao2": {
+                "decision_schema": "codex-cron.event-loop-decision.v1",
+                "ao2_decision_schema": "ao2.pulse-codex-cron-event-loop-decision.v1",
+            },
+            "trust_boundary": {"provider_execution": False},
+        },
+    )
+    write_json(
+        "ao2-pulse-codex-cron-event-loop-smoke/latest/pulse-generate-next/summary.json",
+        {"schema_version": "ao2.pulse-generate-next.v1", "status": "passed"},
+    )
+    write_json(
+        "ao2-pulse-codex-cron-event-loop-smoke/latest/pulse-next-recommended-tasks/codex-cron-event-loop-decision.json",
+        {"schema_version": "codex-cron.event-loop-decision.v1"},
+    )
+    stdout_path = root / "ao2-pulse-codex-cron-event-loop-smoke/latest/codex-cron-run-loop.stdout"
+    stdout_path.parent.mkdir(parents=True, exist_ok=True)
+    stdout_path.write_text("ok\n", encoding="utf-8")
+    write_json(
+        "ao2-dual-repo-installed-release-smoke/latest/summary.json",
+        {
+            "schema_version": "ao2.dual-repo-installed-release-smoke.v1",
+            "status": "passed",
+            "archives": {
+                "ao2": {"manifest_schema": "ao2.release-manifest.v1"},
+                "ao2_control_plane": {"manifest_schema": "ao2-control-plane.release-manifest.v1"},
+            },
+            "trust_boundary": {"auth_value_stored": False},
+        },
+    )
+    write_json(
+        "ao2-release-publication-closure/summary.json",
+        {
+            "schema_version": "ao2.release-publication-dry-run-closure.v1",
+            "status": "passed",
+            "publication_ready": True,
+            "stable_release_ready": True,
+            "publication_state": {"dry_run": True, "upload_status": "not_attempted"},
+            "trust_boundary": {"mutates_releases": False, "stores_credentials": False},
+        },
+    )
+    write_json(
+        "ao2-dual-repo-release-publication-closure-index/summary.json",
+        {
+            "schema_version": "ao2.dual-repo-release-publication-closure-index.v1",
+            "status": "passed",
+            "ao2": {"schema_version": "ao2.release-publication-dry-run-closure.v1"},
+            "control_plane": {
+                "schema_version": "ao2.cp-release-publication-closure.v1",
+                "checksum_verified": True,
+            },
+            "trust_boundary": {
+                "mutates_releases": False,
+                "mutates_github_releases": False,
+            },
+        },
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "release:readiness:artifact-consumer"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        env={**os.environ, "AO2_RELEASE_READINESS_CONSUMER_ROOT": str(root)},
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.release-readiness-artifact-consumer.v1"
+    assert summary["status"] == "passed"
+    assert "ao2-pulse-codex-cron-event-loop-smoke" in summary["source_artifacts"]
+    assert "ci_pulse_codex_cron_event_loop_smoke_artifact_job" in summary["required_checks"]
+    assert summary["trust_boundary"]["stores_credentials"] is False
 
 
 def test_dual_repo_installed_release_smoke_contract():

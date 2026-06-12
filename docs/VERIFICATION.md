@@ -557,6 +557,10 @@ Result:
   `ao2.dual-repo-release-publication-closure-index.v1` evidence. The consumer
   then uploads `ao2-release-readiness-consumer` with
   `ao2.release-readiness-artifact-consumer.v1` evidence.
+  The same validation is available locally as
+  `npm run release:readiness:artifact-consumer`, using
+  `AO2_RELEASE_READINESS_CONSUMER_ROOT` when validating downloaded or fixture
+  artifacts outside CI.
   The operator-facing dual-repo evidence index is documented in
   `docs/release/PUBLIC-RELEASE-VERIFICATION.md`, including AO2 hosted
   post-stable release verification, control-plane post-release verification,
