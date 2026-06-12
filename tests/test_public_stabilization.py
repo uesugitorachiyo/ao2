@@ -737,6 +737,12 @@ def test_stable_promotion_workflow_is_guarded_and_documented():
         "post-stable-release-smoke-Linux",
         "post-stable-release-smoke-macOS",
         "post-stable-release-smoke-Windows",
+        "ao2-dual-public-release-smoke",
+        "ao2.dual-public-release-smoke.v1",
+        "task_board_readback_schema",
+        "dual-public-release-smoke",
+        "auth_value_stored",
+        "credential_material_in_urls",
         "ao2-control-plane-post-release-verification-ubuntu",
         "ao2-control-plane-post-release-verification-macos",
         "ao2-control-plane-post-release-verification-windows",
@@ -757,10 +763,14 @@ def test_stable_promotion_workflow_is_guarded_and_documented():
     assert "ao2.stable-promotion-workflow.v1" in verification
     assert "ao2.stable-promotion-evidence-gate.v1" in verification
     assert "post-release verification evidence gate" in verification
+    assert "ao2-dual-public-release-smoke" in verification
+    assert "dual public task-board readback schemas" in verification
 
     public_release_index = read("docs/release/PUBLIC-RELEASE-VERIFICATION.md")
     assert "Stable promotion evidence gate" in public_release_index
     assert "AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD=1" in public_release_index
+    assert "ao2-dual-public-release-smoke" in public_release_index
+    assert "control_plane_approves_release=false" in public_release_index
 
 
 def test_operator_release_evidence_bundle_downloads_and_verifies_cross_repo_artifacts(tmp_path):
