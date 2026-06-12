@@ -795,6 +795,12 @@ def test_operator_release_evidence_bundle_downloads_and_verifies_cross_repo_arti
         "post-stable-release-smoke-Linux",
         "post-stable-release-smoke-macOS",
         "post-stable-release-smoke-Windows",
+        "ao2-dual-public-release-smoke",
+        "ao2.dual-public-release-smoke.v1",
+        "task_board_readback_schema",
+        "auth_value_stored",
+        "credential_material_in_urls",
+        "control_plane_approves_release",
         "ao2-control-plane-post-release-verification-ubuntu",
         "ao2-control-plane-post-release-verification-macos",
         "ao2-control-plane-post-release-verification-windows",
@@ -816,6 +822,42 @@ def test_operator_release_evidence_bundle_downloads_and_verifies_cross_repo_arti
                 "schema_version": "ao2.dual-repo-release-publication-closure-index.v1",
                 "status": "passed",
             },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    dual_public = fixture / "dual-public-release-smoke" / "latest"
+    (dual_public / "smoke").mkdir(parents=True)
+    (dual_public / "summary.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.dual-public-release-smoke.v1",
+                "status": "passed",
+                "trust_boundary": {
+                    "auth_value_stored": False,
+                    "credential_material_in_urls": False,
+                    "credential_material_included": False,
+                    "mutates_github_releases": False,
+                    "control_plane_approves_release": False,
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (dual_public / "smoke" / "task-board-readback.json").write_text(
+        json.dumps(
+            {"schema_version": "ao2.cp-ai-task-board-readback.v1"},
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (dual_public / "smoke" / "task-board-dashboard.json").write_text(
+        json.dumps(
+            {"schema_version": "ao2.cp-ai-task-board-dashboard.v1"},
             sort_keys=True,
         )
         + "\n",
@@ -876,6 +918,17 @@ def test_operator_release_evidence_bundle_downloads_and_verifies_cross_repo_arti
     assert summary["trust_boundary"]["downloads_github_actions_artifacts"] is False
     assert summary["trust_boundary"]["mutates_releases"] is False
     assert summary["trust_boundary"]["stores_credentials"] is False
+    dual_public_check = next(
+        check
+        for check in summary["checks"]
+        if check["artifact"] == "ao2-dual-public-release-smoke"
+    )
+    assert dual_public_check["status"] == "passed"
+    assert dual_public_check["task_board_readback_schema"] == "ao2.cp-ai-task-board-readback.v1"
+    assert dual_public_check["task_board_dashboard_schema"] == "ao2.cp-ai-task-board-dashboard.v1"
+    assert dual_public_check["auth_value_stored"] is False
+    assert dual_public_check["credential_material_in_urls"] is False
+    assert dual_public_check["control_plane_approves_release"] is False
 
     verification = read("docs/VERIFICATION.md")
     assert "npm run release:operator-evidence-bundle" in verification
