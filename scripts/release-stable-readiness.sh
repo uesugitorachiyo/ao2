@@ -42,6 +42,19 @@ for component in asset_summary["components"]:
                 "message": "The current public artifact is explicitly marked as a prerelease.",
             }
         )
+    release_name = str(component.get("release_name") or "")
+    if component.get("stable_release_present", False) and any(
+        marker in release_name.lower()
+        for marker in ("alpha", "pre-release", "prerelease", "preview")
+    ):
+        blockers.append(
+            {
+                "code": "stable_release_label_mentions_alpha",
+                "severity": "blocking",
+                "message": "Stable release metadata must not describe the release as alpha, prerelease, or preview.",
+                "release_name": release_name,
+            }
+        )
     if component["name"] == "ao2":
         observed = set(component.get("observed_assets", []))
         required_signed_provenance = {
@@ -73,6 +86,7 @@ for component in asset_summary["components"]:
             "name": component["name"],
             "repo": component["repo"],
             "tag": component["tag"],
+            "release_name": component.get("release_name"),
             "release_url": component["release_url"],
             "release_channel": component["release_channel"],
             "stable_release_present": component["stable_release_present"],
@@ -113,6 +127,7 @@ for item in component_results:
     rows.append(
         "<tr>"
         f"<td>{html.escape(item['name'])}</td>"
+        f"<td>{html.escape(str(item['release_name']))}</td>"
         f"<td><a href=\"{html.escape(item['release_url'])}\">{html.escape(item['tag'])}</a></td>"
         f"<td>{html.escape(item['release_channel'])}</td>"
         f"<td>{html.escape(str(item['stable_release_present']).lower())}</td>"
@@ -131,7 +146,7 @@ dashboard_path.write_text(
     "</head><body><h1>Stable Release Readiness</h1>"
     f"<p>{html.escape(headline)}</p>"
     f"<p>Status: <code>{html.escape(payload['status'])}</code></p>"
-    "<table><thead><tr><th>Component</th><th>Tag</th><th>Channel</th><th>Stable Present</th>"
+    "<table><thead><tr><th>Component</th><th>Release Name</th><th>Tag</th><th>Channel</th><th>Stable Present</th>"
     "<th>Asset Gate</th><th>Stable Ready</th><th>Promotion Blockers</th></tr></thead>"
     f"<tbody>{''.join(rows)}</tbody></table></body></html>\n",
     encoding="utf-8",

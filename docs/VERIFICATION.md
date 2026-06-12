@@ -753,9 +753,9 @@ Result:
   readiness stays local-first instead of depending on live GitHub artifact
   downloads
 - `npm run release:stable-readiness`: consumes the release asset completeness
-  report, records prerelease-only and signed-provenance blockers, and emits
-  `ao2.stable-release-readiness.v1` plus `dashboard.html` for stable promotion
-  review
+  report, records prerelease-only, alpha-labeled stable release title, and
+  signed-provenance blockers, and emits `ao2.stable-release-readiness.v1` plus
+  `dashboard.html` for stable promotion review
 - `npm run release:stable-promotion-workflow`: reruns stable readiness, emits
   `ao2.stable-promotion-workflow.v1`, and stays in dry-run mode unless
   `AO2_STABLE_PROMOTION_CONFIRM=promote-stable-<ao2-tag>-<control-plane-tag>`
