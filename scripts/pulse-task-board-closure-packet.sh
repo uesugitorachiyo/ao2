@@ -3,13 +3,17 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_ROOT="${AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_ROOT:-$ROOT/target/pulse-task-board-closure-packet}"
+VERIFY_ONLY="${AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_VERIFY_ONLY:-0}"
 LATEST_ROOT="$OUT_ROOT/latest"
 LOG_DIR="$LATEST_ROOT/logs"
 TASK_BOARD_ROOT="$LATEST_ROOT/task-board"
-TASK_BOARD="$TASK_BOARD_ROOT/summary.json"
 NEXT_ACTIONS_ROOT="$LATEST_ROOT/next-actions"
 TASK_BOARD_STATE_ROOT="$LATEST_ROOT/task-board-state"
 CONTROL_PLANE_FIXTURE_ROOT="$LATEST_ROOT/control-plane-fixture-consumer-smoke"
+TASK_BOARD="${AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_TASK_BOARD:-$TASK_BOARD_ROOT/summary.json}"
+NEXT_ACTIONS="${AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_NEXT_ACTIONS:-$NEXT_ACTIONS_ROOT/summary.json}"
+TASK_BOARD_STATE="${AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_TASK_BOARD_STATE:-$TASK_BOARD_STATE_ROOT/summary.json}"
+CONTROL_PLANE="${AO2_PULSE_TASK_BOARD_CLOSURE_PACKET_CONTROL_PLANE:-$CONTROL_PLANE_FIXTURE_ROOT/summary.json}"
 SUMMARY="$LATEST_ROOT/summary.json"
 MARKDOWN="$LATEST_ROOT/closure-packet.md"
 
@@ -18,27 +22,34 @@ mkdir -p "$LOG_DIR" "$TASK_BOARD_ROOT" "$NEXT_ACTIONS_ROOT" "$TASK_BOARD_STATE_R
 # shellcheck source=scripts/lib/pulse-gate-lib.sh
 . "$ROOT/scripts/lib/pulse-gate-lib.sh"
 
-ao2_gate_run_step "$LOG_DIR" pulse_generate_next \
-  env AO2_PULSE_GENERATE_NEXT_REGISTER=0 \
-    AO2_PULSE_TASK_BOARD_ROOT="$TASK_BOARD_ROOT" \
-    npm run pulse:generate-next
+if [[ "$VERIFY_ONLY" == "1" ]]; then
+  for step in pulse_generate_next pulse_next_actions pulse_task_board_state control_plane_fixture_consumer_smoke; do
+    printf "0\n" >"$LOG_DIR/$step.log.exit-code"
+    printf "verify-only: using supplied fixture paths\n" >"$LOG_DIR/$step.log"
+  done
+else
+  ao2_gate_run_step "$LOG_DIR" pulse_generate_next \
+    env AO2_PULSE_GENERATE_NEXT_REGISTER=0 \
+      AO2_PULSE_TASK_BOARD_ROOT="$TASK_BOARD_ROOT" \
+      npm run pulse:generate-next
 
-ao2_gate_run_step "$LOG_DIR" pulse_next_actions \
-  env AO2_PULSE_NEXT_ACTIONS_BOARD="$TASK_BOARD" \
-    AO2_PULSE_NEXT_ACTIONS_ROOT="$NEXT_ACTIONS_ROOT" \
-    npm run pulse:next-actions
+  ao2_gate_run_step "$LOG_DIR" pulse_next_actions \
+    env AO2_PULSE_NEXT_ACTIONS_BOARD="$TASK_BOARD" \
+      AO2_PULSE_NEXT_ACTIONS_ROOT="$NEXT_ACTIONS_ROOT" \
+      npm run pulse:next-actions
 
-ao2_gate_run_step "$LOG_DIR" pulse_task_board_state \
-  env AO2_PULSE_TASK_BOARD_STATE_BOARD="$TASK_BOARD" \
-    AO2_PULSE_TASK_BOARD_STATE_ROOT="$TASK_BOARD_STATE_ROOT" \
-    npm run pulse:task-board-state
+  ao2_gate_run_step "$LOG_DIR" pulse_task_board_state \
+    env AO2_PULSE_TASK_BOARD_STATE_BOARD="$TASK_BOARD" \
+      AO2_PULSE_TASK_BOARD_STATE_ROOT="$TASK_BOARD_STATE_ROOT" \
+      npm run pulse:task-board-state
 
-ao2_gate_run_step "$LOG_DIR" control_plane_fixture_consumer_smoke \
-  env AO2_CP_FIXTURE_CONSUMER_TASK_BOARD="$TASK_BOARD" \
-    AO2_CP_FIXTURE_CONSUMER_SMOKE_ROOT="$CONTROL_PLANE_FIXTURE_ROOT" \
-    npm run control-plane:fixture-consumer-smoke
+  ao2_gate_run_step "$LOG_DIR" control_plane_fixture_consumer_smoke \
+    env AO2_CP_FIXTURE_CONSUMER_TASK_BOARD="$TASK_BOARD" \
+      AO2_CP_FIXTURE_CONSUMER_SMOKE_ROOT="$CONTROL_PLANE_FIXTURE_ROOT" \
+      npm run control-plane:fixture-consumer-smoke
+fi
 
-python3 - "$LATEST_ROOT" "$LOG_DIR" "$TASK_BOARD" "$NEXT_ACTIONS_ROOT/summary.json" "$TASK_BOARD_STATE_ROOT/summary.json" "$CONTROL_PLANE_FIXTURE_ROOT/summary.json" "$SUMMARY" "$MARKDOWN" <<'PY'
+python3 - "$LATEST_ROOT" "$LOG_DIR" "$TASK_BOARD" "$NEXT_ACTIONS" "$TASK_BOARD_STATE" "$CONTROL_PLANE" "$SUMMARY" "$MARKDOWN" "$VERIFY_ONLY" <<'PY'
 import json
 import sys
 from datetime import datetime, timezone
@@ -52,6 +63,7 @@ task_board_state_path = Path(sys.argv[5]).resolve()
 control_plane_path = Path(sys.argv[6]).resolve()
 summary_path = Path(sys.argv[7]).resolve()
 markdown_path = Path(sys.argv[8]).resolve()
+verify_only = sys.argv[9] == "1"
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -131,6 +143,19 @@ control_plane_ok = (
     and operator_view.get("status") == "passed"
 )
 steps_ok = all(code == 0 for code in step_exit_codes.values())
+blockers = []
+if not steps_ok:
+    blockers.append("component_step_failed")
+if not schemas_ok:
+    blockers.append("schema_validation_failed")
+if not component_statuses_ok:
+    blockers.append("component_status_failed")
+if not task_ids_match:
+    blockers.append("task_id_alignment_mismatch")
+if not safety_fields_preserved:
+    blockers.append("safety_fields_missing")
+if not control_plane_ok:
+    blockers.append("control_plane_readback_failed")
 status = "passed" if all([
     steps_ok,
     schemas_ok,
@@ -144,7 +169,9 @@ payload = {
     "schema_version": "ao2.pulse-task-board-closure-packet.v1",
     "generated_at_utc": utc_now(),
     "status": status,
+    "mode": "verify-only" if verify_only else "generate-and-verify",
     "artifact_root": str(latest_root),
+    "blockers": blockers,
     "task_count": len(tasks),
     "next_actions": action_summaries,
     "alignment": {
@@ -202,6 +229,12 @@ lines = [
     "",
     "## Checks",
 ]
+if blockers:
+    lines.append("")
+    lines.append("## Blockers")
+    for blocker in blockers:
+        lines.append(f"- `{blocker}`")
+    lines.append("")
 for name, code in step_exit_codes.items():
     lines.append(f"- `{name}` exit code: `{code}`")
 lines.extend([
