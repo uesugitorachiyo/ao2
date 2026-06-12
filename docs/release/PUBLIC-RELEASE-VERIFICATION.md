@@ -6,7 +6,7 @@ This is the operator index for verifying public release evidence across
 The current public release pair is:
 
 - AO2 stable release: `v0.4.80`
-- AO2 control-plane stable release: `v0.1.12`
+- AO2 control-plane stable release: `v0.1.13`
 
 All checks below are read-only. They download release assets or GitHub Actions
 artifacts, verify checksums and summaries, and do not approve AO2 runs, mutate
@@ -24,10 +24,21 @@ install/update, `version --json`, `doctor --json`, and
 Expected AO2 evidence artifact:
 
 - `post-stable-release-smoke-${{ runner.os }}`
+- `ao2-dual-public-release-smoke`
+
+The `ao2-dual-public-release-smoke` artifact is the cross-repository public
+archive interoperability proof. It downloads the published AO2 Linux x86_64
+archive and the published control-plane Linux x86_64 archive, verifies each
+against its public `SHA256SUMS`, starts the published control-plane server, and
+uses the published AO2 binary identity plus an `ao2.ai-task-board.v1` fixture to
+exercise task-board ingest/readback. Its `summary.json` uses
+`ao2.dual-public-release-smoke.v1` and records that the smoke is read-only,
+including `mutates_github_releases=false`, no stored bearer value, and no
+release approval authority.
 
 The control-plane uses `Post Release Verification` in
 `.github/workflows/post-release-verification.yml`. It can be dispatched
-manually and runs on schedule. It downloads all public `v0.1.12` release
+manually and runs on schedule. It downloads all public `v0.1.13` release
 assets, verifies `SHA256SUMS`, and writes a release publication closure summary
 on Ubuntu, macOS, and Windows.
 
@@ -92,6 +103,11 @@ operator-facing release evidence set into
   `post-stable-release-smoke-macOS`, and
   `post-stable-release-smoke-Windows` install/update evidence with
   `signature_verified=true`;
+- AO2 `ao2-dual-public-release-smoke` evidence with
+  `ao2.dual-public-release-smoke.v1`, the published AO2 Linux x86_64 archive,
+  the published control-plane Linux x86_64 archive, and task-board readback
+  schemas `ao2.cp-ai-task-board-readback.v1` and
+  `ao2.cp-ai-task-board-dashboard.v1`;
 - control-plane `ao2-control-plane-post-release-verification-ubuntu`,
   `ao2-control-plane-post-release-verification-macos`, and
   `ao2-control-plane-post-release-verification-windows` summaries with
@@ -139,6 +155,8 @@ keeps confirmed stable promotion blocked.
 ## Acceptance Checklist
 
 - AO2 post-stable release verification passes on Ubuntu, macOS, and Windows.
+- AO2 `ao2-dual-public-release-smoke` proves the published AO2 and
+  control-plane archives interoperate from downloaded release assets.
 - Control-plane post-release verification passes on Ubuntu, macOS, and Windows.
 - AO2 `ao2-dual-repo-release-publication-closure-index` validates
   `ao2-control-plane-release-publication-closure`.

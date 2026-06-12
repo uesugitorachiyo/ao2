@@ -511,7 +511,7 @@ def test_release_asset_completeness_gate_covers_ao2_and_control_plane():
         "uesugitorachiyo/ao2",
         "uesugitorachiyo/ao2-control-plane",
         "v0.4.80",
-        "v0.1.12",
+        "v0.1.13",
         "ao2-0.4.80-linux-aarch64.tar.gz",
         "ao2-0.4.80-linux-x86_64.tar.gz",
         "ao2-0.4.80-macos-aarch64.tar.gz",
@@ -520,8 +520,10 @@ def test_release_asset_completeness_gate_covers_ao2_and_control_plane():
         "ao2-release-provenance.json.sig",
         "ao2-release-signing-public.pem",
         "ao2-release-readiness-summary.json",
-        "ao2-control-plane-0.1.12-macos-aarch64.tar.gz",
-        "ao2-control-plane-release-train-bridge-windows-summary.json",
+        "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
+        "ao2-control-plane-0.1.13-macos-aarch64.tar.gz",
+        "ao2-control-plane-0.1.13-windows-x86_64.tar.gz",
+        "summary.json",
         "SHA256SUMS",
         "missing_assets",
         "missing_checksum_entries",
@@ -600,9 +602,9 @@ def test_release_metadata_drift_audit_is_exposed_and_documented():
         "uesugitorachiyo/ao2",
         "uesugitorachiyo/ao2-control-plane",
         "v0.4.80",
-        "v0.1.12",
+        "v0.1.13",
         "AO2 v0.4.80 stable",
-        "ao2-control-plane v0.1.12 stable",
+        "ao2-control-plane v0.1.13",
         "docs/release/PUBLIC-RELEASE-VERIFICATION.md",
         "docs/INSTALL.md",
         "gh release view",
@@ -619,7 +621,7 @@ def test_release_metadata_drift_audit_is_exposed_and_documented():
     assert "ao2.release-metadata-drift-audit.v1" in verification
 
     public_release_index = read("docs/release/PUBLIC-RELEASE-VERIFICATION.md")
-    assert "AO2 control-plane stable release: `v0.1.12`" in public_release_index
+    assert "AO2 control-plane stable release: `v0.1.13`" in public_release_index
     assert "AO2 control-plane prerelease" not in public_release_index
 
 
@@ -721,7 +723,7 @@ def test_stable_promotion_workflow_is_guarded_and_documented():
         "ao2.stable-promotion-workflow.v1",
         "release:stable-readiness",
         "AO2_STABLE_PROMOTION_CONFIRM",
-        "promote-stable-v0.4.80-v0.1.12",
+        "promote-stable-v0.4.80-v0.1.13",
         "gh release edit",
         "--prerelease=false",
         "stable_channel_only",
@@ -1391,6 +1393,94 @@ def test_dual_repo_installed_release_smoke_ci_and_release_note_contract():
         "ao2.cp-ai-task-board-readback.v1",
     ]:
         assert needle in release_doc
+
+
+def test_dual_public_release_smoke_contract():
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["release:dual-public-smoke"]
+        == "node scripts/run-sh-script.js scripts/dual-public-release-smoke.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "dual-public-release-smoke.sh"
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.dual-public-release-smoke.v1",
+        "AO2_PUBLIC_RELEASE_SMOKE_ROOT",
+        "AO2_PUBLIC_RELEASE_SMOKE_BIND",
+        "AO2_RELEASE_TAG",
+        "AO2_CP_RELEASE_TAG",
+        "uesugitorachiyo/ao2",
+        "uesugitorachiyo/ao2-control-plane",
+        "gh release download",
+        "ao2-0.4.80-linux-x86_64.tar.gz",
+        "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
+        "SHA256SUMS",
+        "ao2.release-manifest.v1",
+        "ao2-control-plane.release-manifest.v1",
+        "ao2.ai-task-board.v1",
+        "ao2.cp-ai-task-board-readback.v1",
+        "ao2.cp-ai-task-board-dashboard.v1",
+        "Authorization: Bearer",
+        "downloads_public_release_archives",
+        "auth_value_stored",
+        "credential_material_included",
+        "mutates_github_releases",
+        "control_plane_approves_release",
+    ]:
+        assert needle in text
+
+    for forbidden in [
+        "/Users/torachiyouesugi/Documents/private",
+        "target/long-lived-control-plane/api-token",
+        "gh release upload",
+        "gh release edit",
+        "gh release create",
+        "git push origin",
+        "npm publish",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+    ]:
+        assert forbidden not in text
+
+
+def test_dual_public_release_smoke_workflow_and_docs_contract():
+    workflow = read(".github/workflows/post-stable-release-verification.yml")
+    release_doc = read("docs/release/PUBLIC-RELEASE-VERIFICATION.md")
+    verification = read("docs/VERIFICATION.md")
+
+    for needle in [
+        "dual-public-release-smoke:",
+        "name: Dual public release smoke",
+        "AO2_PUBLIC_RELEASE_SMOKE_ROOT=target/dual-public-release-smoke",
+        "npm run release:dual-public-smoke",
+        "ao2.dual-public-release-smoke.v1",
+        "ao2.cp-ai-task-board-readback.v1",
+        "ao2.cp-ai-task-board-dashboard.v1",
+        "ao2-dual-public-release-smoke",
+        "target/dual-public-release-smoke/latest/summary.json",
+    ]:
+        assert needle in workflow
+
+    for needle in [
+        "AO2 stable release: `v0.4.80`",
+        "AO2 control-plane stable release: `v0.1.13`",
+        "ao2-dual-public-release-smoke",
+        "ao2.dual-public-release-smoke.v1",
+        "published AO2 Linux x86_64 archive",
+        "published control-plane Linux x86_64 archive",
+        "read-only",
+        "mutates_github_releases=false",
+    ]:
+        assert needle in release_doc
+
+    for needle in [
+        "release:dual-public-smoke",
+        "ao2.dual-public-release-smoke.v1",
+        "published AO2 and control-plane archives",
+    ]:
+        assert needle in verification
 
 
 def test_ai_task_board_control_plane_bridge_script_contract():
@@ -7991,7 +8081,7 @@ def test_dual_repo_public_release_verification_index_is_documented():
         "uesugitorachiyo/ao2",
         "uesugitorachiyo/ao2-control-plane",
         "v0.4.80",
-        "v0.1.12",
+        "v0.1.13",
         "Post Stable Release Verification",
         ".github/workflows/post-stable-release-verification.yml",
         "post-stable-release-smoke-${{ runner.os }}",

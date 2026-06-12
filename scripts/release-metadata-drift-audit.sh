@@ -45,12 +45,12 @@ components = [
     {
         "component": "ao2-control-plane",
         "repo": "uesugitorachiyo/ao2-control-plane",
-        "tag": "v0.1.12",
-        "expected_release_name": "ao2-control-plane v0.1.12 stable",
+        "tag": "v0.1.13",
+        "expected_release_name": "ao2-control-plane v0.1.13",
         "expected_channel": "stable",
         "doc_expectations": {
             "docs/release/PUBLIC-RELEASE-VERIFICATION.md": [
-                "AO2 control-plane stable release: `v0.1.12`",
+                "AO2 control-plane stable release: `v0.1.13`",
             ],
         },
         "forbidden_doc_fragments": [
