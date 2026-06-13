@@ -47,8 +47,17 @@ jobs:
           assert summary["schema_version"] == "ao2.operator-release-evidence-bundle.v1", summary
           assert summary["status"] == "passed", summary
           assert summary["operator_release_evidence_ready"] is True, summary
-          assert len(summary["checks"]) == 7, summary
+          assert len(summary["checks"]) == 9, summary
           assert all(check["status"] == "passed" for check in summary["checks"]), summary
+          public_pair_digest = next(
+              check
+              for check in summary["checks"]
+              if check["artifact"] == "ao2-public-release-pair-digest-audit"
+          )
+          assert public_pair_digest["schema_version"] == "ao2.public-release-pair-digest-audit.v1", summary
+          assert public_pair_digest["archive_parity_status"] == "passed", summary
+          assert public_pair_digest["mutates_releases"] is False, summary
+          assert public_pair_digest["stores_credentials"] is False, summary
           trust = summary["trust_boundary"]
           assert trust["mutates_releases"] is False, summary
           assert trust["stores_credentials"] is False, summary
