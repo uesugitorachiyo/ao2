@@ -138,9 +138,10 @@ checks without approving releases or mutating AO2 artifacts.
 `npm run release:stable-promotion-workflow` uses this hosted evidence before it
 can promote AO2 and `ao2-control-plane` releases from prerelease to stable. The
 workflow downloads the latest successful AO2 `Post Stable Release Verification`
-artifacts, including `ao2-dual-public-release-smoke`, and the latest successful
-control-plane `Post Release Verification` artifacts, then emits
-`ao2.stable-promotion-evidence-gate.v1`.
+artifacts, including `ao2-dual-public-release-smoke`, the latest successful AO2
+`Post Release Pair Digest Audit` artifact `ao2-public-release-pair-digest-audit`,
+and the latest successful control-plane `Post Release Verification` artifacts,
+then emits `ao2.stable-promotion-evidence-gate.v1`.
 
 The gate requires:
 
@@ -152,6 +153,10 @@ The gate requires:
   schemas, `auth_value_stored=false`, `credential_material_in_urls=false`,
   `mutates_github_releases=false`, and
   `control_plane_approves_release=false`;
+- AO2 `ao2-public-release-pair-digest-audit` with
+  `ao2.public-release-pair-digest-audit.v1`, `status=passed`,
+  `archive_parity.status=passed`, `mutates_releases=false`, and
+  `stores_credentials=false`;
 - control-plane `ao2-control-plane-post-release-verification-ubuntu`,
   `ao2-control-plane-post-release-verification-macos`, and
   `ao2-control-plane-post-release-verification-windows` artifacts with
@@ -168,6 +173,9 @@ keeps confirmed stable promotion blocked.
 - AO2 post-stable release verification passes on Ubuntu, macOS, and Windows.
 - AO2 `ao2-dual-public-release-smoke` proves the published AO2 and
   control-plane archives interoperate from downloaded release assets.
+- AO2 `ao2-public-release-pair-digest-audit` proves every required AO2 and
+  control-plane archive has public digest/size parity with the dual-repo
+  closure index.
 - Control-plane post-release verification passes on Ubuntu, macOS, and Windows.
 - AO2 `ao2-dual-repo-release-publication-closure-index` validates
   `ao2-control-plane-release-publication-closure`.

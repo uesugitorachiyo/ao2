@@ -1226,15 +1226,21 @@ def test_stable_promotion_workflow_is_guarded_and_documented():
         "uesugitorachiyo/ao2-control-plane",
         "AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD",
         "AO2_STABLE_PROMOTION_EVIDENCE_ROOT",
+        "AO2_STABLE_PROMOTION_EVIDENCE_FIXTURE_DIR",
         "Post Stable Release Verification",
+        "Post Release Pair Digest Audit",
         "Post Release Verification",
         "post-stable-release-smoke-Linux",
         "post-stable-release-smoke-macOS",
         "post-stable-release-smoke-Windows",
         "ao2-dual-public-release-smoke",
         "ao2.dual-public-release-smoke.v1",
+        "ao2-public-release-pair-digest-audit",
+        "ao2.public-release-pair-digest-audit.v1",
+        "archive_parity_status",
         "task_board_readback_schema",
         "dual-public-release-smoke",
+        "public-pair-digest-audit",
         "auth_value_stored",
         "credential_material_in_urls",
         "ao2-control-plane-post-release-verification-ubuntu",
@@ -1258,13 +1264,164 @@ def test_stable_promotion_workflow_is_guarded_and_documented():
     assert "ao2.stable-promotion-evidence-gate.v1" in verification
     assert "post-release verification evidence gate" in verification
     assert "ao2-dual-public-release-smoke" in verification
+    assert "ao2-public-release-pair-digest-audit" in verification
+    assert "archive_parity.status=passed" in verification
     assert "dual public task-board readback schemas" in verification
 
     public_release_index = read("docs/release/PUBLIC-RELEASE-VERIFICATION.md")
     assert "Stable promotion evidence gate" in public_release_index
     assert "AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD=1" in public_release_index
     assert "ao2-dual-public-release-smoke" in public_release_index
+    assert "ao2-public-release-pair-digest-audit" in public_release_index
+    assert "archive_parity.status=passed" in public_release_index
     assert "control_plane_approves_release=false" in public_release_index
+
+
+def test_stable_promotion_workflow_requires_public_pair_digest_audit(tmp_path):
+    fixture = tmp_path / "fixture"
+    for name in ["ao2-linux", "ao2-macos", "ao2-windows"]:
+        install_update = fixture / name / "smoke" / "install-update.json"
+        install_update.parent.mkdir(parents=True)
+        install_update.write_text(
+            json.dumps(
+                {
+                    "status": "installed",
+                    "signature_verified": True,
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    dual_public = fixture / "dual-public-release-smoke" / "latest"
+    (dual_public / "smoke").mkdir(parents=True)
+    (dual_public / "summary.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.dual-public-release-smoke.v1",
+                "status": "passed",
+                "trust_boundary": {
+                    "auth_value_stored": False,
+                    "credential_material_in_urls": False,
+                    "credential_material_included": False,
+                    "mutates_github_releases": False,
+                    "control_plane_approves_release": False,
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (dual_public / "smoke" / "task-board-readback.json").write_text(
+        json.dumps(
+            {"schema_version": "ao2.cp-ai-task-board-readback.v1"},
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (dual_public / "smoke" / "task-board-dashboard.json").write_text(
+        json.dumps(
+            {"schema_version": "ao2.cp-ai-task-board-dashboard.v1"},
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    for name in ["control-plane-ubuntu", "control-plane-macos", "control-plane-windows"]:
+        summary = fixture / name / "summary.json"
+        summary.parent.mkdir(parents=True)
+        summary.write_text(
+            json.dumps(
+                {
+                    "schema_version": "ao2.cp-release-publication-closure.v1",
+                    "status": "passed",
+                    "checksum_verified": True,
+                    "trust_boundary": {
+                        "credential_material_included": False,
+                        "mutates_github_releases": False,
+                    },
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "npm").write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [ "$1 $2" != "run release:stable-readiness" ]; then
+  echo "unexpected npm command: $*" >&2
+  exit 1
+fi
+mkdir -p "$AO2_STABLE_RELEASE_READINESS_ROOT"
+cat > "$AO2_STABLE_RELEASE_READINESS_ROOT/summary.json" <<'JSON'
+{
+  "schema_version": "ao2.stable-release-readiness.v1",
+  "stable_release_ready": false,
+  "components": [
+    {"name": "ao2", "repo": "uesugitorachiyo/ao2", "tag": "v0.4.80"},
+    {"name": "ao2-control-plane", "repo": "uesugitorachiyo/ao2-control-plane", "tag": "v0.1.13"}
+  ],
+  "promotion_blockers": [
+    {"component": "ao2", "code": "stable_release_absent", "severity": "blocking"},
+    {"component": "ao2-control-plane", "code": "current_channel_is_prerelease", "severity": "blocking"}
+  ]
+}
+JSON
+""",
+        encoding="utf-8",
+    )
+    (bin_dir / "npm").chmod(0o755)
+    (bin_dir / "gh").write_text(
+        "#!/usr/bin/env bash\nexit 1\n",
+        encoding="utf-8",
+    )
+    (bin_dir / "gh").chmod(0o755)
+
+    out_root = tmp_path / "stable-promotion"
+    result = subprocess.run(
+        ["node", "scripts/run-sh-script.js", "scripts/release-stable-promotion-workflow.sh"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+            "AO2_STABLE_PROMOTION_ROOT": str(out_root),
+            "AO2_STABLE_PROMOTION_EVIDENCE_FIXTURE_DIR": str(fixture),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    evidence_summary = json.loads(
+        (out_root / "post-release-verification-evidence" / "summary.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    public_pair_check = next(
+        check
+        for check in evidence_summary["checks"]
+        if check["artifact"] == "ao2-public-release-pair-digest-audit"
+    )
+    assert public_pair_check["status"] == "missing"
+    assert public_pair_check["missing"] == "target/post-release-pair-digest-audit/summary.json"
+    assert evidence_summary["post_release_evidence_ready"] is False
+
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "blocked"
+    assert summary["post_release_evidence_ready"] is False
+    assert any(
+        blocker["code"] == "post_release_evidence_missing"
+        for blocker in summary["blockers"]
+    )
 
 
 def test_operator_release_evidence_bundle_downloads_and_verifies_cross_repo_artifacts(tmp_path):
