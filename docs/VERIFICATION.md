@@ -571,6 +571,17 @@ Result:
   post-stable release verification, control-plane post-release verification,
   `ao2-control-plane-release-publication-closure`, and
   `ao2.dual-repo-release-publication-closure-index.v1` evidence.
+- `npm run release:public-pair-digest-audit`: read-only post-release verifier
+  that reads public AO2 and ao2-control-plane GitHub Release asset metadata,
+  plus a supplied dual-repo closure index via
+  `AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON`, and emits
+  `ao2.public-release-pair-digest-audit.v1`. It checks each published archive
+  has digest and size metadata, then compares control-plane
+  `ao2-control-plane-*.tar.gz` closure `sha256`/`size_bytes` evidence with the
+  corresponding published release asset. Fixture inputs are available through
+  `AO2_PUBLIC_PAIR_DIGEST_AUDIT_AO2_RELEASE_VIEW_JSON` and
+  `AO2_PUBLIC_PAIR_DIGEST_AUDIT_CONTROL_PLANE_RELEASE_VIEW_JSON`; the audit
+  does not mutate releases or store credentials.
 - `npm run release:readiness:regression-gate`: runs static release readiness,
   Phase 1 operator golden-path smoke, Pulse local mirror, Pulse resume dry-run,
   real CI artifact download contract, artifact indexing, fail-on-attention

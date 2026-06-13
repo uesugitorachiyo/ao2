@@ -625,6 +625,188 @@ def test_release_metadata_drift_audit_is_exposed_and_documented():
     assert "AO2 control-plane prerelease" not in public_release_index
 
 
+def test_public_release_pair_digest_audit_rejects_closure_release_asset_drift(tmp_path):
+    package_json = json.loads(read("package.json"))
+    assert package_json["scripts"]["release:public-pair-digest-audit"] == (
+        "node scripts/run-sh-script.js scripts/public-release-pair-digest-audit.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "public-release-pair-digest-audit.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+
+    for needle in [
+        "ao2.public-release-pair-digest-audit.v1",
+        "AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON",
+        "AO2_PUBLIC_PAIR_DIGEST_AUDIT_AO2_RELEASE_VIEW_JSON",
+        "AO2_PUBLIC_PAIR_DIGEST_AUDIT_CONTROL_PLANE_RELEASE_VIEW_JSON",
+        "uesugitorachiyo/ao2",
+        "uesugitorachiyo/ao2-control-plane",
+        "gh release view",
+        "dual_repo_closure_digest_match",
+        "published_asset_digest_present",
+        "published_asset_size_match",
+        "mutates_releases",
+        "stores_credentials",
+    ]:
+        assert needle in text
+
+    verification = read("docs/VERIFICATION.md")
+    assert "npm run release:public-pair-digest-audit" in verification
+    assert "ao2.public-release-pair-digest-audit.v1" in verification
+
+    closure_index = tmp_path / "dual-repo-closure-index.json"
+    ao2_release = tmp_path / "ao2-release.json"
+    control_plane_release = tmp_path / "control-plane-release.json"
+
+    closure_index.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.dual-repo-release-publication-closure-index.v1",
+                "status": "passed",
+                "control_plane": {
+                    "schema_version": "ao2.cp-release-publication-closure.v1",
+                    "checksum_verified": True,
+                    "assets": [
+                        {
+                            "name": "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
+                            "sha256": "a" * 64,
+                            "size_bytes": 4236805,
+                        }
+                    ],
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    ao2_release.write_text(
+        json.dumps(
+            {
+                "tagName": "v0.4.80",
+                "name": "AO2 v0.4.80 stable",
+                "isPrerelease": False,
+                "publishedAt": "2026-06-10T18:45:16Z",
+                "url": "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.80",
+                "assets": [
+                    {
+                        "name": "ao2-0.4.80-linux-x86_64.tar.gz",
+                        "digest": "sha256:" + "c" * 64,
+                        "size": 3345603,
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    control_plane_release.write_text(
+        json.dumps(
+            {
+                "tagName": "v0.1.13",
+                "name": "ao2-control-plane v0.1.13",
+                "isPrerelease": False,
+                "publishedAt": "2026-06-12T05:53:59Z",
+                "url": (
+                    "https://github.com/uesugitorachiyo/ao2-control-plane/"
+                    "releases/tag/v0.1.13"
+                ),
+                "assets": [
+                    {
+                        "name": "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
+                        "digest": "sha256:" + "b" * 64,
+                        "size": 4236805,
+                    }
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    out_root = tmp_path / "audit"
+    result = subprocess.run(
+        ["npm", "run", "release:public-pair-digest-audit"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_ROOT": str(out_root),
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON": str(
+                closure_index
+            ),
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_AO2_RELEASE_VIEW_JSON": str(ao2_release),
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_CONTROL_PLANE_RELEASE_VIEW_JSON": str(
+                control_plane_release
+            ),
+        },
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "status=failed" in result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.public-release-pair-digest-audit.v1"
+    assert summary["status"] == "failed"
+    failed = [item for item in summary["checks"] if item["status"] == "failed"]
+    assert any(item["code"] == "dual_repo_closure_digest_match" for item in failed)
+    assert summary["trust_boundary"]["mutates_releases"] is False
+
+    closure_index.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.dual-repo-release-publication-closure-index.v1",
+                "status": "passed",
+                "control_plane": {
+                    "schema_version": "ao2.cp-release-publication-closure.v1",
+                    "checksum_verified": True,
+                    "assets": [
+                        {
+                            "name": "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
+                            "sha256": "b" * 64,
+                            "size_bytes": 4236805,
+                        }
+                    ],
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    passed_root = tmp_path / "audit-passed"
+    passed_result = subprocess.run(
+        ["npm", "run", "release:public-pair-digest-audit"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_ROOT": str(passed_root),
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON": str(
+                closure_index
+            ),
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_AO2_RELEASE_VIEW_JSON": str(ao2_release),
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_CONTROL_PLANE_RELEASE_VIEW_JSON": str(
+                control_plane_release
+            ),
+        },
+        check=False,
+    )
+
+    assert passed_result.returncode == 0, passed_result.stderr + passed_result.stdout
+    assert "status=passed" in passed_result.stdout
+
+
 def test_release_sync_provenance_assets_is_guarded_and_documented():
     package_json = json.loads(read("package.json"))
     assert (
@@ -1123,6 +1305,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "release_metadata_drift_audit",
         "release_metadata_drift_audit_summary",
         "release_metadata_drift_audit_status",
+        "release_public_pair_digest_audit_contract",
+        "release:public-pair-digest-audit",
         "target/release-readiness-consumer/ao2-release-readiness",
         "target/release-readiness-consumer/ao2-release-train-control-plane-bridge",
         "target/release-readiness-consumer/ao2-ai-task-board-control-plane-bridge",
@@ -1142,6 +1326,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.cp-release-publication-closure.v1",
         "ao2.dual-repo-release-publication-closure-index.v1",
         "ao2.release-metadata-drift-audit.v1",
+        "ao2.public-release-pair-digest-audit.v1",
         "ao2.release-artifact-closure-index.v1",
         "ao2-control-plane-",
         ".tar.gz",
@@ -1157,6 +1342,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "release_publication_closure",
         "dual_repo_release_publication_closure_index",
         "release_metadata_drift_audit",
+        "release_public_pair_digest_audit",
     ]:
         assert needle in script
 
