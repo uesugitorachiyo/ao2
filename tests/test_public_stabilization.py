@@ -1956,6 +1956,25 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
     assert "Stable release evidence packet" in public_release_index
     assert "release:stable-evidence-packet" in public_release_index
 
+    ci = read(".github/workflows/ci.yml")
+    for needle in [
+        "stable-release-evidence-packet-artifacts:",
+        "name: Stable release evidence packet artifacts",
+        "AO2_STABLE_PROMOTION_ROOT=target/stable-release-evidence-packet-ci/stable-promotion-workflow",
+        "npm run release:stable-promotion-workflow",
+        "AO2_OPERATOR_RELEASE_EVIDENCE_ROOT=target/stable-release-evidence-packet-ci/operator-release-evidence-bundle",
+        "npm run release:operator-evidence-bundle",
+        "AO2_STABLE_RELEASE_EVIDENCE_PACKET_ROOT=target/stable-release-evidence-packet-ci/packet",
+        "AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY=target/stable-release-evidence-packet-ci/stable-promotion-workflow/summary.json",
+        "AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY=target/stable-release-evidence-packet-ci/operator-release-evidence-bundle/summary.json",
+        "npm run release:stable-evidence-packet",
+        "ao2.stable-release-evidence-packet.v1",
+        "stable_release_evidence_ready",
+        "ao2-stable-release-evidence-packet",
+        "target/stable-release-evidence-packet-ci",
+    ]:
+        assert needle in ci
+
 
 def test_evidence_control_plane_smoke_script_is_token_safe_and_exposed_by_npm():
     package_json = json.loads(read("package.json"))
@@ -2167,6 +2186,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "target/release-readiness-consumer/ao2-dual-repo-installed-release-smoke",
         "target/release-readiness-consumer/ao2-release-publication-closure",
         "target/release-readiness-consumer/ao2-dual-repo-release-publication-closure-index",
+        "target/release-readiness-consumer/ao2-stable-release-evidence-packet",
         "ao2.release-readiness-local.v1",
         "ao2.release-train-control-plane-bridge.v1",
         "ao2.ai-task-board-control-plane-bridge.v1",
@@ -2177,6 +2197,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.release-publication-dry-run-closure.v1",
         "ao2.cp-release-publication-closure.v1",
         "ao2.dual-repo-release-publication-closure-index.v1",
+        "ao2.stable-release-evidence-packet.v1",
         "ao2.release-metadata-drift-audit.v1",
         "ao2.public-release-pair-digest-audit.v1",
         "ao2.release-artifact-closure-index.v1",
@@ -2193,6 +2214,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "dual_repo_installed_release_smoke",
         "release_publication_closure",
         "dual_repo_release_publication_closure_index",
+        "stable_release_evidence_packet",
         "release_metadata_drift_audit",
         "release_public_pair_digest_audit",
     ]:
@@ -2238,7 +2260,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2-pulse-codex-cron-event-loop-smoke",
         "release-readiness-artifact-consumer:",
         "name: Release readiness artifact consumer",
-        "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-codex-cron-event-loop-smoke-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index]",
+        "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-codex-cron-event-loop-smoke-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index, stable-release-evidence-packet-artifacts]",
         "uses: actions/checkout@v6.0.3",
         "uses: actions/download-artifact@v8.0.1",
         "name: ao2-release-readiness",
@@ -2257,6 +2279,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "path: target/release-readiness-consumer/ao2-release-publication-closure",
         "name: ao2-dual-repo-release-publication-closure-index",
         "path: target/release-readiness-consumer/ao2-dual-repo-release-publication-closure-index",
+        "name: ao2-stable-release-evidence-packet",
+        "path: target/release-readiness-consumer/ao2-stable-release-evidence-packet",
         "AO2_RELEASE_PUBLICATION_DRY_RUN_CLOSURE_ROOT=target/release-publication-closure-ci",
         "npm run release:publication-dry-run-closure",
         "if: always()",
@@ -2491,6 +2515,7 @@ def _write_release_readiness_consumer_fixture(root: Path):
         "ci_dual_repo_installed_release_smoke_artifact_job",
         "ci_release_publication_closure_artifact_job",
         "ci_dual_repo_release_publication_closure_index_job",
+        "ci_stable_release_evidence_packet_artifact_job",
     ]
     _write_release_readiness_consumer_json(
         root,
@@ -2628,6 +2653,29 @@ def _write_release_readiness_consumer_fixture(root: Path):
             },
         },
     )
+    _write_release_readiness_consumer_json(
+        root,
+        "ao2-stable-release-evidence-packet/packet/summary.json",
+        {
+            "schema_version": "ao2.stable-release-evidence-packet.v1",
+            "status": "passed",
+            "stable_release_evidence_ready": True,
+            "stable_promotion": {
+                "schema_version": "ao2.stable-promotion-workflow.v1"
+            },
+            "operator_evidence": {
+                "schema_version": "ao2.operator-release-evidence-bundle.v1",
+                "operator_release_evidence_ready": True,
+            },
+            "trust_boundary": {
+                "mutates_releases": False,
+                "stores_credentials": False,
+            },
+        },
+    )
+    stable_dashboard = root / "ao2-stable-release-evidence-packet/packet/dashboard.html"
+    stable_dashboard.parent.mkdir(parents=True, exist_ok=True)
+    stable_dashboard.write_text("<!doctype html><title>Stable Release Evidence Packet</title>\n", encoding="utf-8")
 
 
 def _run_release_readiness_artifact_consumer(root: Path):
@@ -2663,6 +2711,8 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
         ".tar.gz",
         "sha256",
         "size_bytes",
+        "ao2.stable-release-evidence-packet.v1",
+        "stable_release_evidence_ready",
     ]:
         assert needle in script
 
@@ -2686,7 +2736,9 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
     assert summary["schema_version"] == "ao2.release-readiness-artifact-consumer.v1"
     assert summary["status"] == "passed"
     assert "ao2-pulse-codex-cron-event-loop-smoke" in summary["source_artifacts"]
+    assert "ao2-stable-release-evidence-packet" in summary["source_artifacts"]
     assert "ci_pulse_codex_cron_event_loop_smoke_artifact_job" in summary["required_checks"]
+    assert "ci_stable_release_evidence_packet_artifact_job" in summary["required_checks"]
     assert summary["trust_boundary"]["stores_credentials"] is False
 
 
@@ -2813,6 +2865,30 @@ def test_release_readiness_artifact_consumer_rejects_bad_fixture_evidence(tmp_pa
                 },
             ),
             "control-plane publication closure archive missing digest evidence",
+        ),
+        (
+            "stable_release_evidence_packet_not_ready",
+            lambda root: _write_release_readiness_consumer_json(
+                root,
+                "ao2-stable-release-evidence-packet/packet/summary.json",
+                {
+                    "schema_version": "ao2.stable-release-evidence-packet.v1",
+                    "status": "failed",
+                    "stable_release_evidence_ready": False,
+                    "stable_promotion": {
+                        "schema_version": "ao2.stable-promotion-workflow.v1"
+                    },
+                    "operator_evidence": {
+                        "schema_version": "ao2.operator-release-evidence-bundle.v1",
+                        "operator_release_evidence_ready": True,
+                    },
+                    "trust_boundary": {
+                        "mutates_releases": False,
+                        "stores_credentials": False,
+                    },
+                },
+            ),
+            "stable release evidence packet did not pass",
         ),
         (
             "missing_required_check",

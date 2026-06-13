@@ -120,6 +120,17 @@ for asset in control_plane_archive_assets:
 require(dual_repo_publication_closure_summary.get("trust_boundary", {}).get("mutates_releases") is False, "dual-repo publication closure mutated releases", dual_repo_publication_closure_summary)
 require(dual_repo_publication_closure_summary.get("trust_boundary", {}).get("mutates_github_releases") is False, "dual-repo publication closure mutated GitHub releases", dual_repo_publication_closure_summary)
 
+stable_release_evidence_packet_path, stable_release_evidence_packet = load_json("ao2-stable-release-evidence-packet/packet/summary.json")
+require(stable_release_evidence_packet.get("schema_version") == "ao2.stable-release-evidence-packet.v1", "unexpected stable release evidence packet schema", stable_release_evidence_packet)
+require(stable_release_evidence_packet.get("status") == "passed", "stable release evidence packet did not pass", stable_release_evidence_packet)
+require(stable_release_evidence_packet.get("stable_release_evidence_ready") is True, "stable release evidence packet was not ready", stable_release_evidence_packet)
+require(stable_release_evidence_packet.get("stable_promotion", {}).get("schema_version") == "ao2.stable-promotion-workflow.v1", "unexpected stable promotion schema in stable evidence packet", stable_release_evidence_packet)
+require(stable_release_evidence_packet.get("operator_evidence", {}).get("schema_version") == "ao2.operator-release-evidence-bundle.v1", "unexpected operator evidence schema in stable evidence packet", stable_release_evidence_packet)
+require(stable_release_evidence_packet.get("operator_evidence", {}).get("operator_release_evidence_ready") is True, "operator evidence was not ready in stable evidence packet", stable_release_evidence_packet)
+require(stable_release_evidence_packet.get("trust_boundary", {}).get("mutates_releases") is False, "stable release evidence packet mutated releases", stable_release_evidence_packet)
+require(stable_release_evidence_packet.get("trust_boundary", {}).get("stores_credentials") is False, "stable release evidence packet stored credentials", stable_release_evidence_packet)
+require((consumer_root / "ao2-stable-release-evidence-packet/packet/dashboard.html").is_file(), "missing stable release evidence packet dashboard")
+
 required_checks = [
     "ci_job_required_os:verify",
     "ci_job_required_os:release-archive-hosted-smoke",
@@ -132,6 +143,7 @@ required_checks = [
     "ci_dual_repo_installed_release_smoke_artifact_job",
     "ci_release_publication_closure_artifact_job",
     "ci_dual_repo_release_publication_closure_index_job",
+    "ci_stable_release_evidence_packet_artifact_job",
 ]
 checks = {item.get("name"): item for item in summary.get("checks", [])}
 missing = [
@@ -154,6 +166,7 @@ consumer_summary = {
         "ao2-dual-repo-installed-release-smoke",
         "ao2-release-publication-closure",
         "ao2-dual-repo-release-publication-closure-index",
+        "ao2-stable-release-evidence-packet",
     ],
     "source_summaries": [
         str(summary_path_source),
@@ -166,6 +179,7 @@ consumer_summary = {
         str(dual_repo_summary_path),
         str(publication_closure_summary_path),
         str(dual_repo_publication_closure_summary_path),
+        str(stable_release_evidence_packet_path),
     ],
     "required_checks": required_checks,
     "trust_boundary": {

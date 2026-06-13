@@ -273,11 +273,37 @@ add(
     "downloads AO2 and ao2-control-plane release publication closure artifacts and uploads a combined closure index",
 )
 
+stable_release_evidence_packet_artifacts = workflow_job_block("stable-release-evidence-packet-artifacts")
+stable_release_evidence_packet_artifacts_ok = (
+    stable_release_evidence_packet_artifacts is not None
+    and "name: Stable release evidence packet artifacts" in stable_release_evidence_packet_artifacts
+    and "GH_TOKEN: ${{ github.token }}" in stable_release_evidence_packet_artifacts
+    and "AO2_STABLE_PROMOTION_ROOT=target/stable-release-evidence-packet-ci/stable-promotion-workflow" in stable_release_evidence_packet_artifacts
+    and "npm run release:stable-promotion-workflow" in stable_release_evidence_packet_artifacts
+    and "AO2_OPERATOR_RELEASE_EVIDENCE_ROOT=target/stable-release-evidence-packet-ci/operator-release-evidence-bundle" in stable_release_evidence_packet_artifacts
+    and "npm run release:operator-evidence-bundle" in stable_release_evidence_packet_artifacts
+    and "AO2_STABLE_RELEASE_EVIDENCE_PACKET_ROOT=target/stable-release-evidence-packet-ci/packet" in stable_release_evidence_packet_artifacts
+    and "AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY=target/stable-release-evidence-packet-ci/stable-promotion-workflow/summary.json" in stable_release_evidence_packet_artifacts
+    and "AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY=target/stable-release-evidence-packet-ci/operator-release-evidence-bundle/summary.json" in stable_release_evidence_packet_artifacts
+    and "npm run release:stable-evidence-packet" in stable_release_evidence_packet_artifacts
+    and "ao2.stable-release-evidence-packet.v1" in stable_release_evidence_packet_artifacts
+    and "stable_release_evidence_ready" in stable_release_evidence_packet_artifacts
+    and "mutates_releases" in stable_release_evidence_packet_artifacts
+    and "stores_credentials" in stable_release_evidence_packet_artifacts
+    and "name: ao2-stable-release-evidence-packet" in stable_release_evidence_packet_artifacts
+    and "target/stable-release-evidence-packet-ci" in stable_release_evidence_packet_artifacts
+)
+add(
+    "ci_stable_release_evidence_packet_artifact_job",
+    "passed" if stable_release_evidence_packet_artifacts_ok else "failed",
+    "runs stable promotion and operator evidence baselines, composes the stable release evidence packet, and uploads non-mutating evidence",
+)
+
 release_readiness_artifact_consumer = workflow_job_block("release-readiness-artifact-consumer")
 release_readiness_artifact_consumer_script = read("scripts/release-readiness-artifact-consumer.sh")
 release_readiness_artifact_consumer_ok = (
     release_readiness_artifact_consumer is not None
-    and "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-codex-cron-event-loop-smoke-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index]" in release_readiness_artifact_consumer
+    and "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-codex-cron-event-loop-smoke-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index, stable-release-evidence-packet-artifacts]" in release_readiness_artifact_consumer
     and "actions/download-artifact@v8.0.1" in release_readiness_artifact_consumer
     and "npm run release:readiness:artifact-consumer" in release_readiness_artifact_consumer
     and scripts.get("release:readiness:artifact-consumer") == "node scripts/run-sh-script.js scripts/release-readiness-artifact-consumer.sh"
@@ -297,6 +323,8 @@ release_readiness_artifact_consumer_ok = (
     and "target/release-readiness-consumer/ao2-release-publication-closure" in release_readiness_artifact_consumer
     and "name: ao2-dual-repo-release-publication-closure-index" in release_readiness_artifact_consumer
     and "target/release-readiness-consumer/ao2-dual-repo-release-publication-closure-index" in release_readiness_artifact_consumer
+    and "name: ao2-stable-release-evidence-packet" in release_readiness_artifact_consumer
+    and "target/release-readiness-consumer/ao2-stable-release-evidence-packet" in release_readiness_artifact_consumer
     and "ao2.release-readiness-local.v1" in release_readiness_artifact_consumer_script
     and "ao2.release-train-control-plane-bridge.v1" in release_readiness_artifact_consumer_script
     and "ao2.ai-task-board-control-plane-bridge.v1" in release_readiness_artifact_consumer_script
@@ -307,6 +335,9 @@ release_readiness_artifact_consumer_ok = (
     and "ao2.release-publication-dry-run-closure.v1" in release_readiness_artifact_consumer_script
     and "ao2.dual-repo-release-publication-closure-index.v1" in release_readiness_artifact_consumer_script
     and "ao2.cp-release-publication-closure.v1" in release_readiness_artifact_consumer_script
+    and "ao2.stable-release-evidence-packet.v1" in release_readiness_artifact_consumer_script
+    and "stable_release_evidence_ready" in release_readiness_artifact_consumer_script
+    and "stable_release_evidence_packet" in release_readiness_artifact_consumer_script
     and "ao2-control-plane-" in release_readiness_artifact_consumer_script
     and ".tar.gz" in release_readiness_artifact_consumer_script
     and "sha256" in release_readiness_artifact_consumer_script
@@ -324,6 +355,7 @@ release_readiness_artifact_consumer_ok = (
     and "ci_dual_repo_installed_release_smoke_artifact_job" in release_readiness_artifact_consumer_script
     and "ci_release_publication_closure_artifact_job" in release_readiness_artifact_consumer_script
     and "ci_dual_repo_release_publication_closure_index_job" in release_readiness_artifact_consumer_script
+    and "ci_stable_release_evidence_packet_artifact_job" in release_readiness_artifact_consumer_script
 )
 add(
     "ci_release_readiness_artifact_consumer_job",
@@ -671,6 +703,27 @@ artifact_closure_index = {
             ],
         },
         {
+            "id": "stable_release_evidence_packet",
+            "artifact_name": "ao2-stable-release-evidence-packet",
+            "producer_job": "stable-release-evidence-packet-artifacts",
+            "required_files": [
+                "packet/summary.json",
+                "packet/dashboard.html",
+                "stable-promotion-workflow/summary.json",
+                "operator-release-evidence-bundle/summary.json",
+            ],
+            "schema_versions": [
+                "ao2.stable-release-evidence-packet.v1",
+                "ao2.stable-promotion-workflow.v1",
+                "ao2.operator-release-evidence-bundle.v1",
+            ],
+            "required_checks": ["ci_stable_release_evidence_packet_artifact_job"],
+            "source_artifacts": [
+                "stable-promotion-workflow",
+                "operator-release-evidence-bundle",
+            ],
+        },
+        {
             "id": "release_readiness_artifact_consumer",
             "artifact_name": "ao2-release-readiness-consumer",
             "producer_job": "release-readiness-artifact-consumer",
@@ -686,6 +739,7 @@ artifact_closure_index = {
                 "ao2-dual-repo-installed-release-smoke",
                 "ao2-release-publication-closure",
                 "ao2-dual-repo-release-publication-closure-index",
+                "ao2-stable-release-evidence-packet",
             ],
         },
     ],

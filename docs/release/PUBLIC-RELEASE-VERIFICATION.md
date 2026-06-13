@@ -152,6 +152,16 @@ publish releases. Use
 `AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY=<path>` to compose a
 packet from preserved release-publication baselines.
 
+AO2 CI publishes the same composed packet as the
+`ao2-stable-release-evidence-packet` GitHub Actions artifact from the
+`Stable release evidence packet artifacts` job. That hosted artifact contains
+the final `packet/summary.json`, `packet/dashboard.html`, the source
+`stable-promotion-workflow/summary.json`, and the source
+`operator-release-evidence-bundle/summary.json`. The
+`Release readiness artifact consumer` job downloads this artifact and fails
+closed unless `stable_release_evidence_ready=true`,
+`mutates_releases=false`, and `stores_credentials=false`.
+
 ## Stable promotion evidence gate
 
 `npm run release:stable-promotion-workflow` uses this hosted evidence before it
