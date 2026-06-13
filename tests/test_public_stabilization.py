@@ -1821,6 +1821,142 @@ def test_operator_release_evidence_bundle_downloads_and_verifies_cross_repo_arti
     assert "ao2.public-release-pair-digest-audit.v1" in public_release_index
 
 
+def test_stable_release_evidence_packet_combines_release_and_operator_baselines(tmp_path):
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["release:stable-evidence-packet"]
+        == "node scripts/run-sh-script.js scripts/stable-release-evidence-packet.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "stable-release-evidence-packet.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.stable-release-evidence-packet.v1",
+        "AO2_STABLE_RELEASE_EVIDENCE_PACKET_ROOT",
+        "AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY",
+        "AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY",
+        "ao2.stable-promotion-workflow.v1",
+        "ao2.operator-release-evidence-bundle.v1",
+        "post_release_evidence_ready",
+        "operator_release_evidence_ready",
+        "stable_release_evidence_ready",
+        "dashboard.html",
+        "mutates_releases",
+        "stores_credentials",
+    ]:
+        assert needle in text
+
+    stable_summary = tmp_path / "stable-promotion" / "summary.json"
+    stable_summary.parent.mkdir(parents=True)
+    stable_summary.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.stable-promotion-workflow.v1",
+                "status": "already_stable",
+                "post_release_evidence_ready": True,
+                "evidence_gate_status": "passed",
+                "blockers": [],
+                "components": [
+                    {"name": "ao2", "repo": "uesugitorachiyo/ao2", "tag": "v0.4.80"},
+                    {
+                        "name": "ao2-control-plane",
+                        "repo": "uesugitorachiyo/ao2-control-plane",
+                        "tag": "v0.1.13",
+                    },
+                ],
+                "trust_boundary": {
+                    "mutates_releases": False,
+                    "stores_credentials": False,
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    operator_summary = tmp_path / "operator-bundle" / "summary.json"
+    operator_summary.parent.mkdir(parents=True)
+    operator_summary.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.operator-release-evidence-bundle.v1",
+                "status": "passed",
+                "operator_release_evidence_ready": True,
+                "checks": [
+                    {
+                        "component": "ao2",
+                        "platform": "linux",
+                        "artifact": "post-stable-release-smoke-Linux",
+                        "status": "passed",
+                    },
+                    {
+                        "component": "ao2-control-plane",
+                        "platform": "windows",
+                        "artifact": "ao2-control-plane-post-release-verification-windows",
+                        "status": "passed",
+                    },
+                ],
+                "trust_boundary": {
+                    "mutates_releases": False,
+                    "stores_credentials": False,
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    out_root = tmp_path / "packet"
+    result = subprocess.run(
+        ["npm", "run", "release:stable-evidence-packet"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_STABLE_RELEASE_EVIDENCE_PACKET_ROOT": str(out_root),
+            "AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY": str(stable_summary),
+            "AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY": str(operator_summary),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.stable-release-evidence-packet.v1"
+    assert summary["status"] == "passed"
+    assert summary["stable_release_evidence_ready"] is True
+    assert summary["stable_promotion"]["status"] == "already_stable"
+    assert summary["stable_promotion"]["post_release_evidence_ready"] is True
+    assert summary["stable_promotion"]["evidence_gate_status"] == "passed"
+    assert summary["operator_evidence"]["status"] == "passed"
+    assert summary["operator_evidence"]["operator_release_evidence_ready"] is True
+    assert summary["operator_evidence"]["check_count"] == 2
+    assert summary["operator_evidence"]["passed_check_count"] == 2
+    assert summary["trust_boundary"]["mutates_releases"] is False
+    assert summary["trust_boundary"]["stores_credentials"] is False
+    assert summary["sources"]["stable_promotion_summary"] == str(stable_summary)
+    assert summary["sources"]["operator_evidence_summary"] == str(operator_summary)
+    assert not summary["blockers"]
+
+    dashboard = (out_root / "dashboard.html").read_text(encoding="utf-8")
+    assert "Stable Release Evidence Packet" in dashboard
+    assert "ao2.stable-release-evidence-packet.v1" in dashboard
+    assert "post-stable-release-smoke-Linux" in dashboard
+    assert "ao2-control-plane-post-release-verification-windows" in dashboard
+
+    verification = read("docs/VERIFICATION.md")
+    assert "npm run release:stable-evidence-packet" in verification
+    assert "ao2.stable-release-evidence-packet.v1" in verification
+
+    public_release_index = read("docs/release/PUBLIC-RELEASE-VERIFICATION.md")
+    assert "Stable release evidence packet" in public_release_index
+    assert "release:stable-evidence-packet" in public_release_index
+
+
 def test_evidence_control_plane_smoke_script_is_token_safe_and_exposed_by_npm():
     package_json = json.loads(read("package.json"))
     assert (

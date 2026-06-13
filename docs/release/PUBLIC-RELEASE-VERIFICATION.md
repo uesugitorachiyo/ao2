@@ -133,6 +133,25 @@ the control-plane `/api/v1/release/operator-evidence` and
 `/api/v1/release/operator-evidence.json` routes then render the same seven
 checks without approving releases or mutating AO2 artifacts.
 
+## Stable release evidence packet
+
+Run `npm run release:stable-evidence-packet` after the stable promotion workflow
+and operator release evidence bundle have produced local summaries. The command
+composes `ao2.stable-promotion-workflow.v1` and
+`ao2.operator-release-evidence-bundle.v1` into
+`target/stable-release-evidence-packet/latest/summary.json` and
+`dashboard.html`, using schema `ao2.stable-release-evidence-packet.v1`.
+
+The packet is ready only when the stable promotion evidence gate reports
+`post_release_evidence_ready=true` with `evidence_gate_status=passed` and the
+operator bundle reports `operator_release_evidence_ready=true`. It is a
+read-only operator surface: it reads local evidence summaries, records
+`mutates_releases=false` and `stores_credentials=false`, and does not approve or
+publish releases. Use
+`AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY=<path>` and
+`AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY=<path>` to compose a
+packet from preserved release-publication baselines.
+
 ## Stable promotion evidence gate
 
 `npm run release:stable-promotion-workflow` uses this hosted evidence before it

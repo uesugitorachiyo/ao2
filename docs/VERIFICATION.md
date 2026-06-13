@@ -840,6 +840,19 @@ Result:
   `ao2-operator-release-evidence-bundle` so operators can download
   `summary.json` and point `AO2_CP_OPERATOR_RELEASE_EVIDENCE_SUMMARY` at it for
   read-only control-plane dashboard readback.
+- `npm run release:stable-evidence-packet`: composes the current
+  `ao2.stable-promotion-workflow.v1` summary and
+  `ao2.operator-release-evidence-bundle.v1` summary into one read-only
+  operator packet at `target/stable-release-evidence-packet/latest`. It emits
+  `ao2.stable-release-evidence-packet.v1`, `summary.json`, and
+  `dashboard.html`, and fails closed unless the stable promotion evidence gate
+  reports `post_release_evidence_ready=true` with
+  `evidence_gate_status=passed` and the operator bundle reports
+  `operator_release_evidence_ready=true`. Use
+  `AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY=<path>` and
+  `AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY=<path>` to compose from
+  preserved local baselines. The packet reads local summaries only and records
+  `mutates_releases=false` and `stores_credentials=false`.
 - `npm run release:immutability-audit`: composes asset completeness, stable
   readiness, full release download verification, checksum validation, signed
   provenance verification, GitHub asset digest checks, and release metadata
