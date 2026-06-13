@@ -233,6 +233,12 @@ if closure_path:
             for asset in release_views[component_name].get("assets", [])
             if isinstance(asset, dict) and asset.get("name")
         }
+        published_archives_by_name = {
+            name: asset
+            for name, asset in published_assets.items()
+            if str(name).startswith(component["archive_prefix"])
+            and str(name).endswith(".tar.gz")
+        }
         closure_archives = closure_archive_assets(
             closure_component,
             component["archive_prefix"],
@@ -248,10 +254,16 @@ if closure_path:
         missing_published_required = [
             name
             for name in component["required_archive_names"]
-            if name not in published_assets
+            if name not in published_archives_by_name
         ]
         missing_required = sorted(
             set(missing_closure_required + missing_published_required)
+        )
+        closure_without_published_assets = sorted(
+            set(closure_archives_by_name) - set(published_archives_by_name)
+        )
+        published_without_closure_assets = sorted(
+            set(published_archives_by_name) - set(closure_archives_by_name)
         )
         add_check(
             closure_checks,
@@ -263,10 +275,21 @@ if closure_path:
             closure_missing_assets=missing_closure_required,
             published_missing_assets=missing_published_required,
         )
+        add_check(
+            closure_checks,
+            component_name,
+            "public_archive_closure_parity",
+            "passed"
+            if not closure_without_published_assets
+            and not published_without_closure_assets
+            else "failed",
+            closure_without_published_assets=closure_without_published_assets,
+            published_without_closure_assets=published_without_closure_assets,
+        )
         mismatched_assets = []
         for asset in closure_archives:
             asset_name = asset["name"]
-            published = published_assets.get(asset_name)
+            published = published_archives_by_name.get(asset_name)
             expected_digest = normalize_digest(asset.get("sha256"))
             observed_digest = normalize_digest((published or {}).get("digest"))
             digest_matches = (
@@ -301,18 +324,18 @@ if closure_path:
             )
         archive_parity_components[component_name] = {
             "status": "passed"
-            if not missing_required and not mismatched_assets
+            if not missing_required
+            and not closure_without_published_assets
+            and not published_without_closure_assets
+            and not mismatched_assets
             else "failed",
             "required_archive_names": component["required_archive_names"],
             "required_archive_count": len(component["required_archive_names"]),
             "closure_archive_assets": sorted(closure_archives_by_name),
-            "published_archive_assets": sorted(
-                name
-                for name, asset in published_assets.items()
-                if str(name).startswith(component["archive_prefix"])
-                and str(name).endswith(".tar.gz")
-            ),
+            "published_archive_assets": sorted(published_archives_by_name),
             "missing_assets": missing_required,
+            "closure_without_published_assets": closure_without_published_assets,
+            "published_without_closure_assets": published_without_closure_assets,
             "mismatched_assets": sorted(mismatched_assets),
         }
 else:

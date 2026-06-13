@@ -984,6 +984,53 @@ def test_public_release_pair_digest_audit_rejects_missing_or_mismatched_full_arc
         for item in drift_summary["checks"]
     )
 
+    extra_public_archives = dict(cp_archives)
+    extra_public_archives[
+        "ao2-control-plane-0.1.13-linux-riscv64.tar.gz"
+    ] = ("2" * 64, 204)
+    release_fixture(cp_release, "ao2-control-plane", extra_public_archives)
+    extra_public_closure = tmp_path / "extra-public-closure.json"
+    write_closure(extra_public_closure, ao2_archives, cp_archives)
+    extra_public_result = subprocess.run(
+        ["npm", "run", "release:public-pair-digest-audit"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_ROOT": str(tmp_path / "extra-public-audit"),
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON": str(
+                extra_public_closure
+            ),
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_AO2_RELEASE_VIEW_JSON": str(ao2_release),
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_CONTROL_PLANE_RELEASE_VIEW_JSON": str(
+                cp_release
+            ),
+        },
+        check=False,
+    )
+    assert extra_public_result.returncode != 0
+    extra_public_summary = json.loads(
+        (tmp_path / "extra-public-audit" / "summary.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    extra_public_name = "ao2-control-plane-0.1.13-linux-riscv64.tar.gz"
+    assert any(
+        item["component"] == "ao2-control-plane"
+        and item["code"] == "public_archive_closure_parity"
+        and item["status"] == "failed"
+        and extra_public_name in item["published_without_closure_assets"]
+        for item in extra_public_summary["checks"]
+    )
+    assert (
+        extra_public_summary["archive_parity"]["components"]["ao2-control-plane"][
+            "published_without_closure_assets"
+        ]
+        == [extra_public_name]
+    )
+
+    release_fixture(cp_release, "ao2-control-plane", cp_archives)
     passed_closure = tmp_path / "passed-closure.json"
     write_closure(passed_closure, ao2_archives, cp_archives)
     passed_result = subprocess.run(
