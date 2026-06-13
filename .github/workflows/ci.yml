@@ -775,6 +775,20 @@ jobs:
         with:
           name: ao2-release-publication-closure
           path: target/dual-repo-release-publication-closure-index/ao2-release-publication-closure
+      - name: Download AO2 public archive assets for closure index
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          archive_dir="target/dual-repo-release-publication-closure-index/ao2-release-archives"
+          rm -rf "$archive_dir"
+          mkdir -p "$archive_dir"
+          gh release download v0.4.80 \
+            --repo uesugitorachiyo/ao2 \
+            --pattern "ao2-*.tar.gz" \
+            --dir "$archive_dir" \
+            --clobber
       - name: Download ao2-control-plane release publication closure artifact
         shell: bash
         env:
@@ -814,12 +828,14 @@ jobs:
         shell: bash
         run: |
           python3 - <<'PY'
+          import hashlib
           import json
           from pathlib import Path
 
           root = Path("target/dual-repo-release-publication-closure-index")
           ao2_summary_path = root / "ao2-release-publication-closure" / "summary.json"
           cp_summary_path = root / "ao2-control-plane-release-publication-closure" / "summary.json"
+          ao2_archive_dir = root / "ao2-release-archives"
           ao2_summary = json.loads(ao2_summary_path.read_text(encoding="utf-8"))
           cp_summary = json.loads(cp_summary_path.read_text(encoding="utf-8"))
           assert ao2_summary.get("schema_version") == "ao2.release-publication-dry-run-closure.v1", ao2_summary
@@ -832,6 +848,28 @@ jobs:
           assert cp_summary.get("checksum_verified") is True, cp_summary
           assert cp_summary.get("trust_boundary", {}).get("mutates_github_releases") is False, cp_summary
           assert cp_summary.get("trust_boundary", {}).get("mutates_ao_artifacts") is False, cp_summary
+          required_ao2_archives = [
+              "ao2-0.4.80-linux-aarch64.tar.gz",
+              "ao2-0.4.80-linux-x86_64.tar.gz",
+              "ao2-0.4.80-macos-aarch64.tar.gz",
+              "ao2-0.4.80-windows-x86_64.tar.gz",
+          ]
+          ao2_archive_assets = []
+          for name in required_ao2_archives:
+              path = ao2_archive_dir / name
+              assert path.is_file(), {"missing_ao2_archive": name, "archive_dir": str(ao2_archive_dir)}
+              ao2_archive_assets.append(
+                  {
+                      "name": name,
+                      "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                      "size_bytes": path.stat().st_size,
+                  }
+              )
+          for asset in ao2_archive_assets:
+              assert isinstance(asset["sha256"], str) and len(asset["sha256"]) == 64 and all(
+                  char in "0123456789abcdef" for char in asset["sha256"].lower()
+              ), asset
+              assert isinstance(asset["size_bytes"], int) and asset["size_bytes"] > 0, asset
           cp_assets = cp_summary.get("assets", [])
           cp_asset_records = sorted(
               [
@@ -872,6 +910,9 @@ jobs:
                   "status": ao2_summary["status"],
                   "publication_ready": ao2_summary["publication_ready"],
                   "stable_release_ready": ao2_summary["stable_release_ready"],
+                  "asset_count": len(ao2_archive_assets),
+                  "assets": ao2_archive_assets,
+                  "archive_assets": ao2_archive_assets,
               },
               "control_plane": {
                   "schema_version": cp_summary["schema_version"],

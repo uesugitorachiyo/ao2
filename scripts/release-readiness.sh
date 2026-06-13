@@ -244,6 +244,15 @@ dual_repo_release_publication_closure_index_ok = (
     and "needs: release-publication-closure-artifacts" in dual_repo_release_publication_closure_index
     and "ao2-dual-repo-release-publication-closure-index" in dual_repo_release_publication_closure_index
     and "ao2-control-plane-release-publication-closure" in dual_repo_release_publication_closure_index
+    and "Download AO2 public archive assets for closure index" in dual_repo_release_publication_closure_index
+    and "target/dual-repo-release-publication-closure-index/ao2-release-archives" in dual_repo_release_publication_closure_index
+    and "gh release download v0.4.80" in dual_repo_release_publication_closure_index
+    and "ao2_archive_assets" in dual_repo_release_publication_closure_index
+    and "hashlib.sha256(path.read_bytes()).hexdigest()" in dual_repo_release_publication_closure_index
+    and "ao2-0.4.80-linux-aarch64.tar.gz" in dual_repo_release_publication_closure_index
+    and "ao2-0.4.80-linux-x86_64.tar.gz" in dual_repo_release_publication_closure_index
+    and "ao2-0.4.80-macos-aarch64.tar.gz" in dual_repo_release_publication_closure_index
+    and "ao2-0.4.80-windows-x86_64.tar.gz" in dual_repo_release_publication_closure_index
     and "target/dual-repo-release-publication-closure-index/ao2-release-publication-closure" in dual_repo_release_publication_closure_index
     and "target/dual-repo-release-publication-closure-index/ao2-control-plane-release-publication-closure" in dual_repo_release_publication_closure_index
     and "gh run list --repo uesugitorachiyo/ao2-control-plane --branch main --workflow CI" in dual_repo_release_publication_closure_index
@@ -351,6 +360,17 @@ release_public_pair_digest_audit_contract_ok = (
     and "gh" in release_public_pair_digest_audit_script
     and "release" in release_public_pair_digest_audit_script
     and "view" in release_public_pair_digest_audit_script
+    and "required_archive_names" in release_public_pair_digest_audit_script
+    and "required_archive_presence" in release_public_pair_digest_audit_script
+    and "closure_archive_assets" in release_public_pair_digest_audit_script
+    and "full_archive_parity" in release_public_pair_digest_audit_script
+    and "ao2-0.4.80-linux-aarch64.tar.gz" in release_public_pair_digest_audit_script
+    and "ao2-0.4.80-linux-x86_64.tar.gz" in release_public_pair_digest_audit_script
+    and "ao2-0.4.80-macos-aarch64.tar.gz" in release_public_pair_digest_audit_script
+    and "ao2-0.4.80-windows-x86_64.tar.gz" in release_public_pair_digest_audit_script
+    and "ao2-control-plane-0.1.13-linux-x86_64.tar.gz" in release_public_pair_digest_audit_script
+    and "ao2-control-plane-0.1.13-macos-aarch64.tar.gz" in release_public_pair_digest_audit_script
+    and "ao2-control-plane-0.1.13-windows-x86_64.tar.gz" in release_public_pair_digest_audit_script
     and "dual_repo_closure_digest_match" in release_public_pair_digest_audit_script
     and "published_asset_digest_present" in release_public_pair_digest_audit_script
     and "published_asset_size_match" in release_public_pair_digest_audit_script
