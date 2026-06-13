@@ -20,6 +20,7 @@
     "release:asset-completeness": "node scripts/run-sh-script.js scripts/release-asset-completeness.sh",
     "release:stable-readiness": "node scripts/run-sh-script.js scripts/release-stable-readiness.sh",
     "release:metadata-drift-audit": "node scripts/run-sh-script.js scripts/release-metadata-drift-audit.sh",
+    "release:public-pair-digest-audit": "node scripts/run-sh-script.js scripts/public-release-pair-digest-audit.sh",
     "release:stable-promotion-workflow": "node scripts/run-sh-script.js scripts/release-stable-promotion-workflow.sh",
     "release:operator-evidence-bundle": "node scripts/run-sh-script.js scripts/operator-release-evidence-bundle.sh",
     "release:operator-evidence-workflow-contract": "node scripts/run-sh-script.js scripts/operator-release-evidence-workflow-contract.sh",

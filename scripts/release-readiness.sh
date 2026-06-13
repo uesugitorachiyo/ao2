@@ -340,6 +340,31 @@ add(
     "validates release names, stable/prerelease channel flags, and public docs without mutation",
 )
 
+release_public_pair_digest_audit_script = read("scripts/public-release-pair-digest-audit.sh")
+release_public_pair_digest_audit_contract_ok = (
+    scripts.get("release:public-pair-digest-audit")
+    == "node scripts/run-sh-script.js scripts/public-release-pair-digest-audit.sh"
+    and "ao2.public-release-pair-digest-audit.v1" in release_public_pair_digest_audit_script
+    and "AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON" in release_public_pair_digest_audit_script
+    and "AO2_PUBLIC_PAIR_DIGEST_AUDIT_AO2_RELEASE_VIEW_JSON" in release_public_pair_digest_audit_script
+    and "AO2_PUBLIC_PAIR_DIGEST_AUDIT_CONTROL_PLANE_RELEASE_VIEW_JSON" in release_public_pair_digest_audit_script
+    and "gh" in release_public_pair_digest_audit_script
+    and "release" in release_public_pair_digest_audit_script
+    and "view" in release_public_pair_digest_audit_script
+    and "dual_repo_closure_digest_match" in release_public_pair_digest_audit_script
+    and "published_asset_digest_present" in release_public_pair_digest_audit_script
+    and "published_asset_size_match" in release_public_pair_digest_audit_script
+    and "sha256" in release_public_pair_digest_audit_script
+    and "size_bytes" in release_public_pair_digest_audit_script
+    and "mutates_releases" in release_public_pair_digest_audit_script
+    and "stores_credentials" in release_public_pair_digest_audit_script
+)
+add(
+    "release_public_pair_digest_audit_contract",
+    "passed" if release_public_pair_digest_audit_contract_ok else "failed",
+    "compares dual-repo closure archive digest metadata with published release asset metadata without mutation",
+)
+
 for workflow in [".github/workflows/release-gate.yml", ".github/workflows/public-release-build.yml"]:
     text = read(workflow)
     manual_only = (
