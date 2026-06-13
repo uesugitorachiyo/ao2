@@ -556,7 +556,8 @@ Result:
   downloads AO2's `ao2-release-publication-closure` and the latest successful
   control-plane `ao2-control-plane-release-publication-closure`, validates
   `ao2.cp-release-publication-closure.v1`, `checksum_verified=true`, and at
-  least one `ao2-control-plane-*.tar.gz` archive asset, then uploads
+  least one `ao2-control-plane-*.tar.gz` archive asset with `sha256` and
+  positive `size_bytes` evidence, then uploads
   `ao2-dual-repo-release-publication-closure-index` with
   `ao2.dual-repo-release-publication-closure-index.v1` evidence. The consumer
   then uploads `ao2-release-readiness-consumer` with
