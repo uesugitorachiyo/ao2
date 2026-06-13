@@ -813,9 +813,12 @@ Result:
   prerelease to stable. Confirmed promotion is also blocked by a
   post-release verification evidence gate: the workflow downloads the latest
   successful AO2 `Post Stable Release Verification` artifacts and
-  `ao2-dual-public-release-smoke` artifact plus ao2-control-plane
-  `Post Release Verification` artifacts, validates signatures/checksum
-  summaries and dual public task-board readback schemas, and emits
+  `ao2-dual-public-release-smoke` artifact, the AO2 `Post Release Pair Digest
+  Audit` artifact `ao2-public-release-pair-digest-audit`, plus
+  ao2-control-plane `Post Release Verification` artifacts, validates
+  signatures/checksum summaries, dual public task-board readback schemas, and
+  `ao2.public-release-pair-digest-audit.v1` with
+  `archive_parity.status=passed`, and emits
   `ao2.stable-promotion-evidence-gate.v1` with
   `post-release verification evidence gate` status before any release mutation
   is attempted

@@ -9,6 +9,7 @@ AO2_CP_RELEASE_REPO="${AO2_CP_RELEASE_REPO:-uesugitorachiyo/ao2-control-plane}"
 AO2_STABLE_PROMOTION_ROOT="${AO2_STABLE_PROMOTION_ROOT:-$ROOT/target/stable-promotion-workflow/latest}"
 AO2_STABLE_PROMOTION_CONFIRM="${AO2_STABLE_PROMOTION_CONFIRM:-}"
 AO2_STABLE_PROMOTION_EVIDENCE_ROOT="${AO2_STABLE_PROMOTION_EVIDENCE_ROOT:-$AO2_STABLE_PROMOTION_ROOT/post-release-verification-evidence}"
+AO2_STABLE_PROMOTION_EVIDENCE_FIXTURE_DIR="${AO2_STABLE_PROMOTION_EVIDENCE_FIXTURE_DIR:-}"
 AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD="${AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD:-0}"
 # Default release train confirmation: AO2_STABLE_PROMOTION_CONFIRM=promote-stable-v0.4.80-v0.1.13
 READINESS_ROOT="$AO2_STABLE_PROMOTION_ROOT/stable-release-readiness"
@@ -57,7 +58,17 @@ mkdir -p "$AO2_STABLE_PROMOTION_EVIDENCE_ROOT"
 printf "stable_promotion_evidence_gate=start\n" > "$EVIDENCE_LOG"
 
 download_status="passed"
-if [ "$AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD" = "1" ]; then
+if [ -n "$AO2_STABLE_PROMOTION_EVIDENCE_FIXTURE_DIR" ]; then
+  if [ -d "$AO2_STABLE_PROMOTION_EVIDENCE_FIXTURE_DIR" ]; then
+    cp -R "$AO2_STABLE_PROMOTION_EVIDENCE_FIXTURE_DIR"/. "$AO2_STABLE_PROMOTION_EVIDENCE_ROOT"/
+    printf "stable_promotion_evidence_gate=fixture fixture_dir=%s\n" \
+      "$AO2_STABLE_PROMOTION_EVIDENCE_FIXTURE_DIR" >> "$EVIDENCE_LOG"
+  else
+    download_status="failed"
+    printf "stable_promotion_evidence_gate=fixture_missing fixture_dir=%s\n" \
+      "$AO2_STABLE_PROMOTION_EVIDENCE_FIXTURE_DIR" >> "$EVIDENCE_LOG"
+  fi
+elif [ "$AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD" = "1" ]; then
   download_status="skipped"
   printf "stable_promotion_evidence_gate=skipped\n" >> "$EVIDENCE_LOG"
 else
@@ -72,6 +83,7 @@ $AO2_RELEASE_REPO|Post Stable Release Verification|post-stable-release-smoke-Lin
 $AO2_RELEASE_REPO|Post Stable Release Verification|post-stable-release-smoke-macOS|ao2-macos
 $AO2_RELEASE_REPO|Post Stable Release Verification|post-stable-release-smoke-Windows|ao2-windows
 $AO2_RELEASE_REPO|Post Stable Release Verification|ao2-dual-public-release-smoke|dual-public-release-smoke
+$AO2_RELEASE_REPO|Post Release Pair Digest Audit|ao2-public-release-pair-digest-audit|public-pair-digest-audit
 $AO2_CP_RELEASE_REPO|Post Release Verification|ao2-control-plane-post-release-verification-ubuntu|control-plane-ubuntu
 $AO2_CP_RELEASE_REPO|Post Release Verification|ao2-control-plane-post-release-verification-macos|control-plane-macos
 $AO2_CP_RELEASE_REPO|Post Release Verification|ao2-control-plane-post-release-verification-windows|control-plane-windows
@@ -119,6 +131,13 @@ required = [
         "kind": "ao2-dual-public-release-smoke",
     },
     {
+        "component": "ao2",
+        "platform": "public-pair-digest-audit",
+        "artifact": "ao2-public-release-pair-digest-audit",
+        "path": root / "public-pair-digest-audit",
+        "kind": "public-pair-digest-audit",
+    },
+    {
         "component": "ao2-control-plane",
         "platform": "ubuntu",
         "artifact": "ao2-control-plane-post-release-verification-ubuntu",
@@ -154,7 +173,7 @@ for item in required:
     if download_status == "skipped":
         status = "skipped"
         details["skip_reason"] = "AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD=1"
-    elif not item["path"].is_dir():
+    elif item["kind"] != "public-pair-digest-audit" and not item["path"].is_dir():
         status = "missing"
         details["missing"] = "artifact_directory"
     elif item["kind"] == "ao2-post-stable":
@@ -208,6 +227,29 @@ for item in required:
                 or trust.get("credential_material_included") is not False
                 or trust.get("mutates_github_releases") is not False
                 or trust.get("control_plane_approves_release") is not False
+            ):
+                status = "failed"
+    elif item["kind"] == "public-pair-digest-audit":
+        summary = item["path"] / "target" / "post-release-pair-digest-audit" / "summary.json"
+        if not summary.is_file():
+            status = "missing"
+            details["missing"] = "target/post-release-pair-digest-audit/summary.json"
+        else:
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            trust = payload.get("trust_boundary", {})
+            archive_parity = payload.get("archive_parity", {})
+            details["summary"] = str(summary)
+            details["schema_version"] = payload.get("schema_version")
+            details["summary_status"] = payload.get("status")
+            details["archive_parity_status"] = archive_parity.get("status")
+            details["mutates_releases"] = trust.get("mutates_releases")
+            details["stores_credentials"] = trust.get("stores_credentials")
+            if (
+                payload.get("schema_version") != "ao2.public-release-pair-digest-audit.v1"
+                or payload.get("status") != "passed"
+                or archive_parity.get("status") != "passed"
+                or trust.get("mutates_releases") is not False
+                or trust.get("stores_credentials") is not False
             ):
                 status = "failed"
     else:
