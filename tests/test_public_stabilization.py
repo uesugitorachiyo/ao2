@@ -807,6 +807,54 @@ def test_public_release_pair_digest_audit_rejects_closure_release_asset_drift(tm
     assert "status=passed" in passed_result.stdout
 
 
+def test_post_release_pair_digest_audit_workflow_is_manual_and_read_only():
+    workflow = read(".github/workflows/post-release-pair-digest-audit.yml")
+    verification = read("docs/VERIFICATION.md")
+
+    for needle in [
+        "name: Post Release Pair Digest Audit",
+        "workflow_dispatch:",
+        "permissions:",
+        "  contents: read",
+        "  actions: read",
+        "uses: actions/checkout@v6.0.3",
+        "uses: actions/setup-node@v6.4.0",
+        'node-version: "22"',
+        "gh run list --repo uesugitorachiyo/ao2 --branch main --workflow CI --status success",
+        'gh run download "$run_id" --repo uesugitorachiyo/ao2',
+        "--name ao2-dual-repo-release-publication-closure-index",
+        "AO2_PUBLIC_PAIR_DIGEST_AUDIT_ROOT=target/post-release-pair-digest-audit",
+        "AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON=target/post-release-pair-digest-audit-input/summary.json",
+        "npm run release:public-pair-digest-audit",
+        "ao2.public-release-pair-digest-audit.v1",
+        "target/post-release-pair-digest-audit/summary.json",
+        "mutates_releases",
+        "stores_credentials",
+        "uses: actions/upload-artifact@v7.0.1",
+        "name: ao2-public-release-pair-digest-audit",
+    ]:
+        assert needle in workflow
+
+    for forbidden in [
+        "pull_request:",
+        "push:",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "/Users/torachiyouesugi/Documents/private",
+        "target/long-lived-control-plane/api-token",
+        "gh release create",
+        "gh release edit",
+        "gh release upload",
+        "git push origin",
+        "npm publish",
+    ]:
+        assert forbidden not in workflow
+
+    assert "Post Release Pair Digest Audit" in verification
+    assert "ao2-public-release-pair-digest-audit" in verification
+    assert "target/post-release-pair-digest-audit-input/summary.json" in verification
+
+
 def test_release_sync_provenance_assets_is_guarded_and_documented():
     package_json = json.loads(read("package.json"))
     assert (
@@ -1306,7 +1354,12 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "release_metadata_drift_audit_summary",
         "release_metadata_drift_audit_status",
         "release_public_pair_digest_audit_contract",
+        "post_release_pair_digest_audit_workflow",
+        "Post Release Pair Digest Audit",
+        "ao2-public-release-pair-digest-audit",
         "release:public-pair-digest-audit",
+        "target/post-release-pair-digest-audit/summary.json",
+        "ao2.public-release-pair-digest-audit.v1",
         "target/release-readiness-consumer/ao2-release-readiness",
         "target/release-readiness-consumer/ao2-release-train-control-plane-bridge",
         "target/release-readiness-consumer/ao2-ai-task-board-control-plane-bridge",

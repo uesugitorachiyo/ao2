@@ -582,6 +582,15 @@ Result:
   `AO2_PUBLIC_PAIR_DIGEST_AUDIT_AO2_RELEASE_VIEW_JSON` and
   `AO2_PUBLIC_PAIR_DIGEST_AUDIT_CONTROL_PLANE_RELEASE_VIEW_JSON`; the audit
   does not mutate releases or store credentials.
+- `Post Release Pair Digest Audit`: manual read-only GitHub workflow that
+  finds the latest successful AO2 `main` CI run, downloads
+  `ao2-dual-repo-release-publication-closure-index` into
+  `target/post-release-pair-digest-audit-input/summary.json`, runs
+  `npm run release:public-pair-digest-audit`, validates
+  `ao2.public-release-pair-digest-audit.v1` with `mutates_releases=false` and
+  `stores_credentials=false`, and uploads
+  `ao2-public-release-pair-digest-audit` containing
+  `target/post-release-pair-digest-audit/summary.json` plus the dashboard.
 - `npm run release:readiness:regression-gate`: runs static release readiness,
   Phase 1 operator golden-path smoke, Pulse local mirror, Pulse resume dry-run,
   real CI artifact download contract, artifact indexing, fail-on-attention

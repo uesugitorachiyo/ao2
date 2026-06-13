@@ -365,6 +365,49 @@ add(
     "compares dual-repo closure archive digest metadata with published release asset metadata without mutation",
 )
 
+post_release_pair_digest_audit_workflow = read(".github/workflows/post-release-pair-digest-audit.yml")
+post_release_pair_digest_audit_forbidden = [
+    "pull_request:",
+    "push:",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "/Users/torachiyouesugi/Documents/private",
+    "target/long-lived-control-plane/api-token",
+    "gh release create",
+    "gh release edit",
+    "gh release upload",
+    "git push origin",
+    "npm publish",
+]
+post_release_pair_digest_audit_workflow_ok = (
+    "name: Post Release Pair Digest Audit" in post_release_pair_digest_audit_workflow
+    and re.search(r"(?m)^\s*workflow_dispatch:\s*$", post_release_pair_digest_audit_workflow)
+    and "permissions:" in post_release_pair_digest_audit_workflow
+    and "  contents: read" in post_release_pair_digest_audit_workflow
+    and "  actions: read" in post_release_pair_digest_audit_workflow
+    and "uses: actions/checkout@v6.0.3" in post_release_pair_digest_audit_workflow
+    and "uses: actions/setup-node@v6.4.0" in post_release_pair_digest_audit_workflow
+    and 'node-version: "22"' in post_release_pair_digest_audit_workflow
+    and "gh run list --repo uesugitorachiyo/ao2 --branch main --workflow CI --status success" in post_release_pair_digest_audit_workflow
+    and 'gh run download "$run_id" --repo uesugitorachiyo/ao2' in post_release_pair_digest_audit_workflow
+    and "--name ao2-dual-repo-release-publication-closure-index" in post_release_pair_digest_audit_workflow
+    and "AO2_PUBLIC_PAIR_DIGEST_AUDIT_ROOT=target/post-release-pair-digest-audit" in post_release_pair_digest_audit_workflow
+    and "AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON=target/post-release-pair-digest-audit-input/summary.json" in post_release_pair_digest_audit_workflow
+    and "npm run release:public-pair-digest-audit" in post_release_pair_digest_audit_workflow
+    and "ao2.public-release-pair-digest-audit.v1" in post_release_pair_digest_audit_workflow
+    and "target/post-release-pair-digest-audit/summary.json" in post_release_pair_digest_audit_workflow
+    and "mutates_releases" in post_release_pair_digest_audit_workflow
+    and "stores_credentials" in post_release_pair_digest_audit_workflow
+    and "uses: actions/upload-artifact@v7.0.1" in post_release_pair_digest_audit_workflow
+    and "name: ao2-public-release-pair-digest-audit" in post_release_pair_digest_audit_workflow
+    and all(forbidden not in post_release_pair_digest_audit_workflow for forbidden in post_release_pair_digest_audit_forbidden)
+)
+add(
+    "post_release_pair_digest_audit_workflow",
+    "passed" if post_release_pair_digest_audit_workflow_ok else "failed",
+    "manual read-only workflow downloads the dual-repo closure index and uploads ao2.public-release-pair-digest-audit.v1 evidence",
+)
+
 for workflow in [".github/workflows/release-gate.yml", ".github/workflows/public-release-build.yml"]:
     text = read(workflow)
     manual_only = (

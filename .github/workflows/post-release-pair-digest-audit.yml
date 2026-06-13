@@ -1,0 +1,90 @@
+name: Post Release Pair Digest Audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: Optional AO2 main CI run id containing ao2-dual-repo-release-publication-closure-index
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: post-release-pair-digest-audit-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  post-release-pair-digest-audit:
+    name: Public release pair digest audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout audit helpers
+        uses: actions/checkout@v6.0.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+
+      - name: Download dual-repo closure index
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p target/post-release-pair-digest-audit-input
+          run_id="${SOURCE_RUN_ID:-}"
+          if [ -z "$run_id" ]; then
+            run_id="$(gh run list --repo uesugitorachiyo/ao2 --branch main --workflow CI --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+          fi
+          if [ -z "$run_id" ]; then
+            echo "missing successful AO2 main CI run" >&2
+            exit 1
+          fi
+          printf '%s\n' "$run_id" > target/post-release-pair-digest-audit-input/source-run-id.txt
+          gh run download "$run_id" --repo uesugitorachiyo/ao2 \
+            --name ao2-dual-repo-release-publication-closure-index \
+            --dir target/post-release-pair-digest-audit-input
+          test -f target/post-release-pair-digest-audit-input/summary.json
+
+      - name: Run public release pair digest audit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          AO2_PUBLIC_PAIR_DIGEST_AUDIT_ROOT=target/post-release-pair-digest-audit \
+          AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON=target/post-release-pair-digest-audit-input/summary.json \
+            npm run release:public-pair-digest-audit
+
+      - name: Validate digest audit evidence
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary = json.loads(
+              Path("target/post-release-pair-digest-audit/summary.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          assert summary["schema_version"] == "ao2.public-release-pair-digest-audit.v1", summary
+          assert summary["status"] == "passed", summary
+          assert summary["trust_boundary"]["mutates_releases"] is False, summary
+          assert summary["trust_boundary"]["stores_credentials"] is False, summary
+          PY
+
+      - name: Upload public release pair digest audit
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-public-release-pair-digest-audit
+          path: |
+            target/post-release-pair-digest-audit-input/source-run-id.txt
+            target/post-release-pair-digest-audit-input/summary.json
+            target/post-release-pair-digest-audit/summary.json
+            target/post-release-pair-digest-audit/dashboard.html
+          if-no-files-found: error
