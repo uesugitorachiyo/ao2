@@ -1227,6 +1227,17 @@ def test_operator_release_evidence_bundle_downloads_and_verifies_cross_repo_arti
         == "node scripts/run-sh-script.js scripts/operator-release-evidence-bundle.sh"
     )
 
+    workflow = read(".github/workflows/operator-release-evidence-audit.yml")
+    for needle in [
+        'assert len(summary["checks"]) == 9',
+        'check["artifact"] == "ao2-public-release-pair-digest-audit"',
+        'public_pair_digest["schema_version"] == "ao2.public-release-pair-digest-audit.v1"',
+        'public_pair_digest["archive_parity_status"] == "passed"',
+        'public_pair_digest["mutates_releases"] is False',
+        'public_pair_digest["stores_credentials"] is False',
+    ]:
+        assert needle in workflow
+
     script = REPO_ROOT / "scripts" / "operator-release-evidence-bundle.sh"
     assert script.is_file()
     assert script.stat().st_mode & stat.S_IXUSR
