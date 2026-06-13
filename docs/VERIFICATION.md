@@ -823,11 +823,14 @@ Result:
   release evidence set into one local folder and emits
   `ao2.operator-release-evidence-bundle.v1`. It verifies the AO2
   `ao2-dual-repo-release-publication-closure-index`, AO2 Linux/macOS/Windows
-  post-stable install/update evidence, and ao2-control-plane
-  Ubuntu/macOS/Windows post-release summaries with checksum and trust-boundary
-  checks. Use `AO2_OPERATOR_RELEASE_EVIDENCE_FIXTURE_DIR=<path>` for offline
-  fixture verification. The scheduled/manual `Operator Release Evidence Audit`
-  workflow runs the same command on GitHub Actions and uploads
+  post-stable install/update evidence, AO2
+  `ao2-public-release-pair-digest-audit` evidence with
+  `ao2.public-release-pair-digest-audit.v1` and `archive_parity.status=passed`,
+  and ao2-control-plane Ubuntu/macOS/Windows post-release summaries with
+  checksum and trust-boundary checks. Use
+  `AO2_OPERATOR_RELEASE_EVIDENCE_FIXTURE_DIR=<path>` for offline fixture
+  verification. The scheduled/manual `Operator Release Evidence Audit` workflow
+  runs the same command on GitHub Actions and uploads
   `ao2-operator-release-evidence-bundle` so operators can download
   `summary.json` and point `AO2_CP_OPERATOR_RELEASE_EVIDENCE_SUMMARY` at it for
   read-only control-plane dashboard readback.

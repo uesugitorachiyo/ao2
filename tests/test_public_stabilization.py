@@ -1032,7 +1032,11 @@ def test_post_release_pair_digest_audit_workflow_is_manual_and_read_only():
         "uses: actions/checkout@v6.0.3",
         "uses: actions/setup-node@v6.4.0",
         'node-version: "22"',
+        "EXPECTED_HEAD_SHA: ${{ github.sha }}",
         "gh run list --repo uesugitorachiyo/ao2 --branch main --workflow CI --status success",
+        "--json databaseId,headSha",
+        'select(.headSha == \\"$expected_head_sha\\")',
+        "missing successful AO2 main CI run for head sha",
         'gh run download "$run_id" --repo uesugitorachiyo/ao2',
         "--name ao2-dual-repo-release-publication-closure-index",
         "AO2_PUBLIC_PAIR_DIGEST_AUDIT_ROOT=target/post-release-pair-digest-audit",
@@ -1240,6 +1244,11 @@ def test_operator_release_evidence_bundle_downloads_and_verifies_cross_repo_arti
         "post-stable-release-smoke-Windows",
         "ao2-dual-public-release-smoke",
         "ao2.dual-public-release-smoke.v1",
+        "Post Release Pair Digest Audit",
+        "ao2-public-release-pair-digest-audit",
+        "ao2.public-release-pair-digest-audit.v1",
+        "public-pair-digest-audit",
+        "archive_parity",
         "task_board_readback_schema",
         "auth_value_stored",
         "credential_material_in_urls",
@@ -1301,6 +1310,26 @@ def test_operator_release_evidence_bundle_downloads_and_verifies_cross_repo_arti
     (dual_public / "smoke" / "task-board-dashboard.json").write_text(
         json.dumps(
             {"schema_version": "ao2.cp-ai-task-board-dashboard.v1"},
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    public_pair_digest = (
+        fixture / "public-pair-digest-audit" / "target" / "post-release-pair-digest-audit"
+    )
+    public_pair_digest.mkdir(parents=True)
+    (public_pair_digest / "summary.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.public-release-pair-digest-audit.v1",
+                "status": "passed",
+                "archive_parity": {"status": "passed"},
+                "trust_boundary": {
+                    "mutates_releases": False,
+                    "stores_credentials": False,
+                },
+            },
             sort_keys=True,
         )
         + "\n",
@@ -1372,14 +1401,30 @@ def test_operator_release_evidence_bundle_downloads_and_verifies_cross_repo_arti
     assert dual_public_check["auth_value_stored"] is False
     assert dual_public_check["credential_material_in_urls"] is False
     assert dual_public_check["control_plane_approves_release"] is False
+    public_pair_digest_check = next(
+        check
+        for check in summary["checks"]
+        if check["artifact"] == "ao2-public-release-pair-digest-audit"
+    )
+    assert public_pair_digest_check["status"] == "passed"
+    assert (
+        public_pair_digest_check["schema_version"]
+        == "ao2.public-release-pair-digest-audit.v1"
+    )
+    assert public_pair_digest_check["summary_status"] == "passed"
+    assert public_pair_digest_check["archive_parity_status"] == "passed"
+    assert public_pair_digest_check["mutates_releases"] is False
+    assert public_pair_digest_check["stores_credentials"] is False
 
     verification = read("docs/VERIFICATION.md")
     assert "npm run release:operator-evidence-bundle" in verification
     assert "ao2.operator-release-evidence-bundle.v1" in verification
+    assert "ao2-public-release-pair-digest-audit" in verification
 
     public_release_index = read("docs/release/PUBLIC-RELEASE-VERIFICATION.md")
     assert "Operator release evidence bundle" in public_release_index
     assert "release:operator-evidence-bundle" in public_release_index
+    assert "ao2.public-release-pair-digest-audit.v1" in public_release_index
 
 
 def test_evidence_control_plane_smoke_script_is_token_safe_and_exposed_by_npm():

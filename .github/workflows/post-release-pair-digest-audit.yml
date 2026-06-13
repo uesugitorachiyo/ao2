@@ -34,15 +34,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          EXPECTED_HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           mkdir -p target/post-release-pair-digest-audit-input
           run_id="${SOURCE_RUN_ID:-}"
+          expected_head_sha="${EXPECTED_HEAD_SHA:-}"
           if [ -z "$run_id" ]; then
-            run_id="$(gh run list --repo uesugitorachiyo/ao2 --branch main --workflow CI --status success --limit 1 --json databaseId --jq '.[0].databaseId')"
+            run_id="$(gh run list --repo uesugitorachiyo/ao2 --branch main --workflow CI --status success --limit 20 --json databaseId,headSha --jq ".[] | select(.headSha == \"$expected_head_sha\") | .databaseId" | head -n 1)"
           fi
           if [ -z "$run_id" ]; then
-            echo "missing successful AO2 main CI run" >&2
+            echo "missing successful AO2 main CI run for head sha $expected_head_sha" >&2
             exit 1
           fi
           printf '%s\n' "$run_id" > target/post-release-pair-digest-audit-input/source-run-id.txt

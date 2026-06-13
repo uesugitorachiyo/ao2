@@ -80,6 +80,7 @@ $AO2_RELEASE_REPO|Post Stable Release Verification|post-stable-release-smoke-Lin
 $AO2_RELEASE_REPO|Post Stable Release Verification|post-stable-release-smoke-macOS|ao2-macos
 $AO2_RELEASE_REPO|Post Stable Release Verification|post-stable-release-smoke-Windows|ao2-windows
 $AO2_RELEASE_REPO|Post Stable Release Verification|ao2-dual-public-release-smoke|dual-public-release-smoke
+$AO2_RELEASE_REPO|Post Release Pair Digest Audit|ao2-public-release-pair-digest-audit|public-pair-digest-audit
 $AO2_CP_RELEASE_REPO|Post Release Verification|ao2-control-plane-post-release-verification-ubuntu|control-plane-ubuntu
 $AO2_CP_RELEASE_REPO|Post Release Verification|ao2-control-plane-post-release-verification-macos|control-plane-macos
 $AO2_CP_RELEASE_REPO|Post Release Verification|ao2-control-plane-post-release-verification-windows|control-plane-windows
@@ -134,6 +135,13 @@ required = [
         "artifact": "ao2-dual-public-release-smoke",
         "path": download_root / "dual-public-release-smoke",
         "kind": "ao2-dual-public-release-smoke",
+    },
+    {
+        "component": "ao2",
+        "platform": "public-release-pair",
+        "artifact": "ao2-public-release-pair-digest-audit",
+        "path": download_root / "public-pair-digest-audit",
+        "kind": "public-pair-digest-audit",
     },
     {
         "component": "ao2-control-plane",
@@ -253,6 +261,28 @@ for item in required:
                 or trust.get("credential_material_included") is not False
                 or trust.get("mutates_github_releases") is not False
                 or trust.get("control_plane_approves_release") is not False
+            ):
+                status = "failed"
+    elif item["kind"] == "public-pair-digest-audit":
+        summary = find_json_with_schema(item["path"], "ao2.public-release-pair-digest-audit.v1")
+        if summary is None:
+            status = "missing"
+            details["missing"] = "ao2.public-release-pair-digest-audit.v1"
+        else:
+            payload = load_json(summary)
+            trust = payload.get("trust_boundary", {})
+            archive_parity = payload.get("archive_parity", {})
+            details["summary"] = str(summary)
+            details["schema_version"] = payload.get("schema_version")
+            details["summary_status"] = payload.get("status")
+            details["archive_parity_status"] = archive_parity.get("status")
+            details["mutates_releases"] = trust.get("mutates_releases")
+            details["stores_credentials"] = trust.get("stores_credentials")
+            if (
+                payload.get("status") != "passed"
+                or archive_parity.get("status") != "passed"
+                or trust.get("mutates_releases") is not False
+                or trust.get("stores_credentials") is not False
             ):
                 status = "failed"
     else:
