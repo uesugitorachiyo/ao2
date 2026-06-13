@@ -252,6 +252,8 @@ dual_repo_release_publication_closure_index_ok = (
     and "ao2.release-publication-dry-run-closure.v1" in dual_repo_release_publication_closure_index
     and "ao2.cp-release-publication-closure.v1" in dual_repo_release_publication_closure_index
     and "checksum_verified" in dual_repo_release_publication_closure_index
+    and "ao2-control-plane-" in dual_repo_release_publication_closure_index
+    and ".tar.gz" in dual_repo_release_publication_closure_index
     and "mutates_github_releases" in dual_repo_release_publication_closure_index
 )
 add(
@@ -294,6 +296,8 @@ release_readiness_artifact_consumer_ok = (
     and "ao2.release-publication-dry-run-closure.v1" in release_readiness_artifact_consumer_script
     and "ao2.dual-repo-release-publication-closure-index.v1" in release_readiness_artifact_consumer_script
     and "ao2.cp-release-publication-closure.v1" in release_readiness_artifact_consumer_script
+    and "ao2-control-plane-" in release_readiness_artifact_consumer_script
+    and ".tar.gz" in release_readiness_artifact_consumer_script
     and "publication_ready" in release_readiness_artifact_consumer_script
     and "stable_release_ready" in release_readiness_artifact_consumer_script
     and "ci_job_required_os:verify" in release_readiness_artifact_consumer_script

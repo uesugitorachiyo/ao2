@@ -1143,6 +1143,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.dual-repo-release-publication-closure-index.v1",
         "ao2.release-metadata-drift-audit.v1",
         "ao2.release-artifact-closure-index.v1",
+        "ao2-control-plane-",
+        ".tar.gz",
         "artifact-closure-index.json",
         "release_readiness_artifact_consumer",
         "release_train_control_plane_bridge",
@@ -1167,6 +1169,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "gh run download \"$candidate_run_id\" --repo uesugitorachiyo/ao2-control-plane",
         "ao2.dual-repo-release-publication-closure-index.v1",
         "ao2.cp-release-publication-closure.v1",
+        "ao2-control-plane-",
+        ".tar.gz",
         "ao2-dual-repo-release-publication-closure-index",
         "uses: dtolnay/rust-toolchain@stable",
         "Download published provenance sidecars",
@@ -1242,6 +1246,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.release-publication-dry-run-closure.v1",
         "ao2-control-plane-release-publication-closure",
         "ao2.cp-release-publication-closure.v1",
+        "ao2-control-plane-",
+        ".tar.gz",
         "ao2-dual-repo-release-publication-closure-index",
         "ao2.dual-repo-release-publication-closure-index.v1",
         "ao2.release-artifact-closure-index.v1",
@@ -1550,6 +1556,10 @@ def _write_release_readiness_consumer_fixture(root: Path):
             "control_plane": {
                 "schema_version": "ao2.cp-release-publication-closure.v1",
                 "checksum_verified": True,
+                "assets": [
+                    {"name": "SHA256SUMS"},
+                    {"name": "ao2-control-plane-0.1.13-linux-x86_64.tar.gz"},
+                ],
             },
             "trust_boundary": {
                 "mutates_releases": False,
@@ -1588,6 +1598,8 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
         "ci_pulse_codex_cron_event_loop_smoke_artifact_job",
         "github_actions_artifact_download",
         "provider_execution",
+        "ao2-control-plane-",
+        ".tar.gz",
     ]:
         assert needle in script
 
@@ -1676,6 +1688,34 @@ def test_release_readiness_artifact_consumer_rejects_bad_fixture_evidence(tmp_pa
                 },
             ),
             "Pulse codex-cron smoke must not execute providers",
+        ),
+        (
+            "control_plane_checksum_valid_without_archive_asset",
+            lambda root: _write_release_readiness_consumer_json(
+                root,
+                "ao2-dual-repo-release-publication-closure-index/summary.json",
+                {
+                    "schema_version": (
+                        "ao2.dual-repo-release-publication-closure-index.v1"
+                    ),
+                    "status": "passed",
+                    "ao2": {
+                        "schema_version": (
+                            "ao2.release-publication-dry-run-closure.v1"
+                        )
+                    },
+                    "control_plane": {
+                        "schema_version": "ao2.cp-release-publication-closure.v1",
+                        "checksum_verified": True,
+                        "assets": [{"name": "SHA256SUMS"}],
+                    },
+                    "trust_boundary": {
+                        "mutates_releases": False,
+                        "mutates_github_releases": False,
+                    },
+                },
+            ),
+            "control-plane publication closure missing release archive asset",
         ),
         (
             "missing_required_check",

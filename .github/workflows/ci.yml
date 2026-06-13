@@ -832,6 +832,18 @@ jobs:
           assert cp_summary.get("checksum_verified") is True, cp_summary
           assert cp_summary.get("trust_boundary", {}).get("mutates_github_releases") is False, cp_summary
           assert cp_summary.get("trust_boundary", {}).get("mutates_ao_artifacts") is False, cp_summary
+          cp_assets = cp_summary.get("assets", [])
+          cp_asset_names = sorted(
+              asset.get("name", "")
+              for asset in cp_assets
+              if isinstance(asset, dict) and asset.get("name")
+          )
+          cp_archive_assets = [
+              name
+              for name in cp_asset_names
+              if name.startswith("ao2-control-plane-") and name.endswith(".tar.gz")
+          ]
+          assert cp_archive_assets, cp_summary
           summary = {
               "schema_version": "ao2.dual-repo-release-publication-closure-index.v1",
               "status": "passed",
@@ -851,7 +863,9 @@ jobs:
                   "status": cp_summary["status"],
                   "release_tag": cp_summary.get("release_tag"),
                   "checksum_verified": cp_summary["checksum_verified"],
-                  "asset_count": len(cp_summary.get("assets", [])),
+                  "asset_count": len(cp_asset_names),
+                  "assets": [{"name": name} for name in cp_asset_names],
+                  "archive_assets": cp_archive_assets,
               },
               "trust_boundary": {
                   "local_only": True,

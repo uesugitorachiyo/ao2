@@ -95,6 +95,16 @@ require(dual_repo_publication_closure_summary.get("status") == "passed", "dual-r
 require(dual_repo_publication_closure_summary.get("ao2", {}).get("schema_version") == "ao2.release-publication-dry-run-closure.v1", "unexpected AO2 publication closure schema in dual-repo index", dual_repo_publication_closure_summary)
 require(dual_repo_publication_closure_summary.get("control_plane", {}).get("schema_version") == "ao2.cp-release-publication-closure.v1", "unexpected control-plane publication closure schema", dual_repo_publication_closure_summary)
 require(dual_repo_publication_closure_summary.get("control_plane", {}).get("checksum_verified") is True, "control-plane publication closure checksum not verified", dual_repo_publication_closure_summary)
+control_plane_assets = dual_repo_publication_closure_summary.get("control_plane", {}).get("assets", [])
+control_plane_archive_assets = [
+    asset.get("name", "")
+    for asset in control_plane_assets
+    if isinstance(asset, dict)
+    and isinstance(asset.get("name"), str)
+    and asset["name"].startswith("ao2-control-plane-")
+    and asset["name"].endswith(".tar.gz")
+]
+require(control_plane_archive_assets, "control-plane publication closure missing release archive asset", dual_repo_publication_closure_summary.get("control_plane", {}))
 require(dual_repo_publication_closure_summary.get("trust_boundary", {}).get("mutates_releases") is False, "dual-repo publication closure mutated releases", dual_repo_publication_closure_summary)
 require(dual_repo_publication_closure_summary.get("trust_boundary", {}).get("mutates_github_releases") is False, "dual-repo publication closure mutated GitHub releases", dual_repo_publication_closure_summary)
 
