@@ -156,7 +156,10 @@ The gate requires:
 - AO2 `ao2-public-release-pair-digest-audit` with
   `ao2.public-release-pair-digest-audit.v1`, `status=passed`,
   `archive_parity.status=passed`, `mutates_releases=false`, and
-  `stores_credentials=false`;
+  `stores_credentials=false`. Downloaded GitHub artifact contents place the
+  summary at `post-release-pair-digest-audit/summary.json` under the artifact
+  root; the gate also accepts the legacy fixture path
+  `target/post-release-pair-digest-audit/summary.json`;
 - control-plane `ao2-control-plane-post-release-verification-ubuntu`,
   `ao2-control-plane-post-release-verification-macos`, and
   `ao2-control-plane-post-release-verification-windows` artifacts with

@@ -818,7 +818,10 @@ Result:
   ao2-control-plane `Post Release Verification` artifacts, validates
   signatures/checksum summaries, dual public task-board readback schemas, and
   `ao2.public-release-pair-digest-audit.v1` with
-  `archive_parity.status=passed`, and emits
+  `archive_parity.status=passed`. Downloaded digest-audit artifacts expose
+  `post-release-pair-digest-audit/summary.json` under the artifact root, with
+  legacy fixture support for `target/post-release-pair-digest-audit/summary.json`,
+  and the workflow emits
   `ao2.stable-promotion-evidence-gate.v1` with
   `post-release verification evidence gate` status before any release mutation
   is attempted
