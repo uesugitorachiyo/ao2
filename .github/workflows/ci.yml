@@ -833,17 +833,32 @@ jobs:
           assert cp_summary.get("trust_boundary", {}).get("mutates_github_releases") is False, cp_summary
           assert cp_summary.get("trust_boundary", {}).get("mutates_ao_artifacts") is False, cp_summary
           cp_assets = cp_summary.get("assets", [])
-          cp_asset_names = sorted(
-              asset.get("name", "")
-              for asset in cp_assets
-              if isinstance(asset, dict) and asset.get("name")
+          cp_asset_records = sorted(
+              [
+                  {
+                      "name": asset["name"],
+                      "sha256": asset.get("sha256"),
+                      "size_bytes": asset.get("size_bytes"),
+                  }
+                  for asset in cp_assets
+                  if isinstance(asset, dict) and asset.get("name")
+              ],
+              key=lambda asset: asset["name"],
           )
           cp_archive_assets = [
-              name
-              for name in cp_asset_names
-              if name.startswith("ao2-control-plane-") and name.endswith(".tar.gz")
+              asset
+              for asset in cp_asset_records
+              if asset["name"].startswith("ao2-control-plane-")
+              and asset["name"].endswith(".tar.gz")
           ]
           assert cp_archive_assets, cp_summary
+          for asset in cp_archive_assets:
+              digest = asset.get("sha256")
+              size_bytes = asset.get("size_bytes")
+              assert isinstance(digest, str) and len(digest) == 64 and all(
+                  char in "0123456789abcdef" for char in digest.lower()
+              ), asset
+              assert isinstance(size_bytes, int) and size_bytes > 0, asset
           summary = {
               "schema_version": "ao2.dual-repo-release-publication-closure-index.v1",
               "status": "passed",
@@ -863,8 +878,8 @@ jobs:
                   "status": cp_summary["status"],
                   "release_tag": cp_summary.get("release_tag"),
                   "checksum_verified": cp_summary["checksum_verified"],
-                  "asset_count": len(cp_asset_names),
-                  "assets": [{"name": name} for name in cp_asset_names],
+                  "asset_count": len(cp_asset_records),
+                  "assets": cp_asset_records,
                   "archive_assets": cp_archive_assets,
               },
               "trust_boundary": {

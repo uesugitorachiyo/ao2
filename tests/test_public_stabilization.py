@@ -1145,6 +1145,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.release-artifact-closure-index.v1",
         "ao2-control-plane-",
         ".tar.gz",
+        "sha256",
+        "size_bytes",
         "artifact-closure-index.json",
         "release_readiness_artifact_consumer",
         "release_train_control_plane_bridge",
@@ -1171,6 +1173,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.cp-release-publication-closure.v1",
         "ao2-control-plane-",
         ".tar.gz",
+        "sha256",
+        "size_bytes",
         "ao2-dual-repo-release-publication-closure-index",
         "uses: dtolnay/rust-toolchain@stable",
         "Download published provenance sidecars",
@@ -1248,6 +1252,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.cp-release-publication-closure.v1",
         "ao2-control-plane-",
         ".tar.gz",
+        "sha256",
+        "size_bytes",
         "ao2-dual-repo-release-publication-closure-index",
         "ao2.dual-repo-release-publication-closure-index.v1",
         "ao2.release-artifact-closure-index.v1",
@@ -1558,7 +1564,11 @@ def _write_release_readiness_consumer_fixture(root: Path):
                 "checksum_verified": True,
                 "assets": [
                     {"name": "SHA256SUMS"},
-                    {"name": "ao2-control-plane-0.1.13-linux-x86_64.tar.gz"},
+                    {
+                        "name": "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
+                        "sha256": "a" * 64,
+                        "size_bytes": 4096,
+                    },
                 ],
             },
             "trust_boundary": {
@@ -1600,6 +1610,8 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
         "provider_execution",
         "ao2-control-plane-",
         ".tar.gz",
+        "sha256",
+        "size_bytes",
     ]:
         assert needle in script
 
@@ -1716,6 +1728,40 @@ def test_release_readiness_artifact_consumer_rejects_bad_fixture_evidence(tmp_pa
                 },
             ),
             "control-plane publication closure missing release archive asset",
+        ),
+        (
+            "control_plane_archive_asset_without_digest_evidence",
+            lambda root: _write_release_readiness_consumer_json(
+                root,
+                "ao2-dual-repo-release-publication-closure-index/summary.json",
+                {
+                    "schema_version": (
+                        "ao2.dual-repo-release-publication-closure-index.v1"
+                    ),
+                    "status": "passed",
+                    "ao2": {
+                        "schema_version": (
+                            "ao2.release-publication-dry-run-closure.v1"
+                        )
+                    },
+                    "control_plane": {
+                        "schema_version": "ao2.cp-release-publication-closure.v1",
+                        "checksum_verified": True,
+                        "assets": [
+                            {
+                                "name": (
+                                    "ao2-control-plane-0.1.13-linux-x86_64.tar.gz"
+                                )
+                            }
+                        ],
+                    },
+                    "trust_boundary": {
+                        "mutates_releases": False,
+                        "mutates_github_releases": False,
+                    },
+                },
+            ),
+            "control-plane publication closure archive missing digest evidence",
         ),
         (
             "missing_required_check",

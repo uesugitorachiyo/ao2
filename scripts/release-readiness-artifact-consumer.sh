@@ -97,7 +97,7 @@ require(dual_repo_publication_closure_summary.get("control_plane", {}).get("sche
 require(dual_repo_publication_closure_summary.get("control_plane", {}).get("checksum_verified") is True, "control-plane publication closure checksum not verified", dual_repo_publication_closure_summary)
 control_plane_assets = dual_repo_publication_closure_summary.get("control_plane", {}).get("assets", [])
 control_plane_archive_assets = [
-    asset.get("name", "")
+    asset
     for asset in control_plane_assets
     if isinstance(asset, dict)
     and isinstance(asset.get("name"), str)
@@ -105,6 +105,18 @@ control_plane_archive_assets = [
     and asset["name"].endswith(".tar.gz")
 ]
 require(control_plane_archive_assets, "control-plane publication closure missing release archive asset", dual_repo_publication_closure_summary.get("control_plane", {}))
+for asset in control_plane_archive_assets:
+    sha256 = asset.get("sha256")
+    size_bytes = asset.get("size_bytes")
+    require(
+        isinstance(sha256, str)
+        and len(sha256) == 64
+        and all(char in "0123456789abcdef" for char in sha256.lower())
+        and isinstance(size_bytes, int)
+        and size_bytes > 0,
+        "control-plane publication closure archive missing digest evidence",
+        asset,
+    )
 require(dual_repo_publication_closure_summary.get("trust_boundary", {}).get("mutates_releases") is False, "dual-repo publication closure mutated releases", dual_repo_publication_closure_summary)
 require(dual_repo_publication_closure_summary.get("trust_boundary", {}).get("mutates_github_releases") is False, "dual-repo publication closure mutated GitHub releases", dual_repo_publication_closure_summary)
 
