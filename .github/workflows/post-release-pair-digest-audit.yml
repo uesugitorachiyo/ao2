@@ -74,6 +74,7 @@ jobs:
           )
           assert summary["schema_version"] == "ao2.public-release-pair-digest-audit.v1", summary
           assert summary["status"] == "passed", summary
+          assert summary["archive_parity"]["status"] == "passed", summary
           assert summary["trust_boundary"]["mutates_releases"] is False, summary
           assert summary["trust_boundary"]["stores_credentials"] is False, summary
           PY

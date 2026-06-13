@@ -576,11 +576,18 @@ Result:
   plus a supplied dual-repo closure index via
   `AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON`, and emits
   `ao2.public-release-pair-digest-audit.v1`. It checks each published archive
-  has digest and size metadata, then compares control-plane
-  `ao2-control-plane-*.tar.gz` closure `sha256`/`size_bytes` evidence with the
-  corresponding published release asset. Fixture inputs are available through
-  `AO2_PUBLIC_PAIR_DIGEST_AUDIT_AO2_RELEASE_VIEW_JSON` and
-  `AO2_PUBLIC_PAIR_DIGEST_AUDIT_CONTROL_PLANE_RELEASE_VIEW_JSON`; the audit
+  has digest and size metadata, requires full archive parity for AO2
+  `ao2-0.4.80-linux-aarch64.tar.gz`, `ao2-0.4.80-linux-x86_64.tar.gz`,
+  `ao2-0.4.80-macos-aarch64.tar.gz`, and
+  `ao2-0.4.80-windows-x86_64.tar.gz`, plus control-plane
+  `ao2-control-plane-0.1.13-linux-x86_64.tar.gz`,
+  `ao2-control-plane-0.1.13-macos-aarch64.tar.gz`, and
+  `ao2-control-plane-0.1.13-windows-x86_64.tar.gz`, and compares every closure
+  archive record's `sha256`/`size_bytes` evidence with the corresponding
+  published release asset. The summary includes `required_archive_names`,
+  `required_archive_presence`, and `archive_parity` evidence. Fixture inputs
+  are available through `AO2_PUBLIC_PAIR_DIGEST_AUDIT_AO2_RELEASE_VIEW_JSON`
+  and `AO2_PUBLIC_PAIR_DIGEST_AUDIT_CONTROL_PLANE_RELEASE_VIEW_JSON`; the audit
   does not mutate releases or store credentials.
 - `Post Release Pair Digest Audit`: manual read-only GitHub workflow that
   finds the latest successful AO2 `main` CI run, downloads

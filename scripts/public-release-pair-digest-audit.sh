@@ -31,6 +31,12 @@ components = [
         "expected_release_name": "AO2 v0.4.80 stable",
         "release_view_env": "AO2_PUBLIC_PAIR_DIGEST_AUDIT_AO2_RELEASE_VIEW_JSON",
         "archive_prefix": "ao2-",
+        "required_archive_names": [
+            "ao2-0.4.80-linux-aarch64.tar.gz",
+            "ao2-0.4.80-linux-x86_64.tar.gz",
+            "ao2-0.4.80-macos-aarch64.tar.gz",
+            "ao2-0.4.80-windows-x86_64.tar.gz",
+        ],
     },
     {
         "component": "ao2-control-plane",
@@ -39,6 +45,11 @@ components = [
         "expected_release_name": "ao2-control-plane v0.1.13",
         "release_view_env": "AO2_PUBLIC_PAIR_DIGEST_AUDIT_CONTROL_PLANE_RELEASE_VIEW_JSON",
         "archive_prefix": "ao2-control-plane-",
+        "required_archive_names": [
+            "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
+            "ao2-control-plane-0.1.13-macos-aarch64.tar.gz",
+            "ao2-control-plane-0.1.13-windows-x86_64.tar.gz",
+        ],
     },
 ]
 
@@ -90,6 +101,19 @@ def archive_assets(release: dict, prefix: str) -> list[dict]:
     ]
 
 
+def closure_archive_assets(closure_component: dict, prefix: str) -> list[dict]:
+    candidates = closure_component.get("archive_assets")
+    if not isinstance(candidates, list):
+        candidates = closure_component.get("assets", [])
+    return [
+        asset
+        for asset in candidates
+        if isinstance(asset, dict)
+        and str(asset.get("name", "")).startswith(prefix)
+        and str(asset.get("name", "")).endswith(".tar.gz")
+    ]
+
+
 def add_check(checks: list[dict], component: str, code: str, status: str, **details) -> None:
     checks.append({"component": component, "code": code, "status": status, **details})
 
@@ -128,12 +152,26 @@ for component in components:
         observed="prerelease" if release.get("isPrerelease") else "stable",
     )
     archives = archive_assets(release, component["archive_prefix"])
+    published_archive_names = {asset.get("name") for asset in archives}
+    missing_published_required = [
+        name
+        for name in component["required_archive_names"]
+        if name not in published_archive_names
+    ]
     add_check(
         component_checks,
         component["component"],
         "published_archive_assets_present",
         "passed" if archives else "failed",
         archive_count=len(archives),
+    )
+    add_check(
+        component_checks,
+        component["component"],
+        "published_required_archive_presence",
+        "passed" if not missing_published_required else "failed",
+        required_archive_names=component["required_archive_names"],
+        missing_assets=missing_published_required,
     )
     for asset in archives:
         add_check(
@@ -172,6 +210,7 @@ closure_path = os.environ.get(
     "AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON", ""
 )
 closure_checks = []
+archive_parity_components = {}
 closure = None
 if closure_path:
     closure = load_json(Path(closure_path))
@@ -185,47 +224,97 @@ if closure_path:
         else "failed",
         observed=closure.get("schema_version"),
     )
-    cp_release_assets = {
-        asset.get("name"): asset
-        for asset in release_views["ao2-control-plane"].get("assets", [])
-        if isinstance(asset, dict) and asset.get("name")
-    }
-    for asset in closure.get("control_plane", {}).get("assets", []):
-        if not (
-            isinstance(asset, dict)
-            and str(asset.get("name", "")).startswith("ao2-control-plane-")
-            and str(asset.get("name", "")).endswith(".tar.gz")
-        ):
-            continue
-        published = cp_release_assets.get(asset["name"])
-        expected_digest = normalize_digest(asset.get("sha256"))
-        observed_digest = normalize_digest((published or {}).get("digest"))
-        add_check(
-            closure_checks,
-            "ao2-control-plane",
-            "dual_repo_closure_digest_match",
-            "passed"
-            if published is not None
-            and valid_sha256(asset.get("sha256"))
-            and expected_digest == observed_digest
-            else "failed",
-            asset=asset["name"],
-            closure_sha256=asset.get("sha256"),
-            published_digest=(published or {}).get("digest"),
+    for component in components:
+        component_name = component["component"]
+        closure_key = "control_plane" if component_name == "ao2-control-plane" else "ao2"
+        closure_component = closure.get(closure_key, {})
+        published_assets = {
+            asset.get("name"): asset
+            for asset in release_views[component_name].get("assets", [])
+            if isinstance(asset, dict) and asset.get("name")
+        }
+        closure_archives = closure_archive_assets(
+            closure_component,
+            component["archive_prefix"],
+        )
+        closure_archives_by_name = {
+            asset.get("name"): asset for asset in closure_archives if asset.get("name")
+        }
+        missing_closure_required = [
+            name
+            for name in component["required_archive_names"]
+            if name not in closure_archives_by_name
+        ]
+        missing_published_required = [
+            name
+            for name in component["required_archive_names"]
+            if name not in published_assets
+        ]
+        missing_required = sorted(
+            set(missing_closure_required + missing_published_required)
         )
         add_check(
             closure_checks,
-            "ao2-control-plane",
-            "dual_repo_closure_size_match",
-            "passed"
-            if published is not None
-            and isinstance(asset.get("size_bytes"), int)
-            and asset.get("size_bytes") == published.get("size")
-            else "failed",
-            asset=asset["name"],
-            closure_size_bytes=asset.get("size_bytes"),
-            published_size=(published or {}).get("size"),
+            component_name,
+            "required_archive_presence",
+            "passed" if not missing_required else "failed",
+            required_archive_names=component["required_archive_names"],
+            missing_assets=missing_required,
+            closure_missing_assets=missing_closure_required,
+            published_missing_assets=missing_published_required,
         )
+        mismatched_assets = []
+        for asset in closure_archives:
+            asset_name = asset["name"]
+            published = published_assets.get(asset_name)
+            expected_digest = normalize_digest(asset.get("sha256"))
+            observed_digest = normalize_digest((published or {}).get("digest"))
+            digest_matches = (
+                published is not None
+                and valid_sha256(asset.get("sha256"))
+                and expected_digest == observed_digest
+            )
+            size_matches = (
+                published is not None
+                and isinstance(asset.get("size_bytes"), int)
+                and asset.get("size_bytes") == published.get("size")
+            )
+            if not digest_matches or not size_matches:
+                mismatched_assets.append(asset_name)
+            add_check(
+                closure_checks,
+                component_name,
+                "dual_repo_closure_digest_match",
+                "passed" if digest_matches else "failed",
+                asset=asset_name,
+                closure_sha256=asset.get("sha256"),
+                published_digest=(published or {}).get("digest"),
+            )
+            add_check(
+                closure_checks,
+                component_name,
+                "dual_repo_closure_size_match",
+                "passed" if size_matches else "failed",
+                asset=asset_name,
+                closure_size_bytes=asset.get("size_bytes"),
+                published_size=(published or {}).get("size"),
+            )
+        archive_parity_components[component_name] = {
+            "status": "passed"
+            if not missing_required and not mismatched_assets
+            else "failed",
+            "required_archive_names": component["required_archive_names"],
+            "required_archive_count": len(component["required_archive_names"]),
+            "closure_archive_assets": sorted(closure_archives_by_name),
+            "published_archive_assets": sorted(
+                name
+                for name, asset in published_assets.items()
+                if str(name).startswith(component["archive_prefix"])
+                and str(name).endswith(".tar.gz")
+            ),
+            "missing_assets": missing_required,
+            "mismatched_assets": sorted(mismatched_assets),
+        }
 else:
     add_check(
         closure_checks,
@@ -236,6 +325,12 @@ else:
     )
 
 checks.extend(closure_checks)
+full_archive_parity = (
+    "passed"
+    if archive_parity_components
+    and all(item["status"] == "passed" for item in archive_parity_components.values())
+    else "failed"
+)
 status = "passed" if all(item["status"] == "passed" for item in checks) else "failed"
 payload = {
     "schema_version": "ao2.public-release-pair-digest-audit.v1",
@@ -244,6 +339,10 @@ payload = {
     "artifact_root": str(summary_path.parent),
     "components": components_out,
     "closure_index": str(Path(closure_path)) if closure_path else None,
+    "archive_parity": {
+        "status": full_archive_parity,
+        "components": archive_parity_components,
+    },
     "checks": checks,
     "trust_boundary": {
         "queries_public_releases": True,

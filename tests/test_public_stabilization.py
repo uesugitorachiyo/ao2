@@ -659,21 +659,40 @@ def test_public_release_pair_digest_audit_rejects_closure_release_asset_drift(tm
     closure_index = tmp_path / "dual-repo-closure-index.json"
     ao2_release = tmp_path / "ao2-release.json"
     control_plane_release = tmp_path / "control-plane-release.json"
+    ao2_assets = [
+        ("ao2-0.4.80-linux-aarch64.tar.gz", "c" * 64, 3345601),
+        ("ao2-0.4.80-linux-x86_64.tar.gz", "d" * 64, 3345603),
+        ("ao2-0.4.80-macos-aarch64.tar.gz", "e" * 64, 3345605),
+        ("ao2-0.4.80-windows-x86_64.tar.gz", "f" * 64, 3345607),
+    ]
+    control_plane_assets = [
+        ("ao2-control-plane-0.1.13-linux-x86_64.tar.gz", "b" * 64, 4236805),
+        ("ao2-control-plane-0.1.13-macos-aarch64.tar.gz", "1" * 64, 4236807),
+        ("ao2-control-plane-0.1.13-windows-x86_64.tar.gz", "2" * 64, 4236809),
+    ]
 
     closure_index.write_text(
         json.dumps(
             {
                 "schema_version": "ao2.dual-repo-release-publication-closure-index.v1",
                 "status": "passed",
+                "ao2": {
+                    "schema_version": "ao2.release-publication-dry-run-closure.v1",
+                    "archive_assets": [
+                        {"name": name, "sha256": digest, "size_bytes": size}
+                        for name, digest, size in ao2_assets
+                    ],
+                },
                 "control_plane": {
                     "schema_version": "ao2.cp-release-publication-closure.v1",
                     "checksum_verified": True,
-                    "assets": [
+                    "archive_assets": [
                         {
-                            "name": "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
-                            "sha256": "a" * 64,
-                            "size_bytes": 4236805,
+                            "name": name,
+                            "sha256": ("a" * 64 if name.endswith("linux-x86_64.tar.gz") else digest),
+                            "size_bytes": size,
                         }
+                        for name, digest, size in control_plane_assets
                     ],
                 },
             },
@@ -692,11 +711,8 @@ def test_public_release_pair_digest_audit_rejects_closure_release_asset_drift(tm
                 "publishedAt": "2026-06-10T18:45:16Z",
                 "url": "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.80",
                 "assets": [
-                    {
-                        "name": "ao2-0.4.80-linux-x86_64.tar.gz",
-                        "digest": "sha256:" + "c" * 64,
-                        "size": 3345603,
-                    }
+                    {"name": name, "digest": "sha256:" + digest, "size": size}
+                    for name, digest, size in ao2_assets
                 ],
             },
             indent=2,
@@ -717,11 +733,8 @@ def test_public_release_pair_digest_audit_rejects_closure_release_asset_drift(tm
                     "releases/tag/v0.1.13"
                 ),
                 "assets": [
-                    {
-                        "name": "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
-                        "digest": "sha256:" + "b" * 64,
-                        "size": 4236805,
-                    }
+                    {"name": name, "digest": "sha256:" + digest, "size": size}
+                    for name, digest, size in control_plane_assets
                 ],
             },
             indent=2,
@@ -762,21 +775,25 @@ def test_public_release_pair_digest_audit_rejects_closure_release_asset_drift(tm
 
     closure_index.write_text(
         json.dumps(
-            {
-                "schema_version": "ao2.dual-repo-release-publication-closure-index.v1",
-                "status": "passed",
-                "control_plane": {
-                    "schema_version": "ao2.cp-release-publication-closure.v1",
-                    "checksum_verified": True,
-                    "assets": [
-                        {
-                            "name": "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
-                            "sha256": "b" * 64,
-                            "size_bytes": 4236805,
-                        }
-                    ],
+                {
+                    "schema_version": "ao2.dual-repo-release-publication-closure-index.v1",
+                    "status": "passed",
+                    "ao2": {
+                        "schema_version": "ao2.release-publication-dry-run-closure.v1",
+                        "archive_assets": [
+                            {"name": name, "sha256": digest, "size_bytes": size}
+                            for name, digest, size in ao2_assets
+                        ],
+                    },
+                    "control_plane": {
+                        "schema_version": "ao2.cp-release-publication-closure.v1",
+                        "checksum_verified": True,
+                        "archive_assets": [
+                            {"name": name, "sha256": digest, "size_bytes": size}
+                            for name, digest, size in control_plane_assets
+                        ],
+                    },
                 },
-            },
             indent=2,
             sort_keys=True,
         )
@@ -807,6 +824,201 @@ def test_public_release_pair_digest_audit_rejects_closure_release_asset_drift(tm
     assert "status=passed" in passed_result.stdout
 
 
+def test_public_release_pair_digest_audit_rejects_missing_or_mismatched_full_archive_parity(tmp_path):
+    script = read("scripts/public-release-pair-digest-audit.sh")
+    for needle in [
+        "required_archive_presence",
+        "full_archive_parity",
+        "required_archive_names",
+        "closure_archive_assets",
+        "ao2-0.4.80-linux-aarch64.tar.gz",
+        "ao2-0.4.80-linux-x86_64.tar.gz",
+        "ao2-0.4.80-macos-aarch64.tar.gz",
+        "ao2-0.4.80-windows-x86_64.tar.gz",
+        "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
+        "ao2-control-plane-0.1.13-macos-aarch64.tar.gz",
+        "ao2-control-plane-0.1.13-windows-x86_64.tar.gz",
+    ]:
+        assert needle in script
+
+    ao2_archives = {
+        "ao2-0.4.80-linux-aarch64.tar.gz": ("a" * 64, 101),
+        "ao2-0.4.80-linux-x86_64.tar.gz": ("b" * 64, 102),
+        "ao2-0.4.80-macos-aarch64.tar.gz": ("c" * 64, 103),
+        "ao2-0.4.80-windows-x86_64.tar.gz": ("d" * 64, 104),
+    }
+    cp_archives = {
+        "ao2-control-plane-0.1.13-linux-x86_64.tar.gz": ("e" * 64, 201),
+        "ao2-control-plane-0.1.13-macos-aarch64.tar.gz": ("f" * 64, 202),
+        "ao2-control-plane-0.1.13-windows-x86_64.tar.gz": ("1" * 64, 203),
+    }
+
+    def release_fixture(path: Path, component: str, archives: dict[str, tuple[str, int]]):
+        path.write_text(
+            json.dumps(
+                {
+                    "tagName": "v0.4.80" if component == "ao2" else "v0.1.13",
+                    "name": (
+                        "AO2 v0.4.80 stable"
+                        if component == "ao2"
+                        else "ao2-control-plane v0.1.13"
+                    ),
+                    "isPrerelease": False,
+                    "publishedAt": "2026-06-12T00:00:00Z",
+                    "url": f"https://github.com/uesugitorachiyo/{component}/releases",
+                    "assets": [
+                        {"name": name, "digest": f"sha256:{digest}", "size": size}
+                        for name, (digest, size) in archives.items()
+                    ],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    def closure_asset_records(archives: dict[str, tuple[str, int]]):
+        return [
+            {"name": name, "sha256": digest, "size_bytes": size}
+            for name, (digest, size) in archives.items()
+        ]
+
+    def write_closure(path: Path, ao2: dict[str, tuple[str, int]], cp: dict[str, tuple[str, int]]):
+        path.write_text(
+            json.dumps(
+                {
+                    "schema_version": "ao2.dual-repo-release-publication-closure-index.v1",
+                    "status": "passed",
+                    "ao2": {
+                        "schema_version": "ao2.release-publication-dry-run-closure.v1",
+                        "archive_assets": closure_asset_records(ao2),
+                    },
+                    "control_plane": {
+                        "schema_version": "ao2.cp-release-publication-closure.v1",
+                        "checksum_verified": True,
+                        "archive_assets": closure_asset_records(cp),
+                    },
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+    ao2_release = tmp_path / "ao2-release.json"
+    cp_release = tmp_path / "control-plane-release.json"
+    release_fixture(ao2_release, "ao2", ao2_archives)
+    release_fixture(cp_release, "ao2-control-plane", cp_archives)
+
+    missing_closure = tmp_path / "missing-closure.json"
+    incomplete_ao2 = {
+        name: value
+        for name, value in ao2_archives.items()
+        if not name.endswith("windows-x86_64.tar.gz")
+    }
+    write_closure(missing_closure, incomplete_ao2, cp_archives)
+    missing_result = subprocess.run(
+        ["npm", "run", "release:public-pair-digest-audit"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_ROOT": str(tmp_path / "missing-audit"),
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON": str(
+                missing_closure
+            ),
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_AO2_RELEASE_VIEW_JSON": str(ao2_release),
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_CONTROL_PLANE_RELEASE_VIEW_JSON": str(
+                cp_release
+            ),
+        },
+        check=False,
+    )
+    assert missing_result.returncode != 0
+    missing_summary = json.loads(
+        (tmp_path / "missing-audit" / "summary.json").read_text(encoding="utf-8")
+    )
+    missing_failed = [
+        item for item in missing_summary["checks"] if item["status"] == "failed"
+    ]
+    assert any(
+        item["component"] == "ao2"
+        and item["code"] == "required_archive_presence"
+        and "ao2-0.4.80-windows-x86_64.tar.gz" in item["missing_assets"]
+        for item in missing_failed
+    )
+
+    drift_closure = tmp_path / "drift-closure.json"
+    drift_cp = dict(cp_archives)
+    drift_cp["ao2-control-plane-0.1.13-windows-x86_64.tar.gz"] = ("1" * 64, 999)
+    write_closure(drift_closure, ao2_archives, drift_cp)
+    drift_result = subprocess.run(
+        ["npm", "run", "release:public-pair-digest-audit"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_ROOT": str(tmp_path / "drift-audit"),
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON": str(
+                drift_closure
+            ),
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_AO2_RELEASE_VIEW_JSON": str(ao2_release),
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_CONTROL_PLANE_RELEASE_VIEW_JSON": str(
+                cp_release
+            ),
+        },
+        check=False,
+    )
+    assert drift_result.returncode != 0
+    drift_summary = json.loads(
+        (tmp_path / "drift-audit" / "summary.json").read_text(encoding="utf-8")
+    )
+    assert any(
+        item["component"] == "ao2-control-plane"
+        and item["code"] == "dual_repo_closure_size_match"
+        and item["status"] == "failed"
+        for item in drift_summary["checks"]
+    )
+
+    passed_closure = tmp_path / "passed-closure.json"
+    write_closure(passed_closure, ao2_archives, cp_archives)
+    passed_result = subprocess.run(
+        ["npm", "run", "release:public-pair-digest-audit"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_ROOT": str(tmp_path / "passed-audit"),
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON": str(
+                passed_closure
+            ),
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_AO2_RELEASE_VIEW_JSON": str(ao2_release),
+            "AO2_PUBLIC_PAIR_DIGEST_AUDIT_CONTROL_PLANE_RELEASE_VIEW_JSON": str(
+                cp_release
+            ),
+        },
+        check=False,
+    )
+    assert passed_result.returncode == 0, passed_result.stderr + passed_result.stdout
+    passed_summary = json.loads(
+        (tmp_path / "passed-audit" / "summary.json").read_text(encoding="utf-8")
+    )
+    assert passed_summary["status"] == "passed"
+    assert passed_summary["archive_parity"]["status"] == "passed"
+    assert passed_summary["archive_parity"]["components"]["ao2"]["required_archive_count"] == 4
+    assert (
+        passed_summary["archive_parity"]["components"]["ao2-control-plane"][
+            "required_archive_count"
+        ]
+        == 3
+    )
+
+
 def test_post_release_pair_digest_audit_workflow_is_manual_and_read_only():
     workflow = read(".github/workflows/post-release-pair-digest-audit.yml")
     verification = read("docs/VERIFICATION.md")
@@ -828,6 +1040,7 @@ def test_post_release_pair_digest_audit_workflow_is_manual_and_read_only():
         "npm run release:public-pair-digest-audit",
         "ao2.public-release-pair-digest-audit.v1",
         "target/post-release-pair-digest-audit/summary.json",
+        "archive_parity",
         "mutates_releases",
         "stores_credentials",
         "uses: actions/upload-artifact@v7.0.1",
@@ -1357,9 +1570,20 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "post_release_pair_digest_audit_workflow",
         "Post Release Pair Digest Audit",
         "ao2-public-release-pair-digest-audit",
+        "required_archive_names",
+        "required_archive_presence",
+        "closure_archive_assets",
+        "full_archive_parity",
         "release:public-pair-digest-audit",
         "target/post-release-pair-digest-audit/summary.json",
         "ao2.public-release-pair-digest-audit.v1",
+        "ao2-0.4.80-linux-aarch64.tar.gz",
+        "ao2-0.4.80-linux-x86_64.tar.gz",
+        "ao2-0.4.80-macos-aarch64.tar.gz",
+        "ao2-0.4.80-windows-x86_64.tar.gz",
+        "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
+        "ao2-control-plane-0.1.13-macos-aarch64.tar.gz",
+        "ao2-control-plane-0.1.13-windows-x86_64.tar.gz",
         "target/release-readiness-consumer/ao2-release-readiness",
         "target/release-readiness-consumer/ao2-release-train-control-plane-bridge",
         "target/release-readiness-consumer/ao2-ai-task-board-control-plane-bridge",
@@ -1410,6 +1634,14 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "gh run download \"$candidate_run_id\" --repo uesugitorachiyo/ao2-control-plane",
         "ao2.dual-repo-release-publication-closure-index.v1",
         "ao2.cp-release-publication-closure.v1",
+        "Download AO2 public archive assets for closure index",
+        "target/dual-repo-release-publication-closure-index/ao2-release-archives",
+        "ao2_archive_assets",
+        "hashlib.sha256(path.read_bytes()).hexdigest()",
+        "ao2-0.4.80-linux-aarch64.tar.gz",
+        "ao2-0.4.80-linux-x86_64.tar.gz",
+        "ao2-0.4.80-macos-aarch64.tar.gz",
+        "ao2-0.4.80-windows-x86_64.tar.gz",
         "ao2-control-plane-",
         ".tar.gz",
         "sha256",
@@ -1497,6 +1729,11 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.dual-repo-release-publication-closure-index.v1",
         "ao2.release-artifact-closure-index.v1",
         "artifact-closure-index.json",
+        "required_archive_names",
+        "required_archive_presence",
+        "full archive parity",
+        "ao2-0.4.80-linux-aarch64.tar.gz",
+        "ao2-control-plane-0.1.13-windows-x86_64.tar.gz",
     ]:
         assert needle in verification
 
