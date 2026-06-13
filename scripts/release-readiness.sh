@@ -299,6 +299,39 @@ add(
     "runs stable promotion and operator evidence baselines, composes the stable release evidence packet, and uploads non-mutating evidence",
 )
 
+stable_release_promotion_workflow = read(".github/workflows/stable-release-promotion.yml")
+stable_release_promotion_workflow_ok = (
+    "name: Stable Release Promotion" in stable_release_promotion_workflow
+    and "workflow_dispatch:" in stable_release_promotion_workflow
+    and "stable_release_evidence_run_id:" in stable_release_promotion_workflow
+    and "promotion_confirm:" in stable_release_promotion_workflow
+    and "actions: read" in stable_release_promotion_workflow
+    and "contents: write" in stable_release_promotion_workflow
+    and "GH_TOKEN: ${{ github.token }}" in stable_release_promotion_workflow
+    and "STABLE_RELEASE_EVIDENCE_RUN_ID: ${{ inputs.stable_release_evidence_run_id }}" in stable_release_promotion_workflow
+    and "PROMOTION_CONFIRM_INPUT: ${{ inputs.promotion_confirm }}" in stable_release_promotion_workflow
+    and "ao2-stable-release-evidence-packet" in stable_release_promotion_workflow
+    and "target/stable-release-promotion/stable-release-evidence-packet" in stable_release_promotion_workflow
+    and "ao2.stable-release-evidence-packet.v1" in stable_release_promotion_workflow
+    and "stable_release_evidence_ready" in stable_release_promotion_workflow
+    and "operator_release_evidence_ready" in stable_release_promotion_workflow
+    and "AO2_STABLE_PROMOTION_EVIDENCE_FIXTURE_DIR=target/stable-release-promotion/stable-release-evidence-packet/stable-promotion-workflow/post-release-verification-evidence" in stable_release_promotion_workflow
+    and 'AO2_STABLE_PROMOTION_CONFIRM="$PROMOTION_CONFIRM_INPUT"' in stable_release_promotion_workflow
+    and "npm run release:stable-promotion-workflow" in stable_release_promotion_workflow
+    and "promote-stable-v0.4.80-v0.1.13" in stable_release_promotion_workflow
+    and "refusing stable promotion because workflow input did not match required confirmation" in stable_release_promotion_workflow
+    and "actions/upload-artifact@v7.0.1" in stable_release_promotion_workflow
+    and "ao2-stable-release-promotion-workflow" in stable_release_promotion_workflow
+    and "OPENAI_API_KEY:" not in stable_release_promotion_workflow
+    and "ANTHROPIC_API_KEY:" not in stable_release_promotion_workflow
+    and "AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD=1" not in stable_release_promotion_workflow
+)
+add(
+    "ci_stable_release_promotion_workflow_dispatch",
+    "passed" if stable_release_promotion_workflow_ok else "failed",
+    "manual stable release promotion consumes the hosted stable evidence packet and requires exact confirmation before release mutation",
+)
+
 release_readiness_artifact_consumer = workflow_job_block("release-readiness-artifact-consumer")
 release_readiness_artifact_consumer_script = read("scripts/release-readiness-artifact-consumer.sh")
 release_readiness_artifact_consumer_ok = (
@@ -722,6 +755,24 @@ artifact_closure_index = {
                 "stable-promotion-workflow",
                 "operator-release-evidence-bundle",
             ],
+        },
+        {
+            "id": "stable_release_promotion_workflow_dispatch",
+            "artifact_name": "ao2-stable-release-promotion-workflow",
+            "producer_job": "Stable Release Promotion / stable-release-promotion",
+            "required_files": [
+                "stable-release-evidence-packet/packet/summary.json",
+                "stable-release-evidence-packet/packet/dashboard.html",
+                "workflow/summary.json",
+                "workflow/post-release-verification-evidence/summary.json",
+            ],
+            "schema_versions": [
+                "ao2.stable-release-evidence-packet.v1",
+                "ao2.stable-promotion-workflow.v1",
+                "ao2.stable-promotion-evidence-gate.v1",
+            ],
+            "required_checks": ["ci_stable_release_promotion_workflow_dispatch"],
+            "source_artifacts": ["ao2-stable-release-evidence-packet"],
         },
         {
             "id": "release_readiness_artifact_consumer",

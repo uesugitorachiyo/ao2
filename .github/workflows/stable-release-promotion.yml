@@ -1,0 +1,124 @@
+name: Stable Release Promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      stable_release_evidence_run_id:
+        description: "Optional successful CI run id containing ao2-stable-release-evidence-packet."
+        required: false
+        type: string
+      promotion_confirm:
+        description: "Leave empty for dry-run. Use promote-stable-v0.4.80-v0.1.13 to mutate releases."
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  stable-release-promotion:
+    name: Stable release promotion gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: stable-release-promotion
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+      - name: Reject provider API key environment
+        shell: bash
+        run: |
+          if [ "${OPENAI_API_KEY+x}" = "x" ] || [ "${ANTHROPIC_API_KEY+x}" = "x" ]; then
+            echo "provider API keys are not accepted by stable release promotion" >&2
+            exit 1
+          fi
+      - name: Download stable release evidence packet
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STABLE_RELEASE_EVIDENCE_RUN_ID: ${{ inputs.stable_release_evidence_run_id }}
+        run: |
+          set -euo pipefail
+          out="target/stable-release-promotion/stable-release-evidence-packet"
+          rm -rf "$out"
+          mkdir -p "$out"
+
+          if [ -n "$STABLE_RELEASE_EVIDENCE_RUN_ID" ]; then
+            gh run download "$STABLE_RELEASE_EVIDENCE_RUN_ID" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name ao2-stable-release-evidence-packet \
+              --dir "$out"
+            exit 0
+          fi
+
+          while IFS= read -r run_id; do
+            [ -n "$run_id" ] || continue
+            rm -rf "$out"
+            mkdir -p "$out"
+            if gh run download "$run_id" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name ao2-stable-release-evidence-packet \
+              --dir "$out"; then
+              printf "%s\n" "$run_id" > "$out/source-run-id.txt"
+              exit 0
+            fi
+          done < <(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --branch main \
+            --workflow ci.yml \
+            --status success \
+            --limit 10 \
+            --json databaseId \
+            --jq '.[].databaseId')
+
+          echo "missing ao2-stable-release-evidence-packet from successful main CI runs" >&2
+          exit 1
+      - name: Verify stable release evidence packet
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("target/stable-release-promotion/stable-release-evidence-packet")
+          summary = json.loads((root / "packet" / "summary.json").read_text(encoding="utf-8"))
+          assert summary["schema_version"] == "ao2.stable-release-evidence-packet.v1", summary
+          assert summary["status"] == "passed", summary
+          assert summary["stable_release_evidence_ready"] is True, summary
+          assert summary["operator_evidence"]["operator_release_evidence_ready"] is True, summary
+          assert summary["trust_boundary"]["mutates_releases"] is False, summary
+          assert summary["trust_boundary"]["stores_credentials"] is False, summary
+          assert (root / "stable-promotion-workflow" / "summary.json").is_file()
+          assert (root / "stable-promotion-workflow" / "post-release-verification-evidence" / "summary.json").is_file()
+          assert (root / "operator-release-evidence-bundle" / "summary.json").is_file()
+          assert (root / "packet" / "dashboard.html").is_file()
+          PY
+      - name: Run stable release promotion workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROMOTION_CONFIRM_INPUT: ${{ inputs.promotion_confirm }}
+        run: |
+          set -euo pipefail
+          required_confirm="promote-stable-v0.4.80-v0.1.13"
+          if [ -n "$PROMOTION_CONFIRM_INPUT" ] && [ "$PROMOTION_CONFIRM_INPUT" != "$required_confirm" ]; then
+            echo "refusing stable promotion because workflow input did not match required confirmation" >&2
+            exit 1
+          fi
+
+          env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY \
+            AO2_STABLE_PROMOTION_ROOT=target/stable-release-promotion/workflow \
+            AO2_STABLE_PROMOTION_EVIDENCE_FIXTURE_DIR=target/stable-release-promotion/stable-release-evidence-packet/stable-promotion-workflow/post-release-verification-evidence \
+            AO2_STABLE_PROMOTION_CONFIRM="$PROMOTION_CONFIRM_INPUT" \
+            npm run release:stable-promotion-workflow
+      - name: Upload stable release promotion evidence
+        uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: ao2-stable-release-promotion-workflow
+          path: target/stable-release-promotion
+          if-no-files-found: error
