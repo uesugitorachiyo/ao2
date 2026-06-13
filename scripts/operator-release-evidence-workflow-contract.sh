@@ -46,6 +46,10 @@ require_text "$WORKFLOW" "stores_credentials"
 
 require_text "$PACKAGE_JSON" "\"release:operator-evidence-workflow-contract\""
 require_text "$VERIFICATION_DOC" "Operator Release Evidence Audit"
+require_text "$VERIFICATION_DOC" "ao2-public-release-pair-digest-audit"
+require_text "$VERIFICATION_DOC" "ao2.public-release-pair-digest-audit.v1"
 require_text "$PUBLIC_RELEASE_DOC" "ao2-operator-release-evidence-bundle"
+require_text "$PUBLIC_RELEASE_DOC" "ao2-public-release-pair-digest-audit"
+require_text "$PUBLIC_RELEASE_DOC" "ao2.public-release-pair-digest-audit.v1"
 
 echo "operator_release_evidence_workflow_contract=passed"

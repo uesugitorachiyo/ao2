@@ -108,6 +108,11 @@ operator-facing release evidence set into
   the published control-plane Linux x86_64 archive, and task-board readback
   schemas `ao2.cp-ai-task-board-readback.v1` and
   `ao2.cp-ai-task-board-dashboard.v1`;
+- AO2 `ao2-public-release-pair-digest-audit` evidence with
+  `ao2.public-release-pair-digest-audit.v1` and
+  `archive_parity.status=passed`, proving every AO2 and control-plane release
+  archive in the dual-repo closure index has matching public GitHub Release
+  digest and size evidence;
 - control-plane `ao2-control-plane-post-release-verification-ubuntu`,
   `ao2-control-plane-post-release-verification-macos`, and
   `ao2-control-plane-post-release-verification-windows` summaries with
