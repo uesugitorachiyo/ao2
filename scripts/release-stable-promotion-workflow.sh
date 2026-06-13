@@ -230,10 +230,17 @@ for item in required:
             ):
                 status = "failed"
     elif item["kind"] == "public-pair-digest-audit":
-        summary = item["path"] / "target" / "post-release-pair-digest-audit" / "summary.json"
-        if not summary.is_file():
+        summary_candidates = [
+            item["path"] / "post-release-pair-digest-audit" / "summary.json",
+            item["path"] / "target" / "post-release-pair-digest-audit" / "summary.json",
+        ]
+        summary = next((path for path in summary_candidates if path.is_file()), None)
+        if summary is None:
             status = "missing"
-            details["missing"] = "target/post-release-pair-digest-audit/summary.json"
+            details["missing"] = [
+                "post-release-pair-digest-audit/summary.json",
+                "target/post-release-pair-digest-audit/summary.json",
+            ]
         else:
             payload = json.loads(summary.read_text(encoding="utf-8"))
             trust = payload.get("trust_boundary", {})
