@@ -396,6 +396,10 @@ stable_promotion_dry_run_checklist_ok = (
     and "npm run release:stable-promotion-operator-checklist" in stable_promotion_dry_run_checklist
     and "ao2.stable-promotion-dry-run-audit.v1" in stable_promotion_dry_run_checklist
     and "ao2.stable-promotion-operator-checklist.v1" in stable_promotion_dry_run_checklist
+    and "Assemble lightweight dry-run checklist artifact" in stable_promotion_dry_run_checklist
+    and "target/stable-promotion-dry-run-checklist/checklist-artifact" in stable_promotion_dry_run_checklist
+    and "stable-release-evidence-packet/packet/summary.json" in stable_promotion_dry_run_checklist
+    and "workflow/post-release-verification-evidence/summary.json" in stable_promotion_dry_run_checklist
     and "operator_checklist_ready" in stable_promotion_dry_run_checklist
     and "confirmation_entered" in stable_promotion_dry_run_checklist
     and "ao2-stable-promotion-dry-run-checklist" in stable_promotion_dry_run_checklist
@@ -892,11 +896,8 @@ artifact_closure_index = {
             "producer_job": "Stable Promotion Dry-Run Checklist / stable-promotion-dry-run-checklist",
             "required_files": [
                 "stable-release-evidence-packet/packet/summary.json",
-                "stable-release-evidence-packet/packet/dashboard.html",
                 "workflow/summary.json",
                 "workflow/post-release-verification-evidence/summary.json",
-                "artifact/workflow/summary.json",
-                "artifact/stable-release-evidence-packet/packet/summary.json",
                 "dry-run-audit/summary.json",
                 "operator-checklist/summary.json",
                 "operator-checklist/checklist.md",
