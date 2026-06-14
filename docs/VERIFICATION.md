@@ -910,6 +910,14 @@ Result:
   The manual `Stable Promotion Operator Checklist` workflow downloads the
   dry-run audit by `stable_promotion_dry_run_audit_run_id` and uploads
   `ao2-stable-promotion-operator-checklist`.
+- `Stable Promotion Dry-Run Checklist`: manual GitHub Actions workflow that
+  downloads the latest successful main-CI `ao2-stable-release-evidence-packet`
+  artifact, reruns `npm run release:stable-promotion-workflow` with
+  `AO2_STABLE_PROMOTION_CONFIRM=""`, audits that dry-run, and emits the
+  operator checklist in one hosted artifact named
+  `ao2-stable-promotion-dry-run-checklist`. The workflow has read-only
+  repository permissions, rejects provider API key environment state, and
+  records `confirmation_entered=false` before upload.
 - `npm run release:immutability-audit`: composes asset completeness, stable
   readiness, full release download verification, checksum validation, signed
   provenance verification, GitHub asset digest checks, and release metadata

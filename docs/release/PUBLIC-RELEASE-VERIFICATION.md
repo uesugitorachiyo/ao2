@@ -228,6 +228,22 @@ the exact `promotion_confirm=promote-stable-v0.4.80-v0.1.13` value for the
 operator, but it does not enter the confirmation string or mutate releases. No
 provider API keys are required or accepted.
 
+## Stable promotion dry-run checklist
+
+Dispatch the manual `Stable Promotion Dry-Run Checklist` workflow to convert
+the latest successful main-CI `ao2-stable-release-evidence-packet` directly
+into hosted dry-run audit and operator checklist evidence. The optional
+`stable_release_evidence_run_id` input pins the packet source; otherwise the
+workflow downloads the latest successful main-CI packet, reruns
+`npm run release:stable-promotion-workflow` with
+`AO2_STABLE_PROMOTION_CONFIRM=""`, runs the dry-run audit, generates the
+operator checklist, and uploads `ao2-stable-promotion-dry-run-checklist`.
+
+This workflow is the preferred no-mutation rehearsal before entering the real
+stable-promotion confirmation string. It uses read-only GitHub permissions,
+rejects provider API key environment state, records
+`confirmation_entered=false`, and does not mutate releases.
+
 ## Stable promotion evidence gate
 
 `npm run release:stable-promotion-workflow` uses this hosted evidence before it
