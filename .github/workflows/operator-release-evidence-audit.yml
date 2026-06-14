@@ -47,8 +47,27 @@ jobs:
           assert summary["schema_version"] == "ao2.operator-release-evidence-bundle.v1", summary
           assert summary["status"] == "passed", summary
           assert summary["operator_release_evidence_ready"] is True, summary
-          assert len(summary["checks"]) == 9, summary
+          assert len(summary["checks"]) == 12, summary
           assert all(check["status"] == "passed" for check in summary["checks"]), summary
+          public_consumer_checks = [
+              check
+              for check in summary["checks"]
+              if check["artifact"].startswith("public-release-consumer-smoke-")
+          ]
+          assert len(public_consumer_checks) == 3, summary
+          assert sorted(check["target_label"] for check in public_consumer_checks) == [
+              "linux-x86_64",
+              "macos-aarch64",
+              "windows-x86_64",
+          ], summary
+          assert all(
+              check["schema_version"] == "ao2.public-release-consumer-smoke.v1"
+              for check in public_consumer_checks
+          ), summary
+          assert all(
+              check["downloads_public_release_archives"] is True
+              for check in public_consumer_checks
+          ), summary
           public_pair_digest = next(
               check
               for check in summary["checks"]

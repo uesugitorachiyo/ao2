@@ -123,6 +123,13 @@ operator-facing release evidence set into
   `post-stable-release-smoke-macOS`, and
   `post-stable-release-smoke-Windows` install/update evidence with
   `signature_verified=true`;
+- AO2 `public-release-consumer-smoke-linux`,
+  `public-release-consumer-smoke-macos`, and
+  `public-release-consumer-smoke-windows` evidence with
+  `ao2.public-release-consumer-smoke.v1`, target labels `linux-x86_64`,
+  `macos-aarch64`, and `windows-x86_64`, AO2 and control-plane release
+  manifest schemas, AO2/control-plane help command smoke statuses, and
+  `downloads_public_release_archives=true`;
 - AO2 `ao2-dual-public-release-smoke` evidence with
   `ao2.dual-public-release-smoke.v1`, the published AO2 Linux x86_64 archive,
   the published control-plane Linux x86_64 archive, and task-board readback
@@ -150,7 +157,7 @@ read-only hosted baseline. To inspect it from `ao2-control-plane`, download that
 artifact and start the server with
 `AO2_CP_OPERATOR_RELEASE_EVIDENCE_SUMMARY=<downloaded-artifact>/summary.json`;
 the control-plane `/api/v1/release/operator-evidence` and
-`/api/v1/release/operator-evidence.json` routes then render the same seven
+`/api/v1/release/operator-evidence.json` routes then render the same twelve
 checks without approving releases or mutating AO2 artifacts.
 
 ## Stable release evidence packet
@@ -226,16 +233,28 @@ provider API keys are required or accepted.
 `npm run release:stable-promotion-workflow` uses this hosted evidence before it
 can promote AO2 and `ao2-control-plane` releases from prerelease to stable. The
 workflow downloads the latest successful AO2 `Post Stable Release Verification`
-artifacts, including `ao2-dual-public-release-smoke`, the latest successful AO2
-`Post Release Pair Digest Audit` artifact `ao2-public-release-pair-digest-audit`,
-and the latest successful control-plane `Post Release Verification` artifacts,
-then emits `ao2.stable-promotion-evidence-gate.v1`.
+artifacts, `Public Release Consumer Smoke` artifacts
+`public-release-consumer-smoke-linux`,
+`public-release-consumer-smoke-macos`, and
+`public-release-consumer-smoke-windows`, including
+`ao2-dual-public-release-smoke`, the latest successful AO2 `Post Release Pair
+Digest Audit` artifact `ao2-public-release-pair-digest-audit`, and the latest
+successful control-plane `Post Release Verification` artifacts, then emits
+`ao2.stable-promotion-evidence-gate.v1`.
 
 The gate requires:
 
 - AO2 `post-stable-release-smoke-Linux`, `post-stable-release-smoke-macOS`,
   and `post-stable-release-smoke-Windows` artifacts with
   `signature_verified=true` install/update evidence;
+- AO2 `public-release-consumer-smoke-linux`,
+  `public-release-consumer-smoke-macos`, and
+  `public-release-consumer-smoke-windows` artifacts with
+  `ao2.public-release-consumer-smoke.v1`, expected target labels, AO2 and
+  control-plane release manifest schemas, passed AO2/control-plane command
+  smoke statuses, `downloads_public_release_archives=true`,
+  `credential_material_included=false`, `mutates_github_releases=false`, and
+  `control_plane_approves_release=false`;
 - AO2 `ao2-dual-public-release-smoke` with
   `ao2.dual-public-release-smoke.v1`, passed task-board readback/dashboard
   schemas, `auth_value_stored=false`, `credential_material_in_urls=false`,
@@ -262,6 +281,9 @@ keeps confirmed stable promotion blocked.
 ## Acceptance Checklist
 
 - AO2 post-stable release verification passes on Ubuntu, macOS, and Windows.
+- AO2 public release consumer smoke passes for `linux-x86_64`,
+  `macos-aarch64`, and `windows-x86_64` with
+  `ao2.public-release-consumer-smoke.v1` evidence.
 - AO2 `ao2-dual-public-release-smoke` proves the published AO2 and
   control-plane archives interoperate from downloaded release assets.
 - AO2 `ao2-public-release-pair-digest-audit` proves every required AO2 and

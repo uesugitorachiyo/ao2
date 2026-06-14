@@ -821,11 +821,17 @@ Result:
   is set before flipping the AO2 and ao2-control-plane GitHub Releases from
   prerelease to stable. Confirmed promotion is also blocked by a
   post-release verification evidence gate: the workflow downloads the latest
-  successful AO2 `Post Stable Release Verification` artifacts and
+  successful AO2 `Post Stable Release Verification` artifacts,
+  `Public Release Consumer Smoke` artifacts
+  `public-release-consumer-smoke-linux`,
+  `public-release-consumer-smoke-macos`, and
+  `public-release-consumer-smoke-windows`,
   `ao2-dual-public-release-smoke` artifact, the AO2 `Post Release Pair Digest
   Audit` artifact `ao2-public-release-pair-digest-audit`, plus
   ao2-control-plane `Post Release Verification` artifacts, validates
-  signatures/checksum summaries, dual public task-board readback schemas, and
+  signatures/checksum summaries, `ao2.public-release-consumer-smoke.v1`
+  archive/command smoke summaries with
+  `downloads_public_release_archives=true`, dual public task-board readback schemas, and
   `ao2.public-release-pair-digest-audit.v1` with
   `archive_parity.status=passed`. Downloaded digest-audit artifacts expose
   `post-release-pair-digest-audit/summary.json` under the artifact root, with
@@ -839,6 +845,12 @@ Result:
   `ao2.operator-release-evidence-bundle.v1`. It verifies the AO2
   `ao2-dual-repo-release-publication-closure-index`, AO2 Linux/macOS/Windows
   post-stable install/update evidence, AO2
+  `public-release-consumer-smoke-linux`,
+  `public-release-consumer-smoke-macos`, and
+  `public-release-consumer-smoke-windows` evidence with
+  `ao2.public-release-consumer-smoke.v1`, target labels `linux-x86_64`,
+  `macos-aarch64`, and `windows-x86_64`, release manifest schemas, command
+  smoke statuses, and `downloads_public_release_archives=true`, AO2
   `ao2-public-release-pair-digest-audit` evidence with
   `ao2.public-release-pair-digest-audit.v1` and `archive_parity.status=passed`,
   and ao2-control-plane Ubuntu/macOS/Windows post-release summaries with

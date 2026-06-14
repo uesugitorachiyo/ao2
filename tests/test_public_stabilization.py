@@ -15,6 +15,42 @@ def read(path: str) -> str:
     return (REPO_ROOT / path).read_text(encoding="utf-8")
 
 
+def write_public_consumer_smoke_fixture(fixture: Path, name: str, target_label: str) -> None:
+    summary = fixture / name / "latest" / "summary.json"
+    summary.parent.mkdir(parents=True)
+    summary.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.public-release-consumer-smoke.v1",
+                "status": "passed",
+                "target_label": target_label,
+                "archives": {
+                    "ao2": {"manifest_schema": "ao2.release-manifest.v1"},
+                    "ao2_control_plane": {
+                        "manifest_schema": "ao2-control-plane.release-manifest.v1"
+                    },
+                },
+                "commands": {
+                    "ao2_version": {"status": "passed"},
+                    "ao2_help": {"status": "passed"},
+                    "control_plane_help": {"status": "passed"},
+                },
+                "trust_boundary": {
+                    "downloads_public_release_archives": True,
+                    "auth_value_stored": False,
+                    "credential_material_in_urls": False,
+                    "credential_material_included": False,
+                    "mutates_github_releases": False,
+                    "control_plane_approves_release": False,
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def test_ci_runs_on_public_push_and_pull_request_while_release_gates_stay_manual():
     ci = read(".github/workflows/ci.yml")
     assert re.search(r"(?m)^\s*workflow_dispatch:\s*$", ci)
@@ -1229,11 +1265,21 @@ def test_stable_promotion_workflow_is_guarded_and_documented():
         "AO2_STABLE_PROMOTION_EVIDENCE_ROOT",
         "AO2_STABLE_PROMOTION_EVIDENCE_FIXTURE_DIR",
         "Post Stable Release Verification",
+        "Public Release Consumer Smoke",
         "Post Release Pair Digest Audit",
         "Post Release Verification",
         "post-stable-release-smoke-Linux",
         "post-stable-release-smoke-macOS",
         "post-stable-release-smoke-Windows",
+        "public-release-consumer-smoke-linux",
+        "public-release-consumer-smoke-macos",
+        "public-release-consumer-smoke-windows",
+        "ao2.public-release-consumer-smoke.v1",
+        "downloads_public_release_archives",
+        "target_label",
+        "linux-x86_64",
+        "macos-aarch64",
+        "windows-x86_64",
         "ao2-dual-public-release-smoke",
         "ao2.dual-public-release-smoke.v1",
         "ao2-public-release-pair-digest-audit",
@@ -1266,6 +1312,8 @@ def test_stable_promotion_workflow_is_guarded_and_documented():
     assert "ao2.stable-promotion-workflow.v1" in verification
     assert "ao2.stable-promotion-evidence-gate.v1" in verification
     assert "post-release verification evidence gate" in verification
+    assert "public-release-consumer-smoke-linux" in verification
+    assert "ao2.public-release-consumer-smoke.v1" in verification
     assert "ao2-dual-public-release-smoke" in verification
     assert "ao2-public-release-pair-digest-audit" in verification
     assert "archive_parity.status=passed" in verification
@@ -1275,6 +1323,9 @@ def test_stable_promotion_workflow_is_guarded_and_documented():
     public_release_index = read("docs/release/PUBLIC-RELEASE-VERIFICATION.md")
     assert "Stable promotion evidence gate" in public_release_index
     assert "AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD=1" in public_release_index
+    assert "public-release-consumer-smoke-linux" in public_release_index
+    assert "ao2.public-release-consumer-smoke.v1" in public_release_index
+    assert "downloads_public_release_archives=true" in public_release_index
     assert "ao2-dual-public-release-smoke" in public_release_index
     assert "ao2-public-release-pair-digest-audit" in public_release_index
     assert "archive_parity.status=passed" in public_release_index
@@ -1656,6 +1707,13 @@ def test_stable_promotion_workflow_requires_public_pair_digest_audit(tmp_path):
             encoding="utf-8",
         )
 
+    for name, target_label in [
+        ("public-consumer-linux", "linux-x86_64"),
+        ("public-consumer-macos", "macos-aarch64"),
+        ("public-consumer-windows", "windows-x86_64"),
+    ]:
+        write_public_consumer_smoke_fixture(fixture, name, target_label)
+
     dual_public = fixture / "dual-public-release-smoke" / "latest"
     (dual_public / "smoke").mkdir(parents=True)
     (dual_public / "summary.json").write_text(
@@ -1806,6 +1864,13 @@ def test_stable_promotion_accepts_downloaded_public_pair_digest_layout(tmp_path)
             encoding="utf-8",
         )
 
+    for name, target_label in [
+        ("public-consumer-linux", "linux-x86_64"),
+        ("public-consumer-macos", "macos-aarch64"),
+        ("public-consumer-windows", "windows-x86_64"),
+    ]:
+        write_public_consumer_smoke_fixture(fixture, name, target_label)
+
     dual_public = fixture / "dual-public-release-smoke" / "latest"
     (dual_public / "smoke").mkdir(parents=True)
     (dual_public / "summary.json").write_text(
@@ -1949,6 +2014,21 @@ JSON
         "public-pair-digest-audit/post-release-pair-digest-audit/summary.json"
     )
     assert evidence_summary["post_release_evidence_ready"] is True
+    public_consumer_checks = [
+        check
+        for check in evidence_summary["checks"]
+        if check["kind"] == "public-release-consumer-smoke"
+    ]
+    assert [check["target_label"] for check in public_consumer_checks] == [
+        "linux-x86_64",
+        "macos-aarch64",
+        "windows-x86_64",
+    ]
+    assert all(check["status"] == "passed" for check in public_consumer_checks)
+    assert all(
+        check["downloads_public_release_archives"] is True
+        for check in public_consumer_checks
+    )
 
     summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
     assert summary["post_release_evidence_ready"] is True
@@ -1967,7 +2047,10 @@ def test_operator_release_evidence_bundle_downloads_and_verifies_cross_repo_arti
 
     workflow = read(".github/workflows/operator-release-evidence-audit.yml")
     for needle in [
-        'assert len(summary["checks"]) == 9',
+        'assert len(summary["checks"]) == 12',
+        'check["artifact"].startswith("public-release-consumer-smoke-")',
+        'check["schema_version"] == "ao2.public-release-consumer-smoke.v1"',
+        'check["downloads_public_release_archives"] is True',
         'check["artifact"] == "ao2-public-release-pair-digest-audit"',
         'public_pair_digest["schema_version"] == "ao2.public-release-pair-digest-audit.v1"',
         'public_pair_digest["archive_parity_status"] == "passed"',
@@ -1975,6 +2058,16 @@ def test_operator_release_evidence_bundle_downloads_and_verifies_cross_repo_arti
         'public_pair_digest["stores_credentials"] is False',
     ]:
         assert needle in workflow
+
+    contract = read("scripts/operator-release-evidence-workflow-contract.sh")
+    for needle in [
+        'assert len(summary[\\"checks\\"]) == 12',
+        "public-release-consumer-smoke-",
+        "ao2.public-release-consumer-smoke.v1",
+        "downloads_public_release_archives",
+        "public-release-consumer-smoke-linux",
+    ]:
+        assert needle in contract
 
     script = REPO_ROOT / "scripts" / "operator-release-evidence-bundle.sh"
     assert script.is_file()
@@ -1991,6 +2084,19 @@ def test_operator_release_evidence_bundle_downloads_and_verifies_cross_repo_arti
         "post-stable-release-smoke-Linux",
         "post-stable-release-smoke-macOS",
         "post-stable-release-smoke-Windows",
+        "Public Release Consumer Smoke",
+        "public-release-consumer-smoke-linux",
+        "public-release-consumer-smoke-macos",
+        "public-release-consumer-smoke-windows",
+        "ao2.public-release-consumer-smoke.v1",
+        "public-consumer-linux",
+        "public-consumer-macos",
+        "public-consumer-windows",
+        "downloads_public_release_archives",
+        "target_label",
+        "linux-x86_64",
+        "macos-aarch64",
+        "windows-x86_64",
         "ao2-dual-public-release-smoke",
         "ao2.dual-public-release-smoke.v1",
         "Post Release Pair Digest Audit",
@@ -2098,6 +2204,12 @@ def test_operator_release_evidence_bundle_downloads_and_verifies_cross_repo_arti
             + "\n",
             encoding="utf-8",
         )
+    for name, target_label in [
+        ("public-consumer-linux", "linux-x86_64"),
+        ("public-consumer-macos", "macos-aarch64"),
+        ("public-consumer-windows", "windows-x86_64"),
+    ]:
+        write_public_consumer_smoke_fixture(fixture, name, target_label)
     for name in ["control-plane-ubuntu", "control-plane-macos", "control-plane-windows"]:
         summary = fixture / name / "summary.json"
         summary.parent.mkdir(parents=True)
@@ -2167,15 +2279,36 @@ def test_operator_release_evidence_bundle_downloads_and_verifies_cross_repo_arti
     assert public_pair_digest_check["summary"].endswith(
         "public-pair-digest-audit/post-release-pair-digest-audit/summary.json"
     )
+    public_consumer_checks = [
+        check for check in summary["checks"] if check["kind"] == "public-release-consumer-smoke"
+    ]
+    assert [check["target_label"] for check in public_consumer_checks] == [
+        "linux-x86_64",
+        "macos-aarch64",
+        "windows-x86_64",
+    ]
+    assert all(check["status"] == "passed" for check in public_consumer_checks)
+    assert all(
+        check["schema_version"] == "ao2.public-release-consumer-smoke.v1"
+        for check in public_consumer_checks
+    )
+    assert all(
+        check["downloads_public_release_archives"] is True
+        for check in public_consumer_checks
+    )
 
     verification = read("docs/VERIFICATION.md")
     assert "npm run release:operator-evidence-bundle" in verification
     assert "ao2.operator-release-evidence-bundle.v1" in verification
+    assert "public-release-consumer-smoke-linux" in verification
+    assert "ao2.public-release-consumer-smoke.v1" in verification
     assert "ao2-public-release-pair-digest-audit" in verification
 
     public_release_index = read("docs/release/PUBLIC-RELEASE-VERIFICATION.md")
     assert "Operator release evidence bundle" in public_release_index
     assert "release:operator-evidence-bundle" in public_release_index
+    assert "public-release-consumer-smoke-linux" in public_release_index
+    assert "ao2.public-release-consumer-smoke.v1" in public_release_index
     assert "ao2.public-release-pair-digest-audit.v1" in public_release_index
 
 
