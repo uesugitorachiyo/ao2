@@ -26,6 +26,26 @@ Expected AO2 evidence artifact:
 - `post-stable-release-smoke-${{ runner.os }}`
 - `ao2-dual-public-release-smoke`
 
+AO2 also uses `Public Release Consumer Smoke` in
+`.github/workflows/public-release-consumer-smoke.yml`. It can be dispatched
+manually and runs on schedule. It downloads the public AO2 and control-plane
+release archives for each hosted target, verifies each archive against the
+published `SHA256SUMS`, safely extracts `RELEASE-MANIFEST.json`, and runs
+consumer-facing binary commands without starting release mutation flows.
+
+Expected public consumer evidence artifacts:
+
+- `public-release-consumer-smoke-linux`
+- `public-release-consumer-smoke-macos`
+- `public-release-consumer-smoke-windows`
+
+Run `npm run release:public-consumer-smoke -- --target-label linux-x86_64`,
+`macos-aarch64`, or `windows-x86_64` for the same local check. The emitted
+`summary.json` uses `ao2.public-release-consumer-smoke.v1` and records
+`downloads_public_release_archives=true`,
+`mutates_github_releases=false`, `credential_material_included=false`, and
+`control_plane_approves_release=false`.
+
 The `ao2-dual-public-release-smoke` artifact is the cross-repository public
 archive interoperability proof. It downloads the published AO2 Linux x86_64
 archive and the published control-plane Linux x86_64 archive, verifies each

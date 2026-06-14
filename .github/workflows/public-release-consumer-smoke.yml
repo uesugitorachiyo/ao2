@@ -1,0 +1,94 @@
+name: Public Release Consumer Smoke
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "41 11 * * 2"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-release-consumer-smoke-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AO2_RELEASE_REPO: uesugitorachiyo/ao2
+  AO2_RELEASE_TAG: v0.4.80
+  AO2_CP_RELEASE_REPO: uesugitorachiyo/ao2-control-plane
+  AO2_CP_RELEASE_TAG: v0.1.13
+
+jobs:
+  public-release-consumer-smoke:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Ubuntu public release consumer smoke
+            os: ubuntu-latest
+            target_label: linux-x86_64
+            artifact_suffix: linux
+          - label: macOS public release consumer smoke
+            os: macos-14
+            target_label: macos-aarch64
+            artifact_suffix: macos
+          - label: Windows public release consumer smoke
+            os: windows-latest
+            target_label: windows-x86_64
+            artifact_suffix: windows
+
+    steps:
+      - name: Checkout smoke helpers
+        uses: actions/checkout@v6.0.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+
+      - name: Run public release consumer smoke
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          AO2_PUBLIC_CONSUMER_SMOKE_ROOT=target/public-release-consumer-smoke \
+            npm run release:public-consumer-smoke -- \
+              --target-label "${{ matrix.target_label }}"
+
+      - name: Validate public release consumer smoke evidence
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary = json.loads(Path("target/public-release-consumer-smoke/latest/summary.json").read_text(encoding="utf-8"))
+          assert summary["schema_version"] == "ao2.public-release-consumer-smoke.v1", summary
+          assert summary["status"] == "passed", summary
+          assert summary["target_label"] in {"linux-x86_64", "macos-aarch64", "windows-x86_64"}, summary
+          assert summary["release_pair"]["ao2"]["repo"] == "uesugitorachiyo/ao2", summary
+          assert summary["release_pair"]["ao2_control_plane"]["repo"] == "uesugitorachiyo/ao2-control-plane", summary
+          assert summary["archives"]["ao2"]["manifest_schema"] == "ao2.release-manifest.v1", summary
+          assert summary["archives"]["ao2_control_plane"]["manifest_schema"] == "ao2-control-plane.release-manifest.v1", summary
+          assert summary["commands"]["ao2_version"]["status"] == "passed", summary
+          assert summary["commands"]["ao2_help"]["status"] == "passed", summary
+          assert summary["commands"]["control_plane_help"]["status"] == "passed", summary
+          trust_boundary = summary["trust_boundary"]
+          assert trust_boundary["downloads_public_release_archives"] is True, summary
+          assert trust_boundary["credential_material_included"] is False, summary
+          assert trust_boundary["mutates_github_releases"] is False, summary
+          assert trust_boundary["control_plane_approves_release"] is False, summary
+          PY
+          test -f target/public-release-consumer-smoke/latest/summary.json
+          test -f target/public-release-consumer-smoke/latest/smoke/ao2-version.json
+          test -f target/public-release-consumer-smoke/latest/smoke/ao2-help.txt
+          test -f target/public-release-consumer-smoke/latest/smoke/control-plane-help.txt
+
+      - name: Upload public release consumer smoke evidence
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: public-release-consumer-smoke-${{ matrix.artifact_suffix }}
+          path: target/public-release-consumer-smoke
+          if-no-files-found: error

@@ -81,6 +81,7 @@ npm run control-plane:observer-hardening # read-only observer + restore hardenin
 npm run provider:phase2-contract-hardening # provider contract Phase 2 hardening gate
 npm run release:train-drill # side-effect-free public release train rehearsal
 npm run release:cross-os-attestation # CI-safe cross-OS release artifact attestation
+npm run release:public-consumer-smoke # public AO2/control-plane archive consumer smoke
 npm run next:lengthy:gate # aggregate local gate for the next lengthy task set
 npm run control-plane:cross-repo-observer # cross-repo AO2/control-plane observer integration
 npm run release:install-update-fixture # signed fixture install/update verification
@@ -940,6 +941,14 @@ Result:
   manifests, starts the published control-plane server, and emits
   `ao2.dual-public-release-smoke.v1` evidence with task-board readback schemas
   proving the release pair interoperates without mutating GitHub releases
+- `npm run release:public-consumer-smoke`: downloads the published AO2 and
+  control-plane archives for `linux-x86_64`, `macos-aarch64`, or
+  `windows-x86_64`, verifies public `SHA256SUMS`, safely extracts
+  `RELEASE-MANIFEST.json`, runs AO2 `version --json` plus help commands, and
+  emits `ao2.public-release-consumer-smoke.v1` evidence. The hosted
+  `.github/workflows/public-release-consumer-smoke.yml` matrix uploads
+  `public-release-consumer-smoke-linux`, `public-release-consumer-smoke-macos`,
+  and `public-release-consumer-smoke-windows`.
 - `npm run release:cross-os-attestation` emits
   `ao2.cross-os-release-attestation.v1` at
   `target/cross-os-release-artifact-attestation/latest/summary.json`; by
