@@ -4,6 +4,7 @@ import re
 import shlex
 import stat
 import subprocess
+import tarfile
 from pathlib import Path
 
 
@@ -10300,3 +10301,224 @@ def test_release_immutability_audit_composes_stable_asset_and_download_checks():
     assert "ao2.ai-task-board.v1" in pulse_generate_next
     assert "status_transition_source" in pulse_generate_next
     assert "task-board.json" in verification
+
+
+def test_public_release_consumer_smoke_is_wired_for_three_os_release_assets():
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["release:public-consumer-smoke"]
+        == "node scripts/run-sh-script.js scripts/public-release-consumer-smoke.sh"
+    )
+
+    script_path = REPO_ROOT / "scripts" / "public-release-consumer-smoke.sh"
+    assert script_path.is_file()
+    assert script_path.stat().st_mode & stat.S_IXUSR
+
+    script = script_path.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.public-release-consumer-smoke.v1",
+        "AO2_PUBLIC_CONSUMER_SMOKE_ROOT",
+        "AO2_RELEASE_REPO",
+        "AO2_CP_RELEASE_REPO",
+        "AO2_RELEASE_TAG",
+        "AO2_CP_RELEASE_TAG",
+        "gh release download",
+        "SHA256SUMS",
+        "RELEASE-MANIFEST.json",
+        "version --json",
+        "--help",
+        "downloads_public_release_archives",
+        "mutates_github_releases",
+        "credential_material_included",
+        "control_plane_approves_release",
+        "linux-x86_64",
+        "macos-aarch64",
+        "windows-x86_64",
+    ]:
+        assert needle in script
+
+    for forbidden in [
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "/Users/torachiyouesugi/Documents/private",
+        "target/long-lived-control-plane/api-token",
+        "gh release create",
+        "git push origin",
+        "npm publish",
+    ]:
+        assert forbidden not in script
+
+
+def test_public_release_consumer_smoke_workflow_runs_public_assets_on_each_os():
+    workflow = read(".github/workflows/public-release-consumer-smoke.yml")
+
+    for needle in [
+        "name: Public Release Consumer Smoke",
+        "workflow_dispatch:",
+        "schedule:",
+        "contents: read",
+        "ubuntu-latest",
+        "macos-14",
+        "windows-latest",
+        "linux-x86_64",
+        "macos-aarch64",
+        "windows-x86_64",
+        "AO2_PUBLIC_CONSUMER_SMOKE_ROOT=target/public-release-consumer-smoke",
+        "npm run release:public-consumer-smoke",
+        "--target-label",
+        "ao2.public-release-consumer-smoke.v1",
+        "public-release-consumer-smoke-${{ matrix.artifact_suffix }}",
+        "target/public-release-consumer-smoke/latest/summary.json",
+    ]:
+        assert needle in workflow
+
+    for forbidden in [
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "/Users/torachiyouesugi/Documents/private",
+        "target/long-lived-control-plane/api-token",
+        "gh release create",
+        "git push origin",
+        "npm publish",
+    ]:
+        assert forbidden not in workflow
+
+
+def test_public_release_consumer_smoke_runs_against_offline_fixture(tmp_path):
+    fixture = tmp_path / "fixture"
+    out_root = tmp_path / "out"
+    target_label = "linux-x86_64"
+    ao2_version = "0.4.80"
+    cp_version = "0.1.13"
+
+    def write_executable(path: Path, body: str) -> None:
+        path.write_text(body, encoding="utf-8")
+        path.chmod(path.stat().st_mode | stat.S_IXUSR)
+
+    def build_archive(repo_dir: Path, archive_name: str, manifest: dict, binary_body: str) -> None:
+        archive_root = tmp_path / f"{archive_name}.root"
+        bin_dir = archive_root / "bin"
+        bin_dir.mkdir(parents=True)
+        (archive_root / "RELEASE-MANIFEST.json").write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        write_executable(archive_root / manifest["binary_path"], binary_body)
+        repo_dir.mkdir(parents=True)
+        with tarfile.open(repo_dir / archive_name, "w:gz") as tar:
+            tar.add(archive_root / "RELEASE-MANIFEST.json", arcname="RELEASE-MANIFEST.json")
+            tar.add(archive_root / manifest["binary_path"], arcname=manifest["binary_path"])
+        digest = __import__("hashlib").sha256((repo_dir / archive_name).read_bytes()).hexdigest()
+        (repo_dir / "SHA256SUMS").write_text(f"{digest}  {archive_name}\n", encoding="utf-8")
+
+    ao2_dir = fixture / "ao2"
+    cp_dir = fixture / "control-plane"
+    build_archive(
+        ao2_dir,
+        f"ao2-{ao2_version}-{target_label}.tar.gz",
+        {
+            "schema_version": "ao2.release-manifest.v1",
+            "binary_path": "bin/ao2",
+            "version": ao2_version,
+            "target": target_label,
+        },
+        """#!/usr/bin/env sh
+set -eu
+if [ "${1:-}" = "version" ] && [ "${2:-}" = "--json" ]; then
+  printf '{"package":"ao2","version":"0.4.80","target":"linux-x86_64","release_manifest_schema":"ao2.release-manifest.v1"}\n'
+  exit 0
+fi
+if [ "${1:-}" = "--help" ]; then
+  printf 'ao2 help\n'
+  exit 0
+fi
+exit 2
+""",
+    )
+    build_archive(
+        cp_dir,
+        f"ao2-control-plane-{cp_version}-{target_label}.tar.gz",
+        {
+            "schema_version": "ao2-control-plane.release-manifest.v1",
+            "binary_path": "bin/ao2-cp-server",
+            "version": cp_version,
+            "target": target_label,
+        },
+        """#!/usr/bin/env sh
+set -eu
+if [ "${1:-}" = "--help" ]; then
+  printf 'ao2 control-plane help\n'
+  exit 0
+fi
+exit 2
+""",
+    )
+    cp_summary = {"schema_version": "ao2-control-plane.release-summary.v1", "status": "passed"}
+    (cp_dir / "summary.json").write_text(
+        json.dumps(cp_summary, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    summary_digest = __import__("hashlib").sha256((cp_dir / "summary.json").read_bytes()).hexdigest()
+    with (cp_dir / "SHA256SUMS").open("a", encoding="utf-8") as handle:
+        handle.write(f"{summary_digest}  summary.json\n")
+
+    result = subprocess.run(
+        [
+            "npm",
+            "run",
+            "release:public-consumer-smoke",
+            "--",
+            "--fixture-dir",
+            str(fixture),
+            "--out-root",
+            str(out_root),
+            "--target-label",
+            target_label,
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+
+    summary = json.loads((out_root / "latest" / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.public-release-consumer-smoke.v1"
+    assert summary["status"] == "passed"
+    assert summary["target_label"] == target_label
+    assert summary["release_pair"]["ao2"]["tag"] == "v0.4.80"
+    assert summary["release_pair"]["ao2_control_plane"]["tag"] == "v0.1.13"
+    assert summary["archives"]["ao2"]["manifest_schema"] == "ao2.release-manifest.v1"
+    assert (
+        summary["archives"]["ao2_control_plane"]["manifest_schema"]
+        == "ao2-control-plane.release-manifest.v1"
+    )
+    assert summary["commands"]["ao2_version"]["status"] == "passed"
+    assert summary["commands"]["ao2_help"]["status"] == "passed"
+    assert summary["commands"]["control_plane_help"]["status"] == "passed"
+    assert summary["trust_boundary"]["downloads_public_release_archives"] is True
+    assert summary["trust_boundary"]["mutates_github_releases"] is False
+    assert summary["trust_boundary"]["credential_material_included"] is False
+    assert summary["trust_boundary"]["control_plane_approves_release"] is False
+
+
+def test_public_release_consumer_smoke_is_documented():
+    doc = read("docs/release/PUBLIC-RELEASE-VERIFICATION.md")
+    verification = read("docs/VERIFICATION.md")
+
+    for needle in [
+        "Public Release Consumer Smoke",
+        ".github/workflows/public-release-consumer-smoke.yml",
+        "release:public-consumer-smoke",
+        "ao2.public-release-consumer-smoke.v1",
+        "public-release-consumer-smoke-linux",
+        "public-release-consumer-smoke-macos",
+        "public-release-consumer-smoke-windows",
+        "linux-x86_64",
+        "macos-aarch64",
+        "windows-x86_64",
+    ]:
+        assert needle in doc
+
+    assert "ao2.public-release-consumer-smoke.v1" in verification
+    assert "release:public-consumer-smoke" in verification
