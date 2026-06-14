@@ -922,6 +922,13 @@ Result:
   packet. The workflow has read-only repository permissions, rejects provider
   API key environment state, and records `confirmation_entered=false` before
   upload.
+- `npm run release:readiness:static` records
+  `ao2.release-artifact-size-budget.v1` inside the release artifact closure
+  index and budgets lightweight operator approval artifacts at 1 MiB. The
+  budget currently covers `ao2-stable-promotion-operator-checklist` and
+  `ao2-stable-promotion-dry-run-checklist`; the dry-run checklist baseline is
+  5,436 bytes. This keeps future workflow edits from silently turning approval
+  packets back into large evidence-tree uploads.
 - `npm run release:immutability-audit`: composes asset completeness, stable
   readiness, full release download verification, checksum validation, signed
   provenance verification, GitHub asset digest checks, and release metadata

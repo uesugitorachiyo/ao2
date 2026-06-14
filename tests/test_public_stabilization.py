@@ -2767,6 +2767,11 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "stable_release_promotion_dry_run_audit",
         "stable_promotion_operator_checklist",
         "stable_promotion_dry_run_checklist",
+        "artifact_size_budget",
+        "max_size_bytes",
+        "1048576",
+        "size_budget_bytes",
+        "size_budget_enforced",
         "release_metadata_drift_audit",
         "release_public_pair_digest_audit",
     ]:
@@ -3109,6 +3114,11 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     assert artifacts["stable_promotion_operator_checklist"]["source_artifacts"] == [
         "ao2-stable-release-promotion-dry-run-audit"
     ]
+    assert artifacts["stable_promotion_operator_checklist"]["artifact_size_budget"] == {
+        "budget_scope": "lightweight_operator_approval_packet",
+        "max_size_bytes": 1048576,
+        "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+    }
     assert artifacts["stable_promotion_dry_run_checklist"]["artifact_name"] == (
         "ao2-stable-promotion-dry-run-checklist"
     )
@@ -3133,6 +3143,22 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     assert artifacts["stable_promotion_dry_run_checklist"]["source_artifacts"] == [
         "ao2-stable-release-evidence-packet"
     ]
+    assert artifacts["stable_promotion_dry_run_checklist"]["artifact_size_budget"] == {
+        "budget_scope": "lightweight_operator_approval_packet",
+        "max_size_bytes": 1048576,
+        "observed_baseline_size_bytes": 5436,
+        "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+    }
+    assert closure["artifact_size_budget"] == {
+        "schema_version": "ao2.release-artifact-size-budget.v1",
+        "status": "passed",
+        "size_budget_enforced": True,
+        "default_lightweight_operator_packet_max_size_bytes": 1048576,
+        "budgeted_artifact_ids": [
+            "stable_promotion_operator_checklist",
+            "stable_promotion_dry_run_checklist",
+        ],
+    }
     assert closure["trust_boundary"]["local_only"] is True
     assert closure["trust_boundary"]["stores_credentials"] is False
 

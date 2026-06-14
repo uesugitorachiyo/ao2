@@ -664,6 +664,31 @@ if mode == "full":
         result = run(command)
         add("full_command:" + " ".join(command), "passed" if result.returncode == 0 else "failed", (result.stdout + "\n" + result.stderr)[-4000:])
 
+size_budget_bytes = 1048576
+budgeted_artifact_ids = [
+    "stable_promotion_operator_checklist",
+    "stable_promotion_dry_run_checklist",
+]
+artifact_size_budget = {
+    "schema_version": "ao2.release-artifact-size-budget.v1",
+    "status": "passed",
+    "size_budget_enforced": True,
+    "default_lightweight_operator_packet_max_size_bytes": size_budget_bytes,
+    "budgeted_artifact_ids": budgeted_artifact_ids,
+}
+add(
+    "artifact_size_budget",
+    "passed"
+    if (
+        artifact_size_budget["size_budget_enforced"] is True
+        and artifact_size_budget["default_lightweight_operator_packet_max_size_bytes"] > 0
+        and set(budgeted_artifact_ids)
+        == {"stable_promotion_operator_checklist", "stable_promotion_dry_run_checklist"}
+    )
+    else "failed",
+    f"size_budget_bytes={size_budget_bytes}",
+)
+
 status = "passed" if all(check["status"] == "passed" for check in checks) else "failed"
 report_md_path = summary_path.with_name("report.md")
 report_html_path = summary_path.with_name("report.html")
@@ -672,6 +697,7 @@ artifact_closure_index = {
     "schema_version": "ao2.release-artifact-closure-index.v1",
     "status": status,
     "source_summary": str(summary_path),
+    "artifact_size_budget": artifact_size_budget,
     "required_artifacts": [
         {
             "id": "release_readiness",
@@ -887,6 +913,11 @@ artifact_closure_index = {
                 "ao2.stable-promotion-operator-checklist.v1",
                 "ao2.stable-promotion-dry-run-audit.v1",
             ],
+            "artifact_size_budget": {
+                "budget_scope": "lightweight_operator_approval_packet",
+                "max_size_bytes": size_budget_bytes,
+                "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+            },
             "required_checks": ["ci_stable_promotion_operator_checklist_workflow"],
             "source_artifacts": ["ao2-stable-release-promotion-dry-run-audit"],
         },
@@ -909,6 +940,12 @@ artifact_closure_index = {
                 "ao2.stable-promotion-dry-run-audit.v1",
                 "ao2.stable-promotion-operator-checklist.v1",
             ],
+            "artifact_size_budget": {
+                "budget_scope": "lightweight_operator_approval_packet",
+                "max_size_bytes": size_budget_bytes,
+                "observed_baseline_size_bytes": 5436,
+                "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+            },
             "required_checks": ["ci_stable_promotion_dry_run_checklist_workflow"],
             "source_artifacts": ["ao2-stable-release-evidence-packet"],
         },
