@@ -187,6 +187,20 @@ artifact proves `dry_run=true`, `confirmed=false`,
 last review gate before entering the real
 `promotion_confirm=promote-stable-v0.4.80-v0.1.13` value.
 
+## Stable promotion operator checklist
+
+After the dry-run audit passes, run
+`npm run release:stable-promotion-operator-checklist` against
+`ao2-stable-release-promotion-dry-run-audit` `report/summary.json`, or dispatch
+the manual `Stable Promotion Operator Checklist` workflow with
+`stable_promotion_dry_run_audit_run_id=<dry-run-audit-run-id>`. The checklist
+emits `ao2.stable-promotion-operator-checklist.v1`, `summary.json`, and
+`checklist.md`, then fails closed unless the dry-run audit is ready, unconfirmed,
+non-mutating, and backed by passed post-release evidence. The artifact records
+the exact `promotion_confirm=promote-stable-v0.4.80-v0.1.13` value for the
+operator, but it does not enter the confirmation string or mutate releases. No
+provider API keys are required or accepted.
+
 ## Stable promotion evidence gate
 
 `npm run release:stable-promotion-workflow` uses this hosted evidence before it

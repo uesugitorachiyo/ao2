@@ -885,6 +885,18 @@ Result:
   `Stable Release Promotion Dry-Run Audit` workflow downloads a dry-run artifact
   by `stable_promotion_run_id`, runs this command, and uploads
   `ao2-stable-release-promotion-dry-run-audit`.
+- `npm run release:stable-promotion-operator-checklist`: converts a passed
+  dry-run audit into the human approval packet for stable promotion. Point
+  `AO2_STABLE_PROMOTION_DRY_RUN_AUDIT_SUMMARY` at the
+  `ao2-stable-release-promotion-dry-run-audit` `report/summary.json`; the
+  command emits `ao2.stable-promotion-operator-checklist.v1`,
+  `summary.json`, and `checklist.md`, then fails closed unless the dry-run audit
+  is ready, unconfirmed, non-mutating, and backed by the stable evidence packet.
+  The checklist records the exact
+  `promote-stable-v0.4.80-v0.1.13` confirmation string, but does not enter it.
+  The manual `Stable Promotion Operator Checklist` workflow downloads the
+  dry-run audit by `stable_promotion_dry_run_audit_run_id` and uploads
+  `ao2-stable-promotion-operator-checklist`.
 - `npm run release:immutability-audit`: composes asset completeness, stable
   readiness, full release download verification, checksum validation, signed
   provenance verification, GitHub asset digest checks, and release metadata

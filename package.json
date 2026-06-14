@@ -25,6 +25,7 @@
     "release:operator-evidence-bundle": "node scripts/run-sh-script.js scripts/operator-release-evidence-bundle.sh",
     "release:stable-evidence-packet": "node scripts/run-sh-script.js scripts/stable-release-evidence-packet.sh",
     "release:stable-promotion-dry-run-audit": "node scripts/run-sh-script.js scripts/stable-promotion-dry-run-audit.sh",
+    "release:stable-promotion-operator-checklist": "node scripts/run-sh-script.js scripts/stable-promotion-operator-checklist.sh",
     "release:operator-evidence-workflow-contract": "node scripts/run-sh-script.js scripts/operator-release-evidence-workflow-contract.sh",
     "release:immutability-audit": "node scripts/run-sh-script.js scripts/release-immutability-audit.sh",
     "release:sync-provenance-assets": "node scripts/run-sh-script.js scripts/release-sync-provenance-assets.sh",

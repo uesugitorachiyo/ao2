@@ -1495,6 +1495,149 @@ def test_stable_promotion_dry_run_audit_validates_dispatch_artifact(tmp_path):
     assert "Stable release promotion dry-run audit" in public_release_index
 
 
+def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_path):
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["release:stable-promotion-operator-checklist"]
+        == "node scripts/run-sh-script.js scripts/stable-promotion-operator-checklist.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "stable-promotion-operator-checklist.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.stable-promotion-operator-checklist.v1",
+        "AO2_STABLE_PROMOTION_DRY_RUN_AUDIT_SUMMARY",
+        "AO2_STABLE_PROMOTION_OPERATOR_CHECKLIST_ROOT",
+        "promote-stable-v0.4.80-v0.1.13",
+        "dry_run_audit_ready",
+        "promotion_status",
+        "not_attempted",
+        "mutates_releases",
+        "stores_credentials",
+        "operator_decision",
+        "Stable Promotion Operator Checklist",
+    ]:
+        assert needle in text
+
+    workflow = read(".github/workflows/stable-promotion-operator-checklist.yml")
+    for needle in [
+        "name: Stable Promotion Operator Checklist",
+        "workflow_dispatch:",
+        "stable_promotion_dry_run_audit_run_id:",
+        "permissions:",
+        "actions: read",
+        "contents: read",
+        "GH_TOKEN: ${{ github.token }}",
+        "ao2-stable-release-promotion-dry-run-audit",
+        "target/stable-promotion-operator-checklist/dry-run-audit",
+        "npm run release:stable-promotion-operator-checklist",
+        "ao2-stable-promotion-operator-checklist",
+    ]:
+        assert needle in workflow
+
+    audit_summary = tmp_path / "dry-run-audit" / "report" / "summary.json"
+    audit_summary.parent.mkdir(parents=True)
+    audit_summary.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.stable-promotion-dry-run-audit.v1",
+                "status": "passed",
+                "dry_run_audit_ready": True,
+                "workflow": {
+                    "schema_version": "ao2.stable-promotion-workflow.v1",
+                    "status": "already_stable",
+                    "dry_run": True,
+                    "confirmed": False,
+                    "promotion_status": "not_attempted",
+                    "post_release_evidence_ready": True,
+                    "evidence_gate_status": "passed",
+                },
+                "evidence_gate": {
+                    "schema_version": "ao2.stable-promotion-evidence-gate.v1",
+                    "status": "passed",
+                    "post_release_evidence_ready": True,
+                    "check_count": 8,
+                    "passed_check_count": 8,
+                },
+                "stable_release_evidence_packet": {
+                    "schema_version": "ao2.stable-release-evidence-packet.v1",
+                    "status": "passed",
+                    "stable_release_evidence_ready": True,
+                    "operator_release_evidence_ready": True,
+                },
+                "trust_boundary": {
+                    "local_only": True,
+                    "mutates_releases": False,
+                    "stores_credentials": False,
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    out_root = tmp_path / "operator-checklist"
+    result = subprocess.run(
+        ["npm", "run", "release:stable-promotion-operator-checklist"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_STABLE_PROMOTION_DRY_RUN_AUDIT_SUMMARY": str(audit_summary),
+            "AO2_STABLE_PROMOTION_OPERATOR_CHECKLIST_ROOT": str(out_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.stable-promotion-operator-checklist.v1"
+    assert summary["status"] == "passed"
+    assert summary["operator_checklist_ready"] is True
+    assert summary["required_confirmation"] == "promote-stable-v0.4.80-v0.1.13"
+    assert summary["dry_run_audit"]["dry_run_audit_ready"] is True
+    assert summary["dry_run_audit"]["workflow"]["promotion_status"] == "not_attempted"
+    assert summary["operator_decision"]["confirmation_entered"] is False
+    assert summary["trust_boundary"]["mutates_releases"] is False
+    assert summary["trust_boundary"]["stores_credentials"] is False
+
+    checklist = (out_root / "checklist.md").read_text(encoding="utf-8")
+    assert "Stable Promotion Operator Checklist" in checklist
+    assert "promote-stable-v0.4.80-v0.1.13" in checklist
+    assert "No provider API keys are required or accepted" in checklist
+    assert "Do not enter the confirmation string unless this checklist status is passed" in checklist
+
+    bad = json.loads(audit_summary.read_text(encoding="utf-8"))
+    bad["dry_run_audit_ready"] = False
+    bad["workflow"]["promotion_status"] = "promoted"
+    bad["trust_boundary"]["mutates_releases"] = True
+    audit_summary.write_text(json.dumps(bad, sort_keys=True) + "\n", encoding="utf-8")
+    bad_result = subprocess.run(
+        ["npm", "run", "release:stable-promotion-operator-checklist"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_STABLE_PROMOTION_DRY_RUN_AUDIT_SUMMARY": str(audit_summary),
+            "AO2_STABLE_PROMOTION_OPERATOR_CHECKLIST_ROOT": str(tmp_path / "bad-checklist"),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert bad_result.returncode != 0
+    assert "stable promotion dry-run audit was not ready" in bad_result.stderr
+
+    verification = read("docs/VERIFICATION.md")
+    assert "npm run release:stable-promotion-operator-checklist" in verification
+    assert "ao2.stable-promotion-operator-checklist.v1" in verification
+
+    public_release_index = read("docs/release/PUBLIC-RELEASE-VERIFICATION.md")
+    assert "Stable promotion operator checklist" in public_release_index
+
+
 def test_stable_promotion_workflow_requires_public_pair_digest_audit(tmp_path):
     fixture = tmp_path / "fixture"
     for name in ["ao2-linux", "ao2-macos", "ao2-windows"]:
@@ -2373,6 +2516,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_dual_repo_release_publication_closure_index_job",
         "ci_stable_release_promotion_workflow_dispatch",
         "ci_stable_release_promotion_dry_run_audit_workflow",
+        "ci_stable_promotion_operator_checklist_workflow",
         "release_metadata_drift_audit",
         "release_metadata_drift_audit_summary",
         "release_metadata_drift_audit_status",
@@ -2414,6 +2558,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.cp-release-publication-closure.v1",
         "ao2.dual-repo-release-publication-closure-index.v1",
         "ao2.stable-release-evidence-packet.v1",
+        "ao2.stable-promotion-operator-checklist.v1",
         "ao2.release-metadata-drift-audit.v1",
         "ao2.public-release-pair-digest-audit.v1",
         "ao2.release-artifact-closure-index.v1",
@@ -2433,6 +2578,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "stable_release_evidence_packet",
         "stable_release_promotion_workflow_dispatch",
         "stable_release_promotion_dry_run_audit",
+        "stable_promotion_operator_checklist",
         "release_metadata_drift_audit",
         "release_public_pair_digest_audit",
     ]:
@@ -2528,6 +2674,17 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     ]:
         assert needle in stable_promotion_audit_workflow
 
+    stable_promotion_operator_checklist = read(".github/workflows/stable-promotion-operator-checklist.yml")
+    for needle in [
+        "Stable Promotion Operator Checklist",
+        "stable_promotion_dry_run_audit_run_id",
+        "ao2-stable-release-promotion-dry-run-audit",
+        "target/stable-promotion-operator-checklist/dry-run-audit",
+        "npm run release:stable-promotion-operator-checklist",
+        "ao2-stable-promotion-operator-checklist",
+    ]:
+        assert needle in stable_promotion_operator_checklist
+
     asset_publication = read("scripts/release-asset-publication-readiness.sh")
     public_ship_dry_run = read("scripts/public-ship-dry-run.sh")
     public_ship_rehearsal = read("scripts/public-ship-rehearsal.sh")
@@ -2610,6 +2767,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_dual_repo_installed_release_smoke_artifact_job",
         "ci_release_publication_closure_artifact_job",
         "ci_dual_repo_release_publication_closure_index_job",
+        "ci_stable_promotion_operator_checklist_workflow",
     ]:
         assert checks[name]["status"] == "passed"
     closure = json.loads(
@@ -2728,6 +2886,24 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     assert artifacts["dual_repo_release_publication_closure_index"]["source_artifacts"] == [
         "ao2-release-publication-closure",
         "ao2-control-plane-release-publication-closure",
+    ]
+    assert artifacts["stable_promotion_operator_checklist"]["artifact_name"] == (
+        "ao2-stable-promotion-operator-checklist"
+    )
+    assert artifacts["stable_promotion_operator_checklist"]["producer_job"] == (
+        "Stable Promotion Operator Checklist / stable-promotion-operator-checklist"
+    )
+    assert artifacts["stable_promotion_operator_checklist"]["required_files"] == [
+        "dry-run-audit/report/summary.json",
+        "report/summary.json",
+        "report/checklist.md",
+    ]
+    assert artifacts["stable_promotion_operator_checklist"]["schema_versions"] == [
+        "ao2.stable-promotion-operator-checklist.v1",
+        "ao2.stable-promotion-dry-run-audit.v1",
+    ]
+    assert artifacts["stable_promotion_operator_checklist"]["source_artifacts"] == [
+        "ao2-stable-release-promotion-dry-run-audit"
     ]
     assert closure["trust_boundary"]["local_only"] is True
     assert closure["trust_boundary"]["stores_credentials"] is False

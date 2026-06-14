@@ -1,0 +1,51 @@
+name: Stable Promotion Operator Checklist
+
+on:
+  workflow_dispatch:
+    inputs:
+      stable_promotion_dry_run_audit_run_id:
+        description: "Stable Release Promotion Dry-Run Audit workflow run id."
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  stable-promotion-operator-checklist:
+    name: Stable promotion operator checklist
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+      - name: Download stable promotion dry-run audit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STABLE_PROMOTION_DRY_RUN_AUDIT_RUN_ID: ${{ inputs.stable_promotion_dry_run_audit_run_id }}
+        run: |
+          rm -rf target/stable-promotion-operator-checklist/dry-run-audit
+          mkdir -p target/stable-promotion-operator-checklist/dry-run-audit
+          gh run download "$STABLE_PROMOTION_DRY_RUN_AUDIT_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name ao2-stable-release-promotion-dry-run-audit \
+            --dir target/stable-promotion-operator-checklist/dry-run-audit
+      - name: Generate operator checklist
+        shell: bash
+        run: |
+          AO2_STABLE_PROMOTION_DRY_RUN_AUDIT_SUMMARY=target/stable-promotion-operator-checklist/dry-run-audit/report/summary.json \
+          AO2_STABLE_PROMOTION_OPERATOR_CHECKLIST_ROOT=target/stable-promotion-operator-checklist/report \
+            npm run release:stable-promotion-operator-checklist
+      - name: Upload stable promotion operator checklist
+        uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: ao2-stable-promotion-operator-checklist
+          path: target/stable-promotion-operator-checklist
+          if-no-files-found: error
