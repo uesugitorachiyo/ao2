@@ -332,6 +332,27 @@ add(
     "manual stable release promotion consumes the hosted stable evidence packet and requires exact confirmation before release mutation",
 )
 
+stable_release_promotion_dry_run_audit = read(".github/workflows/stable-release-promotion-dry-run-audit.yml")
+stable_release_promotion_dry_run_audit_ok = (
+    "name: Stable Release Promotion Dry-Run Audit" in stable_release_promotion_dry_run_audit
+    and "workflow_dispatch:" in stable_release_promotion_dry_run_audit
+    and "stable_promotion_run_id:" in stable_release_promotion_dry_run_audit
+    and "actions: read" in stable_release_promotion_dry_run_audit
+    and "contents: read" in stable_release_promotion_dry_run_audit
+    and "GH_TOKEN: ${{ github.token }}" in stable_release_promotion_dry_run_audit
+    and "STABLE_PROMOTION_RUN_ID: ${{ inputs.stable_promotion_run_id }}" in stable_release_promotion_dry_run_audit
+    and "ao2-stable-release-promotion-workflow" in stable_release_promotion_dry_run_audit
+    and "target/stable-promotion-dry-run-audit/artifact" in stable_release_promotion_dry_run_audit
+    and "npm run release:stable-promotion-dry-run-audit" in stable_release_promotion_dry_run_audit
+    and "ao2-stable-release-promotion-dry-run-audit" in stable_release_promotion_dry_run_audit
+    and scripts.get("release:stable-promotion-dry-run-audit") == "node scripts/run-sh-script.js scripts/stable-promotion-dry-run-audit.sh"
+)
+add(
+    "ci_stable_release_promotion_dry_run_audit_workflow",
+    "passed" if stable_release_promotion_dry_run_audit_ok else "failed",
+    "manual post-dispatch audit downloads a stable promotion dry-run artifact and validates that no release mutation was attempted",
+)
+
 release_readiness_artifact_consumer = workflow_job_block("release-readiness-artifact-consumer")
 release_readiness_artifact_consumer_script = read("scripts/release-readiness-artifact-consumer.sh")
 release_readiness_artifact_consumer_ok = (
@@ -773,6 +794,25 @@ artifact_closure_index = {
             ],
             "required_checks": ["ci_stable_release_promotion_workflow_dispatch"],
             "source_artifacts": ["ao2-stable-release-evidence-packet"],
+        },
+        {
+            "id": "stable_release_promotion_dry_run_audit",
+            "artifact_name": "ao2-stable-release-promotion-dry-run-audit",
+            "producer_job": "Stable Release Promotion Dry-Run Audit / stable-release-promotion-dry-run-audit",
+            "required_files": [
+                "artifact/workflow/summary.json",
+                "artifact/workflow/post-release-verification-evidence/summary.json",
+                "artifact/stable-release-evidence-packet/packet/summary.json",
+                "report/summary.json",
+            ],
+            "schema_versions": [
+                "ao2.stable-promotion-dry-run-audit.v1",
+                "ao2.stable-promotion-workflow.v1",
+                "ao2.stable-promotion-evidence-gate.v1",
+                "ao2.stable-release-evidence-packet.v1",
+            ],
+            "required_checks": ["ci_stable_release_promotion_dry_run_audit_workflow"],
+            "source_artifacts": ["ao2-stable-release-promotion-workflow"],
         },
         {
             "id": "release_readiness_artifact_consumer",

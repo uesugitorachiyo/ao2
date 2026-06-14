@@ -1325,6 +1325,176 @@ def test_stable_promotion_workflow_is_guarded_and_documented():
     assert "stable_release_evidence_run_id" in verification
 
 
+def test_stable_promotion_dry_run_audit_validates_dispatch_artifact(tmp_path):
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["release:stable-promotion-dry-run-audit"]
+        == "node scripts/run-sh-script.js scripts/stable-promotion-dry-run-audit.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "stable-promotion-dry-run-audit.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.stable-promotion-dry-run-audit.v1",
+        "AO2_STABLE_PROMOTION_DRY_RUN_ARTIFACT_ROOT",
+        "AO2_STABLE_PROMOTION_DRY_RUN_AUDIT_ROOT",
+        "ao2.stable-promotion-workflow.v1",
+        "ao2.stable-promotion-evidence-gate.v1",
+        "ao2.stable-release-evidence-packet.v1",
+        "dry_run",
+        "confirmed",
+        "promotion_status",
+        "not_attempted",
+        "mutates_releases",
+        "stores_credentials",
+        "stable_release_evidence_ready",
+        "post_release_evidence_ready",
+        "operator_release_evidence_ready",
+    ]:
+        assert needle in text
+
+    workflow = read(".github/workflows/stable-release-promotion-dry-run-audit.yml")
+    for needle in [
+        "name: Stable Release Promotion Dry-Run Audit",
+        "workflow_dispatch:",
+        "stable_promotion_run_id:",
+        "permissions:",
+        "actions: read",
+        "contents: read",
+        "GH_TOKEN: ${{ github.token }}",
+        "ao2-stable-release-promotion-workflow",
+        "target/stable-promotion-dry-run-audit/artifact",
+        "npm run release:stable-promotion-dry-run-audit",
+        "ao2-stable-release-promotion-dry-run-audit",
+    ]:
+        assert needle in workflow
+
+    artifact = tmp_path / "artifact"
+    workflow_summary = artifact / "workflow" / "summary.json"
+    workflow_summary.parent.mkdir(parents=True)
+    workflow_summary.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.stable-promotion-workflow.v1",
+                "status": "already_stable",
+                "dry_run": True,
+                "confirmed": False,
+                "promotion_status": "not_attempted",
+                "post_release_evidence_ready": True,
+                "evidence_gate_status": "passed",
+                "trust_boundary": {
+                    "mutates_releases": False,
+                    "stores_credentials": False,
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    evidence_summary = artifact / "workflow" / "post-release-verification-evidence" / "summary.json"
+    evidence_summary.parent.mkdir(parents=True)
+    evidence_summary.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.stable-promotion-evidence-gate.v1",
+                "status": "passed",
+                "post_release_evidence_ready": True,
+                "checks": [
+                    {"artifact": "post-stable-release-smoke-Linux", "status": "passed"},
+                    {"artifact": "ao2-public-release-pair-digest-audit", "status": "passed"},
+                ],
+                "trust_boundary": {
+                    "mutates_releases": False,
+                    "stores_credentials": False,
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    packet_summary = artifact / "stable-release-evidence-packet" / "packet" / "summary.json"
+    packet_summary.parent.mkdir(parents=True)
+    packet_summary.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.stable-release-evidence-packet.v1",
+                "status": "passed",
+                "stable_release_evidence_ready": True,
+                "stable_promotion": {
+                    "schema_version": "ao2.stable-promotion-workflow.v1",
+                    "post_release_evidence_ready": True,
+                    "evidence_gate_status": "passed",
+                },
+                "operator_evidence": {
+                    "schema_version": "ao2.operator-release-evidence-bundle.v1",
+                    "operator_release_evidence_ready": True,
+                },
+                "trust_boundary": {
+                    "mutates_releases": False,
+                    "stores_credentials": False,
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    out_root = tmp_path / "audit"
+    result = subprocess.run(
+        ["npm", "run", "release:stable-promotion-dry-run-audit"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_STABLE_PROMOTION_DRY_RUN_ARTIFACT_ROOT": str(artifact),
+            "AO2_STABLE_PROMOTION_DRY_RUN_AUDIT_ROOT": str(out_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.stable-promotion-dry-run-audit.v1"
+    assert summary["status"] == "passed"
+    assert summary["dry_run_audit_ready"] is True
+    assert summary["trust_boundary"]["mutates_releases"] is False
+    assert summary["workflow"]["promotion_status"] == "not_attempted"
+    assert summary["evidence_gate"]["passed_check_count"] == 2
+
+    bad = json.loads(workflow_summary.read_text(encoding="utf-8"))
+    bad["dry_run"] = False
+    bad["confirmed"] = True
+    bad["promotion_status"] = "promoted"
+    bad["trust_boundary"]["mutates_releases"] = True
+    workflow_summary.write_text(json.dumps(bad, sort_keys=True) + "\n", encoding="utf-8")
+    bad_result = subprocess.run(
+        ["npm", "run", "release:stable-promotion-dry-run-audit"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_STABLE_PROMOTION_DRY_RUN_ARTIFACT_ROOT": str(artifact),
+            "AO2_STABLE_PROMOTION_DRY_RUN_AUDIT_ROOT": str(tmp_path / "bad-audit"),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert bad_result.returncode != 0
+    assert "stable promotion workflow was not a dry-run" in bad_result.stderr
+
+    verification = read("docs/VERIFICATION.md")
+    assert "npm run release:stable-promotion-dry-run-audit" in verification
+    assert "ao2.stable-promotion-dry-run-audit.v1" in verification
+
+    public_release_index = read("docs/release/PUBLIC-RELEASE-VERIFICATION.md")
+    assert "Stable release promotion dry-run audit" in public_release_index
+
+
 def test_stable_promotion_workflow_requires_public_pair_digest_audit(tmp_path):
     fixture = tmp_path / "fixture"
     for name in ["ao2-linux", "ao2-macos", "ao2-windows"]:
@@ -2202,6 +2372,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_release_publication_closure_artifact_job",
         "ci_dual_repo_release_publication_closure_index_job",
         "ci_stable_release_promotion_workflow_dispatch",
+        "ci_stable_release_promotion_dry_run_audit_workflow",
         "release_metadata_drift_audit",
         "release_metadata_drift_audit_summary",
         "release_metadata_drift_audit_status",
@@ -2261,6 +2432,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "dual_repo_release_publication_closure_index",
         "stable_release_evidence_packet",
         "stable_release_promotion_workflow_dispatch",
+        "stable_release_promotion_dry_run_audit",
         "release_metadata_drift_audit",
         "release_public_pair_digest_audit",
     ]:
@@ -2344,6 +2516,17 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2-stable-release-promotion-workflow",
     ]:
         assert needle in stable_promotion_workflow
+
+    stable_promotion_audit_workflow = read(".github/workflows/stable-release-promotion-dry-run-audit.yml")
+    for needle in [
+        "Stable Release Promotion Dry-Run Audit",
+        "stable_promotion_run_id",
+        "ao2-stable-release-promotion-workflow",
+        "target/stable-promotion-dry-run-audit/artifact",
+        "npm run release:stable-promotion-dry-run-audit",
+        "ao2-stable-release-promotion-dry-run-audit",
+    ]:
+        assert needle in stable_promotion_audit_workflow
 
     asset_publication = read("scripts/release-asset-publication-readiness.sh")
     public_ship_dry_run = read("scripts/public-ship-dry-run.sh")

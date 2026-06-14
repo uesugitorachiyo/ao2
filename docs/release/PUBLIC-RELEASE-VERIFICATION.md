@@ -172,6 +172,21 @@ specific successful CI run; otherwise the workflow downloads the latest
 successful `ao2-stable-release-evidence-packet` artifact from `main` CI. The
 workflow uploads `ao2-stable-release-promotion-workflow` evidence for review.
 
+## Stable release promotion dry-run audit
+
+After a dry-run `Stable Release Promotion` dispatch, run
+`npm run release:stable-promotion-dry-run-audit` against the downloaded
+`ao2-stable-release-promotion-workflow` artifact, or dispatch the manual
+`Stable Release Promotion Dry-Run Audit` workflow with
+`stable_promotion_run_id=<dry-run-run-id>`. The audit emits
+`ao2.stable-promotion-dry-run-audit.v1` and fails closed unless the dry-run
+artifact proves `dry_run=true`, `confirmed=false`,
+`promotion_status=not_attempted`, `post_release_evidence_ready=true`, a ready
+`ao2.stable-release-evidence-packet.v1`, ready operator evidence, and
+`mutates_releases=false` / `stores_credentials=false`. Treat this audit as the
+last review gate before entering the real
+`promotion_confirm=promote-stable-v0.4.80-v0.1.13` value.
+
 ## Stable promotion evidence gate
 
 `npm run release:stable-promotion-workflow` uses this hosted evidence before it
