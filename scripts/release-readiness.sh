@@ -378,6 +378,37 @@ add(
     "manual operator checklist converts a passed dry-run audit into a non-mutating human approval packet before stable promotion",
 )
 
+stable_promotion_dry_run_checklist = read(".github/workflows/stable-promotion-dry-run-checklist.yml")
+stable_promotion_dry_run_checklist_ok = (
+    "name: Stable Promotion Dry-Run Checklist" in stable_promotion_dry_run_checklist
+    and "workflow_dispatch:" in stable_promotion_dry_run_checklist
+    and "stable_release_evidence_run_id:" in stable_promotion_dry_run_checklist
+    and "actions: read" in stable_promotion_dry_run_checklist
+    and "contents: read" in stable_promotion_dry_run_checklist
+    and "GH_TOKEN: ${{ github.token }}" in stable_promotion_dry_run_checklist
+    and "STABLE_RELEASE_EVIDENCE_RUN_ID: ${{ inputs.stable_release_evidence_run_id }}" in stable_promotion_dry_run_checklist
+    and "ao2-stable-release-evidence-packet" in stable_promotion_dry_run_checklist
+    and "target/stable-promotion-dry-run-checklist/stable-release-evidence-packet" in stable_promotion_dry_run_checklist
+    and "AO2_STABLE_PROMOTION_ROOT=target/stable-promotion-dry-run-checklist/workflow" in stable_promotion_dry_run_checklist
+    and "AO2_STABLE_PROMOTION_CONFIRM=\"\"" in stable_promotion_dry_run_checklist
+    and "npm run release:stable-promotion-workflow" in stable_promotion_dry_run_checklist
+    and "npm run release:stable-promotion-dry-run-audit" in stable_promotion_dry_run_checklist
+    and "npm run release:stable-promotion-operator-checklist" in stable_promotion_dry_run_checklist
+    and "ao2.stable-promotion-dry-run-audit.v1" in stable_promotion_dry_run_checklist
+    and "ao2.stable-promotion-operator-checklist.v1" in stable_promotion_dry_run_checklist
+    and "operator_checklist_ready" in stable_promotion_dry_run_checklist
+    and "confirmation_entered" in stable_promotion_dry_run_checklist
+    and "ao2-stable-promotion-dry-run-checklist" in stable_promotion_dry_run_checklist
+    and "OPENAI_API_KEY" in stable_promotion_dry_run_checklist
+    and "ANTHROPIC_API_KEY" in stable_promotion_dry_run_checklist
+    and "contents: write" not in stable_promotion_dry_run_checklist
+)
+add(
+    "ci_stable_promotion_dry_run_checklist_workflow",
+    "passed" if stable_promotion_dry_run_checklist_ok else "failed",
+    "manual dry-run checklist downloads the hosted stable evidence packet, reruns dry-run promotion, audits it, and emits the non-mutating operator checklist",
+)
+
 release_readiness_artifact_consumer = workflow_job_block("release-readiness-artifact-consumer")
 release_readiness_artifact_consumer_script = read("scripts/release-readiness-artifact-consumer.sh")
 release_readiness_artifact_consumer_ok = (
@@ -854,6 +885,31 @@ artifact_closure_index = {
             ],
             "required_checks": ["ci_stable_promotion_operator_checklist_workflow"],
             "source_artifacts": ["ao2-stable-release-promotion-dry-run-audit"],
+        },
+        {
+            "id": "stable_promotion_dry_run_checklist",
+            "artifact_name": "ao2-stable-promotion-dry-run-checklist",
+            "producer_job": "Stable Promotion Dry-Run Checklist / stable-promotion-dry-run-checklist",
+            "required_files": [
+                "stable-release-evidence-packet/packet/summary.json",
+                "stable-release-evidence-packet/packet/dashboard.html",
+                "workflow/summary.json",
+                "workflow/post-release-verification-evidence/summary.json",
+                "artifact/workflow/summary.json",
+                "artifact/stable-release-evidence-packet/packet/summary.json",
+                "dry-run-audit/summary.json",
+                "operator-checklist/summary.json",
+                "operator-checklist/checklist.md",
+            ],
+            "schema_versions": [
+                "ao2.stable-release-evidence-packet.v1",
+                "ao2.stable-promotion-workflow.v1",
+                "ao2.stable-promotion-evidence-gate.v1",
+                "ao2.stable-promotion-dry-run-audit.v1",
+                "ao2.stable-promotion-operator-checklist.v1",
+            ],
+            "required_checks": ["ci_stable_promotion_dry_run_checklist_workflow"],
+            "source_artifacts": ["ao2-stable-release-evidence-packet"],
         },
         {
             "id": "release_readiness_artifact_consumer",
