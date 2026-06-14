@@ -353,6 +353,31 @@ add(
     "manual post-dispatch audit downloads a stable promotion dry-run artifact and validates that no release mutation was attempted",
 )
 
+stable_promotion_operator_checklist = read(".github/workflows/stable-promotion-operator-checklist.yml")
+stable_promotion_operator_checklist_script = read("scripts/stable-promotion-operator-checklist.sh")
+stable_promotion_operator_checklist_ok = (
+    "name: Stable Promotion Operator Checklist" in stable_promotion_operator_checklist
+    and "workflow_dispatch:" in stable_promotion_operator_checklist
+    and "stable_promotion_dry_run_audit_run_id:" in stable_promotion_operator_checklist
+    and "actions: read" in stable_promotion_operator_checklist
+    and "contents: read" in stable_promotion_operator_checklist
+    and "GH_TOKEN: ${{ github.token }}" in stable_promotion_operator_checklist
+    and "STABLE_PROMOTION_DRY_RUN_AUDIT_RUN_ID: ${{ inputs.stable_promotion_dry_run_audit_run_id }}" in stable_promotion_operator_checklist
+    and "ao2-stable-release-promotion-dry-run-audit" in stable_promotion_operator_checklist
+    and "target/stable-promotion-operator-checklist/dry-run-audit" in stable_promotion_operator_checklist
+    and "npm run release:stable-promotion-operator-checklist" in stable_promotion_operator_checklist
+    and "ao2-stable-promotion-operator-checklist" in stable_promotion_operator_checklist
+    and scripts.get("release:stable-promotion-operator-checklist") == "node scripts/run-sh-script.js scripts/stable-promotion-operator-checklist.sh"
+    and "ao2.stable-promotion-operator-checklist.v1" in stable_promotion_operator_checklist_script
+    and "promote-stable-v0.4.80-v0.1.13" in stable_promotion_operator_checklist_script
+    and "No provider API keys are required or accepted" in stable_promotion_operator_checklist_script
+)
+add(
+    "ci_stable_promotion_operator_checklist_workflow",
+    "passed" if stable_promotion_operator_checklist_ok else "failed",
+    "manual operator checklist converts a passed dry-run audit into a non-mutating human approval packet before stable promotion",
+)
+
 release_readiness_artifact_consumer = workflow_job_block("release-readiness-artifact-consumer")
 release_readiness_artifact_consumer_script = read("scripts/release-readiness-artifact-consumer.sh")
 release_readiness_artifact_consumer_ok = (
@@ -813,6 +838,22 @@ artifact_closure_index = {
             ],
             "required_checks": ["ci_stable_release_promotion_dry_run_audit_workflow"],
             "source_artifacts": ["ao2-stable-release-promotion-workflow"],
+        },
+        {
+            "id": "stable_promotion_operator_checklist",
+            "artifact_name": "ao2-stable-promotion-operator-checklist",
+            "producer_job": "Stable Promotion Operator Checklist / stable-promotion-operator-checklist",
+            "required_files": [
+                "dry-run-audit/report/summary.json",
+                "report/summary.json",
+                "report/checklist.md",
+            ],
+            "schema_versions": [
+                "ao2.stable-promotion-operator-checklist.v1",
+                "ao2.stable-promotion-dry-run-audit.v1",
+            ],
+            "required_checks": ["ci_stable_promotion_operator_checklist_workflow"],
+            "source_artifacts": ["ao2-stable-release-promotion-dry-run-audit"],
         },
         {
             "id": "release_readiness_artifact_consumer",
