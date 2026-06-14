@@ -1280,6 +1280,50 @@ def test_stable_promotion_workflow_is_guarded_and_documented():
     assert "post-release-pair-digest-audit/summary.json" in public_release_index
     assert "control_plane_approves_release=false" in public_release_index
 
+    promotion_workflow = read(".github/workflows/stable-release-promotion.yml")
+    for needle in [
+        "name: Stable Release Promotion",
+        "workflow_dispatch:",
+        "stable_release_evidence_run_id:",
+        "promotion_confirm:",
+        "permissions:",
+        "actions: read",
+        "contents: write",
+        "GH_TOKEN: ${{ github.token }}",
+        "STABLE_RELEASE_EVIDENCE_RUN_ID: ${{ inputs.stable_release_evidence_run_id }}",
+        "PROMOTION_CONFIRM_INPUT: ${{ inputs.promotion_confirm }}",
+        "ao2-stable-release-evidence-packet",
+        "target/stable-release-promotion/stable-release-evidence-packet",
+        "ao2.stable-release-evidence-packet.v1",
+        "stable_release_evidence_ready",
+        "operator_release_evidence_ready",
+        "mutates_releases",
+        "stores_credentials",
+        "AO2_STABLE_PROMOTION_EVIDENCE_FIXTURE_DIR=target/stable-release-promotion/stable-release-evidence-packet/stable-promotion-workflow/post-release-verification-evidence",
+        'AO2_STABLE_PROMOTION_CONFIRM="$PROMOTION_CONFIRM_INPUT"',
+        "npm run release:stable-promotion-workflow",
+        "promote-stable-v0.4.80-v0.1.13",
+        "refusing stable promotion because workflow input did not match required confirmation",
+        "actions/upload-artifact@v7.0.1",
+        "ao2-stable-release-promotion-workflow",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+    ]:
+        assert needle in promotion_workflow
+
+    for forbidden in [
+        "OPENAI_API_KEY:",
+        "ANTHROPIC_API_KEY:",
+        "AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD=1",
+    ]:
+        assert forbidden not in promotion_workflow
+
+    verification = read("docs/VERIFICATION.md")
+    assert "Stable Release Promotion" in verification
+    assert "ao2-stable-release-promotion-workflow" in verification
+    assert "ao2-stable-release-evidence-packet" in verification
+    assert "stable_release_evidence_run_id" in verification
+
 
 def test_stable_promotion_workflow_requires_public_pair_digest_audit(tmp_path):
     fixture = tmp_path / "fixture"
@@ -2157,6 +2201,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_dual_repo_installed_release_smoke_artifact_job",
         "ci_release_publication_closure_artifact_job",
         "ci_dual_repo_release_publication_closure_index_job",
+        "ci_stable_release_promotion_workflow_dispatch",
         "release_metadata_drift_audit",
         "release_metadata_drift_audit_summary",
         "release_metadata_drift_audit_status",
@@ -2215,6 +2260,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "release_publication_closure",
         "dual_repo_release_publication_closure_index",
         "stable_release_evidence_packet",
+        "stable_release_promotion_workflow_dispatch",
         "release_metadata_drift_audit",
         "release_public_pair_digest_audit",
     ]:
@@ -2287,6 +2333,17 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "npm run release:readiness:artifact-consumer",
     ]:
         assert needle in ci
+
+    stable_promotion_workflow = read(".github/workflows/stable-release-promotion.yml")
+    for needle in [
+        "Stable Release Promotion",
+        "stable_release_evidence_run_id",
+        "promotion_confirm",
+        "ao2-stable-release-evidence-packet",
+        "target/stable-release-promotion/stable-release-evidence-packet",
+        "ao2-stable-release-promotion-workflow",
+    ]:
+        assert needle in stable_promotion_workflow
 
     asset_publication = read("scripts/release-asset-publication-readiness.sh")
     public_ship_dry_run = read("scripts/public-ship-dry-run.sh")

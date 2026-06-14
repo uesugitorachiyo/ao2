@@ -162,6 +162,16 @@ the final `packet/summary.json`, `packet/dashboard.html`, the source
 closed unless `stable_release_evidence_ready=true`,
 `mutates_releases=false`, and `stores_credentials=false`.
 
+The manual `Stable Release Promotion` GitHub Actions workflow consumes that
+hosted packet before it runs the stable-promotion workflow. Leave
+`promotion_confirm` empty for a dry-run. To allow release mutation, set
+`promotion_confirm=promote-stable-v0.4.80-v0.1.13`; any other non-empty value
+is rejected before `npm run release:stable-promotion-workflow` runs. The
+optional `stable_release_evidence_run_id` input pins promotion review to a
+specific successful CI run; otherwise the workflow downloads the latest
+successful `ao2-stable-release-evidence-packet` artifact from `main` CI. The
+workflow uploads `ao2-stable-release-promotion-workflow` evidence for review.
+
 ## Stable promotion evidence gate
 
 `npm run release:stable-promotion-workflow` uses this hosted evidence before it

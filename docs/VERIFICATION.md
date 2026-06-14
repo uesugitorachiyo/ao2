@@ -861,6 +861,18 @@ Result:
   `AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY=<path>` to compose from
   preserved local baselines. The packet reads local summaries only and records
   `mutates_releases=false` and `stores_credentials=false`.
+- `Stable Release Promotion`: manual GitHub Actions workflow that consumes the
+  hosted `ao2-stable-release-evidence-packet` artifact before running
+  `npm run release:stable-promotion-workflow`. Leave
+  `promotion_confirm` empty for a dry-run, or set it to the exact
+  `promote-stable-v0.4.80-v0.1.13` confirmation string to allow the underlying
+  script to flip AO2 and ao2-control-plane releases after all packet,
+  post-release evidence, archive parity, provenance, and trust-boundary checks
+  pass. The optional `stable_release_evidence_run_id` input pins the packet to a
+  specific successful CI run; when omitted, the workflow downloads the latest
+  successful `ao2-stable-release-evidence-packet` artifact from `main` CI. It
+  uploads `ao2-stable-release-promotion-workflow` evidence and rejects provider
+  API key environment state.
 - `npm run release:immutability-audit`: composes asset completeness, stable
   readiness, full release download verification, checksum validation, signed
   provenance verification, GitHub asset digest checks, and release metadata
