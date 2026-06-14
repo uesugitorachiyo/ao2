@@ -146,10 +146,34 @@ jobs:
           assert checklist["trust_boundary"]["stores_credentials"] is False, checklist
           assert (root / "operator-checklist" / "checklist.md").is_file()
           PY
+      - name: Assemble lightweight dry-run checklist artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="target/stable-promotion-dry-run-checklist"
+          out="$root/checklist-artifact"
+          rm -rf "$out"
+          mkdir -p \
+            "$out/stable-release-evidence-packet/packet" \
+            "$out/workflow/post-release-verification-evidence" \
+            "$out/dry-run-audit" \
+            "$out/operator-checklist"
+          cp "$root/stable-release-evidence-packet/packet/summary.json" \
+            "$out/stable-release-evidence-packet/packet/summary.json"
+          cp "$root/workflow/summary.json" \
+            "$out/workflow/summary.json"
+          cp "$root/workflow/post-release-verification-evidence/summary.json" \
+            "$out/workflow/post-release-verification-evidence/summary.json"
+          cp "$root/dry-run-audit/summary.json" \
+            "$out/dry-run-audit/summary.json"
+          cp "$root/operator-checklist/summary.json" \
+            "$out/operator-checklist/summary.json"
+          cp "$root/operator-checklist/checklist.md" \
+            "$out/operator-checklist/checklist.md"
       - name: Upload stable promotion dry-run checklist
         uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
           name: ao2-stable-promotion-dry-run-checklist
-          path: target/stable-promotion-dry-run-checklist
+          path: target/stable-promotion-dry-run-checklist/checklist-artifact
           if-no-files-found: error

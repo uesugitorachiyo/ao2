@@ -915,9 +915,13 @@ Result:
   artifact, reruns `npm run release:stable-promotion-workflow` with
   `AO2_STABLE_PROMOTION_CONFIRM=""`, audits that dry-run, and emits the
   operator checklist in one hosted artifact named
-  `ao2-stable-promotion-dry-run-checklist`. The workflow has read-only
-  repository permissions, rejects provider API key environment state, and
-  records `confirmation_entered=false` before upload.
+  `ao2-stable-promotion-dry-run-checklist`. The hosted artifact is a
+  lightweight approval packet containing the stable evidence packet summary,
+  stable promotion workflow summaries, dry-run audit summary, and operator
+  checklist files; it does not re-upload the full downloaded stable evidence
+  packet. The workflow has read-only repository permissions, rejects provider
+  API key environment state, and records `confirmation_entered=false` before
+  upload.
 - `npm run release:immutability-audit`: composes asset completeness, stable
   readiness, full release download verification, checksum validation, signed
   provenance verification, GitHub asset digest checks, and release metadata

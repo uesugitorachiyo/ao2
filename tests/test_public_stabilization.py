@@ -1713,6 +1713,10 @@ def test_stable_promotion_dry_run_checklist_workflow_runs_from_stable_evidence_p
         "npm run release:stable-promotion-operator-checklist",
         "ao2.stable-promotion-dry-run-audit.v1",
         "ao2.stable-promotion-operator-checklist.v1",
+        "Assemble lightweight dry-run checklist artifact",
+        "target/stable-promotion-dry-run-checklist/checklist-artifact",
+        "stable-release-evidence-packet/packet/summary.json",
+        "workflow/post-release-verification-evidence/summary.json",
         "operator_checklist_ready",
         "confirmation_entered",
         "ao2-stable-promotion-dry-run-checklist",
@@ -1725,6 +1729,7 @@ def test_stable_promotion_dry_run_checklist_workflow_runs_from_stable_evidence_p
         "contents: write",
         "gh release edit",
         "AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD=1",
+        "path: target/stable-promotion-dry-run-checklist\n",
     ]:
         assert forbidden not in workflow
 
@@ -2878,6 +2883,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "AO2_STABLE_PROMOTION_CONFIRM=\"\"",
         "npm run release:stable-promotion-dry-run-audit",
         "npm run release:stable-promotion-operator-checklist",
+        "target/stable-promotion-dry-run-checklist/checklist-artifact",
         "ao2-stable-promotion-dry-run-checklist",
     ]:
         assert needle in stable_promotion_dry_run_checklist
@@ -3111,11 +3117,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     )
     assert artifacts["stable_promotion_dry_run_checklist"]["required_files"] == [
         "stable-release-evidence-packet/packet/summary.json",
-        "stable-release-evidence-packet/packet/dashboard.html",
         "workflow/summary.json",
         "workflow/post-release-verification-evidence/summary.json",
-        "artifact/workflow/summary.json",
-        "artifact/stable-release-evidence-packet/packet/summary.json",
         "dry-run-audit/summary.json",
         "operator-checklist/summary.json",
         "operator-checklist/checklist.md",
