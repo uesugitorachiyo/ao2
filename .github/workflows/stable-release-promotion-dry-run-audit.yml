@@ -1,0 +1,51 @@
+name: Stable Release Promotion Dry-Run Audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      stable_promotion_run_id:
+        description: "Stable Release Promotion dry-run workflow run id to audit."
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  stable-release-promotion-dry-run-audit:
+    name: Stable release promotion dry-run audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+      - name: Download stable release promotion artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STABLE_PROMOTION_RUN_ID: ${{ inputs.stable_promotion_run_id }}
+        run: |
+          rm -rf target/stable-promotion-dry-run-audit/artifact
+          mkdir -p target/stable-promotion-dry-run-audit/artifact
+          gh run download "$STABLE_PROMOTION_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name ao2-stable-release-promotion-workflow \
+            --dir target/stable-promotion-dry-run-audit/artifact
+      - name: Audit stable promotion dry-run artifact
+        shell: bash
+        run: |
+          AO2_STABLE_PROMOTION_DRY_RUN_ARTIFACT_ROOT=target/stable-promotion-dry-run-audit/artifact \
+          AO2_STABLE_PROMOTION_DRY_RUN_AUDIT_ROOT=target/stable-promotion-dry-run-audit/report \
+            npm run release:stable-promotion-dry-run-audit
+      - name: Upload stable promotion dry-run audit
+        uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: ao2-stable-release-promotion-dry-run-audit
+          path: target/stable-promotion-dry-run-audit
+          if-no-files-found: error
