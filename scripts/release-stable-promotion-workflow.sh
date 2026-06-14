@@ -82,6 +82,9 @@ else
 $AO2_RELEASE_REPO|Post Stable Release Verification|post-stable-release-smoke-Linux|ao2-linux
 $AO2_RELEASE_REPO|Post Stable Release Verification|post-stable-release-smoke-macOS|ao2-macos
 $AO2_RELEASE_REPO|Post Stable Release Verification|post-stable-release-smoke-Windows|ao2-windows
+$AO2_RELEASE_REPO|Public Release Consumer Smoke|public-release-consumer-smoke-linux|public-consumer-linux
+$AO2_RELEASE_REPO|Public Release Consumer Smoke|public-release-consumer-smoke-macos|public-consumer-macos
+$AO2_RELEASE_REPO|Public Release Consumer Smoke|public-release-consumer-smoke-windows|public-consumer-windows
 $AO2_RELEASE_REPO|Post Stable Release Verification|ao2-dual-public-release-smoke|dual-public-release-smoke
 $AO2_RELEASE_REPO|Post Release Pair Digest Audit|ao2-public-release-pair-digest-audit|public-pair-digest-audit
 $AO2_CP_RELEASE_REPO|Post Release Verification|ao2-control-plane-post-release-verification-ubuntu|control-plane-ubuntu
@@ -122,6 +125,30 @@ required = [
         "artifact": "post-stable-release-smoke-Windows",
         "path": root / "ao2-windows",
         "kind": "ao2-post-stable",
+    },
+    {
+        "component": "ao2+ao2-control-plane",
+        "platform": "linux",
+        "artifact": "public-release-consumer-smoke-linux",
+        "path": root / "public-consumer-linux",
+        "kind": "public-release-consumer-smoke",
+        "target_label": "linux-x86_64",
+    },
+    {
+        "component": "ao2+ao2-control-plane",
+        "platform": "macos",
+        "artifact": "public-release-consumer-smoke-macos",
+        "path": root / "public-consumer-macos",
+        "kind": "public-release-consumer-smoke",
+        "target_label": "macos-aarch64",
+    },
+    {
+        "component": "ao2+ao2-control-plane",
+        "platform": "windows",
+        "artifact": "public-release-consumer-smoke-windows",
+        "path": root / "public-consumer-windows",
+        "kind": "public-release-consumer-smoke",
+        "target_label": "windows-x86_64",
     },
     {
         "component": "ao2",
@@ -187,6 +214,61 @@ for item in required:
             details["signature_verified"] = payload.get("signature_verified")
             details["install_status"] = payload.get("status")
             if payload.get("signature_verified") is not True or payload.get("status") != "installed":
+                status = "failed"
+    elif item["kind"] == "public-release-consumer-smoke":
+        summary = item["path"] / "latest" / "summary.json"
+        if not summary.is_file():
+            status = "missing"
+            details["missing"] = "latest/summary.json"
+        else:
+            payload = json.loads(summary.read_text(encoding="utf-8"))
+            archives = payload.get("archives", {})
+            commands = payload.get("commands", {})
+            trust = payload.get("trust_boundary", {})
+            details["summary"] = str(summary)
+            details["schema_version"] = payload.get("schema_version")
+            details["summary_status"] = payload.get("status")
+            details["target_label"] = payload.get("target_label")
+            details["ao2_manifest_schema"] = archives.get("ao2", {}).get("manifest_schema")
+            details["control_plane_manifest_schema"] = archives.get(
+                "ao2_control_plane", {}
+            ).get("manifest_schema")
+            details["ao2_version_status"] = commands.get("ao2_version", {}).get("status")
+            details["ao2_help_status"] = commands.get("ao2_help", {}).get("status")
+            details["control_plane_help_status"] = commands.get(
+                "control_plane_help", {}
+            ).get("status")
+            details["downloads_public_release_archives"] = trust.get(
+                "downloads_public_release_archives"
+            )
+            details["auth_value_stored"] = trust.get("auth_value_stored")
+            details["credential_material_in_urls"] = trust.get(
+                "credential_material_in_urls"
+            )
+            details["credential_material_included"] = trust.get(
+                "credential_material_included"
+            )
+            details["mutates_github_releases"] = trust.get("mutates_github_releases")
+            details["control_plane_approves_release"] = trust.get(
+                "control_plane_approves_release"
+            )
+            if (
+                payload.get("schema_version") != "ao2.public-release-consumer-smoke.v1"
+                or payload.get("status") != "passed"
+                or payload.get("target_label") != item["target_label"]
+                or archives.get("ao2", {}).get("manifest_schema") != "ao2.release-manifest.v1"
+                or archives.get("ao2_control_plane", {}).get("manifest_schema")
+                != "ao2-control-plane.release-manifest.v1"
+                or commands.get("ao2_version", {}).get("status") != "passed"
+                or commands.get("ao2_help", {}).get("status") != "passed"
+                or commands.get("control_plane_help", {}).get("status") != "passed"
+                or trust.get("downloads_public_release_archives") is not True
+                or trust.get("auth_value_stored") is not False
+                or trust.get("credential_material_in_urls") is not False
+                or trust.get("credential_material_included") is not False
+                or trust.get("mutates_github_releases") is not False
+                or trust.get("control_plane_approves_release") is not False
+            ):
                 status = "failed"
     elif item["kind"] == "ao2-dual-public-release-smoke":
         summary = item["path"] / "latest" / "summary.json"
