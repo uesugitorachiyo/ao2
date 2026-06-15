@@ -536,7 +536,8 @@ Result:
   `ao2-release-publication-closure`,
   `ao2-dual-repo-release-publication-closure-index`,
   `ao2-stable-release-evidence-packet`, and
-  `ao2-release-readiness-consumer`
+  `ao2-release-readiness-consumer`; the hosted CI chain closes with
+  `ao2-release-readiness-final-closure-verifier`
 - `Release readiness artifact consumer`: CI job that depends on
   `Release readiness artifacts` and `Release train control-plane bridge
   artifacts`, the AI task-board bridge, Pulse task-board closure packet,
@@ -584,6 +585,17 @@ Result:
   post-stable release verification, control-plane post-release verification,
   `ao2-control-plane-release-publication-closure`, and
   `ao2.dual-repo-release-publication-closure-index.v1` evidence.
+- `Release readiness evidence chain`: CI closes release-readiness evidence in
+  this order: `ao2-release-readiness` ->
+  `ao2-release-readiness-hosted-artifact-gate` ->
+  `ao2-release-readiness-consumer` ->
+  `ao2-release-readiness-final-closure-verifier`. The final verifier is the
+  canonical release-readiness signal for PR and release evidence closure. It
+  downloads only `ao2-release-readiness-consumer`, validates
+  `ao2.release-readiness-artifact-consumer.v1`, rechecks public pair digest
+  parity, hosted artifact gate readiness, stable evidence packet readiness, and
+  trust-boundary fields, then emits
+  `ao2.release-readiness-final-closure-verifier.v1`.
 - `npm run release:public-pair-digest-audit`: read-only post-release verifier
   that reads public AO2 and ao2-control-plane GitHub Release asset metadata,
   plus a supplied dual-repo closure index via
