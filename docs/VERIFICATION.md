@@ -467,6 +467,11 @@ Result:
   `Release support fixture parity with ao2-control-plane` job checks out both
   repos, compares the two fixture files byte-for-byte, and uploads
   `ao2-release-support-fixture-parity` with SHA-256 evidence.
+  When the fixture or a strict CI evidence family requirement changes, open AO2
+  and ao2-control-plane PRs with the same branch name in both repositories. The
+  parity jobs check out the matching peer branch when present; different branch
+  names make each PR compare against the other repository's old `main` fixture
+  and create a false circular failure.
 - `npm run risky-pr:control-plane-bridge`: validates a downloaded Risky PR
   golden `artifact-manifest.json`, writes a stable local
   `target/risky-pr-golden-control-plane-bridge/latest/artifact-manifest.json`,

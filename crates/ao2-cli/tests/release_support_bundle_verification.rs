@@ -134,6 +134,20 @@ fn shared_release_support_contract_fixture_is_accepted() {
         json["trust_boundary"]["control_plane_role"],
         "read_only_observer"
     );
+    let family_ids: Vec<&str> = bundle_json["ci_evidence_index"]["evidence_families"]
+        .as_array()
+        .expect("fixture has CI evidence families")
+        .iter()
+        .map(|family| {
+            family["id"]
+                .as_str()
+                .expect("CI evidence family id is a string")
+        })
+        .collect();
+    assert!(
+        family_ids.contains(&"stable-promotion-evidence-readback"),
+        "shared release-support fixture must include stable-promotion evidence readback"
+    );
 }
 
 fn passed_report_contract_verification() -> serde_json::Value {
@@ -335,6 +349,7 @@ fn test_ci_evidence_index() -> serde_json::Value {
         "evidence_families": [
             {"id": "risky-pr-golden-bridge-smoke", "artifact_name_pattern": "ao2-control-plane-risky-pr-golden-bridge-<target>", "schema_versions": ["ao2.cp-risky-pr-golden-bridge-smoke.v1"], "operator_action": "download-ci-artifact"},
             {"id": "release-train-bridge-smoke", "artifact_name_pattern": "ao2-control-plane-release-train-bridge-<target>", "schema_versions": ["ao2.cp-release-train-bridge-smoke.v1", "ao2.cp-release-train-readback.v1", "ao2.public-release-train-drill.v1"], "operator_action": "download-ci-artifact"},
+            {"id": "stable-promotion-evidence-readback", "artifact_name_pattern": "ao2-control-plane-ao2-stable-promotion-evidence-index-readback", "schema_versions": ["ao2.cp-ao2-stable-promotion-evidence-index-readback.v1", "ao2.cp-stable-promotion-evidence-readback.v1", "ao2.stable-promotion-evidence-index.v1"], "operator_action": "download-ci-artifact"},
             {"id": "ingest-smoke", "artifact_name_pattern": "ao2-control-plane-ingest-smoke-<target>", "schema_versions": ["ao2.cp-ingest-smoke.v1"], "operator_action": "download-ci-artifact"},
             {"id": "release-archive-smoke", "artifact_name_pattern": "ao2-control-plane-smoke-<target>", "schema_versions": ["ao2.cp-release-archive-smoke.v1"], "operator_action": "download-ci-artifact"},
             {"id": "backup-restore-drill", "artifact_name_pattern": "ao2-control-plane-dr-restore", "schema_versions": ["ao2.cp-dr-restore-drill.v1"], "operator_action": "download-ci-artifact"}
@@ -994,6 +1009,10 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
     assert!(
         ci_family_ids.contains(&"release-train-bridge-smoke"),
         "release support bundles must include the release train bridge smoke family; got {ci_family_ids:?}"
+    );
+    assert!(
+        ci_family_ids.contains(&"stable-promotion-evidence-readback"),
+        "release support bundles must include stable-promotion evidence readback for control-plane verifier parity; got {ci_family_ids:?}"
     );
     let release_train_family = bundle_json["ci_evidence_index"]["evidence_families"]
         .as_array()
