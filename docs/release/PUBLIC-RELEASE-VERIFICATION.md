@@ -294,6 +294,22 @@ The gate requires:
 inspection. It makes the evidence gate emit a skipped/not-ready summary and
 keeps confirmed stable promotion blocked.
 
+## Stable promotion evidence index
+
+`npm run release:stable-promotion-evidence-index` creates a read-only
+`ao2.stable-promotion-evidence-index.v1` review packet from the hosted
+`ao2-stable-release-evidence-packet`, `ao2-public-release-pair-digest-audit`,
+and `ao2-release-artifact-size-budget-audit` artifacts. The manual
+`Stable Promotion Evidence Index` workflow downloads those artifacts, validates
+the stable evidence packet, the embedded post-release verification gate, public
+pair digest archive parity, and lightweight approval-packet size budgets, then
+uploads `ao2-stable-promotion-evidence-index`.
+
+Use this index as the first operator review surface before opening the stable
+promotion checklist. It records `mutates_releases=false`,
+`stores_credentials=false`, and `control_plane_approves_release=false`; it does
+not enter the stable promotion confirmation string.
+
 ## Acceptance Checklist
 
 - AO2 post-stable release verification passes on Ubuntu, macOS, and Windows.

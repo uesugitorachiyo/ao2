@@ -922,6 +922,21 @@ Result:
   packet. The workflow has read-only repository permissions, rejects provider
   API key environment state, and records `confirmation_entered=false` before
   upload.
+- `npm run release:stable-promotion-evidence-index`: composes the
+  operator-facing Stable Promotion Evidence Index from a downloaded
+  `ao2-stable-release-evidence-packet`, the AO2
+  `ao2-public-release-pair-digest-audit`, and the
+  `ao2-release-artifact-size-budget-audit`. It emits
+  `ao2.stable-promotion-evidence-index.v1`, `summary.json`, and `index.md`,
+  linking the stable evidence packet, the embedded
+  `ao2.stable-promotion-evidence-gate.v1` post-release verification summary,
+  `ao2.public-release-pair-digest-audit.v1` archive parity, and
+  `ao2.release-artifact-size-budget-audit.v1` approval-packet size checks in
+  one review surface. The manual `Stable Promotion Evidence Index` workflow is
+  read-only, downloads those three hosted artifacts by run id or latest
+  successful main-CI packet, uploads `ao2-stable-promotion-evidence-index`,
+  and records `mutates_releases=false`, `stores_credentials=false`, and
+  `control_plane_approves_release=false`.
 - `npm run release:readiness:static` records
   `ao2.release-artifact-size-budget.v1` inside the release artifact closure
   index and budgets lightweight operator approval artifacts at 1 MiB. The
