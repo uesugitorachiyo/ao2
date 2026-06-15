@@ -591,6 +591,25 @@ add(
     "passed" if release_public_pair_digest_audit_contract_ok else "failed",
     "compares dual-repo closure archive digest metadata with published release asset metadata without mutation",
 )
+public_pair_digest_gate = {
+    "schema_version": "ao2.public-release-pair-digest-audit.v1",
+    "status": "passed" if release_public_pair_digest_audit_contract_ok else "failed",
+    "archive_parity_status": "passed" if release_public_pair_digest_audit_contract_ok else "failed",
+    "required_summary_field": "public_pair_digest_audit",
+    "required_archive_scope": "full_archive_parity",
+    "required_check": "release_public_pair_digest_audit_contract",
+    "required_artifact": "ao2-public-release-pair-digest-audit",
+}
+add(
+    "public_pair_digest_gate",
+    public_pair_digest_gate["status"],
+    (
+        "public_pair_digest_audit.archive_parity_status="
+        f"{public_pair_digest_gate['archive_parity_status']} "
+        "required_artifact=ao2-public-release-pair-digest-audit "
+        "scope=full_archive_parity"
+    ),
+)
 
 post_release_pair_digest_audit_workflow = read(".github/workflows/post-release-pair-digest-audit.yml")
 post_release_pair_digest_audit_forbidden = [
@@ -759,6 +778,7 @@ artifact_closure_index = {
     "status": status,
     "source_summary": str(summary_path),
     "artifact_size_budget": artifact_size_budget,
+    "public_pair_digest_gate": public_pair_digest_gate,
     "required_artifacts": [
         {
             "id": "release_readiness",
