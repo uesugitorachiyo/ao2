@@ -3733,6 +3733,19 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2-public-release-pair-digest-audit",
         "ao2-release-artifact-size-budget-audit",
     ]
+    assert closure["public_pair_digest_gate"] == {
+        "schema_version": "ao2.public-release-pair-digest-audit.v1",
+        "status": "passed",
+        "archive_parity_status": "passed",
+        "required_summary_field": "public_pair_digest_audit",
+        "required_archive_scope": "full_archive_parity",
+        "required_check": "release_public_pair_digest_audit_contract",
+        "required_artifact": "ao2-public-release-pair-digest-audit",
+    }
+    report_md = (out_root / "report.md").read_text(encoding="utf-8")
+    assert "public_pair_digest_audit.archive_parity_status=passed" in report_md
+    assert "ao2-public-release-pair-digest-audit" in report_md
+    assert "full_archive_parity" in report_md
     assert closure["trust_boundary"]["local_only"] is True
     assert closure["trust_boundary"]["stores_credentials"] is False
 
