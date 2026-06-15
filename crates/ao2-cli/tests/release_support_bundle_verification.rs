@@ -90,6 +90,16 @@ fn write_bundle(path: &Path, mut overlay: serde_json::Value) {
     fs::write(path, serde_json::to_string_pretty(&bundle).unwrap()).unwrap();
 }
 
+fn shared_release_support_fixture() -> serde_json::Value {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let fixture = root
+        .join("tests")
+        .join("fixtures")
+        .join("release-support-bundle-contract-v1.json");
+    serde_json::from_str(&fs::read_to_string(&fixture).expect("read shared fixture"))
+        .expect("fixture is JSON")
+}
+
 #[test]
 fn shared_release_support_contract_fixture_is_accepted() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -97,9 +107,7 @@ fn shared_release_support_contract_fixture_is_accepted() {
         .join("tests")
         .join("fixtures")
         .join("release-support-bundle-contract-v1.json");
-    let bundle_json: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(&fixture).expect("read shared fixture"))
-            .expect("fixture is JSON");
+    let bundle_json = shared_release_support_fixture();
     let bundle_sha256 = canonical_sha256(&bundle_json);
     let temp = tempfile::tempdir().unwrap();
     let checksums_path = temp.path().join("SHA256SUMS");
@@ -1006,6 +1014,13 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
         .iter()
         .map(|family| family["id"].as_str().unwrap())
         .collect::<Vec<_>>();
+    let fixture_ci_family_ids = shared_release_support_fixture()["ci_evidence_index"]
+        ["evidence_families"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|family| family["id"].as_str().unwrap().to_owned())
+        .collect::<Vec<_>>();
     assert!(
         ci_family_ids.contains(&"release-train-bridge-smoke"),
         "release support bundles must include the release train bridge smoke family; got {ci_family_ids:?}"
@@ -1013,6 +1028,10 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
     assert!(
         ci_family_ids.contains(&"stable-promotion-evidence-readback"),
         "release support bundles must include stable-promotion evidence readback for control-plane verifier parity; got {ci_family_ids:?}"
+    );
+    assert_eq!(
+        ci_family_ids, fixture_ci_family_ids,
+        "generated release support bundles must keep CI evidence families in shared fixture order"
     );
     let release_train_family = bundle_json["ci_evidence_index"]["evidence_families"]
         .as_array()
