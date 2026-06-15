@@ -500,12 +500,14 @@ release_readiness_artifact_consumer = workflow_job_block("release-readiness-arti
 release_readiness_artifact_consumer_script = read("scripts/release-readiness-artifact-consumer.sh")
 release_readiness_artifact_consumer_ok = (
     release_readiness_artifact_consumer is not None
-    and "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-codex-cron-event-loop-smoke-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index, stable-release-evidence-packet-artifacts]" in release_readiness_artifact_consumer
+    and "needs: [release-readiness-artifacts, release-readiness-hosted-artifact-gate, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-codex-cron-event-loop-smoke-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index, stable-release-evidence-packet-artifacts]" in release_readiness_artifact_consumer
     and "actions/download-artifact@v8.0.1" in release_readiness_artifact_consumer
     and "npm run release:readiness:artifact-consumer" in release_readiness_artifact_consumer
     and scripts.get("release:readiness:artifact-consumer") == "node scripts/run-sh-script.js scripts/release-readiness-artifact-consumer.sh"
     and "name: ao2-release-readiness" in release_readiness_artifact_consumer
     and "target/release-readiness-consumer/ao2-release-readiness" in release_readiness_artifact_consumer
+    and "name: ao2-release-readiness-hosted-artifact-gate" in release_readiness_artifact_consumer
+    and "target/release-readiness-consumer/ao2-release-readiness-hosted-artifact-gate" in release_readiness_artifact_consumer
     and "name: ao2-release-train-control-plane-bridge" in release_readiness_artifact_consumer
     and "target/release-readiness-consumer/ao2-release-train-control-plane-bridge" in release_readiness_artifact_consumer
     and "name: ao2-ai-task-board-control-plane-bridge" in release_readiness_artifact_consumer
@@ -523,6 +525,8 @@ release_readiness_artifact_consumer_ok = (
     and "name: ao2-stable-release-evidence-packet" in release_readiness_artifact_consumer
     and "target/release-readiness-consumer/ao2-stable-release-evidence-packet" in release_readiness_artifact_consumer
     and "ao2.release-readiness-local.v1" in release_readiness_artifact_consumer_script
+    and "ao2.release-readiness-regression-gate.v1" in release_readiness_artifact_consumer_script
+    and "ao2.release-readiness-hosted-artifact-gate.v1" in release_readiness_artifact_consumer_script
     and "ao2.release-train-control-plane-bridge.v1" in release_readiness_artifact_consumer_script
     and "ao2.ai-task-board-control-plane-bridge.v1" in release_readiness_artifact_consumer_script
     and "ao2.pulse-task-board-closure-packet.v1" in release_readiness_artifact_consumer_script
@@ -545,6 +549,7 @@ release_readiness_artifact_consumer_ok = (
     and "ci_job_required_os:release-archive-hosted-smoke" in release_readiness_artifact_consumer_script
     and "ci_job_required_os:workbench-operator-packet-control-plane-smoke" in release_readiness_artifact_consumer_script
     and "ci_release_readiness_static_artifact_job" in release_readiness_artifact_consumer_script
+    and "ci_release_readiness_hosted_artifact_gate_job" in release_readiness_artifact_consumer_script
     and "ci_release_train_control_plane_bridge_artifact_job" in release_readiness_artifact_consumer_script
     and "ci_ai_task_board_control_plane_bridge_artifact_job" in release_readiness_artifact_consumer_script
     and "ci_pulse_task_board_closure_packet_artifact_job" in release_readiness_artifact_consumer_script
@@ -1104,6 +1109,7 @@ artifact_closure_index = {
             "required_checks": ["ci_release_readiness_artifact_consumer_job"],
             "consumes": [
                 "ao2-release-readiness",
+                "ao2-release-readiness-hosted-artifact-gate",
                 "ao2-release-train-control-plane-bridge",
                 "ao2-ai-task-board-control-plane-bridge",
                 "ao2-pulse-task-board-closure-packet",

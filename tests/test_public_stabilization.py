@@ -3225,6 +3225,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "AO2_RELEASE_READINESS_REGRESSION_ONLY_HOSTED_ARTIFACT_GATE",
         "AO2_RELEASE_READINESS_REGRESSION_HOSTED_ARTIFACT_REQUIRED",
         "AO2_RELEASE_READINESS_REGRESSION_HOSTED_ARTIFACT_FIXTURE_DIR",
+        "target/release-readiness-consumer/ao2-release-readiness-hosted-artifact-gate",
         "target/release-readiness-consumer/ao2-release-train-control-plane-bridge",
         "target/release-readiness-consumer/ao2-ai-task-board-control-plane-bridge",
         "target/release-readiness-consumer/ao2-pulse-task-board-closure-packet",
@@ -3332,11 +3333,13 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "AO2_RELEASE_READINESS_REGRESSION_HOSTED_ARTIFACT_FIXTURE_DIR=target/release-readiness-hosted-artifact-gate/input/ao2-release-readiness",
         "npm run release:readiness:regression-gate",
         "ao2-release-readiness-hosted-artifact-gate",
-        "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-codex-cron-event-loop-smoke-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index, stable-release-evidence-packet-artifacts]",
+        "needs: [release-readiness-artifacts, release-readiness-hosted-artifact-gate, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-codex-cron-event-loop-smoke-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index, stable-release-evidence-packet-artifacts]",
         "uses: actions/checkout@v6.0.3",
         "uses: actions/download-artifact@v8.0.1",
         "name: ao2-release-readiness",
         "path: target/release-readiness-consumer/ao2-release-readiness",
+        "name: ao2-release-readiness-hosted-artifact-gate",
+        "path: target/release-readiness-consumer/ao2-release-readiness-hosted-artifact-gate",
         "name: ao2-release-train-control-plane-bridge",
         "path: target/release-readiness-consumer/ao2-release-train-control-plane-bridge",
         "name: ao2-ai-task-board-control-plane-bridge",
@@ -3571,6 +3574,9 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     assert "ao2-pulse-codex-cron-event-loop-smoke" in artifacts[
         "release_readiness_artifact_consumer"
     ]["consumes"]
+    assert "ao2-release-readiness-hosted-artifact-gate" in artifacts[
+        "release_readiness_artifact_consumer"
+    ]["consumes"]
     assert artifacts["release_train_control_plane_bridge"]["artifact_name"] == (
         "ao2-release-train-control-plane-bridge"
     )
@@ -3798,6 +3804,7 @@ def _write_release_readiness_consumer_fixture(root: Path):
         "ci_job_required_os:release-archive-hosted-smoke",
         "ci_job_required_os:workbench-operator-packet-control-plane-smoke",
         "ci_release_readiness_static_artifact_job",
+        "ci_release_readiness_hosted_artifact_gate_job",
         "ci_release_train_control_plane_bridge_artifact_job",
         "ci_ai_task_board_control_plane_bridge_artifact_job",
         "ci_pulse_task_board_closure_packet_artifact_job",
@@ -3830,6 +3837,69 @@ def _write_release_readiness_consumer_fixture(root: Path):
                 "required_archive_scope": "full_archive_parity",
                 "required_check": "release_public_pair_digest_audit_contract",
                 "required_artifact": "ao2-public-release-pair-digest-audit",
+            },
+        },
+    )
+    _write_release_readiness_consumer_json(
+        root,
+        "ao2-release-readiness-hosted-artifact-gate/summary.json",
+        {
+            "schema_version": "ao2.release-readiness-regression-gate.v1",
+            "status": "passed",
+            "checks": [
+                {
+                    "name": "hosted_release_readiness_artifact_gate",
+                    "status": "passed",
+                    "exit_code": 0,
+                }
+            ],
+            "hosted_release_readiness_artifact_gate": {
+                "schema_version": "ao2.release-readiness-hosted-artifact-gate.v1",
+                "status": "passed",
+                "required": True,
+                "readiness_schema_version": "ao2.release-readiness-local.v1",
+                "artifact_closure_schema_version": (
+                    "ao2.release-artifact-closure-index.v1"
+                ),
+                "public_pair_digest_gate": {
+                    "schema_version": "ao2.public-release-pair-digest-audit.v1",
+                    "status": "passed",
+                    "archive_parity_status": "passed",
+                    "required_summary_field": "public_pair_digest_audit",
+                    "required_archive_scope": "full_archive_parity",
+                    "required_check": "release_public_pair_digest_audit_contract",
+                    "required_artifact": "ao2-public-release-pair-digest-audit",
+                },
+                "trust_boundary": {
+                    "local_only": True,
+                    "stores_credentials": False,
+                    "source": "github_actions_artifact_download",
+                },
+            },
+        },
+    )
+    _write_release_readiness_consumer_json(
+        root,
+        "ao2-release-readiness-hosted-artifact-gate/hosted-release-readiness-artifact-gate/summary.json",
+        {
+            "schema_version": "ao2.release-readiness-hosted-artifact-gate.v1",
+            "status": "passed",
+            "required": True,
+            "readiness_schema_version": "ao2.release-readiness-local.v1",
+            "artifact_closure_schema_version": "ao2.release-artifact-closure-index.v1",
+            "public_pair_digest_gate": {
+                "schema_version": "ao2.public-release-pair-digest-audit.v1",
+                "status": "passed",
+                "archive_parity_status": "passed",
+                "required_summary_field": "public_pair_digest_audit",
+                "required_archive_scope": "full_archive_parity",
+                "required_check": "release_public_pair_digest_audit_contract",
+                "required_artifact": "ao2-public-release-pair-digest-audit",
+            },
+            "trust_boundary": {
+                "local_only": True,
+                "stores_credentials": False,
+                "source": "github_actions_artifact_download",
             },
         },
     )
@@ -4015,8 +4085,12 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
     for needle in [
         "AO2_RELEASE_READINESS_CONSUMER_ROOT",
         "ao2.release-readiness-artifact-consumer.v1",
+        "ao2.release-readiness-regression-gate.v1",
+        "ao2.release-readiness-hosted-artifact-gate.v1",
+        "ao2-release-readiness-hosted-artifact-gate",
         "ao2.pulse-codex-cron-event-loop-smoke.v1",
         "codex-cron.event-loop-decision.v1",
+        "ci_release_readiness_hosted_artifact_gate_job",
         "ci_pulse_codex_cron_event_loop_smoke_artifact_job",
         "github_actions_artifact_download",
         "provider_execution",
@@ -4043,6 +4117,11 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
     assert "uses: actions/checkout@v6.0.3" in consumer_ci
     assert "npm run release:readiness:artifact-consumer" in consumer_ci
     assert "python3 - <<'PY'" not in consumer_ci
+    assert "name: ao2-release-readiness-hosted-artifact-gate" in consumer_ci
+    assert (
+        "path: target/release-readiness-consumer/ao2-release-readiness-hosted-artifact-gate"
+        in consumer_ci
+    )
 
     root = tmp_path / "release-readiness-consumer"
     _write_release_readiness_consumer_fixture(root)
@@ -4053,9 +4132,18 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
     assert summary["schema_version"] == "ao2.release-readiness-artifact-consumer.v1"
     assert summary["status"] == "passed"
     assert "ao2-pulse-codex-cron-event-loop-smoke" in summary["source_artifacts"]
+    assert "ao2-release-readiness-hosted-artifact-gate" in summary["source_artifacts"]
     assert "ao2-stable-release-evidence-packet" in summary["source_artifacts"]
+    assert "ci_release_readiness_hosted_artifact_gate_job" in summary["required_checks"]
     assert "ci_pulse_codex_cron_event_loop_smoke_artifact_job" in summary["required_checks"]
     assert "ci_stable_release_evidence_packet_artifact_job" in summary["required_checks"]
+    assert summary["hosted_release_readiness_artifact_gate"]["status"] == "passed"
+    assert (
+        summary["hosted_release_readiness_artifact_gate"]["public_pair_digest_gate"][
+            "archive_parity_status"
+        ]
+        == "passed"
+    )
     assert (
         summary["stable_release_evidence_packet"]["public_pair_digest_audit"][
             "archive_parity_status"
@@ -4108,6 +4196,62 @@ def test_release_readiness_artifact_consumer_rejects_bad_fixture_evidence(tmp_pa
                 },
             ),
             "release readiness public pair digest gate was not ready",
+        ),
+        (
+            "missing_hosted_artifact_gate_summary",
+            lambda root: (
+                root / "ao2-release-readiness-hosted-artifact-gate/summary.json"
+            ).unlink(),
+            "missing required artifact file",
+        ),
+        (
+            "failed_hosted_artifact_gate",
+            lambda root: _write_release_readiness_consumer_json(
+                root,
+                "ao2-release-readiness-hosted-artifact-gate/summary.json",
+                {
+                    "schema_version": "ao2.release-readiness-regression-gate.v1",
+                    "status": "failed",
+                    "hosted_release_readiness_artifact_gate": {
+                        "schema_version": (
+                            "ao2.release-readiness-hosted-artifact-gate.v1"
+                        ),
+                        "status": "passed",
+                    },
+                },
+            ),
+            "release-readiness hosted artifact gate did not pass",
+        ),
+        (
+            "failed_hosted_public_pair_digest_gate",
+            lambda root: _write_release_readiness_consumer_json(
+                root,
+                "ao2-release-readiness-hosted-artifact-gate/hosted-release-readiness-artifact-gate/summary.json",
+                {
+                    "schema_version": "ao2.release-readiness-hosted-artifact-gate.v1",
+                    "status": "passed",
+                    "required": True,
+                    "readiness_schema_version": "ao2.release-readiness-local.v1",
+                    "artifact_closure_schema_version": (
+                        "ao2.release-artifact-closure-index.v1"
+                    ),
+                    "public_pair_digest_gate": {
+                        "schema_version": "ao2.public-release-pair-digest-audit.v1",
+                        "status": "passed",
+                        "archive_parity_status": "failed",
+                        "required_summary_field": "public_pair_digest_audit",
+                        "required_archive_scope": "full_archive_parity",
+                        "required_check": "release_public_pair_digest_audit_contract",
+                        "required_artifact": "ao2-public-release-pair-digest-audit",
+                    },
+                    "trust_boundary": {
+                        "local_only": True,
+                        "stores_credentials": False,
+                        "source": "github_actions_artifact_download",
+                    },
+                },
+            ),
+            "hosted release-readiness public pair digest gate was not ready",
         ),
         (
             "missing_codex_cron_decision",
