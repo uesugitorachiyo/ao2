@@ -966,6 +966,12 @@ Result:
   budget audit all pass. The command is read-only, rejects provider API key
   environment state, and records `mutates_releases=false`,
   `stores_credentials=false`, and `control_plane_approves_release=false`.
+  The manual `Operator Readiness Summary` workflow downloads
+  `ao2-release-readiness-final-closure-verifier`,
+  `ao2-stable-promotion-evidence-index`,
+  `ao2-public-release-pair-digest-audit`, and
+  `ao2-release-artifact-size-budget-audit` by explicit run id or latest
+  successful main workflow run, then uploads `ao2-operator-readiness-summary`.
 - `npm run release:readiness:static` records
   `ao2.release-artifact-size-budget.v1` inside the release artifact closure
   index and budgets lightweight operator approval artifacts at 1 MiB. The
