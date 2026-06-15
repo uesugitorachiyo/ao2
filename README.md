@@ -143,6 +143,23 @@ The main CI workflow in `.github/workflows/ci.yml` runs on pull request and
 `main` push, and can also be dispatched manually. Release workflows such as
 `release-gate.yml` and `public-release-build.yml` remain manual operator gates.
 
+## Release readiness evidence chain
+
+The canonical CI readiness signal is
+`ao2-release-readiness-final-closure-verifier`. It only passes after the
+upstream release-readiness artifacts have been produced, consumed, and checked
+for publication closure.
+
+```text
+ao2-release-readiness -> ao2-release-readiness-hosted-artifact-gate
+-> ao2-release-readiness-consumer
+-> ao2-release-readiness-final-closure-verifier
+```
+
+Use the final verifier artifact to decide whether the public AO2 release
+readiness evidence chain is closed. Earlier artifacts remain useful for
+debugging the specific gate that produced them.
+
 ## Pulse Auto-Advance Evidence
 
 Pulse auto-advance can continue local AO2 work without opening a pull request.

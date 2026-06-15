@@ -3503,6 +3503,10 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "required_archive_names",
         "required_archive_presence",
         "full archive parity",
+        "Release readiness evidence chain",
+        "ao2-release-readiness-final-closure-verifier",
+        "ao2.release-readiness-final-closure-verifier.v1",
+        "canonical release-readiness signal",
         "Stable Promotion Evidence Index",
         "ao2-stable-promotion-evidence-index",
         "ao2.stable-promotion-evidence-index.v1",
@@ -3510,6 +3514,15 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2-control-plane-0.1.13-windows-x86_64.tar.gz",
     ]:
         assert needle in verification
+
+    readme = read("README.md")
+    for needle in [
+        "Release readiness evidence chain",
+        "ao2-release-readiness -> ao2-release-readiness-hosted-artifact-gate",
+        "ao2-release-readiness-final-closure-verifier",
+        "canonical CI readiness signal",
+    ]:
+        assert needle in readme
 
     out_root = tmp_path / "release-readiness"
     result = subprocess.run(
