@@ -3785,6 +3785,23 @@ def _write_release_readiness_consumer_fixture(root: Path):
     )
     _write_release_readiness_consumer_json(
         root,
+        "ao2-release-readiness/artifact-closure-index.json",
+        {
+            "schema_version": "ao2.release-artifact-closure-index.v1",
+            "status": "passed",
+            "public_pair_digest_gate": {
+                "schema_version": "ao2.public-release-pair-digest-audit.v1",
+                "status": "passed",
+                "archive_parity_status": "passed",
+                "required_summary_field": "public_pair_digest_audit",
+                "required_archive_scope": "full_archive_parity",
+                "required_check": "release_public_pair_digest_audit_contract",
+                "required_artifact": "ao2-public-release-pair-digest-audit",
+            },
+        },
+    )
+    _write_release_readiness_consumer_json(
+        root,
         "ao2-release-train-control-plane-bridge/latest/summary.json",
         {
             "schema_version": "ao2.release-train-control-plane-bridge.v1",
@@ -3977,7 +3994,9 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
         "ao2.stable-release-evidence-packet.v1",
         "stable_release_evidence_ready",
         "public_pair_digest_audit",
+        "public_pair_digest_gate",
         "archive_parity_status",
+        "full_archive_parity",
     ]:
         assert needle in script
 
@@ -4010,11 +4029,53 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
         ]
         == "passed"
     )
+    assert summary["public_pair_digest_gate"] == {
+        "schema_version": "ao2.public-release-pair-digest-audit.v1",
+        "status": "passed",
+        "archive_parity_status": "passed",
+        "required_summary_field": "public_pair_digest_audit",
+        "required_archive_scope": "full_archive_parity",
+        "required_check": "release_public_pair_digest_audit_contract",
+        "required_artifact": "ao2-public-release-pair-digest-audit",
+    }
     assert summary["trust_boundary"]["stores_credentials"] is False
 
 
 def test_release_readiness_artifact_consumer_rejects_bad_fixture_evidence(tmp_path):
     cases = [
+        (
+            "missing_public_pair_digest_gate",
+            lambda root: _write_release_readiness_consumer_json(
+                root,
+                "ao2-release-readiness/artifact-closure-index.json",
+                {
+                    "schema_version": "ao2.release-artifact-closure-index.v1",
+                    "status": "passed",
+                },
+            ),
+            "release readiness public pair digest gate was not ready",
+        ),
+        (
+            "failed_public_pair_digest_gate",
+            lambda root: _write_release_readiness_consumer_json(
+                root,
+                "ao2-release-readiness/artifact-closure-index.json",
+                {
+                    "schema_version": "ao2.release-artifact-closure-index.v1",
+                    "status": "passed",
+                    "public_pair_digest_gate": {
+                        "schema_version": "ao2.public-release-pair-digest-audit.v1",
+                        "status": "passed",
+                        "archive_parity_status": "failed",
+                        "required_summary_field": "public_pair_digest_audit",
+                        "required_archive_scope": "full_archive_parity",
+                        "required_check": "release_public_pair_digest_audit_contract",
+                        "required_artifact": "ao2-public-release-pair-digest-audit",
+                    },
+                },
+            ),
+            "release readiness public pair digest gate was not ready",
+        ),
         (
             "missing_codex_cron_decision",
             lambda root: (
@@ -10004,6 +10065,11 @@ def test_public_release_train_drill_contract():
         "artifact-closure-index.json",
         "ao2.release-artifact-closure-index.v1",
         "artifact_closure_index_contract",
+        "public_pair_digest_gate",
+        "public_pair_digest_gate_contract",
+        "release readiness public pair digest gate was not ready",
+        "ao2.public-release-pair-digest-audit.v1",
+        "full_archive_parity",
         "release_train_control_plane_bridge",
         "expected_closure_artifacts",
         '"required_artifacts": expected_closure_artifacts',
