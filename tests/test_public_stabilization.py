@@ -2579,6 +2579,8 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
         "post_release_evidence_ready",
         "operator_release_evidence_ready",
         "stable_release_evidence_ready",
+        "public_pair_digest_audit",
+        "archive_parity_status",
         "dashboard.html",
         "mutates_releases",
         "stores_credentials",
@@ -2634,6 +2636,14 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
                         "artifact": "ao2-control-plane-post-release-verification-windows",
                         "status": "passed",
                     },
+                    {
+                        "component": "ao2",
+                        "platform": "public-release-pair",
+                        "artifact": "ao2-public-release-pair-digest-audit",
+                        "schema_version": "ao2.public-release-pair-digest-audit.v1",
+                        "archive_parity_status": "passed",
+                        "status": "passed",
+                    },
                 ],
                 "trust_boundary": {
                     "mutates_releases": False,
@@ -2671,8 +2681,15 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
     assert summary["stable_promotion"]["evidence_gate_status"] == "passed"
     assert summary["operator_evidence"]["status"] == "passed"
     assert summary["operator_evidence"]["operator_release_evidence_ready"] is True
-    assert summary["operator_evidence"]["check_count"] == 2
-    assert summary["operator_evidence"]["passed_check_count"] == 2
+    assert summary["operator_evidence"]["check_count"] == 3
+    assert summary["operator_evidence"]["passed_check_count"] == 3
+    assert summary["public_pair_digest_audit"]["artifact"] == "ao2-public-release-pair-digest-audit"
+    assert (
+        summary["public_pair_digest_audit"]["schema_version"]
+        == "ao2.public-release-pair-digest-audit.v1"
+    )
+    assert summary["public_pair_digest_audit"]["archive_parity_status"] == "passed"
+    assert summary["public_pair_digest_audit"]["status"] == "passed"
     assert summary["trust_boundary"]["mutates_releases"] is False
     assert summary["trust_boundary"]["stores_credentials"] is False
     assert summary["sources"]["stable_promotion_summary"] == str(stable_summary)
@@ -2684,6 +2701,8 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
     assert "ao2.stable-release-evidence-packet.v1" in dashboard
     assert "post-stable-release-smoke-Linux" in dashboard
     assert "ao2-control-plane-post-release-verification-windows" in dashboard
+    assert "ao2-public-release-pair-digest-audit" in dashboard
+    assert "Archive parity" in dashboard
 
     verification = read("docs/VERIFICATION.md")
     assert "npm run release:stable-evidence-packet" in verification
