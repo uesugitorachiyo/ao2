@@ -61,6 +61,7 @@ for name in [
     "release:readiness",
     "release:readiness:static",
     "release:readiness:artifact-consumer",
+    "release:readiness:final-closure-verifier",
     "release:artifact-size-budget-audit",
     "release:stable-promotion-evidence-index",
     "release:readiness:regression-gate",
@@ -565,6 +566,32 @@ add(
     "downloads release-readiness plus control-plane bridge artifacts and validates schema/status/core cross-OS checks",
 )
 
+release_readiness_final_closure_verifier = workflow_job_block("release-readiness-final-closure-verifier")
+release_readiness_final_closure_verifier_script = read("scripts/release-readiness-final-closure-verifier.sh")
+release_readiness_final_closure_verifier_ok = (
+    release_readiness_final_closure_verifier is not None
+    and "needs: release-readiness-artifact-consumer" in release_readiness_final_closure_verifier
+    and "actions/download-artifact@v8.0.1" in release_readiness_final_closure_verifier
+    and "name: ao2-release-readiness-consumer" in release_readiness_final_closure_verifier
+    and "target/release-readiness-final-closure-verifier/ao2-release-readiness-consumer" in release_readiness_final_closure_verifier
+    and "npm run release:readiness:final-closure-verifier" in release_readiness_final_closure_verifier
+    and scripts.get("release:readiness:final-closure-verifier") == "node scripts/run-sh-script.js scripts/release-readiness-final-closure-verifier.sh"
+    and "name: ao2-release-readiness-final-closure-verifier" in release_readiness_final_closure_verifier
+    and "target/release-readiness-final-closure-verifier" in release_readiness_final_closure_verifier
+    and "ao2.release-readiness-final-closure-verifier.v1" in release_readiness_final_closure_verifier_script
+    and "ao2.release-readiness-artifact-consumer.v1" in release_readiness_final_closure_verifier_script
+    and "ao2-release-readiness-consumer" in release_readiness_final_closure_verifier_script
+    and "ci_release_readiness_artifact_consumer_job" in release_readiness_final_closure_verifier_script
+    and "ci_release_readiness_hosted_artifact_gate_job" in release_readiness_final_closure_verifier_script
+    and "github_actions_artifact_download" in release_readiness_final_closure_verifier_script
+    and "stores_credentials" in release_readiness_final_closure_verifier_script
+)
+add(
+    "ci_release_readiness_final_closure_verifier_job",
+    "passed" if release_readiness_final_closure_verifier_ok else "failed",
+    "downloads the canonical release-readiness consumer artifact and emits final readiness closure evidence",
+)
+
 release_metadata_drift_audit_script = read("scripts/release-metadata-drift-audit.sh")
 release_metadata_drift_audit_contract_ok = (
     "ao2.release-metadata-drift-audit.v1" in release_metadata_drift_audit_script
@@ -694,6 +721,7 @@ for script in [
     "scripts/risky-pr-golden-path.sh",
     "scripts/release-readiness.sh",
     "scripts/release-readiness-artifact-consumer.sh",
+    "scripts/release-readiness-final-closure-verifier.sh",
     "scripts/smoke-evidence-pack-control-plane.sh",
     "scripts/release-metadata-drift-audit.sh",
 ]:
@@ -1119,6 +1147,15 @@ artifact_closure_index = {
                 "ao2-dual-repo-release-publication-closure-index",
                 "ao2-stable-release-evidence-packet",
             ],
+        },
+        {
+            "id": "release_readiness_final_closure_verifier",
+            "artifact_name": "ao2-release-readiness-final-closure-verifier",
+            "producer_job": "release-readiness-final-closure-verifier",
+            "required_files": ["summary.json"],
+            "schema_versions": ["ao2.release-readiness-final-closure-verifier.v1"],
+            "required_checks": ["ci_release_readiness_final_closure_verifier_job"],
+            "source_artifacts": ["ao2-release-readiness-consumer"],
         },
     ],
     "trust_boundary": {
