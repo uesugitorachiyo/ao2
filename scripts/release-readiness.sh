@@ -64,6 +64,7 @@ for name in [
     "release:readiness:final-closure-verifier",
     "release:artifact-size-budget-audit",
     "release:stable-promotion-evidence-index",
+    "release:operator-readiness-summary",
     "release:readiness:regression-gate",
     "release:metadata-drift-audit",
     "smoke:evidence-control-plane",
@@ -497,6 +498,34 @@ add(
     "manual read-only index links stable evidence packet, post-release gate, digest parity, and artifact size budget evidence",
 )
 
+operator_readiness_summary_script = read("scripts/operator-readiness-summary.sh")
+operator_readiness_summary_ok = (
+    scripts.get("release:operator-readiness-summary") == "node scripts/run-sh-script.js scripts/operator-readiness-summary.sh"
+    and "AO2_OPERATOR_READINESS_SUMMARY_ROOT" in operator_readiness_summary_script
+    and "AO2_OPERATOR_READINESS_FINAL_CLOSURE_ROOT" in operator_readiness_summary_script
+    and "AO2_OPERATOR_READINESS_STABLE_PROMOTION_INDEX_ROOT" in operator_readiness_summary_script
+    and "AO2_OPERATOR_READINESS_PUBLIC_PAIR_DIGEST_ROOT" in operator_readiness_summary_script
+    and "AO2_OPERATOR_READINESS_ARTIFACT_SIZE_BUDGET_ROOT" in operator_readiness_summary_script
+    and "ao2.operator-readiness-summary.v1" in operator_readiness_summary_script
+    and "ao2.release-readiness-final-closure-verifier.v1" in operator_readiness_summary_script
+    and "ao2.stable-promotion-evidence-index.v1" in operator_readiness_summary_script
+    and "ao2.public-release-pair-digest-audit.v1" in operator_readiness_summary_script
+    and "ao2.release-artifact-size-budget-audit.v1" in operator_readiness_summary_script
+    and "release_go_no_go" in operator_readiness_summary_script
+    and "mutates_releases" in operator_readiness_summary_script
+    and "stores_credentials" in operator_readiness_summary_script
+    and "control_plane_approves_release" in operator_readiness_summary_script
+    and "OPENAI_API_KEY" in operator_readiness_summary_script
+    and "ANTHROPIC_API_KEY" in operator_readiness_summary_script
+    and "gh release" not in operator_readiness_summary_script
+    and "contents: write" not in operator_readiness_summary_script
+)
+add(
+    "release_operator_readiness_summary",
+    "passed" if operator_readiness_summary_ok else "failed",
+    "local read-only operator go/no-go summary composes final closure, stable promotion index, digest parity, and size budget evidence",
+)
+
 release_readiness_artifact_consumer = workflow_job_block("release-readiness-artifact-consumer")
 release_readiness_artifact_consumer_script = read("scripts/release-readiness-artifact-consumer.sh")
 release_readiness_artifact_consumer_ok = (
@@ -722,6 +751,7 @@ for script in [
     "scripts/release-readiness.sh",
     "scripts/release-readiness-artifact-consumer.sh",
     "scripts/release-readiness-final-closure-verifier.sh",
+    "scripts/operator-readiness-summary.sh",
     "scripts/smoke-evidence-pack-control-plane.sh",
     "scripts/release-metadata-drift-audit.sh",
 ]:
@@ -733,6 +763,7 @@ for forbidden in ["OPENAI_API_" + "KEY=", "ANTHROPIC_API_" + "KEY=", "cat target
     combined = "\n".join((root / path).read_text(encoding="utf-8", errors="replace") for path in [
         "scripts/risky-pr-golden-path.sh",
         "scripts/release-readiness.sh",
+        "scripts/operator-readiness-summary.sh",
         "scripts/smoke-evidence-pack-control-plane.sh",
         "scripts/release-metadata-drift-audit.sh",
     ])

@@ -1914,6 +1914,190 @@ def test_stable_promotion_evidence_index_links_release_gates(tmp_path):
     ]
 
 
+def test_operator_readiness_summary_composes_final_release_go_no_go(tmp_path):
+    package_json = json.loads(read("package.json"))
+    assert package_json["scripts"]["release:operator-readiness-summary"] == (
+        "node scripts/run-sh-script.js scripts/operator-readiness-summary.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "operator-readiness-summary.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.operator-readiness-summary.v1",
+        "AO2_OPERATOR_READINESS_SUMMARY_ROOT",
+        "AO2_OPERATOR_READINESS_FINAL_CLOSURE_ROOT",
+        "AO2_OPERATOR_READINESS_STABLE_PROMOTION_INDEX_ROOT",
+        "AO2_OPERATOR_READINESS_PUBLIC_PAIR_DIGEST_ROOT",
+        "AO2_OPERATOR_READINESS_ARTIFACT_SIZE_BUDGET_ROOT",
+        "ao2.release-readiness-final-closure-verifier.v1",
+        "ao2.stable-promotion-evidence-index.v1",
+        "ao2.public-release-pair-digest-audit.v1",
+        "ao2.release-artifact-size-budget-audit.v1",
+        "required_archive_scope",
+        "release_go_no_go",
+        "mutates_releases",
+        "stores_credentials",
+        "control_plane_approves_release",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+    ]:
+        assert needle in text
+    assert "gh release" not in text
+    assert "contents: write" not in text
+
+    final_root = tmp_path / "final-closure"
+    _write_release_readiness_consumer_json(
+        final_root,
+        "summary.json",
+        {
+            "schema_version": "ao2.release-readiness-final-closure-verifier.v1",
+            "status": "passed",
+            "source_artifact": "ao2-release-readiness-consumer",
+            "trust_boundary": {
+                "local_only": True,
+                "stores_credentials": False,
+                "mutates_releases": False,
+            },
+        },
+    )
+    stable_index_root = tmp_path / "stable-promotion-evidence-index"
+    _write_release_readiness_consumer_json(
+        stable_index_root,
+        "summary.json",
+        {
+            "schema_version": "ao2.stable-promotion-evidence-index.v1",
+            "status": "passed",
+            "stable_promotion_evidence_index_ready": True,
+            "required_operator_actions": [
+                "review_index",
+                "review_operator_checklist",
+                "verify_release_pages",
+                "enter_confirmation_only_after_review",
+            ],
+            "trust_boundary": {
+                "local_only": True,
+                "mutates_releases": False,
+                "stores_credentials": False,
+                "control_plane_approves_release": False,
+            },
+        },
+    )
+    public_pair_root = tmp_path / "public-pair-digest-audit"
+    _write_release_readiness_consumer_json(
+        public_pair_root,
+        "summary.json",
+        {
+            "schema_version": "ao2.public-release-pair-digest-audit.v1",
+            "status": "passed",
+            "archive_parity_status": "passed",
+            "archive_parity": {"status": "passed"},
+            "required_archive_scope": "full_archive_parity",
+            "trust_boundary": {
+                "mutates_releases": False,
+                "stores_credentials": False,
+            },
+        },
+    )
+    size_budget_root = tmp_path / "artifact-size-budget-audit"
+    _write_release_readiness_consumer_json(
+        size_budget_root,
+        "summary.json",
+        {
+            "schema_version": "ao2.release-artifact-size-budget-audit.v1",
+            "status": "passed",
+            "check_count": 2,
+            "passed_check_count": 2,
+            "failed_check_count": 0,
+            "violations": [],
+            "trust_boundary": {
+                "mutates_releases": False,
+                "stores_credentials": False,
+            },
+        },
+    )
+
+    out_root = tmp_path / "operator-readiness-summary"
+    result = subprocess.run(
+        ["npm", "run", "release:operator-readiness-summary"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_OPERATOR_READINESS_SUMMARY_ROOT": str(out_root),
+            "AO2_OPERATOR_READINESS_FINAL_CLOSURE_ROOT": str(final_root),
+            "AO2_OPERATOR_READINESS_STABLE_PROMOTION_INDEX_ROOT": str(stable_index_root),
+            "AO2_OPERATOR_READINESS_PUBLIC_PAIR_DIGEST_ROOT": str(public_pair_root),
+            "AO2_OPERATOR_READINESS_ARTIFACT_SIZE_BUDGET_ROOT": str(size_budget_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.operator-readiness-summary.v1"
+    assert summary["status"] == "passed"
+    assert summary["release_go_no_go"] == "go"
+    assert summary["operator_readiness_ready"] is True
+    assert summary["evidence"]["release_readiness_final_closure"]["ready"] is True
+    assert summary["evidence"]["stable_promotion_evidence_index"]["ready"] is True
+    assert summary["evidence"]["public_pair_digest_audit"]["ready"] is True
+    assert summary["evidence"]["artifact_size_budget_audit"]["ready"] is True
+    assert summary["required_operator_actions"] == [
+        "review_final_closure_verifier",
+        "review_stable_promotion_evidence_index",
+        "review_public_pair_digest_audit",
+        "review_artifact_size_budget_audit",
+        "perform_manual_release_page_review",
+    ]
+    assert summary["trust_boundary"] == {
+        "local_only": True,
+        "mutates_releases": False,
+        "stores_credentials": False,
+        "control_plane_approves_release": False,
+    }
+    report = (out_root / "report.md").read_text(encoding="utf-8")
+    assert "Operator Readiness Summary" in report
+    assert "Release go/no-go: `go`" in report
+    assert "ao2-release-readiness-final-closure-verifier" in report
+    assert "ao2-stable-promotion-evidence-index" in report
+
+    bad = json.loads((public_pair_root / "summary.json").read_text(encoding="utf-8"))
+    bad["archive_parity_status"] = "failed"
+    bad["archive_parity"]["status"] = "failed"
+    (public_pair_root / "summary.json").write_text(
+        json.dumps(bad, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    fail_root = tmp_path / "operator-readiness-summary-fail"
+    result = subprocess.run(
+        ["npm", "run", "release:operator-readiness-summary"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_OPERATOR_READINESS_SUMMARY_ROOT": str(fail_root),
+            "AO2_OPERATOR_READINESS_FINAL_CLOSURE_ROOT": str(final_root),
+            "AO2_OPERATOR_READINESS_STABLE_PROMOTION_INDEX_ROOT": str(stable_index_root),
+            "AO2_OPERATOR_READINESS_PUBLIC_PAIR_DIGEST_ROOT": str(public_pair_root),
+            "AO2_OPERATOR_READINESS_ARTIFACT_SIZE_BUDGET_ROOT": str(size_budget_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    failed = json.loads((fail_root / "summary.json").read_text(encoding="utf-8"))
+    assert failed["release_go_no_go"] == "no_go"
+    assert "public_pair_digest_audit_not_ready" in [
+        blocker["code"] for blocker in failed["blockers"]
+    ]
+
+    verification = read("docs/VERIFICATION.md")
+    assert "npm run release:operator-readiness-summary" in verification
+    assert "ao2.operator-readiness-summary.v1" in verification
+
+
 def test_stable_promotion_dry_run_checklist_workflow_runs_from_stable_evidence_packet():
     workflow = read(".github/workflows/stable-promotion-dry-run-checklist.yml")
     for needle in [
@@ -3279,6 +3463,11 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "release_artifact_size_budget_audit",
         "release:artifact-size-budget-audit",
         "ao2.release-artifact-size-budget-audit.v1",
+        "release_operator_readiness_summary",
+        "release:operator-readiness-summary",
+        "ao2.operator-readiness-summary.v1",
+        "AO2_OPERATOR_READINESS_FINAL_CLOSURE_ROOT",
+        "release_go_no_go",
         "max_size_bytes",
         "1048576",
         "size_budget_bytes",
