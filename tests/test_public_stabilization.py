@@ -5028,10 +5028,95 @@ def test_release_readiness_regression_gate_contract():
         "control_plane_long_lived_smoke",
         "phase1_operator_golden",
         "pulse_local_mirror",
+        "hosted_release_readiness_artifact_gate",
+        "AO2_RELEASE_READINESS_REGRESSION_HOSTED_ARTIFACT_REQUIRED",
+        "AO2_RELEASE_READINESS_REGRESSION_HOSTED_ARTIFACT_FIXTURE_DIR",
+        "AO2_RELEASE_READINESS_REGRESSION_ONLY_HOSTED_ARTIFACT_GATE",
+        "gh run download \"$run_id\" --repo uesugitorachiyo/ao2 --name ao2-release-readiness",
+        "ao2.release-readiness-hosted-artifact-gate.v1",
+        "public_pair_digest_gate",
+        "ao2.public-release-pair-digest-audit.v1",
+        "archive_parity_status",
+        "full_archive_parity",
     ]:
         assert needle in text
     assert "OPENAI_API_KEY" not in text
     assert "ANTHROPIC_API_KEY" not in text
+
+
+def test_release_readiness_regression_gate_validates_hosted_artifact_fixture(tmp_path):
+    fixture = tmp_path / "ao2-release-readiness"
+    fixture.mkdir()
+    (fixture / "summary.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.release-readiness-local.v1",
+                "status": "passed",
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (fixture / "artifact-closure-index.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.release-artifact-closure-index.v1",
+                "status": "passed",
+                "public_pair_digest_gate": {
+                    "schema_version": "ao2.public-release-pair-digest-audit.v1",
+                    "status": "passed",
+                    "archive_parity_status": "passed",
+                    "required_summary_field": "public_pair_digest_audit",
+                    "required_archive_scope": "full_archive_parity",
+                    "required_check": "release_public_pair_digest_audit_contract",
+                    "required_artifact": "ao2-public-release-pair-digest-audit",
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (fixture / "report.md").write_text(
+        "public_pair_digest_audit.archive_parity_status=passed "
+        "required_artifact=ao2-public-release-pair-digest-audit "
+        "scope=full_archive_parity\n",
+        encoding="utf-8",
+    )
+    (fixture / "report.html").write_text("<!doctype html>\n", encoding="utf-8")
+
+    out_root = tmp_path / "regression"
+    result = subprocess.run(
+        ["npm", "run", "release:readiness:regression-gate"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "AO2_RELEASE_READINESS_REGRESSION_ROOT": str(out_root),
+            "AO2_RELEASE_READINESS_REGRESSION_ONLY_HOSTED_ARTIFACT_GATE": "1",
+            "AO2_RELEASE_READINESS_REGRESSION_HOSTED_ARTIFACT_REQUIRED": "1",
+            "AO2_RELEASE_READINESS_REGRESSION_HOSTED_ARTIFACT_FIXTURE_DIR": str(fixture),
+        },
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "passed"
+    assert summary["hosted_release_readiness_artifact_gate"]["status"] == "passed"
+    assert summary["hosted_release_readiness_artifact_gate"]["public_pair_digest_gate"][
+        "archive_parity_status"
+    ] == "passed"
+    assert {
+        "name": "hosted_release_readiness_artifact_gate",
+        "status": "passed",
+        "exit_code": 0,
+        "log": str(out_root / "hosted-release-readiness-artifact-gate.log"),
+    } in summary["checks"]
 
 
 def test_pulse_local_mirror_resume_command_contract():
