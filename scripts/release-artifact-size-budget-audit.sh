@@ -90,23 +90,37 @@ def load_artifacts_from_fixture(path):
 
 def load_artifacts_from_github(repo_name, limit):
     # gh api is read-only here; the workflow/job permissions only need actions:read.
-    result = subprocess.run(
-        [
-            "gh",
-            "api",
-            f"repos/{repo_name}/actions/artifacts",
-            "-f",
-            f"per_page={limit}",
-        ],
-        cwd=root,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "gh api artifacts failed")
-    data = json.loads(result.stdout)
-    return data.get("artifacts", [])
+    if limit <= 0:
+        raise ValueError("artifact metadata limit must be positive")
+    page_size = min(limit, 100)
+    artifacts = []
+    page = 1
+    while True:
+        result = subprocess.run(
+            [
+                "gh",
+                "api",
+                f"repos/{repo_name}/actions/artifacts",
+                "--method",
+                "GET",
+                "-f",
+                f"per_page={page_size}",
+                "-f",
+                f"page={page}",
+            ],
+            cwd=root,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "gh api artifacts failed")
+        data = json.loads(result.stdout)
+        page_artifacts = data.get("artifacts", [])
+        if not page_artifacts:
+            return artifacts
+        artifacts.extend(page_artifacts)
+        page += 1
 
 def parse_created_at(item):
     value = item.get("created_at") or ""

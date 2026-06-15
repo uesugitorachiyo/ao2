@@ -2811,6 +2811,90 @@ def test_release_artifact_size_budget_audit_validates_hosted_metadata(tmp_path):
     assert summary["violations"] == []
     assert summary["checked_artifacts"][1]["observed_size_bytes"] == 5436
 
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_gh = fake_bin / "gh"
+    fake_gh.write_text(
+        """#!/usr/bin/env python3
+import json
+import sys
+
+args = sys.argv[1:]
+if args[:2] != ["api", "repos/uesugitorachiyo/ao2/actions/artifacts"]:
+    print(f"unexpected gh args: {args!r}", file=sys.stderr)
+    raise SystemExit(1)
+if "--method" not in args:
+    print(f"missing --method GET: {args!r}", file=sys.stderr)
+    raise SystemExit(1)
+method_index = args.index("--method")
+if method_index + 1 >= len(args) or args[method_index + 1] != "GET":
+    print(f"missing --method GET: {args!r}", file=sys.stderr)
+    raise SystemExit(1)
+
+page = "1"
+for index, arg in enumerate(args):
+    if arg == "-f" and index + 1 < len(args) and args[index + 1].startswith("page="):
+        page = args[index + 1].split("=", 1)[1]
+
+if page == "1":
+    artifacts = [
+        {
+            "id": 2001,
+            "name": "ao2-stable-promotion-operator-checklist",
+            "size_in_bytes": 4096,
+            "expired": False,
+            "created_at": "2026-06-15T02:58:22Z",
+        }
+    ]
+elif page == "2":
+    artifacts = [
+        {
+            "id": 2002,
+            "name": "ao2-stable-promotion-dry-run-checklist",
+            "size_in_bytes": 5436,
+            "expired": False,
+            "created_at": "2026-06-14T14:21:09Z",
+        }
+    ]
+else:
+    artifacts = []
+
+print(json.dumps({
+    "artifacts": artifacts
+}))
+""",
+        encoding="utf-8",
+    )
+    fake_gh.chmod(0o755)
+
+    github_root = tmp_path / "audit-github"
+    result = subprocess.run(
+        [
+            "npm",
+            "run",
+            "release:artifact-size-budget-audit",
+            "--",
+            "--closure-index",
+            str(closure_index),
+            "--repo",
+            "uesugitorachiyo/ao2",
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "AO2_RELEASE_ARTIFACT_SIZE_BUDGET_AUDIT_ROOT": str(github_root),
+            "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+        },
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+    github_summary = json.loads((github_root / "summary.json").read_text(encoding="utf-8"))
+    assert github_summary["source"] == "github"
+    assert github_summary["status"] == "passed"
+    assert github_summary["passed_check_count"] == 2
+
     fixture_artifacts["artifacts"][1]["size_in_bytes"] = 1048577
     (fixture / "artifacts.json").write_text(
         json.dumps(fixture_artifacts, indent=2, sort_keys=True) + "\n",
