@@ -27,6 +27,21 @@ def require(condition, message, payload=None):
 summary_path_source, summary = load_json("ao2-release-readiness/summary.json")
 require(summary.get("schema_version") == "ao2.release-readiness-local.v1", "unexpected release readiness schema", summary)
 require(summary.get("status") == "passed", "release readiness did not pass", summary)
+closure_index_path, closure_index = load_json("ao2-release-readiness/artifact-closure-index.json")
+require(closure_index.get("schema_version") == "ao2.release-artifact-closure-index.v1", "unexpected release readiness artifact closure schema", closure_index)
+require(closure_index.get("status") == "passed", "release readiness artifact closure did not pass", closure_index)
+public_pair_digest_gate = closure_index.get("public_pair_digest_gate", {})
+require(
+    public_pair_digest_gate.get("schema_version") == "ao2.public-release-pair-digest-audit.v1"
+    and public_pair_digest_gate.get("status") == "passed"
+    and public_pair_digest_gate.get("archive_parity_status") == "passed"
+    and public_pair_digest_gate.get("required_summary_field") == "public_pair_digest_audit"
+    and public_pair_digest_gate.get("required_archive_scope") == "full_archive_parity"
+    and public_pair_digest_gate.get("required_check") == "release_public_pair_digest_audit_contract"
+    and public_pair_digest_gate.get("required_artifact") == "ao2-public-release-pair-digest-audit",
+    "release readiness public pair digest gate was not ready",
+    closure_index,
+)
 
 bridge_summary_path, bridge_summary = load_json("ao2-release-train-control-plane-bridge/latest/summary.json")
 require(bridge_summary.get("schema_version") == "ao2.release-train-control-plane-bridge.v1", "unexpected release train bridge schema", bridge_summary)
@@ -177,6 +192,7 @@ consumer_summary = {
     ],
     "source_summaries": [
         str(summary_path_source),
+        str(closure_index_path),
         str(bridge_summary_path),
         str(task_board_bridge_summary_path),
         str(pulse_task_board_closure_summary_path),
@@ -200,6 +216,7 @@ consumer_summary = {
             "summary": public_pair_digest_audit.get("summary"),
         },
     },
+    "public_pair_digest_gate": public_pair_digest_gate,
     "required_checks": required_checks,
     "trust_boundary": {
         "local_only": True,

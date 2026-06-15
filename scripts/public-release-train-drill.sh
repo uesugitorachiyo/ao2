@@ -165,6 +165,14 @@ artifact_closure_index_contract = {
     "schema_version": "ao2.release-artifact-closure-index.v1",
     "required_artifacts": expected_closure_artifacts,
 }
+public_pair_digest_gate_contract = {
+    "status": "missing",
+    "required_gate": "public_pair_digest_gate",
+    "schema_version": "ao2.public-release-pair-digest-audit.v1",
+    "required_archive_scope": "full_archive_parity",
+    "required_check": "release_public_pair_digest_audit_contract",
+    "required_artifact": "ao2-public-release-pair-digest-audit",
+}
 try:
     release_readiness_static = json.loads(release_readiness_static_summary.read_text(encoding="utf-8"))
     checks_by_name = {
@@ -201,6 +209,16 @@ try:
         and not missing_artifacts
         and not missing_checks
     )
+    public_pair_digest_gate = closure_index.get("public_pair_digest_gate", {})
+    public_pair_digest_gate_ok = (
+        public_pair_digest_gate.get("schema_version") == "ao2.public-release-pair-digest-audit.v1"
+        and public_pair_digest_gate.get("status") == "passed"
+        and public_pair_digest_gate.get("archive_parity_status") == "passed"
+        and public_pair_digest_gate.get("required_summary_field") == "public_pair_digest_audit"
+        and public_pair_digest_gate.get("required_archive_scope") == "full_archive_parity"
+        and public_pair_digest_gate.get("required_check") == "release_public_pair_digest_audit_contract"
+        and public_pair_digest_gate.get("required_artifact") == "ao2-public-release-pair-digest-audit"
+    )
     artifact_closure_index_contract.update({
         "status": "passed" if closure_ok else "failed",
         "observed_status": closure_index.get("status"),
@@ -208,12 +226,19 @@ try:
         "missing_artifacts": missing_artifacts,
         "missing_required_checks": sorted(set(missing_checks)),
     })
+    public_pair_digest_gate_contract.update({
+        "status": "passed" if public_pair_digest_gate_ok else "failed",
+        "observed_gate": public_pair_digest_gate,
+        "error": None if public_pair_digest_gate_ok else "release readiness public pair digest gate was not ready",
+    })
 except FileNotFoundError:
     release_readiness_artifact_consumer_contract["error"] = "release readiness static summary missing"
     artifact_closure_index_contract["error"] = "release readiness artifact-closure-index.json missing"
+    public_pair_digest_gate_contract["error"] = "release readiness artifact-closure-index.json missing"
 except json.JSONDecodeError as exc:
     release_readiness_artifact_consumer_contract.update({"status": "failed", "error": str(exc)})
     artifact_closure_index_contract.update({"status": "failed", "error": str(exc)})
+    public_pair_digest_gate_contract.update({"status": "failed", "error": str(exc)})
 
 publish_guards = {
     "refuses_publish_side_effects_by_default": True,
@@ -226,6 +251,7 @@ status = (
     if all(item["exit_code"] == 0 for item in checks)
     and release_readiness_artifact_consumer_contract["status"] == "passed"
     and artifact_closure_index_contract["status"] == "passed"
+    and public_pair_digest_gate_contract["status"] == "passed"
     else "failed"
 )
 payload = {
@@ -238,6 +264,7 @@ payload = {
     "publish_guards": publish_guards,
     "release_readiness_artifact_consumer_contract": release_readiness_artifact_consumer_contract,
     "artifact_closure_index_contract": artifact_closure_index_contract,
+    "public_pair_digest_gate_contract": public_pair_digest_gate_contract,
     "component_summaries": {
         "release_evidence_closure": str(out_root / "release-evidence-closure" / "summary.json"),
         "release_readiness_static": str(release_readiness_static_summary),
@@ -271,6 +298,8 @@ html_path.write_text(
     f"<code>{html.escape(release_readiness_artifact_consumer_contract['status'])}</code>.</p>"
     "<p>Artifact closure index contract: "
     f"<code>{html.escape(artifact_closure_index_contract['status'])}</code>.</p>"
+    "<p>Public pair digest gate contract: "
+    f"<code>{html.escape(public_pair_digest_gate_contract['status'])}</code>.</p>"
     "<table><thead><tr><th>Check</th><th>Status</th><th>Exit</th><th>Log</th></tr></thead>"
     f"<tbody>{rows}</tbody></table></body></html>\n",
     encoding="utf-8",
