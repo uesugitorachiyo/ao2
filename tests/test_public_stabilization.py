@@ -3186,6 +3186,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         'add_job_matrix_os_check("non_approval_required_check_compat", ["macos-latest", "windows-latest"])',
         "ci_workbench_operator_packet_smoke_index_requires_all_os",
         "ci_release_readiness_static_artifact_job",
+        "ci_release_readiness_hosted_artifact_gate_job",
         "ci_release_readiness_artifact_consumer_job",
         "ci_ai_task_board_control_plane_bridge_artifact_job",
         "ci_pulse_task_board_closure_packet_artifact_job",
@@ -3219,6 +3220,11 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2-control-plane-0.1.13-macos-aarch64.tar.gz",
         "ao2-control-plane-0.1.13-windows-x86_64.tar.gz",
         "target/release-readiness-consumer/ao2-release-readiness",
+        "target/release-readiness-hosted-artifact-gate/input/ao2-release-readiness",
+        "target/release-readiness-hosted-artifact-gate/report",
+        "AO2_RELEASE_READINESS_REGRESSION_ONLY_HOSTED_ARTIFACT_GATE",
+        "AO2_RELEASE_READINESS_REGRESSION_HOSTED_ARTIFACT_REQUIRED",
+        "AO2_RELEASE_READINESS_REGRESSION_HOSTED_ARTIFACT_FIXTURE_DIR",
         "target/release-readiness-consumer/ao2-release-train-control-plane-bridge",
         "target/release-readiness-consumer/ao2-ai-task-board-control-plane-bridge",
         "target/release-readiness-consumer/ao2-pulse-task-board-closure-packet",
@@ -3228,6 +3234,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "target/release-readiness-consumer/ao2-dual-repo-release-publication-closure-index",
         "target/release-readiness-consumer/ao2-stable-release-evidence-packet",
         "ao2.release-readiness-local.v1",
+        "ao2.release-readiness-hosted-artifact-gate.v1",
         "ao2.release-train-control-plane-bridge.v1",
         "ao2.ai-task-board-control-plane-bridge.v1",
         "ao2.pulse-task-board-closure-packet.v1",
@@ -3248,6 +3255,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "size_bytes",
         "artifact-closure-index.json",
         "release_readiness_artifact_consumer",
+        "release_readiness_hosted_artifact_gate",
         "release_train_control_plane_bridge",
         "ai_task_board_control_plane_bridge",
         "pulse_task_board_closure_packet",
@@ -3313,6 +3321,17 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2-pulse-codex-cron-event-loop-smoke",
         "release-readiness-artifact-consumer:",
         "name: Release readiness artifact consumer",
+        "release-readiness-hosted-artifact-gate:",
+        "name: Release readiness hosted artifact gate",
+        "needs: release-readiness-artifacts",
+        "Download current release-readiness artifact",
+        "path: target/release-readiness-hosted-artifact-gate/input/ao2-release-readiness",
+        "AO2_RELEASE_READINESS_REGRESSION_ROOT=target/release-readiness-hosted-artifact-gate/report",
+        "AO2_RELEASE_READINESS_REGRESSION_ONLY_HOSTED_ARTIFACT_GATE=1",
+        "AO2_RELEASE_READINESS_REGRESSION_HOSTED_ARTIFACT_REQUIRED=1",
+        "AO2_RELEASE_READINESS_REGRESSION_HOSTED_ARTIFACT_FIXTURE_DIR=target/release-readiness-hosted-artifact-gate/input/ao2-release-readiness",
+        "npm run release:readiness:regression-gate",
+        "ao2-release-readiness-hosted-artifact-gate",
         "needs: [release-readiness-artifacts, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-codex-cron-event-loop-smoke-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index, stable-release-evidence-packet-artifacts]",
         "uses: actions/checkout@v6.0.3",
         "uses: actions/download-artifact@v8.0.1",
@@ -3502,6 +3521,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_job_required_os:non_approval_required_check_compat",
         "ci_workbench_operator_packet_smoke_index_requires_all_os",
         "ci_release_readiness_static_artifact_job",
+        "ci_release_readiness_hosted_artifact_gate_job",
         "ci_release_artifact_size_budget_audit_job",
         "ci_release_readiness_artifact_consumer_job",
         "ci_release_train_control_plane_bridge_artifact_job",
@@ -3525,6 +3545,19 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     assert artifacts["release_readiness"]["artifact_name"] == "ao2-release-readiness"
     assert artifacts["release_readiness"]["schema_versions"] == [
         "ao2.release-readiness-local.v1"
+    ]
+    assert artifacts["release_readiness_hosted_artifact_gate"]["artifact_name"] == (
+        "ao2-release-readiness-hosted-artifact-gate"
+    )
+    assert artifacts["release_readiness_hosted_artifact_gate"]["producer_job"] == (
+        "release-readiness-hosted-artifact-gate"
+    )
+    assert artifacts["release_readiness_hosted_artifact_gate"]["schema_versions"] == [
+        "ao2.release-readiness-regression-gate.v1",
+        "ao2.release-readiness-hosted-artifact-gate.v1",
+    ]
+    assert artifacts["release_readiness_hosted_artifact_gate"]["source_artifacts"] == [
+        "ao2-release-readiness"
     ]
     assert artifacts["release_readiness_artifact_consumer"]["artifact_name"] == (
         "ao2-release-readiness-consumer"
@@ -4875,6 +4908,10 @@ def test_ci_uploads_guard_and_release_readiness_artifacts():
     assert "Upload release-readiness artifacts" in ci
     assert "ao2-release-readiness" in ci
     assert "target/release-readiness-ci" in ci
+    assert "release-readiness-hosted-artifact-gate" in ci
+    assert "Upload release-readiness hosted artifact gate" in ci
+    assert "ao2-release-readiness-hosted-artifact-gate" in ci
+    assert "target/release-readiness-hosted-artifact-gate/report" in ci
 
     for script_name in [
         "ci-python-guard-artifacts.sh",

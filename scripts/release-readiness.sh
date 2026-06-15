@@ -132,6 +132,28 @@ add(
     "runs static release readiness and uploads target/release-readiness-ci",
 )
 
+release_readiness_hosted_artifact_gate = workflow_job_block("release-readiness-hosted-artifact-gate")
+release_readiness_hosted_artifact_gate_ok = (
+    release_readiness_hosted_artifact_gate is not None
+    and "needs: release-readiness-artifacts" in release_readiness_hosted_artifact_gate
+    and "actions/download-artifact@v8.0.1" in release_readiness_hosted_artifact_gate
+    and "name: ao2-release-readiness" in release_readiness_hosted_artifact_gate
+    and "target/release-readiness-hosted-artifact-gate/input/ao2-release-readiness" in release_readiness_hosted_artifact_gate
+    and "AO2_RELEASE_READINESS_REGRESSION_ROOT=target/release-readiness-hosted-artifact-gate/report" in release_readiness_hosted_artifact_gate
+    and "AO2_RELEASE_READINESS_REGRESSION_ONLY_HOSTED_ARTIFACT_GATE=1" in release_readiness_hosted_artifact_gate
+    and "AO2_RELEASE_READINESS_REGRESSION_HOSTED_ARTIFACT_REQUIRED=1" in release_readiness_hosted_artifact_gate
+    and "AO2_RELEASE_READINESS_REGRESSION_HOSTED_ARTIFACT_FIXTURE_DIR=target/release-readiness-hosted-artifact-gate/input/ao2-release-readiness" in release_readiness_hosted_artifact_gate
+    and "npm run release:readiness:regression-gate" in release_readiness_hosted_artifact_gate
+    and scripts.get("release:readiness:regression-gate") == "node scripts/run-sh-script.js scripts/release-readiness-regression-gate.sh"
+    and "name: ao2-release-readiness-hosted-artifact-gate" in release_readiness_hosted_artifact_gate
+    and "target/release-readiness-hosted-artifact-gate/report" in release_readiness_hosted_artifact_gate
+)
+add(
+    "ci_release_readiness_hosted_artifact_gate_job",
+    "passed" if release_readiness_hosted_artifact_gate_ok else "failed",
+    "downloads the current ao2-release-readiness artifact and verifies its hosted artifact gate evidence",
+)
+
 release_artifact_size_budget_audit_workflow = read(".github/workflows/release-artifact-size-budget-audit.yml")
 release_artifact_size_budget_audit_script = read("scripts/release-artifact-size-budget-audit.sh")
 release_artifact_size_budget_audit_ok = (
@@ -787,6 +809,21 @@ artifact_closure_index = {
             "required_files": ["summary.json", "report.md", "report.html"],
             "schema_versions": ["ao2.release-readiness-local.v1"],
             "required_checks": ["ci_release_readiness_static_artifact_job"],
+        },
+        {
+            "id": "release_readiness_hosted_artifact_gate",
+            "artifact_name": "ao2-release-readiness-hosted-artifact-gate",
+            "producer_job": "release-readiness-hosted-artifact-gate",
+            "required_files": [
+                "summary.json",
+                "hosted-release-readiness-artifact-gate/summary.json",
+            ],
+            "schema_versions": [
+                "ao2.release-readiness-regression-gate.v1",
+                "ao2.release-readiness-hosted-artifact-gate.v1",
+            ],
+            "required_checks": ["ci_release_readiness_hosted_artifact_gate_job"],
+            "source_artifacts": ["ao2-release-readiness"],
         },
         {
             "id": "release_artifact_size_budget_audit",
