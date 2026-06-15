@@ -108,6 +108,20 @@ operator_checks = operator.get("checks") if isinstance(operator.get("checks"), l
 passed_operator_checks = [
     check for check in operator_checks if check.get("status") == "passed"
 ]
+public_pair_digest_check = next(
+    (
+        check
+        for check in operator_checks
+        if check.get("artifact") == "ao2-public-release-pair-digest-audit"
+    ),
+    {},
+)
+public_pair_digest_ready = (
+    public_pair_digest_check.get("status") == "passed"
+    and public_pair_digest_check.get("schema_version")
+    == "ao2.public-release-pair-digest-audit.v1"
+    and public_pair_digest_check.get("archive_parity_status") == "passed"
+)
 operator_ready = (
     operator_schema_ok
     and operator.get("status") == "passed"
@@ -154,6 +168,17 @@ if operator and not operator_ready:
             "check_count": len(operator_checks),
         }
     )
+if operator and not public_pair_digest_ready:
+    blockers.append(
+        {
+            "code": "public_pair_digest_audit_not_ready",
+            "severity": "blocking",
+            "artifact": public_pair_digest_check.get("artifact"),
+            "status": public_pair_digest_check.get("status"),
+            "schema_version": public_pair_digest_check.get("schema_version"),
+            "archive_parity_status": public_pair_digest_check.get("archive_parity_status"),
+        }
+    )
 
 source_trust = [
     stable.get("trust_boundary", {}) if isinstance(stable.get("trust_boundary"), dict) else {},
@@ -187,6 +212,13 @@ payload = {
         "check_count": len(operator_checks),
         "passed_check_count": len(passed_operator_checks),
         "checks": operator_checks,
+    },
+    "public_pair_digest_audit": {
+        "artifact": public_pair_digest_check.get("artifact"),
+        "schema_version": public_pair_digest_check.get("schema_version"),
+        "status": public_pair_digest_check.get("status"),
+        "archive_parity_status": public_pair_digest_check.get("archive_parity_status"),
+        "summary": public_pair_digest_check.get("summary"),
     },
     "blockers": blockers,
     "trust_boundary": {
@@ -252,6 +284,7 @@ dashboard_path.write_text(
   <p><code>{PACKET_SCHEMA}</code></p>
   <p class="status">Status: {html.escape(payload["status"])}</p>
   <p>Stable release evidence ready: {str(stable_release_evidence_ready).lower()}</p>
+  <p>Archive parity: {html.escape(str(payload["public_pair_digest_audit"]["archive_parity_status"]))}</p>
   <h2>Source Summaries</h2>
   <table>
     <tr><th>Source</th><th>Path</th><th>Status</th></tr>
