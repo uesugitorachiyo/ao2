@@ -68,6 +68,7 @@
     "release:readiness:static": "node scripts/run-sh-script.js scripts/release-readiness.sh --static-only",
     "release:readiness:full": "node scripts/run-sh-script.js scripts/release-readiness.sh --full",
     "release:readiness:artifact-consumer": "node scripts/run-sh-script.js scripts/release-readiness-artifact-consumer.sh",
+    "release:readiness:final-closure-verifier": "node scripts/run-sh-script.js scripts/release-readiness-final-closure-verifier.sh",
     "release:artifact-size-budget-audit": "node scripts/run-sh-script.js scripts/release-artifact-size-budget-audit.sh",
     "release:readiness:regression-gate": "node scripts/run-sh-script.js scripts/release-readiness-regression-gate.sh",
     "local:canary": "node scripts/run-sh-script.js scripts/local-canary.sh",

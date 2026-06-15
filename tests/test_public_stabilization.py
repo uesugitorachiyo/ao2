@@ -2,6 +2,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import stat
 import subprocess
 import tarfile
@@ -3188,6 +3189,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_release_readiness_static_artifact_job",
         "ci_release_readiness_hosted_artifact_gate_job",
         "ci_release_readiness_artifact_consumer_job",
+        "ci_release_readiness_final_closure_verifier_job",
         "ci_ai_task_board_control_plane_bridge_artifact_job",
         "ci_pulse_task_board_closure_packet_artifact_job",
         "ci_pulse_codex_cron_event_loop_smoke_artifact_job",
@@ -3234,7 +3236,10 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "target/release-readiness-consumer/ao2-release-publication-closure",
         "target/release-readiness-consumer/ao2-dual-repo-release-publication-closure-index",
         "target/release-readiness-consumer/ao2-stable-release-evidence-packet",
+        "target/release-readiness-final-closure-verifier/ao2-release-readiness-consumer",
+        "target/release-readiness-final-closure-verifier",
         "ao2.release-readiness-local.v1",
+        "ao2.release-readiness-final-closure-verifier.v1",
         "ao2.release-readiness-hosted-artifact-gate.v1",
         "ao2.release-train-control-plane-bridge.v1",
         "ao2.ai-task-board-control-plane-bridge.v1",
@@ -3256,6 +3261,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "size_bytes",
         "artifact-closure-index.json",
         "release_readiness_artifact_consumer",
+        "release_readiness_final_closure_verifier",
         "release_readiness_hosted_artifact_gate",
         "release_train_control_plane_bridge",
         "ai_task_board_control_plane_bridge",
@@ -3360,6 +3366,13 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "npm run release:publication-dry-run-closure",
         "if: always()",
         "npm run release:readiness:artifact-consumer",
+        "release-readiness-final-closure-verifier:",
+        "name: Release readiness final closure verifier",
+        "needs: release-readiness-artifact-consumer",
+        "name: ao2-release-readiness-consumer",
+        "path: target/release-readiness-final-closure-verifier/ao2-release-readiness-consumer",
+        "npm run release:readiness:final-closure-verifier",
+        "ao2-release-readiness-final-closure-verifier",
     ]:
         assert needle in ci
 
@@ -3527,6 +3540,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_release_readiness_hosted_artifact_gate_job",
         "ci_release_artifact_size_budget_audit_job",
         "ci_release_readiness_artifact_consumer_job",
+        "ci_release_readiness_final_closure_verifier_job",
         "ci_release_train_control_plane_bridge_artifact_job",
         "ci_ai_task_board_control_plane_bridge_artifact_job",
         "ci_pulse_task_board_closure_packet_artifact_job",
@@ -3577,6 +3591,18 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     assert "ao2-release-readiness-hosted-artifact-gate" in artifacts[
         "release_readiness_artifact_consumer"
     ]["consumes"]
+    assert artifacts["release_readiness_final_closure_verifier"]["artifact_name"] == (
+        "ao2-release-readiness-final-closure-verifier"
+    )
+    assert artifacts["release_readiness_final_closure_verifier"]["producer_job"] == (
+        "release-readiness-final-closure-verifier"
+    )
+    assert artifacts["release_readiness_final_closure_verifier"]["schema_versions"] == [
+        "ao2.release-readiness-final-closure-verifier.v1"
+    ]
+    assert artifacts["release_readiness_final_closure_verifier"]["source_artifacts"] == [
+        "ao2-release-readiness-consumer"
+    ]
     assert artifacts["release_train_control_plane_bridge"]["artifact_name"] == (
         "ao2-release-train-control-plane-bridge"
     )
@@ -4072,6 +4098,17 @@ def _run_release_readiness_artifact_consumer(root: Path):
     )
 
 
+def _run_release_readiness_final_closure_verifier(root: Path):
+    return subprocess.run(
+        ["npm", "run", "release:readiness:final-closure-verifier"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        env={**os.environ, "AO2_RELEASE_READINESS_FINAL_CLOSURE_ROOT": str(root)},
+        check=False,
+    )
+
+
 def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_path):
     package_json = json.loads(read("package.json"))
     assert package_json["scripts"]["release:readiness:artifact-consumer"] == (
@@ -4450,6 +4487,211 @@ def test_release_readiness_artifact_consumer_rejects_bad_fixture_evidence(tmp_pa
         mutate(root)
 
         result = _run_release_readiness_artifact_consumer(root)
+
+        assert result.returncode != 0, case_name
+        assert expected in result.stderr + result.stdout
+
+
+def test_release_readiness_final_closure_verifier_runs_against_consumer_fixture(tmp_path):
+    package_json = json.loads(read("package.json"))
+    assert package_json["scripts"]["release:readiness:final-closure-verifier"] == (
+        "node scripts/run-sh-script.js scripts/release-readiness-final-closure-verifier.sh"
+    )
+
+    script_path = REPO_ROOT / "scripts" / "release-readiness-final-closure-verifier.sh"
+    assert script_path.is_file()
+    assert script_path.stat().st_mode & stat.S_IXUSR
+    script = script_path.read_text(encoding="utf-8")
+    for needle in [
+        "AO2_RELEASE_READINESS_FINAL_CLOSURE_ROOT",
+        "ao2.release-readiness-final-closure-verifier.v1",
+        "ao2.release-readiness-artifact-consumer.v1",
+        "ao2-release-readiness-consumer",
+        "ci_release_readiness_artifact_consumer_job",
+        "ci_release_readiness_hosted_artifact_gate_job",
+        "ao2-release-readiness-hosted-artifact-gate",
+        "stable_release_evidence_packet",
+        "public_pair_digest_gate",
+        "archive_parity_status",
+        "github_actions_artifact_download",
+    ]:
+        assert needle in script
+
+    ci = read(".github/workflows/ci.yml")
+    final_block = re.search(
+        r"(?ms)^  release-readiness-final-closure-verifier:\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:\n|\Z)",
+        ci,
+    )
+    assert final_block
+    final_ci = final_block.group("body")
+    assert "needs: release-readiness-artifact-consumer" in final_ci
+    assert "uses: actions/download-artifact@v8.0.1" in final_ci
+    assert "name: ao2-release-readiness-consumer" in final_ci
+    assert (
+        "path: target/release-readiness-final-closure-verifier/ao2-release-readiness-consumer"
+        in final_ci
+    )
+    assert "npm run release:readiness:final-closure-verifier" in final_ci
+    assert "ao2-release-readiness-final-closure-verifier" in final_ci
+
+    consumer_fixture = tmp_path / "consumer-fixture"
+    _write_release_readiness_consumer_fixture(consumer_fixture)
+    consumer_result = _run_release_readiness_artifact_consumer(consumer_fixture)
+    assert consumer_result.returncode == 0, consumer_result.stderr + consumer_result.stdout
+
+    verifier_root = tmp_path / "final-closure"
+    consumer_artifact = verifier_root / "ao2-release-readiness-consumer"
+    consumer_artifact.mkdir(parents=True)
+    shutil.copy2(consumer_fixture / "summary.json", consumer_artifact / "summary.json")
+
+    result = _run_release_readiness_final_closure_verifier(verifier_root)
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((verifier_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.release-readiness-final-closure-verifier.v1"
+    assert summary["status"] == "passed"
+    assert summary["source_artifact"] == "ao2-release-readiness-consumer"
+    assert summary["consumer"]["schema_version"] == "ao2.release-readiness-artifact-consumer.v1"
+    assert "ao2-release-readiness-hosted-artifact-gate" in summary["consumer"]["source_artifacts"]
+    assert summary["public_pair_digest_gate"]["archive_parity_status"] == "passed"
+    assert (
+        summary["hosted_release_readiness_artifact_gate"]["public_pair_digest_gate"][
+            "archive_parity_status"
+        ]
+        == "passed"
+    )
+    assert summary["stable_release_evidence_packet"]["stable_release_evidence_ready"] is True
+    assert summary["trust_boundary"]["stores_credentials"] is False
+
+
+def test_release_readiness_final_closure_verifier_rejects_bad_consumer_artifact(tmp_path):
+    cases = [
+        (
+            "missing_consumer_summary",
+            lambda root: None,
+            "missing required artifact file",
+        ),
+        (
+            "failed_consumer_status",
+            lambda root: _write_release_readiness_consumer_json(
+                root,
+                "ao2-release-readiness-consumer/summary.json",
+                {
+                    "schema_version": "ao2.release-readiness-artifact-consumer.v1",
+                    "status": "failed",
+                },
+            ),
+            "release-readiness consumer did not pass",
+        ),
+        (
+            "missing_hosted_source_artifact",
+            lambda root: _write_release_readiness_consumer_json(
+                root,
+                "ao2-release-readiness-consumer/summary.json",
+                {
+                    "schema_version": "ao2.release-readiness-artifact-consumer.v1",
+                    "status": "passed",
+                    "source_artifacts": ["ao2-release-readiness"],
+                    "required_checks": [
+                        "ci_release_readiness_artifact_consumer_job",
+                        "ci_release_readiness_hosted_artifact_gate_job",
+                    ],
+                    "public_pair_digest_gate": {
+                        "schema_version": "ao2.public-release-pair-digest-audit.v1",
+                        "status": "passed",
+                        "archive_parity_status": "passed",
+                        "required_archive_scope": "full_archive_parity",
+                    },
+                    "hosted_release_readiness_artifact_gate": {
+                        "status": "passed",
+                        "public_pair_digest_gate": {
+                            "schema_version": "ao2.public-release-pair-digest-audit.v1",
+                            "status": "passed",
+                            "archive_parity_status": "passed",
+                        },
+                    },
+                    "stable_release_evidence_packet": {
+                        "schema_version": "ao2.stable-release-evidence-packet.v1",
+                        "status": "passed",
+                        "stable_release_evidence_ready": True,
+                        "public_pair_digest_audit": {
+                            "schema_version": "ao2.public-release-pair-digest-audit.v1",
+                            "status": "passed",
+                            "archive_parity_status": "passed",
+                        },
+                    },
+                    "trust_boundary": {
+                        "stores_credentials": False,
+                        "source": "github_actions_artifact_download",
+                    },
+                },
+            ),
+            "release-readiness consumer missing source artifacts",
+        ),
+        (
+            "failed_hosted_gate",
+            lambda root: _write_release_readiness_consumer_json(
+                root,
+                "ao2-release-readiness-consumer/summary.json",
+                {
+                    "schema_version": "ao2.release-readiness-artifact-consumer.v1",
+                    "status": "passed",
+                    "source_artifacts": [
+                        "ao2-release-readiness",
+                        "ao2-release-readiness-hosted-artifact-gate",
+                        "ao2-release-train-control-plane-bridge",
+                        "ao2-ai-task-board-control-plane-bridge",
+                        "ao2-pulse-task-board-closure-packet",
+                        "ao2-pulse-codex-cron-event-loop-smoke",
+                        "ao2-dual-repo-installed-release-smoke",
+                        "ao2-release-publication-closure",
+                        "ao2-dual-repo-release-publication-closure-index",
+                        "ao2-stable-release-evidence-packet",
+                    ],
+                    "required_checks": [
+                        "ci_release_readiness_artifact_consumer_job",
+                        "ci_release_readiness_hosted_artifact_gate_job",
+                    ],
+                    "public_pair_digest_gate": {
+                        "schema_version": "ao2.public-release-pair-digest-audit.v1",
+                        "status": "passed",
+                        "archive_parity_status": "passed",
+                        "required_archive_scope": "full_archive_parity",
+                    },
+                    "hosted_release_readiness_artifact_gate": {
+                        "status": "failed",
+                        "public_pair_digest_gate": {
+                            "schema_version": "ao2.public-release-pair-digest-audit.v1",
+                            "status": "passed",
+                            "archive_parity_status": "passed",
+                        },
+                    },
+                    "stable_release_evidence_packet": {
+                        "schema_version": "ao2.stable-release-evidence-packet.v1",
+                        "status": "passed",
+                        "stable_release_evidence_ready": True,
+                        "public_pair_digest_audit": {
+                            "schema_version": "ao2.public-release-pair-digest-audit.v1",
+                            "status": "passed",
+                            "archive_parity_status": "passed",
+                        },
+                    },
+                    "trust_boundary": {
+                        "stores_credentials": False,
+                        "source": "github_actions_artifact_download",
+                    },
+                },
+            ),
+            "release-readiness hosted gate evidence was not ready",
+        ),
+    ]
+
+    for case_name, write_fixture, expected in cases:
+        root = tmp_path / case_name
+        root.mkdir()
+        write_fixture(root)
+
+        result = _run_release_readiness_final_closure_verifier(root)
 
         assert result.returncode != 0, case_name
         assert expected in result.stderr + result.stdout
