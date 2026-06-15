@@ -1,0 +1,117 @@
+name: Stable Promotion Evidence Index
+
+on:
+  workflow_dispatch:
+    inputs:
+      stable_release_evidence_run_id:
+        description: "Optional successful main CI run id containing ao2-stable-release-evidence-packet."
+        required: false
+        type: string
+      public_pair_digest_audit_run_id:
+        description: "Post Release Pair Digest Audit run id containing ao2-public-release-pair-digest-audit."
+        required: true
+        type: string
+      artifact_size_budget_audit_run_id:
+        description: "Release Artifact Size Budget Audit run id containing ao2-release-artifact-size-budget-audit."
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  stable-promotion-evidence-index:
+    name: Stable promotion evidence index
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+      - name: Reject provider API key environment
+        shell: bash
+        run: |
+          if [ "${OPENAI_API_KEY+x}" = "x" ] || [ "${ANTHROPIC_API_KEY+x}" = "x" ]; then
+            echo "provider API keys are not accepted by stable promotion evidence index" >&2
+            exit 1
+          fi
+      - name: Download stable release evidence packet
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STABLE_RELEASE_EVIDENCE_RUN_ID: ${{ inputs.stable_release_evidence_run_id }}
+        run: |
+          set -euo pipefail
+          out="target/stable-promotion-evidence-index/stable-release-evidence-packet"
+          rm -rf "$out"
+          mkdir -p "$out"
+
+          if [ -n "$STABLE_RELEASE_EVIDENCE_RUN_ID" ]; then
+            gh run download "$STABLE_RELEASE_EVIDENCE_RUN_ID" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name ao2-stable-release-evidence-packet \
+              --dir "$out"
+            exit 0
+          fi
+
+          while IFS= read -r run_id; do
+            [ -n "$run_id" ] || continue
+            rm -rf "$out"
+            mkdir -p "$out"
+            if gh run download "$run_id" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name ao2-stable-release-evidence-packet \
+              --dir "$out"; then
+              printf "%s\n" "$run_id" > "$out/source-run-id.txt"
+              exit 0
+            fi
+          done < <(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --branch main \
+            --workflow ci.yml \
+            --status success \
+            --limit 10 \
+            --json databaseId \
+            --jq '.[].databaseId')
+
+          echo "missing ao2-stable-release-evidence-packet from successful main CI runs" >&2
+          exit 1
+      - name: Download public pair digest audit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLIC_PAIR_DIGEST_AUDIT_RUN_ID: ${{ inputs.public_pair_digest_audit_run_id }}
+        run: |
+          gh run download "$PUBLIC_PAIR_DIGEST_AUDIT_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name ao2-public-release-pair-digest-audit \
+            --dir target/stable-promotion-evidence-index/public-pair-digest-audit
+      - name: Download artifact size budget audit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_SIZE_BUDGET_AUDIT_RUN_ID: ${{ inputs.artifact_size_budget_audit_run_id }}
+        run: |
+          gh run download "$ARTIFACT_SIZE_BUDGET_AUDIT_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name ao2-release-artifact-size-budget-audit \
+            --dir target/stable-promotion-evidence-index/artifact-size-budget-audit
+      - name: Generate stable promotion evidence index
+        shell: bash
+        run: |
+          AO2_STABLE_PROMOTION_EVIDENCE_INDEX_ROOT=target/stable-promotion-evidence-index/report \
+          AO2_STABLE_PROMOTION_EVIDENCE_INDEX_STABLE_PACKET_ROOT=target/stable-promotion-evidence-index/stable-release-evidence-packet \
+          AO2_STABLE_PROMOTION_EVIDENCE_INDEX_PUBLIC_PAIR_DIGEST_ROOT=target/stable-promotion-evidence-index/public-pair-digest-audit \
+          AO2_STABLE_PROMOTION_EVIDENCE_INDEX_ARTIFACT_SIZE_BUDGET_ROOT=target/stable-promotion-evidence-index/artifact-size-budget-audit \
+            npm run release:stable-promotion-evidence-index
+      - name: Upload stable promotion evidence index
+        uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: ao2-stable-promotion-evidence-index
+          path: target/stable-promotion-evidence-index/report
+          if-no-files-found: error

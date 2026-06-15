@@ -62,6 +62,7 @@ for name in [
     "release:readiness:static",
     "release:readiness:artifact-consumer",
     "release:artifact-size-budget-audit",
+    "release:stable-promotion-evidence-index",
     "release:readiness:regression-gate",
     "release:metadata-drift-audit",
     "smoke:evidence-control-plane",
@@ -438,6 +439,39 @@ add(
     "ci_stable_promotion_dry_run_checklist_workflow",
     "passed" if stable_promotion_dry_run_checklist_ok else "failed",
     "manual dry-run checklist downloads the hosted stable evidence packet, reruns dry-run promotion, audits it, and emits the non-mutating operator checklist",
+)
+
+stable_promotion_evidence_index = read(".github/workflows/stable-promotion-evidence-index.yml")
+stable_promotion_evidence_index_script = read("scripts/stable-promotion-evidence-index.sh")
+stable_promotion_evidence_index_ok = (
+    "name: Stable Promotion Evidence Index" in stable_promotion_evidence_index
+    and "workflow_dispatch:" in stable_promotion_evidence_index
+    and "stable_release_evidence_run_id:" in stable_promotion_evidence_index
+    and "public_pair_digest_audit_run_id:" in stable_promotion_evidence_index
+    and "artifact_size_budget_audit_run_id:" in stable_promotion_evidence_index
+    and "actions: read" in stable_promotion_evidence_index
+    and "contents: read" in stable_promotion_evidence_index
+    and "GH_TOKEN: ${{ github.token }}" in stable_promotion_evidence_index
+    and "ao2-stable-release-evidence-packet" in stable_promotion_evidence_index
+    and "ao2-public-release-pair-digest-audit" in stable_promotion_evidence_index
+    and "ao2-release-artifact-size-budget-audit" in stable_promotion_evidence_index
+    and "npm run release:stable-promotion-evidence-index" in stable_promotion_evidence_index
+    and "ao2-stable-promotion-evidence-index" in stable_promotion_evidence_index
+    and "contents: write" not in stable_promotion_evidence_index
+    and scripts.get("release:stable-promotion-evidence-index") == "node scripts/run-sh-script.js scripts/stable-promotion-evidence-index.sh"
+    and "ao2.stable-promotion-evidence-index.v1" in stable_promotion_evidence_index_script
+    and "ao2.stable-release-evidence-packet.v1" in stable_promotion_evidence_index_script
+    and "ao2.stable-promotion-evidence-gate.v1" in stable_promotion_evidence_index_script
+    and "ao2.public-release-pair-digest-audit.v1" in stable_promotion_evidence_index_script
+    and "ao2.release-artifact-size-budget-audit.v1" in stable_promotion_evidence_index_script
+    and "mutates_releases" in stable_promotion_evidence_index_script
+    and "stores_credentials" in stable_promotion_evidence_index_script
+    and "control_plane_approves_release" in stable_promotion_evidence_index_script
+)
+add(
+    "ci_stable_promotion_evidence_index_workflow",
+    "passed" if stable_promotion_evidence_index_ok else "failed",
+    "manual read-only index links stable evidence packet, post-release gate, digest parity, and artifact size budget evidence",
 )
 
 release_readiness_artifact_consumer = workflow_job_block("release-readiness-artifact-consumer")
@@ -984,6 +1018,25 @@ artifact_closure_index = {
             },
             "required_checks": ["ci_stable_promotion_dry_run_checklist_workflow"],
             "source_artifacts": ["ao2-stable-release-evidence-packet"],
+        },
+        {
+            "id": "stable_promotion_evidence_index",
+            "artifact_name": "ao2-stable-promotion-evidence-index",
+            "producer_job": "Stable Promotion Evidence Index / stable-promotion-evidence-index",
+            "required_files": ["summary.json", "index.md"],
+            "schema_versions": [
+                "ao2.stable-promotion-evidence-index.v1",
+                "ao2.stable-release-evidence-packet.v1",
+                "ao2.stable-promotion-evidence-gate.v1",
+                "ao2.public-release-pair-digest-audit.v1",
+                "ao2.release-artifact-size-budget-audit.v1",
+            ],
+            "required_checks": ["ci_stable_promotion_evidence_index_workflow"],
+            "source_artifacts": [
+                "ao2-stable-release-evidence-packet",
+                "ao2-public-release-pair-digest-audit",
+                "ao2-release-artifact-size-budget-audit",
+            ],
         },
         {
             "id": "release_readiness_artifact_consumer",

@@ -1692,6 +1692,198 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
     assert "Stable promotion operator checklist" in public_release_index
 
 
+def test_stable_promotion_evidence_index_links_release_gates(tmp_path):
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["release:stable-promotion-evidence-index"]
+        == "node scripts/run-sh-script.js scripts/stable-promotion-evidence-index.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "stable-promotion-evidence-index.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.stable-promotion-evidence-index.v1",
+        "AO2_STABLE_PROMOTION_EVIDENCE_INDEX_ROOT",
+        "AO2_STABLE_PROMOTION_EVIDENCE_INDEX_STABLE_PACKET_ROOT",
+        "AO2_STABLE_PROMOTION_EVIDENCE_INDEX_PUBLIC_PAIR_DIGEST_ROOT",
+        "AO2_STABLE_PROMOTION_EVIDENCE_INDEX_ARTIFACT_SIZE_BUDGET_ROOT",
+        "ao2.stable-release-evidence-packet.v1",
+        "ao2.stable-promotion-evidence-gate.v1",
+        "ao2.public-release-pair-digest-audit.v1",
+        "ao2.release-artifact-size-budget-audit.v1",
+        "archive_parity",
+        "failed_check_count",
+        "mutates_releases",
+        "stores_credentials",
+        "control_plane_approves_release",
+        "Stable Promotion Evidence Index",
+    ]:
+        assert needle in text
+    assert "gh release" not in text
+    assert "contents: write" not in text
+
+    workflow = read(".github/workflows/stable-promotion-evidence-index.yml")
+    for needle in [
+        "name: Stable Promotion Evidence Index",
+        "workflow_dispatch:",
+        "stable_release_evidence_run_id:",
+        "public_pair_digest_audit_run_id:",
+        "artifact_size_budget_audit_run_id:",
+        "permissions:",
+        "actions: read",
+        "contents: read",
+        "GH_TOKEN: ${{ github.token }}",
+        "ao2-stable-release-evidence-packet",
+        "ao2-public-release-pair-digest-audit",
+        "ao2-release-artifact-size-budget-audit",
+        "npm run release:stable-promotion-evidence-index",
+        "ao2-stable-promotion-evidence-index",
+    ]:
+        assert needle in workflow
+    assert "contents: write" not in workflow
+
+    stable_root = tmp_path / "stable-release-evidence-packet"
+    _write_release_readiness_consumer_json(
+        stable_root,
+        "packet/summary.json",
+        {
+            "schema_version": "ao2.stable-release-evidence-packet.v1",
+            "status": "passed",
+            "stable_release_evidence_ready": True,
+            "trust_boundary": {
+                "mutates_releases": False,
+                "stores_credentials": False,
+            },
+        },
+    )
+    _write_release_readiness_consumer_json(
+        stable_root,
+        "stable-promotion-workflow/post-release-verification-evidence/summary.json",
+        {
+            "schema_version": "ao2.stable-promotion-evidence-gate.v1",
+            "status": "passed",
+            "post_release_evidence_ready": True,
+            "check_count": 12,
+            "passed_check_count": 12,
+            "checks": [
+                {
+                    "artifact": "ao2-public-release-pair-digest-audit",
+                    "status": "passed",
+                }
+            ],
+            "trust_boundary": {
+                "mutates_releases": False,
+                "stores_credentials": False,
+                "control_plane_approves_release": False,
+            },
+        },
+    )
+
+    public_pair_root = tmp_path / "public-pair-digest-audit"
+    _write_release_readiness_consumer_json(
+        public_pair_root,
+        "post-release-pair-digest-audit/summary.json",
+        {
+            "schema_version": "ao2.public-release-pair-digest-audit.v1",
+            "status": "passed",
+            "archive_parity": {"status": "passed"},
+            "trust_boundary": {
+                "mutates_releases": False,
+                "stores_credentials": False,
+            },
+        },
+    )
+
+    size_budget_root = tmp_path / "artifact-size-budget-audit"
+    _write_release_readiness_consumer_json(
+        size_budget_root,
+        "summary.json",
+        {
+            "schema_version": "ao2.release-artifact-size-budget-audit.v1",
+            "status": "passed",
+            "check_count": 2,
+            "passed_check_count": 2,
+            "failed_check_count": 0,
+            "violations": [],
+            "trust_boundary": {
+                "mutates_releases": False,
+                "stores_credentials": False,
+            },
+        },
+    )
+
+    out_root = tmp_path / "evidence-index"
+    result = subprocess.run(
+        ["npm", "run", "release:stable-promotion-evidence-index"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_STABLE_PROMOTION_EVIDENCE_INDEX_ROOT": str(out_root),
+            "AO2_STABLE_PROMOTION_EVIDENCE_INDEX_STABLE_PACKET_ROOT": str(stable_root),
+            "AO2_STABLE_PROMOTION_EVIDENCE_INDEX_PUBLIC_PAIR_DIGEST_ROOT": str(public_pair_root),
+            "AO2_STABLE_PROMOTION_EVIDENCE_INDEX_ARTIFACT_SIZE_BUDGET_ROOT": str(size_budget_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.stable-promotion-evidence-index.v1"
+    assert summary["status"] == "passed"
+    assert summary["stable_promotion_evidence_index_ready"] is True
+    assert summary["evidence"]["stable_release_evidence_packet"]["ready"] is True
+    assert summary["evidence"]["post_release_verification_gate"]["ready"] is True
+    assert summary["evidence"]["public_pair_digest_audit"]["archive_parity_status"] == "passed"
+    assert summary["evidence"]["artifact_size_budget_audit"]["failed_check_count"] == 0
+    assert summary["required_operator_actions"] == [
+        "review_index",
+        "review_operator_checklist",
+        "verify_release_pages",
+        "enter_confirmation_only_after_review",
+    ]
+    assert summary["trust_boundary"] == {
+        "local_only": True,
+        "mutates_releases": False,
+        "stores_credentials": False,
+        "control_plane_approves_release": False,
+    }
+    index = (out_root / "index.md").read_text(encoding="utf-8")
+    assert "Stable Promotion Evidence Index" in index
+    assert "ao2-public-release-pair-digest-audit" in index
+    assert "ao2-release-artifact-size-budget-audit" in index
+
+    bad = json.loads((size_budget_root / "summary.json").read_text(encoding="utf-8"))
+    bad["failed_check_count"] = 1
+    bad["violations"] = [{"artifact": "ao2-stable-promotion-operator-checklist"}]
+    (size_budget_root / "summary.json").write_text(
+        json.dumps(bad, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    fail_root = tmp_path / "evidence-index-fail"
+    result = subprocess.run(
+        ["npm", "run", "release:stable-promotion-evidence-index"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_STABLE_PROMOTION_EVIDENCE_INDEX_ROOT": str(fail_root),
+            "AO2_STABLE_PROMOTION_EVIDENCE_INDEX_STABLE_PACKET_ROOT": str(stable_root),
+            "AO2_STABLE_PROMOTION_EVIDENCE_INDEX_PUBLIC_PAIR_DIGEST_ROOT": str(public_pair_root),
+            "AO2_STABLE_PROMOTION_EVIDENCE_INDEX_ARTIFACT_SIZE_BUDGET_ROOT": str(size_budget_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    summary = json.loads((fail_root / "summary.json").read_text(encoding="utf-8"))
+    assert "artifact_size_budget_audit_not_ready" in [
+        blocker["code"] for blocker in summary["blockers"]
+    ]
+
+
 def test_stable_promotion_dry_run_checklist_workflow_runs_from_stable_evidence_packet():
     workflow = read(".github/workflows/stable-promotion-dry-run-checklist.yml")
     for needle in [
@@ -3167,6 +3359,24 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         assert needle in release_artifact_size_budget_audit
     assert "contents: write" not in release_artifact_size_budget_audit
 
+    stable_promotion_evidence_index = read(".github/workflows/stable-promotion-evidence-index.yml")
+    for needle in [
+        "Stable Promotion Evidence Index",
+        "workflow_dispatch:",
+        "stable_release_evidence_run_id",
+        "public_pair_digest_audit_run_id",
+        "artifact_size_budget_audit_run_id",
+        "actions: read",
+        "contents: read",
+        "ao2-stable-release-evidence-packet",
+        "ao2-public-release-pair-digest-audit",
+        "ao2-release-artifact-size-budget-audit",
+        "npm run release:stable-promotion-evidence-index",
+        "ao2-stable-promotion-evidence-index",
+    ]:
+        assert needle in stable_promotion_evidence_index
+    assert "contents: write" not in stable_promotion_evidence_index
+
     asset_publication = read("scripts/release-asset-publication-readiness.sh")
     public_ship_dry_run = read("scripts/public-ship-dry-run.sh")
     public_ship_rehearsal = read("scripts/public-ship-rehearsal.sh")
@@ -3210,6 +3420,9 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "required_archive_names",
         "required_archive_presence",
         "full archive parity",
+        "Stable Promotion Evidence Index",
+        "ao2-stable-promotion-evidence-index",
+        "ao2.stable-promotion-evidence-index.v1",
         "ao2-0.4.80-linux-aarch64.tar.gz",
         "ao2-control-plane-0.1.13-windows-x86_64.tar.gz",
     ]:
@@ -3252,6 +3465,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_dual_repo_release_publication_closure_index_job",
         "ci_stable_promotion_operator_checklist_workflow",
         "ci_stable_promotion_dry_run_checklist_workflow",
+        "ci_stable_promotion_evidence_index_workflow",
     ]:
         assert checks[name]["status"] == "passed"
     closure = json.loads(
@@ -3448,6 +3662,28 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     ]
     assert artifacts["release_artifact_size_budget_audit"]["source_artifacts"] == [
         "ao2-release-readiness"
+    ]
+    assert artifacts["stable_promotion_evidence_index"]["artifact_name"] == (
+        "ao2-stable-promotion-evidence-index"
+    )
+    assert artifacts["stable_promotion_evidence_index"]["producer_job"] == (
+        "Stable Promotion Evidence Index / stable-promotion-evidence-index"
+    )
+    assert artifacts["stable_promotion_evidence_index"]["required_files"] == [
+        "summary.json",
+        "index.md",
+    ]
+    assert artifacts["stable_promotion_evidence_index"]["schema_versions"] == [
+        "ao2.stable-promotion-evidence-index.v1",
+        "ao2.stable-release-evidence-packet.v1",
+        "ao2.stable-promotion-evidence-gate.v1",
+        "ao2.public-release-pair-digest-audit.v1",
+        "ao2.release-artifact-size-budget-audit.v1",
+    ]
+    assert artifacts["stable_promotion_evidence_index"]["source_artifacts"] == [
+        "ao2-stable-release-evidence-packet",
+        "ao2-public-release-pair-digest-audit",
+        "ao2-release-artifact-size-budget-audit",
     ]
     assert closure["trust_boundary"]["local_only"] is True
     assert closure["trust_boundary"]["stores_credentials"] is False
