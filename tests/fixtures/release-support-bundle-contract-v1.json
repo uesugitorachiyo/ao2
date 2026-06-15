@@ -275,6 +275,37 @@
           "approves_release": false,
           "mutates_ao_artifacts": false
         }
+      },
+      {
+        "id": "stable-promotion-evidence-readback",
+        "artifact_name_pattern": "ao2-control-plane-ao2-stable-promotion-evidence-index-readback",
+        "schema_versions": [
+          "ao2.cp-ao2-stable-promotion-evidence-index-readback.v1",
+          "ao2.cp-stable-promotion-evidence-readback.v1",
+          "ao2.stable-promotion-evidence-index.v1"
+        ],
+        "operator_action": "download-ci-artifact",
+        "ci_artifact_provenance": {
+          "provider": "github-actions",
+          "workflow_file": ".github/workflows/ci.yml",
+          "workflow_name": "CI",
+          "run_id_source": "github_actions_run_id",
+          "token_free": true,
+          "job_names": [
+            "AO2 stable promotion evidence index readback"
+          ],
+          "artifact_names": [
+            "ao2-control-plane-ao2-stable-promotion-evidence-index-readback"
+          ],
+          "run_url_template": "https://github.com/uesugitorachiyo/ao2-control-plane/actions/runs/<run_id>",
+          "artifact_download_url_template": "https://github.com/uesugitorachiyo/ao2-control-plane/actions/runs/<run_id>/artifacts",
+          "digest_reference": "summary.json carries schema/status plus stable promotion evidence readiness"
+        },
+        "trust_boundary": {
+          "read_only": true,
+          "approves_release": false,
+          "mutates_ao_artifacts": false
+        }
       }
     ]
   },
@@ -292,7 +323,7 @@
         "id": "ci_evidence_index",
         "schema_version": "ao2.cp-ci-evidence-index.v1",
         "path": "$.ci_evidence_index",
-        "sha256": "9c4a2e535bb3a1c4de6be3794feb2a86793de9f734a23276155b3a36dbb832c0"
+        "sha256": "6c7d688e5b988fa6c1603ee54d7dba1567277b11d46b22341e870234c380ef51"
       },
       {
         "id": "install_verification",
@@ -347,7 +378,7 @@
       "algorithm": "sha256-ao2-cp-canonical-json-v1",
       "scope": "embedded_support_bundle_surfaces",
       "surface_sha256": {
-        "ci_evidence_index": "9c4a2e535bb3a1c4de6be3794feb2a86793de9f734a23276155b3a36dbb832c0",
+        "ci_evidence_index": "6c7d688e5b988fa6c1603ee54d7dba1567277b11d46b22341e870234c380ef51",
         "install_verification": "596b2893a4fdbf65289879af7b7b288f8f1d8c60c9b11f8d27d5c0f0ddd86ba9",
         "hosted_release_smoke": "379914d06f5240e3097607176642d353923dcc5ef3ffc9e6fd98150d2631e007",
         "release_assembly": "8eba32358aaaf9064f63363e8bf2d9149fb34b761aaded9d414534b1f7f44009",
