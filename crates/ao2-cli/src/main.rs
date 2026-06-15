@@ -67752,6 +67752,21 @@ fn release_support_bundle_ci_evidence_index() -> serde_json::Value {
                 "summary.json carries schema/status plus release-train readback observer digests",
             ),
             release_support_bundle_ci_family(
+                "stable-promotion-evidence-readback",
+                "Stable promotion evidence readback",
+                "ao2-control-plane-ao2-stable-promotion-evidence-index-readback",
+                &[
+                    "ao2.cp-ao2-stable-promotion-evidence-index-readback.v1",
+                    "ao2.cp-stable-promotion-evidence-readback.v1",
+                    "ao2.stable-promotion-evidence-index.v1",
+                ],
+                "summary.json",
+                "Proves AO2 stable-promotion evidence can be observed through the control plane without token leakage or release approval.",
+                &["AO2 stable promotion evidence index readback"],
+                &["ao2-control-plane-ao2-stable-promotion-evidence-index-readback"],
+                "summary.json carries schema/status plus stable promotion evidence readiness",
+            ),
+            release_support_bundle_ci_family(
                 "ingest-smoke",
                 "Ingest smoke",
                 "ao2-control-plane-ingest-smoke-<target>",
