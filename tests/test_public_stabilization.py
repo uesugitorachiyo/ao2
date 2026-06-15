@@ -1404,6 +1404,8 @@ def test_stable_promotion_dry_run_audit_validates_dispatch_artifact(tmp_path):
         "stable_release_evidence_ready",
         "post_release_evidence_ready",
         "operator_release_evidence_ready",
+        "public_pair_digest_audit",
+        "archive_parity_status",
     ]:
         assert needle in text
 
@@ -1485,6 +1487,12 @@ def test_stable_promotion_dry_run_audit_validates_dispatch_artifact(tmp_path):
                     "schema_version": "ao2.operator-release-evidence-bundle.v1",
                     "operator_release_evidence_ready": True,
                 },
+                "public_pair_digest_audit": {
+                    "artifact": "ao2-public-release-pair-digest-audit",
+                    "schema_version": "ao2.public-release-pair-digest-audit.v1",
+                    "status": "passed",
+                    "archive_parity_status": "passed",
+                },
                 "trust_boundary": {
                     "mutates_releases": False,
                     "stores_credentials": False,
@@ -1517,6 +1525,12 @@ def test_stable_promotion_dry_run_audit_validates_dispatch_artifact(tmp_path):
     assert summary["trust_boundary"]["mutates_releases"] is False
     assert summary["workflow"]["promotion_status"] == "not_attempted"
     assert summary["evidence_gate"]["passed_check_count"] == 2
+    assert (
+        summary["stable_release_evidence_packet"]["public_pair_digest_audit"][
+            "archive_parity_status"
+        ]
+        == "passed"
+    )
 
     bad = json.loads(workflow_summary.read_text(encoding="utf-8"))
     bad["dry_run"] = False
@@ -1569,6 +1583,8 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
         "mutates_releases",
         "stores_credentials",
         "operator_decision",
+        "public_pair_digest_audit",
+        "archive_parity_status",
         "Stable Promotion Operator Checklist",
     ]:
         assert needle in text
@@ -1620,6 +1636,12 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
                     "status": "passed",
                     "stable_release_evidence_ready": True,
                     "operator_release_evidence_ready": True,
+                    "public_pair_digest_audit": {
+                        "artifact": "ao2-public-release-pair-digest-audit",
+                        "schema_version": "ao2.public-release-pair-digest-audit.v1",
+                        "status": "passed",
+                        "archive_parity_status": "passed",
+                    },
                 },
                 "trust_boundary": {
                     "local_only": True,
@@ -1654,6 +1676,12 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
     assert summary["required_confirmation"] == "promote-stable-v0.4.80-v0.1.13"
     assert summary["dry_run_audit"]["dry_run_audit_ready"] is True
     assert summary["dry_run_audit"]["workflow"]["promotion_status"] == "not_attempted"
+    assert (
+        summary["dry_run_audit"]["stable_release_evidence_packet"][
+            "public_pair_digest_audit"
+        ]["archive_parity_status"]
+        == "passed"
+    )
     assert summary["operator_decision"]["confirmation_entered"] is False
     assert summary["trust_boundary"]["mutates_releases"] is False
     assert summary["trust_boundary"]["stores_credentials"] is False
@@ -1662,6 +1690,7 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
     assert "Stable Promotion Operator Checklist" in checklist
     assert "promote-stable-v0.4.80-v0.1.13" in checklist
     assert "No provider API keys are required or accepted" in checklist
+    assert "Archive parity status: `passed`" in checklist
     assert "Do not enter the confirmation string unless this checklist status is passed" in checklist
 
     bad = json.loads(audit_summary.read_text(encoding="utf-8"))

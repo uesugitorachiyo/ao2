@@ -100,6 +100,19 @@ if packet.get("status") != "passed" or packet.get("stable_release_evidence_ready
     )
 if packet.get("operator_release_evidence_ready") is not True:
     fail("operator_evidence_not_ready", "operator release evidence was not ready", {"operator_release_evidence_ready": packet.get("operator_release_evidence_ready")})
+public_pair_digest_audit = packet.get("public_pair_digest_audit", {})
+if public_pair_digest_audit.get("schema_version") != "ao2.public-release-pair-digest-audit.v1":
+    fail(
+        "public_pair_digest_audit_schema_mismatch",
+        "public pair digest audit schema was not present in stable release evidence packet",
+        public_pair_digest_audit,
+    )
+if public_pair_digest_audit.get("status") != "passed" or public_pair_digest_audit.get("archive_parity_status") != "passed":
+    fail(
+        "public_pair_digest_audit_not_ready",
+        "public pair digest audit archive parity was not ready",
+        public_pair_digest_audit,
+    )
 if trust_boundary.get("mutates_releases") is not False:
     fail("dry_run_audit_mutates_releases", "stable promotion dry-run audit trust boundary mutates releases", trust_boundary)
 if trust_boundary.get("stores_credentials") is not False:
@@ -144,6 +157,13 @@ payload = {
             "status": packet.get("status"),
             "stable_release_evidence_ready": packet.get("stable_release_evidence_ready"),
             "operator_release_evidence_ready": packet.get("operator_release_evidence_ready"),
+            "public_pair_digest_audit": {
+                "artifact": public_pair_digest_audit.get("artifact"),
+                "schema_version": public_pair_digest_audit.get("schema_version"),
+                "status": public_pair_digest_audit.get("status"),
+                "archive_parity_status": public_pair_digest_audit.get("archive_parity_status"),
+                "summary": public_pair_digest_audit.get("summary"),
+            },
         },
     },
     "operator_decision": {
@@ -182,6 +202,7 @@ lines = [
     "- Confirm the stable promotion dry-run audit passed.",
     "- Confirm the dry-run workflow was unconfirmed and did not attempt promotion.",
     "- Confirm post-release evidence and the stable release evidence packet passed.",
+    f"- Archive parity status: `{public_pair_digest_audit.get('archive_parity_status')}`.",
     "- Confirm the public GitHub Release pages show the intended AO2 and ao2-control-plane assets.",
     "- No provider API keys are required or accepted.",
     "- The control plane records evidence; it does not approve the release.",
