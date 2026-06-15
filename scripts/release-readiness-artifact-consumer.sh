@@ -43,6 +43,51 @@ require(
     closure_index,
 )
 
+hosted_gate_summary_path, hosted_gate_summary = load_json("ao2-release-readiness-hosted-artifact-gate/summary.json")
+require(
+    hosted_gate_summary.get("schema_version") == "ao2.release-readiness-regression-gate.v1",
+    "unexpected release-readiness hosted artifact gate schema",
+    hosted_gate_summary,
+)
+hosted_gate_nested = hosted_gate_summary.get("hosted_release_readiness_artifact_gate", {})
+require(
+    hosted_gate_summary.get("status") == "passed"
+    and hosted_gate_nested.get("schema_version") == "ao2.release-readiness-hosted-artifact-gate.v1"
+    and hosted_gate_nested.get("status") == "passed",
+    "release-readiness hosted artifact gate did not pass",
+    hosted_gate_summary,
+)
+hosted_gate_detail_path, hosted_gate_detail = load_json(
+    "ao2-release-readiness-hosted-artifact-gate/hosted-release-readiness-artifact-gate/summary.json"
+)
+require(
+    hosted_gate_detail.get("schema_version") == "ao2.release-readiness-hosted-artifact-gate.v1",
+    "unexpected hosted release-readiness artifact gate detail schema",
+    hosted_gate_detail,
+)
+hosted_public_pair_digest_gate = hosted_gate_detail.get("public_pair_digest_gate", {})
+require(
+    hosted_gate_detail.get("status") == "passed"
+    and hosted_gate_detail.get("required") is True
+    and hosted_gate_detail.get("readiness_schema_version") == "ao2.release-readiness-local.v1"
+    and hosted_gate_detail.get("artifact_closure_schema_version") == "ao2.release-artifact-closure-index.v1"
+    and hosted_public_pair_digest_gate.get("schema_version") == "ao2.public-release-pair-digest-audit.v1"
+    and hosted_public_pair_digest_gate.get("status") == "passed"
+    and hosted_public_pair_digest_gate.get("archive_parity_status") == "passed"
+    and hosted_public_pair_digest_gate.get("required_summary_field") == "public_pair_digest_audit"
+    and hosted_public_pair_digest_gate.get("required_archive_scope") == "full_archive_parity"
+    and hosted_public_pair_digest_gate.get("required_check") == "release_public_pair_digest_audit_contract"
+    and hosted_public_pair_digest_gate.get("required_artifact") == "ao2-public-release-pair-digest-audit",
+    "hosted release-readiness public pair digest gate was not ready",
+    hosted_gate_detail,
+)
+require(
+    hosted_gate_detail.get("trust_boundary", {}).get("stores_credentials") is False
+    and hosted_gate_detail.get("trust_boundary", {}).get("source") == "github_actions_artifact_download",
+    "hosted release-readiness artifact gate trust boundary was not ready",
+    hosted_gate_detail,
+)
+
 bridge_summary_path, bridge_summary = load_json("ao2-release-train-control-plane-bridge/latest/summary.json")
 require(bridge_summary.get("schema_version") == "ao2.release-train-control-plane-bridge.v1", "unexpected release train bridge schema", bridge_summary)
 require(bridge_summary.get("status") == "passed", "release train bridge did not pass", bridge_summary)
@@ -158,6 +203,7 @@ required_checks = [
     "ci_job_required_os:release-archive-hosted-smoke",
     "ci_job_required_os:workbench-operator-packet-control-plane-smoke",
     "ci_release_readiness_static_artifact_job",
+    "ci_release_readiness_hosted_artifact_gate_job",
     "ci_release_train_control_plane_bridge_artifact_job",
     "ci_ai_task_board_control_plane_bridge_artifact_job",
     "ci_pulse_task_board_closure_packet_artifact_job",
@@ -181,6 +227,7 @@ consumer_summary = {
     "status": "passed",
     "source_artifacts": [
         "ao2-release-readiness",
+        "ao2-release-readiness-hosted-artifact-gate",
         "ao2-release-train-control-plane-bridge",
         "ao2-ai-task-board-control-plane-bridge",
         "ao2-pulse-task-board-closure-packet",
@@ -193,6 +240,8 @@ consumer_summary = {
     "source_summaries": [
         str(summary_path_source),
         str(closure_index_path),
+        str(hosted_gate_summary_path),
+        str(hosted_gate_detail_path),
         str(bridge_summary_path),
         str(task_board_bridge_summary_path),
         str(pulse_task_board_closure_summary_path),
@@ -217,6 +266,14 @@ consumer_summary = {
         },
     },
     "public_pair_digest_gate": public_pair_digest_gate,
+    "hosted_release_readiness_artifact_gate": {
+        "schema_version": hosted_gate_detail.get("schema_version"),
+        "status": hosted_gate_detail.get("status"),
+        "required": hosted_gate_detail.get("required"),
+        "readiness_schema_version": hosted_gate_detail.get("readiness_schema_version"),
+        "artifact_closure_schema_version": hosted_gate_detail.get("artifact_closure_schema_version"),
+        "public_pair_digest_gate": hosted_public_pair_digest_gate,
+    },
     "required_checks": required_checks,
     "trust_boundary": {
         "local_only": True,
