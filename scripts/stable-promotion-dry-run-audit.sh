@@ -96,6 +96,19 @@ if packet.get("stable_promotion", {}).get("evidence_gate_status") != "passed":
     fail("packet_stable_promotion_gate_not_passed", "packet stable promotion gate was not passed", packet.get("stable_promotion", {}))
 if packet.get("operator_evidence", {}).get("operator_release_evidence_ready") is not True:
     fail("packet_operator_evidence_not_ready", "packet operator evidence was not ready", packet.get("operator_evidence", {}))
+public_pair_digest_audit = packet.get("public_pair_digest_audit", {})
+if public_pair_digest_audit.get("schema_version") != "ao2.public-release-pair-digest-audit.v1":
+    fail(
+        "packet_public_pair_digest_schema_mismatch",
+        "packet public pair digest audit schema was not present",
+        public_pair_digest_audit,
+    )
+if public_pair_digest_audit.get("status") != "passed" or public_pair_digest_audit.get("archive_parity_status") != "passed":
+    fail(
+        "packet_public_pair_digest_not_ready",
+        "packet public pair digest audit archive parity was not ready",
+        public_pair_digest_audit,
+    )
 if packet.get("trust_boundary", {}).get("mutates_releases") is not False:
     fail("packet_mutates_releases", "stable release evidence packet trust boundary mutates releases", packet.get("trust_boundary", {}))
 if packet.get("trust_boundary", {}).get("stores_credentials") is not False:
@@ -134,6 +147,13 @@ payload = {
         "status": packet.get("status"),
         "stable_release_evidence_ready": packet.get("stable_release_evidence_ready"),
         "operator_release_evidence_ready": packet.get("operator_evidence", {}).get("operator_release_evidence_ready"),
+        "public_pair_digest_audit": {
+            "artifact": public_pair_digest_audit.get("artifact"),
+            "schema_version": public_pair_digest_audit.get("schema_version"),
+            "status": public_pair_digest_audit.get("status"),
+            "archive_parity_status": public_pair_digest_audit.get("archive_parity_status"),
+            "summary": public_pair_digest_audit.get("summary"),
+        },
     },
     "failures": failures,
     "trust_boundary": {
