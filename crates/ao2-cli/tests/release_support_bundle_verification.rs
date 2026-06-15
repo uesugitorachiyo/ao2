@@ -1033,6 +1033,11 @@ fn release_support_bundle_build_writes_verifiable_bundle_and_checksums() {
         ci_family_ids, fixture_ci_family_ids,
         "generated release support bundles must keep CI evidence families in shared fixture order"
     );
+    assert_eq!(
+        bundle_json["ci_evidence_index"],
+        shared_release_support_fixture()["ci_evidence_index"],
+        "generated release support bundles must embed the shared CI evidence index contract"
+    );
     let release_train_family = bundle_json["ci_evidence_index"]["evidence_families"]
         .as_array()
         .unwrap()

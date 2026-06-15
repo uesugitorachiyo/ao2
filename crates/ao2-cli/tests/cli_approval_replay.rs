@@ -46384,7 +46384,7 @@ printf 'Changed files: discount_service/discounts.py\n'
         .unwrap();
     let port = read_server_port(&mut child);
     start_queue_job(port, &format!("{name}-run"), &prompt_path);
-    wait_for_queue_job_status(port, &format!("{name}-run"), "accepted");
+    wait_for_workbench_support_fixture_job(port, &format!("{name}-run"));
     if export_evidence {
         let evidence_body = format!("kind=summary&run_id={name}-run");
         let evidence_request = format!(
@@ -48209,8 +48209,22 @@ fn start_queue_job(port: u16, run_id: &str, prompt_path: &Path) -> serde_json::V
 }
 
 fn wait_for_queue_job_status(port: u16, run_id: &str, expected_status: &str) -> serde_json::Value {
+    wait_for_queue_job_status_with_attempts(port, run_id, expected_status, 300)
+}
+
+fn wait_for_workbench_support_fixture_job(port: u16, run_id: &str) -> serde_json::Value {
+    let attempts = if cfg!(windows) { 900 } else { 300 };
+    wait_for_queue_job_status_with_attempts(port, run_id, "accepted", attempts)
+}
+
+fn wait_for_queue_job_status_with_attempts(
+    port: u16,
+    run_id: &str,
+    expected_status: &str,
+    attempts: usize,
+) -> serde_json::Value {
     let mut last_job = None;
-    for _ in 0..300 {
+    for _ in 0..attempts {
         let queue = get_queue(port);
         let job = queue["jobs"]
             .as_array()
