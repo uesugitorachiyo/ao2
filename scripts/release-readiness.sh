@@ -61,6 +61,7 @@ for name in [
     "release:readiness",
     "release:readiness:static",
     "release:readiness:artifact-consumer",
+    "release:artifact-size-budget-audit",
     "release:readiness:regression-gate",
     "release:metadata-drift-audit",
     "smoke:evidence-control-plane",
@@ -128,6 +129,30 @@ add(
     "ci_release_readiness_static_artifact_job",
     "passed" if release_readiness_artifacts_ok else "failed",
     "runs static release readiness and uploads target/release-readiness-ci",
+)
+
+release_artifact_size_budget_audit_workflow = read(".github/workflows/release-artifact-size-budget-audit.yml")
+release_artifact_size_budget_audit_script = read("scripts/release-artifact-size-budget-audit.sh")
+release_artifact_size_budget_audit_ok = (
+    "name: Release Artifact Size Budget Audit" in release_artifact_size_budget_audit_workflow
+    and "workflow_dispatch:" in release_artifact_size_budget_audit_workflow
+    and "actions: read" in release_artifact_size_budget_audit_workflow
+    and "contents: read" in release_artifact_size_budget_audit_workflow
+    and "GH_TOKEN: ${{ github.token }}" in release_artifact_size_budget_audit_workflow
+    and "ao2-release-readiness" in release_artifact_size_budget_audit_workflow
+    and "artifact-closure-index.json" in release_artifact_size_budget_audit_workflow
+    and "npm run release:artifact-size-budget-audit" in release_artifact_size_budget_audit_workflow
+    and "ao2-release-artifact-size-budget-audit" in release_artifact_size_budget_audit_workflow
+    and "contents: write" not in release_artifact_size_budget_audit_workflow
+    and scripts.get("release:artifact-size-budget-audit") == "node scripts/run-sh-script.js scripts/release-artifact-size-budget-audit.sh"
+    and "ao2.release-artifact-size-budget-audit.v1" in release_artifact_size_budget_audit_script
+    and "gh api" in release_artifact_size_budget_audit_script
+    and "actions/artifacts" in release_artifact_size_budget_audit_script
+)
+add(
+    "ci_release_artifact_size_budget_audit_job",
+    "passed" if release_artifact_size_budget_audit_ok else "failed",
+    "manual read-only audit fetches GitHub Actions artifact size metadata and enforces closure-index budgets",
 )
 
 release_train_bridge_artifacts = workflow_job_block("release-train-control-plane-bridge-artifacts")
@@ -367,6 +392,8 @@ stable_promotion_operator_checklist_ok = (
     and "target/stable-promotion-operator-checklist/dry-run-audit" in stable_promotion_operator_checklist
     and "npm run release:stable-promotion-operator-checklist" in stable_promotion_operator_checklist
     and "ao2-stable-promotion-operator-checklist" in stable_promotion_operator_checklist
+    and "path: target/stable-promotion-operator-checklist/report" in stable_promotion_operator_checklist
+    and "path: target/stable-promotion-operator-checklist\n" not in stable_promotion_operator_checklist
     and scripts.get("release:stable-promotion-operator-checklist") == "node scripts/run-sh-script.js scripts/stable-promotion-operator-checklist.sh"
     and "ao2.stable-promotion-operator-checklist.v1" in stable_promotion_operator_checklist_script
     and "promote-stable-v0.4.80-v0.1.13" in stable_promotion_operator_checklist_script
@@ -706,6 +733,15 @@ artifact_closure_index = {
             "required_files": ["summary.json", "report.md", "report.html"],
             "schema_versions": ["ao2.release-readiness-local.v1"],
             "required_checks": ["ci_release_readiness_static_artifact_job"],
+        },
+        {
+            "id": "release_artifact_size_budget_audit",
+            "artifact_name": "ao2-release-artifact-size-budget-audit",
+            "producer_job": "Release Artifact Size Budget Audit / release-artifact-size-budget-audit",
+            "required_files": ["summary.json"],
+            "schema_versions": ["ao2.release-artifact-size-budget-audit.v1"],
+            "required_checks": ["ci_release_artifact_size_budget_audit_job"],
+            "source_artifacts": ["ao2-release-readiness"],
         },
         {
             "id": "release_train_control_plane_bridge",

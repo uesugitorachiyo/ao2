@@ -47,5 +47,5 @@ jobs:
         if: always()
         with:
           name: ao2-stable-promotion-operator-checklist
-          path: target/stable-promotion-operator-checklist
+          path: target/stable-promotion-operator-checklist/report
           if-no-files-found: error

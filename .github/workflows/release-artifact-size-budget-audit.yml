@@ -1,0 +1,89 @@
+name: Release Artifact Size Budget Audit
+
+on:
+  workflow_dispatch:
+    inputs:
+      closure_index_run_id:
+        description: "Optional CI run id containing ao2-release-readiness."
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  release-artifact-size-budget-audit:
+    name: Release artifact size budget audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+      - name: Reject provider API key environment
+        shell: bash
+        run: |
+          if [ "${OPENAI_API_KEY+x}" = "x" ] || [ "${ANTHROPIC_API_KEY+x}" = "x" ]; then
+            echo "provider API keys are not accepted by release artifact size budget audit" >&2
+            exit 1
+          fi
+      - name: Download release-readiness closure index
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLOSURE_INDEX_RUN_ID: ${{ inputs.closure_index_run_id }}
+        run: |
+          set -euo pipefail
+          out="target/release-artifact-size-budget-audit/release-readiness"
+          rm -rf "$out"
+          mkdir -p "$out"
+
+          if [ -n "$CLOSURE_INDEX_RUN_ID" ]; then
+            gh run download "$CLOSURE_INDEX_RUN_ID" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name ao2-release-readiness \
+              --dir "$out"
+            exit 0
+          fi
+
+          while IFS= read -r run_id; do
+            [ -n "$run_id" ] || continue
+            rm -rf "$out"
+            mkdir -p "$out"
+            if gh run download "$run_id" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name ao2-release-readiness \
+              --dir "$out"; then
+              printf "%s\n" "$run_id" > "$out/source-run-id.txt"
+              exit 0
+            fi
+          done < <(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --branch main \
+            --workflow ci.yml \
+            --status success \
+            --limit 10 \
+            --json databaseId \
+            --jq '.[].databaseId')
+
+          echo "missing ao2-release-readiness artifact from successful main CI runs" >&2
+          exit 1
+      - name: Audit live hosted artifact size budgets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          AO2_RELEASE_ARTIFACT_SIZE_BUDGET_AUDIT_ROOT=target/release-artifact-size-budget-audit/report \
+          AO2_RELEASE_ARTIFACT_SIZE_BUDGET_AUDIT_CLOSURE_INDEX=target/release-artifact-size-budget-audit/release-readiness/artifact-closure-index.json \
+            npm run release:artifact-size-budget-audit
+      - name: Upload release artifact size budget audit
+        uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: ao2-release-artifact-size-budget-audit
+          path: target/release-artifact-size-budget-audit/report
+          if-no-files-found: error
