@@ -1586,8 +1586,10 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
         "target/stable-promotion-operator-checklist/dry-run-audit",
         "npm run release:stable-promotion-operator-checklist",
         "ao2-stable-promotion-operator-checklist",
+        "path: target/stable-promotion-operator-checklist/report",
     ]:
         assert needle in workflow
+    assert "path: target/stable-promotion-operator-checklist\n" not in workflow
 
     audit_summary = tmp_path / "dry-run-audit" / "report" / "summary.json"
     audit_summary.parent.mkdir(parents=True)
@@ -2683,6 +2685,173 @@ def test_release_readiness_script_is_local_only_and_checks_repo_guardrails():
     assert "cat target/long-lived-control-plane/api-token" not in text
 
 
+def test_release_artifact_size_budget_audit_validates_hosted_metadata(tmp_path):
+    package_json = json.loads(read("package.json"))
+    assert (
+        package_json["scripts"]["release:artifact-size-budget-audit"]
+        == "node scripts/run-sh-script.js scripts/release-artifact-size-budget-audit.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "release-artifact-size-budget-audit.sh"
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.release-artifact-size-budget-audit.v1",
+        "artifact-closure-index.json",
+        "size_in_bytes",
+        "max_size_bytes",
+        "fail_if_hosted_artifact_exceeds_budget",
+        "gh api",
+        "actions/artifacts",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+    ]:
+        assert needle in text
+    assert "contents: write" not in text
+    assert "gh release" not in text
+
+    closure_index = tmp_path / "artifact-closure-index.json"
+    closure_index.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.release-artifact-closure-index.v1",
+                "status": "passed",
+                "artifact_size_budget": {
+                    "schema_version": "ao2.release-artifact-size-budget.v1",
+                    "status": "passed",
+                    "size_budget_enforced": True,
+                    "default_lightweight_operator_packet_max_size_bytes": 1048576,
+                    "budgeted_artifact_ids": [
+                        "stable_promotion_operator_checklist",
+                        "stable_promotion_dry_run_checklist",
+                    ],
+                },
+                "required_artifacts": [
+                    {
+                        "id": "stable_promotion_operator_checklist",
+                        "artifact_name": "ao2-stable-promotion-operator-checklist",
+                        "artifact_size_budget": {
+                            "budget_scope": "lightweight_operator_approval_packet",
+                            "max_size_bytes": 1048576,
+                            "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+                        },
+                    },
+                    {
+                        "id": "stable_promotion_dry_run_checklist",
+                        "artifact_name": "ao2-stable-promotion-dry-run-checklist",
+                        "artifact_size_budget": {
+                            "budget_scope": "lightweight_operator_approval_packet",
+                            "max_size_bytes": 1048576,
+                            "observed_baseline_size_bytes": 5436,
+                            "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+                        },
+                    },
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    fixture = tmp_path / "fixture"
+    fixture.mkdir()
+    fixture_artifacts = {
+        "artifacts": [
+            {
+                "id": 1001,
+                "name": "ao2-stable-promotion-operator-checklist",
+                "size_in_bytes": 4096,
+                "expired": False,
+                "created_at": "2026-06-14T14:00:00Z",
+            },
+            {
+                "id": 1002,
+                "name": "ao2-stable-promotion-dry-run-checklist",
+                "size_in_bytes": 5436,
+                "expired": False,
+                "created_at": "2026-06-14T14:21:09Z",
+            },
+        ]
+    }
+    (fixture / "artifacts.json").write_text(
+        json.dumps(fixture_artifacts, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    out_root = tmp_path / "audit-pass"
+    result = subprocess.run(
+        [
+            "npm",
+            "run",
+            "release:artifact-size-budget-audit",
+            "--",
+            "--closure-index",
+            str(closure_index),
+            "--fixture-dir",
+            str(fixture),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "AO2_RELEASE_ARTIFACT_SIZE_BUDGET_AUDIT_ROOT": str(out_root),
+        },
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.release-artifact-size-budget-audit.v1"
+    assert summary["status"] == "passed"
+    assert summary["artifact_size_budget"]["size_budget_enforced"] is True
+    assert summary["passed_check_count"] == 2
+    assert summary["check_count"] == 2
+    assert summary["violations"] == []
+    assert summary["checked_artifacts"][1]["observed_size_bytes"] == 5436
+
+    fixture_artifacts["artifacts"][1]["size_in_bytes"] = 1048577
+    (fixture / "artifacts.json").write_text(
+        json.dumps(fixture_artifacts, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    fail_root = tmp_path / "audit-fail"
+    result = subprocess.run(
+        [
+            "npm",
+            "run",
+            "release:artifact-size-budget-audit",
+            "--",
+            "--closure-index",
+            str(closure_index),
+            "--fixture-dir",
+            str(fixture),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "AO2_RELEASE_ARTIFACT_SIZE_BUDGET_AUDIT_ROOT": str(fail_root),
+        },
+        check=False,
+    )
+    assert result.returncode == 1
+    summary = json.loads((fail_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "failed"
+    assert summary["failed_check_count"] == 1
+    assert summary["violations"] == [
+        {
+            "artifact_id": "stable_promotion_dry_run_checklist",
+            "artifact_name": "ao2-stable-promotion-dry-run-checklist",
+            "observed_size_bytes": 1048577,
+            "max_size_bytes": 1048576,
+            "reason": "size_budget_exceeded",
+        }
+    ]
+
+
 def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     script = read("scripts/release-readiness.sh")
     for needle in [
@@ -2768,6 +2937,9 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "stable_promotion_operator_checklist",
         "stable_promotion_dry_run_checklist",
         "artifact_size_budget",
+        "release_artifact_size_budget_audit",
+        "release:artifact-size-budget-audit",
+        "ao2.release-artifact-size-budget-audit.v1",
         "max_size_bytes",
         "1048576",
         "size_budget_bytes",
@@ -2893,6 +3065,24 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     ]:
         assert needle in stable_promotion_dry_run_checklist
 
+    release_artifact_size_budget_audit = read(".github/workflows/release-artifact-size-budget-audit.yml")
+    for needle in [
+        "Release Artifact Size Budget Audit",
+        "workflow_dispatch:",
+        "closure_index_run_id",
+        "actions: read",
+        "contents: read",
+        "GH_TOKEN: ${{ github.token }}",
+        "ao2-release-readiness",
+        "artifact-closure-index.json",
+        "AO2_RELEASE_ARTIFACT_SIZE_BUDGET_AUDIT_ROOT=target/release-artifact-size-budget-audit/report",
+        "AO2_RELEASE_ARTIFACT_SIZE_BUDGET_AUDIT_CLOSURE_INDEX=target/release-artifact-size-budget-audit/release-readiness/artifact-closure-index.json",
+        "npm run release:artifact-size-budget-audit",
+        "ao2-release-artifact-size-budget-audit",
+    ]:
+        assert needle in release_artifact_size_budget_audit
+    assert "contents: write" not in release_artifact_size_budget_audit
+
     asset_publication = read("scripts/release-asset-publication-readiness.sh")
     public_ship_dry_run = read("scripts/public-ship-dry-run.sh")
     public_ship_rehearsal = read("scripts/public-ship-rehearsal.sh")
@@ -2967,6 +3157,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_job_required_os:non_approval_required_check_compat",
         "ci_workbench_operator_packet_smoke_index_requires_all_os",
         "ci_release_readiness_static_artifact_job",
+        "ci_release_artifact_size_budget_audit_job",
         "ci_release_readiness_artifact_consumer_job",
         "ci_release_train_control_plane_bridge_artifact_job",
         "ci_ai_task_board_control_plane_bridge_artifact_job",
@@ -3159,6 +3350,21 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
             "stable_promotion_dry_run_checklist",
         ],
     }
+    assert artifacts["release_artifact_size_budget_audit"]["artifact_name"] == (
+        "ao2-release-artifact-size-budget-audit"
+    )
+    assert artifacts["release_artifact_size_budget_audit"]["producer_job"] == (
+        "Release Artifact Size Budget Audit / release-artifact-size-budget-audit"
+    )
+    assert artifacts["release_artifact_size_budget_audit"]["required_files"] == [
+        "summary.json"
+    ]
+    assert artifacts["release_artifact_size_budget_audit"]["schema_versions"] == [
+        "ao2.release-artifact-size-budget-audit.v1"
+    ]
+    assert artifacts["release_artifact_size_budget_audit"]["source_artifacts"] == [
+        "ao2-release-readiness"
+    ]
     assert closure["trust_boundary"]["local_only"] is True
     assert closure["trust_boundary"]["stores_credentials"] is False
 

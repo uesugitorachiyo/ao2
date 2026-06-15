@@ -908,8 +908,8 @@ Result:
   The checklist records the exact
   `promote-stable-v0.4.80-v0.1.13` confirmation string, but does not enter it.
   The manual `Stable Promotion Operator Checklist` workflow downloads the
-  dry-run audit by `stable_promotion_dry_run_audit_run_id` and uploads
-  `ao2-stable-promotion-operator-checklist`.
+  dry-run audit by `stable_promotion_dry_run_audit_run_id` and uploads only the
+  generated report directory as `ao2-stable-promotion-operator-checklist`.
 - `Stable Promotion Dry-Run Checklist`: manual GitHub Actions workflow that
   downloads the latest successful main-CI `ao2-stable-release-evidence-packet`
   artifact, reruns `npm run release:stable-promotion-workflow` with
@@ -929,6 +929,15 @@ Result:
   `ao2-stable-promotion-dry-run-checklist`; the dry-run checklist baseline is
   5,436 bytes. This keeps future workflow edits from silently turning approval
   packets back into large evidence-tree uploads.
+- `npm run release:artifact-size-budget-audit`: reads the release artifact
+  closure index and checks the latest non-expired GitHub Actions artifact
+  metadata for each budgeted artifact. It emits
+  `ao2.release-artifact-size-budget-audit.v1` and fails if any hosted
+  `size_in_bytes` exceeds its declared `max_size_bytes`. Use
+  `--fixture-dir <path>` with `artifacts.json` for local tests. The manual
+  `Release Artifact Size Budget Audit` workflow downloads `ao2-release-readiness`,
+  reads `artifact-closure-index.json`, queries read-only GitHub artifact
+  metadata, and uploads `ao2-release-artifact-size-budget-audit`.
 - `npm run release:immutability-audit`: composes asset completeness, stable
   readiness, full release download verification, checksum validation, signed
   provenance verification, GitHub asset digest checks, and release metadata
