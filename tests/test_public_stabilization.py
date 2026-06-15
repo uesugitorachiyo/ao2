@@ -2098,6 +2098,65 @@ def test_operator_readiness_summary_composes_final_release_go_no_go(tmp_path):
     assert "ao2.operator-readiness-summary.v1" in verification
 
 
+def test_operator_readiness_summary_workflow_uploads_go_no_go_artifact():
+    workflow_path = REPO_ROOT / ".github" / "workflows" / "operator-readiness-summary.yml"
+    assert workflow_path.is_file()
+    workflow = workflow_path.read_text(encoding="utf-8")
+    for needle in [
+        "name: Operator Readiness Summary",
+        "workflow_dispatch:",
+        "final_closure_run_id:",
+        "stable_promotion_evidence_index_run_id:",
+        "public_pair_digest_audit_run_id:",
+        "artifact_size_budget_audit_run_id:",
+        "permissions:",
+        "actions: read",
+        "contents: read",
+        "GH_TOKEN: ${{ github.token }}",
+        "uses: actions/checkout@v6.0.3",
+        "uses: actions/setup-node@v6.4.0",
+        "node-version: \"22\"",
+        "Reject provider API key environment",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "gh run list",
+        "--workflow \"$workflow\"",
+        "ci.yml",
+        "--status success",
+        "ao2-release-readiness-final-closure-verifier",
+        "ao2-stable-promotion-evidence-index",
+        "ao2-public-release-pair-digest-audit",
+        "ao2-release-artifact-size-budget-audit",
+        "AO2_OPERATOR_READINESS_SUMMARY_ROOT=target/operator-readiness-summary/report",
+        "AO2_OPERATOR_READINESS_FINAL_CLOSURE_ROOT=target/operator-readiness-summary/final-closure",
+        "AO2_OPERATOR_READINESS_STABLE_PROMOTION_INDEX_ROOT=target/operator-readiness-summary/stable-promotion-evidence-index",
+        "AO2_OPERATOR_READINESS_PUBLIC_PAIR_DIGEST_ROOT=target/operator-readiness-summary/public-pair-digest-audit",
+        "AO2_OPERATOR_READINESS_ARTIFACT_SIZE_BUDGET_ROOT=target/operator-readiness-summary/artifact-size-budget-audit",
+        "npm run release:operator-readiness-summary",
+        "ao2.operator-readiness-summary.v1",
+        "ao2-operator-readiness-summary",
+        "uses: actions/upload-artifact@v7.0.1",
+        "if-no-files-found: error",
+    ]:
+        assert needle in workflow
+    assert "contents: write" not in workflow
+    assert "actions: write" not in workflow
+    assert "gh release" not in workflow
+
+    release_readiness = read("scripts/release-readiness.sh")
+    for needle in [
+        ".github/workflows/operator-readiness-summary.yml",
+        "operator_readiness_summary_workflow",
+        "ao2-operator-readiness-summary",
+        "npm run release:operator-readiness-summary",
+    ]:
+        assert needle in release_readiness
+
+    verification = read("docs/VERIFICATION.md")
+    assert "Operator Readiness Summary" in verification
+    assert "ao2-operator-readiness-summary" in verification
+
+
 def test_stable_promotion_dry_run_checklist_workflow_runs_from_stable_evidence_packet():
     workflow = read(".github/workflows/stable-promotion-dry-run-checklist.yml")
     for needle in [

@@ -526,6 +526,40 @@ add(
     "local read-only operator go/no-go summary composes final closure, stable promotion index, digest parity, and size budget evidence",
 )
 
+operator_readiness_summary_workflow = read(".github/workflows/operator-readiness-summary.yml")
+operator_readiness_summary_workflow_ok = (
+    "name: Operator Readiness Summary" in operator_readiness_summary_workflow
+    and "workflow_dispatch:" in operator_readiness_summary_workflow
+    and "final_closure_run_id:" in operator_readiness_summary_workflow
+    and "stable_promotion_evidence_index_run_id:" in operator_readiness_summary_workflow
+    and "public_pair_digest_audit_run_id:" in operator_readiness_summary_workflow
+    and "artifact_size_budget_audit_run_id:" in operator_readiness_summary_workflow
+    and "actions: read" in operator_readiness_summary_workflow
+    and "contents: read" in operator_readiness_summary_workflow
+    and "GH_TOKEN: ${{ github.token }}" in operator_readiness_summary_workflow
+    and "gh run list" in operator_readiness_summary_workflow
+    and "--workflow \"$workflow\"" in operator_readiness_summary_workflow
+    and "ci.yml" in operator_readiness_summary_workflow
+    and "ao2-release-readiness-final-closure-verifier" in operator_readiness_summary_workflow
+    and "ao2-stable-promotion-evidence-index" in operator_readiness_summary_workflow
+    and "ao2-public-release-pair-digest-audit" in operator_readiness_summary_workflow
+    and "ao2-release-artifact-size-budget-audit" in operator_readiness_summary_workflow
+    and "npm run release:operator-readiness-summary" in operator_readiness_summary_workflow
+    and "ao2.operator-readiness-summary.v1" in operator_readiness_summary_workflow
+    and "ao2-operator-readiness-summary" in operator_readiness_summary_workflow
+    and "actions/upload-artifact@v7.0.1" in operator_readiness_summary_workflow
+    and "OPENAI_API_KEY" in operator_readiness_summary_workflow
+    and "ANTHROPIC_API_KEY" in operator_readiness_summary_workflow
+    and "contents: write" not in operator_readiness_summary_workflow
+    and "actions: write" not in operator_readiness_summary_workflow
+    and "gh release" not in operator_readiness_summary_workflow
+)
+add(
+    "operator_readiness_summary_workflow",
+    "passed" if operator_readiness_summary_workflow_ok else "failed",
+    "manual read-only workflow uploads ao2-operator-readiness-summary from hosted readiness evidence",
+)
+
 release_readiness_artifact_consumer = workflow_job_block("release-readiness-artifact-consumer")
 release_readiness_artifact_consumer_script = read("scripts/release-readiness-artifact-consumer.sh")
 release_readiness_artifact_consumer_ok = (
