@@ -954,6 +954,18 @@ Result:
   successful main-CI packet, uploads `ao2-stable-promotion-evidence-index`,
   and records `mutates_releases=false`, `stores_credentials=false`, and
   `control_plane_approves_release=false`.
+- `npm run release:operator-readiness-summary`: composes the final
+  operator-facing go/no-go packet from
+  `ao2-release-readiness-final-closure-verifier`,
+  `ao2-stable-promotion-evidence-index`,
+  `ao2-public-release-pair-digest-audit`, and
+  `ao2-release-artifact-size-budget-audit`. It emits
+  `ao2.operator-readiness-summary.v1`, `summary.json`, and `report.md`,
+  setting `release_go_no_go=go` only when the final closure verifier,
+  stable-promotion evidence index, public pair digest audit, and artifact size
+  budget audit all pass. The command is read-only, rejects provider API key
+  environment state, and records `mutates_releases=false`,
+  `stores_credentials=false`, and `control_plane_approves_release=false`.
 - `npm run release:readiness:static` records
   `ao2.release-artifact-size-budget.v1` inside the release artifact closure
   index and budgets lightweight operator approval artifacts at 1 MiB. The
