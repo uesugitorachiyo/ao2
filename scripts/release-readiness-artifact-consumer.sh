@@ -127,6 +127,13 @@ require(stable_release_evidence_packet.get("stable_release_evidence_ready") is T
 require(stable_release_evidence_packet.get("stable_promotion", {}).get("schema_version") == "ao2.stable-promotion-workflow.v1", "unexpected stable promotion schema in stable evidence packet", stable_release_evidence_packet)
 require(stable_release_evidence_packet.get("operator_evidence", {}).get("schema_version") == "ao2.operator-release-evidence-bundle.v1", "unexpected operator evidence schema in stable evidence packet", stable_release_evidence_packet)
 require(stable_release_evidence_packet.get("operator_evidence", {}).get("operator_release_evidence_ready") is True, "operator evidence was not ready in stable evidence packet", stable_release_evidence_packet)
+public_pair_digest_audit = stable_release_evidence_packet.get("public_pair_digest_audit", {})
+require(public_pair_digest_audit.get("schema_version") == "ao2.public-release-pair-digest-audit.v1", "unexpected public pair digest audit schema in stable evidence packet", stable_release_evidence_packet)
+require(
+    public_pair_digest_audit.get("status") == "passed" and public_pair_digest_audit.get("archive_parity_status") == "passed",
+    "stable release evidence packet public pair digest audit was not ready",
+    stable_release_evidence_packet,
+)
 require(stable_release_evidence_packet.get("trust_boundary", {}).get("mutates_releases") is False, "stable release evidence packet mutated releases", stable_release_evidence_packet)
 require(stable_release_evidence_packet.get("trust_boundary", {}).get("stores_credentials") is False, "stable release evidence packet stored credentials", stable_release_evidence_packet)
 require((consumer_root / "ao2-stable-release-evidence-packet/packet/dashboard.html").is_file(), "missing stable release evidence packet dashboard")
@@ -181,6 +188,18 @@ consumer_summary = {
         str(dual_repo_publication_closure_summary_path),
         str(stable_release_evidence_packet_path),
     ],
+    "stable_release_evidence_packet": {
+        "schema_version": stable_release_evidence_packet.get("schema_version"),
+        "status": stable_release_evidence_packet.get("status"),
+        "stable_release_evidence_ready": stable_release_evidence_packet.get("stable_release_evidence_ready"),
+        "public_pair_digest_audit": {
+            "artifact": public_pair_digest_audit.get("artifact"),
+            "schema_version": public_pair_digest_audit.get("schema_version"),
+            "status": public_pair_digest_audit.get("status"),
+            "archive_parity_status": public_pair_digest_audit.get("archive_parity_status"),
+            "summary": public_pair_digest_audit.get("summary"),
+        },
+    },
     "required_checks": required_checks,
     "trust_boundary": {
         "local_only": True,

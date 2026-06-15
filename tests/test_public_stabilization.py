@@ -3911,6 +3911,12 @@ def _write_release_readiness_consumer_fixture(root: Path):
                 "schema_version": "ao2.operator-release-evidence-bundle.v1",
                 "operator_release_evidence_ready": True,
             },
+            "public_pair_digest_audit": {
+                "artifact": "ao2-public-release-pair-digest-audit",
+                "schema_version": "ao2.public-release-pair-digest-audit.v1",
+                "status": "passed",
+                "archive_parity_status": "passed",
+            },
             "trust_boundary": {
                 "mutates_releases": False,
                 "stores_credentials": False,
@@ -3957,6 +3963,8 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
         "size_bytes",
         "ao2.stable-release-evidence-packet.v1",
         "stable_release_evidence_ready",
+        "public_pair_digest_audit",
+        "archive_parity_status",
     ]:
         assert needle in script
 
@@ -3983,6 +3991,12 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
     assert "ao2-stable-release-evidence-packet" in summary["source_artifacts"]
     assert "ci_pulse_codex_cron_event_loop_smoke_artifact_job" in summary["required_checks"]
     assert "ci_stable_release_evidence_packet_artifact_job" in summary["required_checks"]
+    assert (
+        summary["stable_release_evidence_packet"]["public_pair_digest_audit"][
+            "archive_parity_status"
+        ]
+        == "passed"
+    )
     assert summary["trust_boundary"]["stores_credentials"] is False
 
 
@@ -4133,6 +4147,36 @@ def test_release_readiness_artifact_consumer_rejects_bad_fixture_evidence(tmp_pa
                 },
             ),
             "stable release evidence packet did not pass",
+        ),
+        (
+            "stable_packet_public_pair_digest_not_ready",
+            lambda root: _write_release_readiness_consumer_json(
+                root,
+                "ao2-stable-release-evidence-packet/packet/summary.json",
+                {
+                    "schema_version": "ao2.stable-release-evidence-packet.v1",
+                    "status": "passed",
+                    "stable_release_evidence_ready": True,
+                    "stable_promotion": {
+                        "schema_version": "ao2.stable-promotion-workflow.v1"
+                    },
+                    "operator_evidence": {
+                        "schema_version": "ao2.operator-release-evidence-bundle.v1",
+                        "operator_release_evidence_ready": True,
+                    },
+                    "public_pair_digest_audit": {
+                        "artifact": "ao2-public-release-pair-digest-audit",
+                        "schema_version": "ao2.public-release-pair-digest-audit.v1",
+                        "status": "passed",
+                        "archive_parity_status": "failed",
+                    },
+                    "trust_boundary": {
+                        "mutates_releases": False,
+                        "stores_credentials": False,
+                    },
+                },
+            ),
+            "stable release evidence packet public pair digest audit was not ready",
         ),
         (
             "missing_required_check",
