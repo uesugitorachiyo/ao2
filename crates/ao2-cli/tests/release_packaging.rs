@@ -2986,6 +2986,9 @@ fn ci_compares_shared_release_support_fixture_with_control_plane() {
         "name: Release support fixture parity with ao2-control-plane",
         "repository: uesugitorachiyo/ao2-control-plane",
         "path: ao2-control-plane",
+        "Use matching ao2-control-plane branch when present",
+        "refs/heads/${head_ref}",
+        "checkout --detach FETCH_HEAD",
         "cmp -s ao2/tests/fixtures/release-support-bundle-contract-v1.json ao2-control-plane/tests/fixtures/release-support-bundle-contract-v1.json",
         "shasum -a 256 ao2/tests/fixtures/release-support-bundle-contract-v1.json ao2-control-plane/tests/fixtures/release-support-bundle-contract-v1.json",
         "target/release-support-fixture-parity/summary.json",
@@ -2998,6 +3001,8 @@ fn ci_compares_shared_release_support_fixture_with_control_plane() {
     }
     assert!(verification.contains("Release support fixture parity with ao2-control-plane"));
     assert!(verification.contains("ao2-release-support-fixture-parity"));
+    assert!(verification.contains("same branch name in both repositories"));
+    assert!(verification.contains("strict CI evidence family"));
 }
 
 #[test]

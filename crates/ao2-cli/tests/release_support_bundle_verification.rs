@@ -134,6 +134,20 @@ fn shared_release_support_contract_fixture_is_accepted() {
         json["trust_boundary"]["control_plane_role"],
         "read_only_observer"
     );
+    let family_ids: Vec<&str> = bundle_json["ci_evidence_index"]["evidence_families"]
+        .as_array()
+        .expect("fixture has CI evidence families")
+        .iter()
+        .map(|family| {
+            family["id"]
+                .as_str()
+                .expect("CI evidence family id is a string")
+        })
+        .collect();
+    assert!(
+        family_ids.contains(&"stable-promotion-evidence-readback"),
+        "shared release-support fixture must include stable-promotion evidence readback"
+    );
 }
 
 fn passed_report_contract_verification() -> serde_json::Value {
