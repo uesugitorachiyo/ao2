@@ -991,15 +991,29 @@ Result:
   `Public Release Operator Checklist Closure` workflow downloads both upstream
   artifacts by explicit run id or latest successful main workflow run and
   uploads `ao2-public-release-operator-checklist-closure`.
+- `npm run release:dual-repo-public-approval-closure`: composes the final
+  public release approval evidence from AO2
+  `ao2-public-release-operator-checklist-closure`, control-plane
+  `ao2-control-plane-public-release-pair-verification`, and control-plane
+  `ao2-control-plane-ao2-stable-promotion-evidence-index-readback`. It emits
+  `ao2.dual-repo-public-approval-closure.v1`, `summary.json`, and `report.md`,
+  setting `release_go_no_go=go` only when AO2's operator decision fields remain
+  unapproved, the control-plane public release pair verification has no gaps,
+  the control-plane AO2 stable promotion evidence readback has no gaps, and all
+  trust-boundary fields confirm no release mutation or approval authority. The
+  manual `Dual Repo Public Approval Closure` workflow downloads the AO2 and
+  ao2-control-plane upstream artifacts by explicit run id or latest successful
+  main workflow run and uploads `ao2-dual-repo-public-approval-closure`.
 - `npm run release:readiness:static` records
   `ao2.release-artifact-size-budget.v1` inside the release artifact closure
   index and budgets lightweight operator approval artifacts at 1 MiB. The
   budget currently covers `ao2-stable-promotion-operator-checklist`,
   `ao2-stable-promotion-dry-run-checklist`,
   `ao2-public-release-operator-checklist`, and
-  `ao2-public-release-operator-checklist-closure`; the dry-run checklist
-  baseline is 5,436 bytes. This keeps future workflow edits from silently
-  turning approval packets back into large evidence-tree uploads.
+  `ao2-public-release-operator-checklist-closure`, and
+  `ao2-dual-repo-public-approval-closure`; the dry-run checklist baseline is
+  5,436 bytes. This keeps future workflow edits from silently turning approval
+  packets back into large evidence-tree uploads.
 - `npm run release:artifact-size-budget-audit`: reads the release artifact
   closure index and checks the latest non-expired GitHub Actions artifact
   metadata for each budgeted artifact. It emits
