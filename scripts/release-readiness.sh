@@ -294,16 +294,21 @@ dual_repo_release_publication_closure_index_ok = (
     dual_repo_release_publication_closure_index is not None
     and "needs: release-publication-closure-artifacts" in dual_repo_release_publication_closure_index
     and "ao2-dual-repo-release-publication-closure-index" in dual_repo_release_publication_closure_index
+    and "Checkout release train manifest" in dual_repo_release_publication_closure_index
+    and "actions/checkout@v6.0.3" in dual_repo_release_publication_closure_index
     and "ao2-control-plane-release-publication-closure" in dual_repo_release_publication_closure_index
     and "Download AO2 public archive assets for closure index" in dual_repo_release_publication_closure_index
     and "target/dual-repo-release-publication-closure-index/ao2-release-archives" in dual_repo_release_publication_closure_index
-    and "gh release download v0.4.80" in dual_repo_release_publication_closure_index
+    and 'eval "$(scripts/release-train-env.sh stable)"' in dual_repo_release_publication_closure_index
+    and 'gh release download "$AO2_RELEASE_TRAIN_AO2_TAG"' in dual_repo_release_publication_closure_index
     and "ao2_archive_assets" in dual_repo_release_publication_closure_index
     and "hashlib.sha256(path.read_bytes()).hexdigest()" in dual_repo_release_publication_closure_index
-    and "ao2-0.4.80-linux-aarch64.tar.gz" in dual_repo_release_publication_closure_index
-    and "ao2-0.4.80-linux-x86_64.tar.gz" in dual_repo_release_publication_closure_index
-    and "ao2-0.4.80-macos-aarch64.tar.gz" in dual_repo_release_publication_closure_index
-    and "ao2-0.4.80-windows-x86_64.tar.gz" in dual_repo_release_publication_closure_index
+    and 'release_train = json.loads(Path("docs/release/release-train.json").read_text(encoding="utf-8"))' in dual_repo_release_publication_closure_index
+    and 'stable_version = release_train["stable"]["ao2"]["version"]' in dual_repo_release_publication_closure_index
+    and 'f"ao2-{stable_version}-linux-aarch64.tar.gz"' in dual_repo_release_publication_closure_index
+    and 'f"ao2-{stable_version}-linux-x86_64.tar.gz"' in dual_repo_release_publication_closure_index
+    and 'f"ao2-{stable_version}-macos-aarch64.tar.gz"' in dual_repo_release_publication_closure_index
+    and 'f"ao2-{stable_version}-windows-x86_64.tar.gz"' in dual_repo_release_publication_closure_index
     and "target/dual-repo-release-publication-closure-index/ao2-release-publication-closure" in dual_repo_release_publication_closure_index
     and "target/dual-repo-release-publication-closure-index/ao2-control-plane-release-publication-closure" in dual_repo_release_publication_closure_index
     and "gh run list --repo uesugitorachiyo/ao2-control-plane --branch main --workflow CI" in dual_repo_release_publication_closure_index
@@ -362,9 +367,12 @@ stable_release_promotion_workflow_ok = (
     and "contents: write" in stable_release_promotion_workflow
     and "GH_TOKEN: ${{ github.token }}" in stable_release_promotion_workflow
     and "STABLE_RELEASE_EVIDENCE_RUN_ID: ${{ inputs.stable_release_evidence_run_id }}" in stable_release_promotion_workflow
-    and "AO2_RELEASE_TAG_INPUT: ${{ inputs.ao2_release_tag || 'v0.4.80' }}" in stable_release_promotion_workflow
-    and "AO2_CP_RELEASE_TAG_INPUT: ${{ inputs.ao2_cp_release_tag || 'v0.1.13' }}" in stable_release_promotion_workflow
+    and "AO2_RELEASE_TAG_INPUT: ${{ inputs.ao2_release_tag }}" in stable_release_promotion_workflow
+    and "AO2_CP_RELEASE_TAG_INPUT: ${{ inputs.ao2_cp_release_tag }}" in stable_release_promotion_workflow
     and "PROMOTION_CONFIRM_INPUT: ${{ inputs.promotion_confirm }}" in stable_release_promotion_workflow
+    and 'eval "$(scripts/release-train-env.sh stable)"' in stable_release_promotion_workflow
+    and 'AO2_RELEASE_TAG_INPUT="${AO2_RELEASE_TAG_INPUT:-$AO2_RELEASE_TRAIN_AO2_TAG}"' in stable_release_promotion_workflow
+    and 'AO2_CP_RELEASE_TAG_INPUT="${AO2_CP_RELEASE_TAG_INPUT:-$AO2_RELEASE_TRAIN_CP_TAG}"' in stable_release_promotion_workflow
     and "ao2-stable-release-evidence-packet" in stable_release_promotion_workflow
     and "target/stable-release-promotion/stable-release-evidence-packet" in stable_release_promotion_workflow
     and "ao2.stable-release-evidence-packet.v1" in stable_release_promotion_workflow
@@ -376,7 +384,7 @@ stable_release_promotion_workflow_ok = (
     and 'AO2_CP_RELEASE_TAG="$AO2_CP_RELEASE_TAG_INPUT"' in stable_release_promotion_workflow
     and 'AO2_STABLE_PROMOTION_CONFIRM="$PROMOTION_CONFIRM_INPUT"' in stable_release_promotion_workflow
     and "npm run release:stable-promotion-workflow" in stable_release_promotion_workflow
-    and "promote-stable-v0.4.80-v0.1.13" in stable_release_promotion_workflow
+    and "manifest-derived promote-stable-<ao2-tag>-<control-plane-tag>" in stable_release_promotion_workflow
     and "refusing stable promotion because workflow input did not match required confirmation" in stable_release_promotion_workflow
     and "actions/upload-artifact@v7.0.1" in stable_release_promotion_workflow
     and "ao2-stable-release-promotion-workflow" in stable_release_promotion_workflow
@@ -423,8 +431,11 @@ stable_promotion_operator_checklist_ok = (
     and "contents: read" in stable_promotion_operator_checklist
     and "GH_TOKEN: ${{ github.token }}" in stable_promotion_operator_checklist
     and "STABLE_PROMOTION_DRY_RUN_AUDIT_RUN_ID: ${{ inputs.stable_promotion_dry_run_audit_run_id }}" in stable_promotion_operator_checklist
-    and "AO2_RELEASE_TAG_INPUT: ${{ inputs.ao2_release_tag || 'v0.4.80' }}" in stable_promotion_operator_checklist
-    and "AO2_CP_RELEASE_TAG_INPUT: ${{ inputs.ao2_cp_release_tag || 'v0.1.13' }}" in stable_promotion_operator_checklist
+    and "AO2_RELEASE_TAG_INPUT: ${{ inputs.ao2_release_tag }}" in stable_promotion_operator_checklist
+    and "AO2_CP_RELEASE_TAG_INPUT: ${{ inputs.ao2_cp_release_tag }}" in stable_promotion_operator_checklist
+    and 'eval "$(scripts/release-train-env.sh stable)"' in stable_promotion_operator_checklist
+    and 'AO2_RELEASE_TAG_INPUT="${AO2_RELEASE_TAG_INPUT:-$AO2_RELEASE_TRAIN_AO2_TAG}"' in stable_promotion_operator_checklist
+    and 'AO2_CP_RELEASE_TAG_INPUT="${AO2_CP_RELEASE_TAG_INPUT:-$AO2_RELEASE_TRAIN_CP_TAG}"' in stable_promotion_operator_checklist
     and "ao2-stable-release-promotion-dry-run-audit" in stable_promotion_operator_checklist
     and "target/stable-promotion-operator-checklist/dry-run-audit" in stable_promotion_operator_checklist
     and 'AO2_RELEASE_TAG="${AO2_RELEASE_TAG_INPUT}"' in stable_promotion_operator_checklist
@@ -436,7 +447,9 @@ stable_promotion_operator_checklist_ok = (
     and "path: target/stable-promotion-operator-checklist\n" not in stable_promotion_operator_checklist
     and scripts.get("release:stable-promotion-operator-checklist") == "node scripts/run-sh-script.js scripts/stable-promotion-operator-checklist.sh"
     and "ao2.stable-promotion-operator-checklist.v1" in stable_promotion_operator_checklist_script
-    and "promote-stable-v0.4.80-v0.1.13" in stable_promotion_operator_checklist_script
+    and "scripts/release-train-env.sh" in stable_promotion_operator_checklist_script
+    and "AO2_RELEASE_TRAIN_AO2_TAG" in stable_promotion_operator_checklist_script
+    and "AO2_RELEASE_TRAIN_CP_TAG" in stable_promotion_operator_checklist_script
     and 'AO2_STABLE_PROMOTION_REQUIRED_CONFIRM="${AO2_STABLE_PROMOTION_REQUIRED_CONFIRM:-promote-stable-$AO2_RELEASE_TAG-$AO2_CONTROL_PLANE_RELEASE_TAG}"' in stable_promotion_operator_checklist_script
     and "No provider API keys are required or accepted" in stable_promotion_operator_checklist_script
 )
@@ -841,13 +854,16 @@ release_public_pair_digest_audit_contract_ok = (
     and "required_archive_presence" in release_public_pair_digest_audit_script
     and "closure_archive_assets" in release_public_pair_digest_audit_script
     and "full_archive_parity" in release_public_pair_digest_audit_script
-    and "ao2-0.4.80-linux-aarch64.tar.gz" in release_public_pair_digest_audit_script
-    and "ao2-0.4.80-linux-x86_64.tar.gz" in release_public_pair_digest_audit_script
-    and "ao2-0.4.80-macos-aarch64.tar.gz" in release_public_pair_digest_audit_script
-    and "ao2-0.4.80-windows-x86_64.tar.gz" in release_public_pair_digest_audit_script
-    and "ao2-control-plane-0.1.13-linux-x86_64.tar.gz" in release_public_pair_digest_audit_script
-    and "ao2-control-plane-0.1.13-macos-aarch64.tar.gz" in release_public_pair_digest_audit_script
-    and "ao2-control-plane-0.1.13-windows-x86_64.tar.gz" in release_public_pair_digest_audit_script
+    and "scripts/release-train-env.sh" in release_public_pair_digest_audit_script
+    and "AO2_RELEASE_TRAIN_AO2_VERSION" in release_public_pair_digest_audit_script
+    and "AO2_RELEASE_TRAIN_CP_VERSION" in release_public_pair_digest_audit_script
+    and 'f"ao2-{ao2_version}-linux-aarch64.tar.gz"' in release_public_pair_digest_audit_script
+    and 'f"ao2-{ao2_version}-linux-x86_64.tar.gz"' in release_public_pair_digest_audit_script
+    and 'f"ao2-{ao2_version}-macos-aarch64.tar.gz"' in release_public_pair_digest_audit_script
+    and 'f"ao2-{ao2_version}-windows-x86_64.tar.gz"' in release_public_pair_digest_audit_script
+    and 'f"ao2-control-plane-{cp_version}-linux-x86_64.tar.gz"' in release_public_pair_digest_audit_script
+    and 'f"ao2-control-plane-{cp_version}-macos-aarch64.tar.gz"' in release_public_pair_digest_audit_script
+    and 'f"ao2-control-plane-{cp_version}-windows-x86_64.tar.gz"' in release_public_pair_digest_audit_script
     and "dual_repo_closure_digest_match" in release_public_pair_digest_audit_script
     and "published_asset_digest_present" in release_public_pair_digest_audit_script
     and "published_asset_size_match" in release_public_pair_digest_audit_script

@@ -4,13 +4,20 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_ROOT="${AO2_RELEASE_ASSET_COMPLETENESS_ROOT:-$ROOT/target/release-asset-completeness/latest}"
 SUMMARY="$OUT_ROOT/summary.json"
+eval "$("$ROOT/scripts/release-train-env.sh" "${AO2_RELEASE_TRAIN:-stable}")"
 
 rm -rf "$OUT_ROOT"
 mkdir -p "$OUT_ROOT"
 
 # Uses `gh release view` for release metadata and `gh release download` for
 # checksum manifests. This gate reads public release state; it does not mutate.
-python3 - "$OUT_ROOT" "$SUMMARY" <<'PY'
+python3 - "$OUT_ROOT" "$SUMMARY" \
+  "$AO2_RELEASE_TRAIN_MANIFEST" \
+  "$AO2_RELEASE_TRAIN_NAME" \
+  "$AO2_RELEASE_TRAIN_AO2_TAG" \
+  "$AO2_RELEASE_TRAIN_AO2_VERSION" \
+  "$AO2_RELEASE_TRAIN_CP_TAG" \
+  "$AO2_RELEASE_TRAIN_CP_VERSION" <<'PY'
 import json
 import html
 import subprocess
@@ -20,25 +27,31 @@ from pathlib import Path
 
 out_root = Path(sys.argv[1])
 summary_path = Path(sys.argv[2])
+manifest_path = Path(sys.argv[3])
+release_train_name = sys.argv[4]
+ao2_tag = sys.argv[5]
+ao2_version = sys.argv[6]
+cp_tag = sys.argv[7]
+cp_version = sys.argv[8]
 
 components = [
     {
         "name": "ao2",
         "repo": "uesugitorachiyo/ao2",
-        "tag": "v0.4.80",
+        "tag": ao2_tag,
         "expected_assets": [
-            "ao2-0.4.80-linux-aarch64.tar.gz",
-            "ao2-0.4.80-linux-aarch64.tar.gz.sha256",
-            "ao2-0.4.80-linux-aarch64.tar.gz.sig",
-            "ao2-0.4.80-linux-x86_64.tar.gz",
-            "ao2-0.4.80-linux-x86_64.tar.gz.sha256",
-            "ao2-0.4.80-linux-x86_64.tar.gz.sig",
-            "ao2-0.4.80-macos-aarch64.tar.gz",
-            "ao2-0.4.80-macos-aarch64.tar.gz.sha256",
-            "ao2-0.4.80-macos-aarch64.tar.gz.sig",
-            "ao2-0.4.80-windows-x86_64.tar.gz",
-            "ao2-0.4.80-windows-x86_64.tar.gz.sha256",
-            "ao2-0.4.80-windows-x86_64.tar.gz.sig",
+            f"ao2-{ao2_version}-linux-aarch64.tar.gz",
+            f"ao2-{ao2_version}-linux-aarch64.tar.gz.sha256",
+            f"ao2-{ao2_version}-linux-aarch64.tar.gz.sig",
+            f"ao2-{ao2_version}-linux-x86_64.tar.gz",
+            f"ao2-{ao2_version}-linux-x86_64.tar.gz.sha256",
+            f"ao2-{ao2_version}-linux-x86_64.tar.gz.sig",
+            f"ao2-{ao2_version}-macos-aarch64.tar.gz",
+            f"ao2-{ao2_version}-macos-aarch64.tar.gz.sha256",
+            f"ao2-{ao2_version}-macos-aarch64.tar.gz.sig",
+            f"ao2-{ao2_version}-windows-x86_64.tar.gz",
+            f"ao2-{ao2_version}-windows-x86_64.tar.gz.sha256",
+            f"ao2-{ao2_version}-windows-x86_64.tar.gz.sig",
             "ao2-release-artifact-closure-index.json",
             "ao2-release-provenance.json",
             "ao2-release-provenance.json.sig",
@@ -51,11 +64,11 @@ components = [
     {
         "name": "ao2-control-plane",
         "repo": "uesugitorachiyo/ao2-control-plane",
-        "tag": "v0.1.13",
+        "tag": cp_tag,
         "expected_assets": [
-            "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
-            "ao2-control-plane-0.1.13-macos-aarch64.tar.gz",
-            "ao2-control-plane-0.1.13-windows-x86_64.tar.gz",
+            f"ao2-control-plane-{cp_version}-linux-x86_64.tar.gz",
+            f"ao2-control-plane-{cp_version}-macos-aarch64.tar.gz",
+            f"ao2-control-plane-{cp_version}-windows-x86_64.tar.gz",
             "SHA256SUMS",
             "summary.json",
         ],
@@ -156,6 +169,12 @@ payload = {
     "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     "status": "passed" if all(item["status"] == "passed" for item in results) else "failed",
     "artifact_root": str(out_root),
+    "release_train": {
+        "name": release_train_name,
+        "manifest": str(manifest_path),
+        "ao2": {"tag": ao2_tag, "version": ao2_version},
+        "ao2_control_plane": {"tag": cp_tag, "version": cp_version},
+    },
     "components": results,
     "trust_boundary": {
         "queries_public_releases": True,

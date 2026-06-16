@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_ROOT="${AO2_PUBLIC_PAIR_DIGEST_AUDIT_ROOT:-$ROOT/target/public-release-pair-digest-audit/latest}"
 SUMMARY="$OUT_ROOT/summary.json"
+eval "$("$ROOT/scripts/release-train-env.sh" "${AO2_RELEASE_TRAIN:-stable}")"
 
 rm -rf "$OUT_ROOT"
 mkdir -p "$OUT_ROOT"
@@ -11,7 +12,13 @@ mkdir -p "$OUT_ROOT"
 # Read-only post-release audit. It compares public GitHub Release asset digest
 # metadata from `gh release view` against the dual-repo publication closure
 # index produced by CI.
-python3 - "$ROOT" "$SUMMARY" <<'PY'
+python3 - "$ROOT" "$SUMMARY" \
+  "$AO2_RELEASE_TRAIN_MANIFEST" \
+  "$AO2_RELEASE_TRAIN_NAME" \
+  "$AO2_RELEASE_TRAIN_AO2_TAG" \
+  "$AO2_RELEASE_TRAIN_AO2_VERSION" \
+  "$AO2_RELEASE_TRAIN_CP_TAG" \
+  "$AO2_RELEASE_TRAIN_CP_VERSION" <<'PY'
 import html
 import json
 import os
@@ -22,33 +29,39 @@ from pathlib import Path
 
 root = Path(sys.argv[1])
 summary_path = Path(sys.argv[2])
+manifest_path = Path(sys.argv[3])
+release_train_name = sys.argv[4]
+ao2_tag = sys.argv[5]
+ao2_version = sys.argv[6]
+cp_tag = sys.argv[7]
+cp_version = sys.argv[8]
 
 components = [
     {
         "component": "ao2",
         "repo": "uesugitorachiyo/ao2",
-        "tag": "v0.4.80",
-        "expected_release_name": "AO2 v0.4.80 stable",
+        "tag": ao2_tag,
+        "expected_release_name": f"AO2 {ao2_tag} stable",
         "release_view_env": "AO2_PUBLIC_PAIR_DIGEST_AUDIT_AO2_RELEASE_VIEW_JSON",
         "archive_prefix": "ao2-",
         "required_archive_names": [
-            "ao2-0.4.80-linux-aarch64.tar.gz",
-            "ao2-0.4.80-linux-x86_64.tar.gz",
-            "ao2-0.4.80-macos-aarch64.tar.gz",
-            "ao2-0.4.80-windows-x86_64.tar.gz",
+            f"ao2-{ao2_version}-linux-aarch64.tar.gz",
+            f"ao2-{ao2_version}-linux-x86_64.tar.gz",
+            f"ao2-{ao2_version}-macos-aarch64.tar.gz",
+            f"ao2-{ao2_version}-windows-x86_64.tar.gz",
         ],
     },
     {
         "component": "ao2-control-plane",
         "repo": "uesugitorachiyo/ao2-control-plane",
-        "tag": "v0.1.13",
-        "expected_release_name": "ao2-control-plane v0.1.13",
+        "tag": cp_tag,
+        "expected_release_name": f"ao2-control-plane {cp_tag}",
         "release_view_env": "AO2_PUBLIC_PAIR_DIGEST_AUDIT_CONTROL_PLANE_RELEASE_VIEW_JSON",
         "archive_prefix": "ao2-control-plane-",
         "required_archive_names": [
-            "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
-            "ao2-control-plane-0.1.13-macos-aarch64.tar.gz",
-            "ao2-control-plane-0.1.13-windows-x86_64.tar.gz",
+            f"ao2-control-plane-{cp_version}-linux-x86_64.tar.gz",
+            f"ao2-control-plane-{cp_version}-macos-aarch64.tar.gz",
+            f"ao2-control-plane-{cp_version}-windows-x86_64.tar.gz",
         ],
     },
 ]
@@ -360,6 +373,12 @@ payload = {
     "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     "status": status,
     "artifact_root": str(summary_path.parent),
+    "release_train": {
+        "name": release_train_name,
+        "manifest": str(manifest_path),
+        "ao2": {"tag": ao2_tag, "version": ao2_version},
+        "ao2_control_plane": {"tag": cp_tag, "version": cp_version},
+    },
     "components": components_out,
     "closure_index": str(Path(closure_path)) if closure_path else None,
     "archive_parity": {

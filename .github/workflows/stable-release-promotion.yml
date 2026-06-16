@@ -8,17 +8,15 @@ on:
         required: false
         type: string
       ao2_release_tag:
-        description: "AO2 release tag to promote or rehearse."
+        description: "AO2 release tag to promote or rehearse. Defaults to the stable release-train manifest when omitted."
         required: false
         type: string
-        default: v0.4.80
       ao2_cp_release_tag:
-        description: "ao2-control-plane release tag paired with the AO2 promotion."
+        description: "ao2-control-plane release tag paired with the AO2 promotion. Defaults to the stable release-train manifest when omitted."
         required: false
         type: string
-        default: v0.1.13
       promotion_confirm:
-        description: "Leave empty for dry-run. Use promote-stable-v0.4.80-v0.1.13 for the default stable train."
+        description: "Leave empty for dry-run. Use the manifest-derived promote-stable-<ao2-tag>-<control-plane-tag> string for live promotion."
         required: false
         type: string
 
@@ -111,11 +109,14 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          AO2_RELEASE_TAG_INPUT: ${{ inputs.ao2_release_tag || 'v0.4.80' }}
-          AO2_CP_RELEASE_TAG_INPUT: ${{ inputs.ao2_cp_release_tag || 'v0.1.13' }}
+          AO2_RELEASE_TAG_INPUT: ${{ inputs.ao2_release_tag }}
+          AO2_CP_RELEASE_TAG_INPUT: ${{ inputs.ao2_cp_release_tag }}
           PROMOTION_CONFIRM_INPUT: ${{ inputs.promotion_confirm }}
         run: |
           set -euo pipefail
+          eval "$(scripts/release-train-env.sh stable)"
+          AO2_RELEASE_TAG_INPUT="${AO2_RELEASE_TAG_INPUT:-$AO2_RELEASE_TRAIN_AO2_TAG}"
+          AO2_CP_RELEASE_TAG_INPUT="${AO2_CP_RELEASE_TAG_INPUT:-$AO2_RELEASE_TRAIN_CP_TAG}"
           required_confirm="promote-stable-${AO2_RELEASE_TAG_INPUT}-${AO2_CP_RELEASE_TAG_INPUT}"
           if [ -n "$PROMOTION_CONFIRM_INPUT" ] && [ "$PROMOTION_CONFIRM_INPUT" != "$required_confirm" ]; then
             echo "refusing stable promotion because workflow input did not match required confirmation" >&2

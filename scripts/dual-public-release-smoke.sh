@@ -5,10 +5,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_ROOT="${AO2_PUBLIC_RELEASE_SMOKE_ROOT:-$ROOT/target/dual-public-release-smoke}"
 LATEST_ROOT="$OUT_ROOT/latest"
 SMOKE_BIND="${AO2_PUBLIC_RELEASE_SMOKE_BIND:-127.0.0.1:19884}"
+eval "$("$ROOT/scripts/release-train-env.sh" "${AO2_RELEASE_TRAIN:-stable}")"
 AO2_RELEASE_REPO="${AO2_RELEASE_REPO:-uesugitorachiyo/ao2}"
-AO2_RELEASE_TAG="${AO2_RELEASE_TAG:-v0.4.80}"
+AO2_RELEASE_TAG="${AO2_RELEASE_TAG:-$AO2_RELEASE_TRAIN_AO2_TAG}"
 AO2_CP_RELEASE_REPO="${AO2_CP_RELEASE_REPO:-uesugitorachiyo/ao2-control-plane}"
-AO2_CP_RELEASE_TAG="${AO2_CP_RELEASE_TAG:-v0.1.13}"
+AO2_CP_RELEASE_TAG="${AO2_CP_RELEASE_TAG:-$AO2_RELEASE_TRAIN_CP_TAG}"
 TARGET_LABEL="${AO2_PUBLIC_RELEASE_SMOKE_TARGET:-}"
 
 usage() {
@@ -78,9 +79,6 @@ if [[ -z "$TARGET_LABEL" ]]; then
   esac
   TARGET_LABEL="$os_label-$arch_label"
 fi
-# Current default public smoke archive contract:
-# ao2-0.4.80-linux-x86_64.tar.gz
-# ao2-control-plane-0.1.13-linux-x86_64.tar.gz
 AO2_ARCHIVE_NAME="ao2-$AO2_VERSION-$TARGET_LABEL.tar.gz"
 AO2_CP_ARCHIVE_NAME="ao2-control-plane-$AO2_CP_VERSION-$TARGET_LABEL.tar.gz"
 
@@ -184,7 +182,7 @@ def write_task_board(path: Path) -> None:
         "release_objective": "Verify the published AO2 and control-plane release archives interoperate.",
         "source_recommendation": "Production readiness public dual-release smoke.",
         "release_train": {
-            "version": "v0.4.80/v0.1.13",
+            "version": f"{ao2_tag}/{cp_tag}",
             "theme": "Public release pair interoperability",
         },
         "tasks": [
@@ -205,7 +203,7 @@ def write_task_board(path: Path) -> None:
                     "Stop if either published archive is missing or checksum-invalid.",
                     "Stop if control-plane readback requires credentials or release mutation authority.",
                 ],
-                "release_train": "v0.4.80/v0.1.13",
+                "release_train": f"{ao2_tag}/{cp_tag}",
             }
         ],
         "control_plane_readback": {

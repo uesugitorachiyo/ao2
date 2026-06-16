@@ -860,6 +860,8 @@ jobs:
     needs: release-publication-closure-artifacts
     timeout-minutes: 10
     steps:
+      - name: Checkout release train manifest
+        uses: actions/checkout@v6.0.3
       - name: Download AO2 release publication closure artifact
         uses: actions/download-artifact@v8.0.1
         with:
@@ -871,10 +873,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          eval "$(scripts/release-train-env.sh stable)"
           archive_dir="target/dual-repo-release-publication-closure-index/ao2-release-archives"
           rm -rf "$archive_dir"
           mkdir -p "$archive_dir"
-          gh release download v0.4.80 \
+          gh release download "$AO2_RELEASE_TRAIN_AO2_TAG" \
             --repo uesugitorachiyo/ao2 \
             --pattern "ao2-*.tar.gz" \
             --dir "$archive_dir" \
@@ -926,6 +929,8 @@ jobs:
           ao2_summary_path = root / "ao2-release-publication-closure" / "summary.json"
           cp_summary_path = root / "ao2-control-plane-release-publication-closure" / "summary.json"
           ao2_archive_dir = root / "ao2-release-archives"
+          release_train = json.loads(Path("docs/release/release-train.json").read_text(encoding="utf-8"))
+          stable_version = release_train["stable"]["ao2"]["version"]
           ao2_summary = json.loads(ao2_summary_path.read_text(encoding="utf-8"))
           cp_summary = json.loads(cp_summary_path.read_text(encoding="utf-8"))
           assert ao2_summary.get("schema_version") == "ao2.release-publication-dry-run-closure.v1", ao2_summary
@@ -939,10 +944,10 @@ jobs:
           assert cp_summary.get("trust_boundary", {}).get("mutates_github_releases") is False, cp_summary
           assert cp_summary.get("trust_boundary", {}).get("mutates_ao_artifacts") is False, cp_summary
           required_ao2_archives = [
-              "ao2-0.4.80-linux-aarch64.tar.gz",
-              "ao2-0.4.80-linux-x86_64.tar.gz",
-              "ao2-0.4.80-macos-aarch64.tar.gz",
-              "ao2-0.4.80-windows-x86_64.tar.gz",
+              f"ao2-{stable_version}-linux-aarch64.tar.gz",
+              f"ao2-{stable_version}-linux-x86_64.tar.gz",
+              f"ao2-{stable_version}-macos-aarch64.tar.gz",
+              f"ao2-{stable_version}-windows-x86_64.tar.gz",
           ]
           ao2_archive_assets = []
           for name in required_ao2_archives:

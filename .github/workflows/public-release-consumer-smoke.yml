@@ -4,15 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       ao2_release_tag:
-        description: "AO2 release tag to download."
+        description: "AO2 release tag to download. Defaults to the stable release-train manifest when omitted."
         required: false
         type: string
-        default: v0.4.80
       ao2_cp_release_tag:
-        description: "ao2-control-plane release tag to download."
+        description: "ao2-control-plane release tag to download. Defaults to the stable release-train manifest when omitted."
         required: false
         type: string
-        default: v0.1.13
   schedule:
     - cron: "41 11 * * 2"
 
@@ -25,9 +23,9 @@ concurrency:
 
 env:
   AO2_RELEASE_REPO: uesugitorachiyo/ao2
-  AO2_RELEASE_TAG: ${{ inputs.ao2_release_tag || 'v0.4.80' }}
+  AO2_RELEASE_TAG: ${{ inputs.ao2_release_tag }}
   AO2_CP_RELEASE_REPO: uesugitorachiyo/ao2-control-plane
-  AO2_CP_RELEASE_TAG: ${{ inputs.ao2_cp_release_tag || 'v0.1.13' }}
+  AO2_CP_RELEASE_TAG: ${{ inputs.ao2_cp_release_tag }}
 
 jobs:
   public-release-consumer-smoke:

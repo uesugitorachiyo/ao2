@@ -4,15 +4,13 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "AO2 release tag to smoke on Windows."
+        description: "AO2 release tag to smoke on Windows. Defaults to the stable release-train manifest when omitted."
         required: false
         type: string
-        default: v0.4.80
       release_version:
-        description: "AO2 release version used in the Windows archive name."
+        description: "AO2 release version used in the Windows archive name. Defaults to the stable release-train manifest when omitted."
         required: false
         type: string
-        default: 0.4.80
 
 permissions:
   contents: read
@@ -26,11 +24,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6.0.3
 
+      - name: Resolve stable release train defaults
+        shell: bash
+        env:
+          AO2_RELEASE_TAG_INPUT: ${{ inputs.release_tag }}
+          AO2_RELEASE_VERSION_INPUT: ${{ inputs.release_version }}
+        run: |
+          set -euo pipefail
+          eval "$(scripts/release-train-env.sh stable)"
+          {
+            echo "AO2_RELEASE_TAG=${AO2_RELEASE_TAG_INPUT:-$AO2_RELEASE_TRAIN_AO2_TAG}"
+            echo "AO2_RELEASE_VERSION=${AO2_RELEASE_VERSION_INPUT:-$AO2_RELEASE_TRAIN_AO2_VERSION}"
+          } >> "$GITHUB_ENV"
+
       - name: Download public release archive
         env:
           GH_TOKEN: ${{ github.token }}
-          AO2_RELEASE_TAG: ${{ inputs.release_tag || 'v0.4.80' }}
-          AO2_RELEASE_VERSION: ${{ inputs.release_version || '0.4.80' }}
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist-windows | Out-Null
@@ -42,8 +51,6 @@ jobs:
             --dir dist-windows
 
       - name: Verify public release archive checksum
-        env:
-          AO2_RELEASE_VERSION: ${{ inputs.release_version || '0.4.80' }}
         shell: pwsh
         run: |
           $archive = "ao2-$env:AO2_RELEASE_VERSION-windows-x86_64.tar.gz"
@@ -59,8 +66,6 @@ jobs:
           }
 
       - name: Smoke installed release
-        env:
-          AO2_RELEASE_VERSION: ${{ inputs.release_version || '0.4.80' }}
         shell: pwsh
         run: |
           $archive = "ao2-$env:AO2_RELEASE_VERSION-windows-x86_64.tar.gz"
