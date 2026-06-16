@@ -3684,6 +3684,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "stable_release_promotion_dry_run_audit",
         "stable_promotion_operator_checklist",
         "stable_promotion_dry_run_checklist",
+        "public_release_operator_checklist",
         "artifact_size_budget",
         "release_artifact_size_budget_audit",
         "release:artifact-size-budget-audit",
@@ -4178,6 +4179,29 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "observed_baseline_size_bytes": 5436,
         "enforcement": "fail_if_hosted_artifact_exceeds_budget",
     }
+    assert artifacts["public_release_operator_checklist"]["artifact_name"] == (
+        "ao2-public-release-operator-checklist"
+    )
+    assert artifacts["public_release_operator_checklist"]["producer_job"] == (
+        "Public Release Operator Checklist / public-release-operator-checklist"
+    )
+    assert artifacts["public_release_operator_checklist"]["required_files"] == [
+        "operator-readiness-summary/summary.json",
+        "report/summary.json",
+        "report/checklist.md",
+    ]
+    assert artifacts["public_release_operator_checklist"]["schema_versions"] == [
+        "ao2.public-release-operator-checklist.v1",
+        "ao2.operator-readiness-summary.v1",
+    ]
+    assert artifacts["public_release_operator_checklist"]["source_artifacts"] == [
+        "ao2-operator-readiness-summary"
+    ]
+    assert artifacts["public_release_operator_checklist"]["artifact_size_budget"] == {
+        "budget_scope": "lightweight_operator_approval_packet",
+        "max_size_bytes": 1048576,
+        "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+    }
     assert closure["artifact_size_budget"] == {
         "schema_version": "ao2.release-artifact-size-budget.v1",
         "status": "passed",
@@ -4186,6 +4210,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "budgeted_artifact_ids": [
             "stable_promotion_operator_checklist",
             "stable_promotion_dry_run_checklist",
+            "public_release_operator_checklist",
         ],
     }
     assert artifacts["release_artifact_size_budget_audit"]["artifact_name"] == (
