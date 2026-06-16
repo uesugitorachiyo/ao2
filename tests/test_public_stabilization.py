@@ -2157,6 +2157,172 @@ def test_operator_readiness_summary_workflow_uploads_go_no_go_artifact():
     assert "ao2-operator-readiness-summary" in verification
 
 
+def test_public_release_operator_checklist_consumes_operator_readiness_summary(tmp_path):
+    package_json = json.loads(read("package.json"))
+    assert package_json["scripts"]["release:public-operator-checklist"] == (
+        "node scripts/run-sh-script.js scripts/public-release-operator-checklist.sh"
+    )
+
+    script_path = REPO_ROOT / "scripts" / "public-release-operator-checklist.sh"
+    assert script_path.is_file()
+    assert script_path.stat().st_mode & stat.S_IXUSR
+    script = script_path.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.public-release-operator-checklist.v1",
+        "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_ROOT",
+        "AO2_PUBLIC_RELEASE_OPERATOR_READINESS_SUMMARY",
+        "AO2_PUBLIC_RELEASE_OPERATOR_REQUIRED_CONFIRM",
+        "ao2.operator-readiness-summary.v1",
+        "release_go_no_go",
+        "operator_readiness_ready",
+        "go_no_go_reviewed",
+        "release_pages_reviewed",
+        "artifact_digests_reviewed",
+        "approval_confirmation_entered",
+        "mutates_releases",
+        "stores_credentials",
+        "control_plane_approves_release",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+    ]:
+        assert needle in script
+    assert "gh release" not in script
+    assert "contents: write" not in script
+
+    readiness_summary = tmp_path / "operator-readiness-summary" / "summary.json"
+    readiness_summary.parent.mkdir(parents=True)
+    readiness_summary.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.operator-readiness-summary.v1",
+                "status": "passed",
+                "release_go_no_go": "go",
+                "operator_readiness_ready": True,
+                "evidence": {
+                    "release_readiness_final_closure": {"ready": True},
+                    "stable_promotion_evidence_index": {"ready": True},
+                    "public_pair_digest_audit": {
+                        "ready": True,
+                        "archive_parity_status": "passed",
+                        "required_archive_scope": "full_archive_parity",
+                    },
+                    "artifact_size_budget_audit": {"ready": True, "failed_check_count": 0},
+                },
+                "trust_boundary": {
+                    "local_only": True,
+                    "mutates_releases": False,
+                    "stores_credentials": False,
+                    "control_plane_approves_release": False,
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    out_root = tmp_path / "public-release-operator-checklist"
+    result = subprocess.run(
+        ["npm", "run", "release:public-operator-checklist"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_ROOT": str(out_root),
+            "AO2_PUBLIC_RELEASE_OPERATOR_READINESS_SUMMARY": str(readiness_summary),
+            "AO2_PUBLIC_RELEASE_OPERATOR_REQUIRED_CONFIRM": "public-release-reviewed-v0.4.80-v0.1.13",
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.public-release-operator-checklist.v1"
+    assert summary["status"] == "passed"
+    assert summary["operator_checklist_ready"] is True
+    assert summary["source"]["schema_version"] == "ao2.operator-readiness-summary.v1"
+    assert summary["source"]["release_go_no_go"] == "go"
+    assert summary["operator_decision"] == {
+        "required_confirmation": "public-release-reviewed-v0.4.80-v0.1.13",
+        "go_no_go_reviewed": False,
+        "release_pages_reviewed": False,
+        "artifact_digests_reviewed": False,
+        "approval_confirmation_entered": False,
+    }
+    assert summary["trust_boundary"] == {
+        "local_only": True,
+        "mutates_releases": False,
+        "stores_credentials": False,
+        "control_plane_approves_release": False,
+    }
+    checklist = (out_root / "checklist.md").read_text(encoding="utf-8")
+    assert "Public Release Operator Checklist" in checklist
+    assert "Release go/no-go: `go`" in checklist
+    assert "go_no_go_reviewed: `false`" in checklist
+    assert "approval_confirmation_entered: `false`" in checklist
+
+    bad = json.loads(readiness_summary.read_text(encoding="utf-8"))
+    bad["release_go_no_go"] = "no_go"
+    bad["operator_readiness_ready"] = False
+    readiness_summary.write_text(json.dumps(bad, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    fail_root = tmp_path / "public-release-operator-checklist-fail"
+    result = subprocess.run(
+        ["npm", "run", "release:public-operator-checklist"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_ROOT": str(fail_root),
+            "AO2_PUBLIC_RELEASE_OPERATOR_READINESS_SUMMARY": str(readiness_summary),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    failed = json.loads((fail_root / "summary.json").read_text(encoding="utf-8"))
+    assert "operator_readiness_summary_not_go" in [
+        failure["code"] for failure in failed["failures"]
+    ]
+
+    workflow = read(".github/workflows/public-release-operator-checklist.yml")
+    for needle in [
+        "name: Public Release Operator Checklist",
+        "workflow_dispatch:",
+        "operator_readiness_summary_run_id:",
+        "actions: read",
+        "contents: read",
+        "GH_TOKEN: ${{ github.token }}",
+        "ao2-operator-readiness-summary",
+        "target/public-release-operator-checklist/operator-readiness-summary",
+        "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_ROOT=target/public-release-operator-checklist/report",
+        "AO2_PUBLIC_RELEASE_OPERATOR_READINESS_SUMMARY=target/public-release-operator-checklist/operator-readiness-summary/summary.json",
+        "npm run release:public-operator-checklist",
+        "ao2.public-release-operator-checklist.v1",
+        "ao2-public-release-operator-checklist",
+        "uses: actions/upload-artifact@v7.0.1",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+    ]:
+        assert needle in workflow
+    assert "contents: write" not in workflow
+    assert "actions: write" not in workflow
+    assert "gh release" not in workflow
+
+    release_readiness = read("scripts/release-readiness.sh")
+    for needle in [
+        ".github/workflows/public-release-operator-checklist.yml",
+        "public_release_operator_checklist",
+        "release:public-operator-checklist",
+        "ao2-public-release-operator-checklist",
+    ]:
+        assert needle in release_readiness
+
+    verification = read("docs/VERIFICATION.md")
+    assert "npm run release:public-operator-checklist" in verification
+    assert "ao2.public-release-operator-checklist.v1" in verification
+
+
 def test_stable_promotion_dry_run_checklist_workflow_runs_from_stable_evidence_packet():
     workflow = read(".github/workflows/stable-promotion-dry-run-checklist.yml")
     for needle in [
