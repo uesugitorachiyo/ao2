@@ -2511,6 +2511,239 @@ def test_public_release_operator_checklist_closure_verifies_unapproved_checklist
     assert "ao2.public-release-operator-checklist-closure.v1" in verification
 
 
+def test_dual_repo_public_release_approval_closure_composes_ao2_and_control_plane_evidence(tmp_path):
+    package_json = json.loads(read("package.json"))
+    assert package_json["scripts"]["release:dual-repo-public-approval-closure"] == (
+        "node scripts/run-sh-script.js scripts/dual-repo-public-approval-closure.sh"
+    )
+
+    script_path = REPO_ROOT / "scripts" / "dual-repo-public-approval-closure.sh"
+    assert script_path.is_file()
+    assert script_path.stat().st_mode & stat.S_IXUSR
+    script = script_path.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.dual-repo-public-approval-closure.v1",
+        "AO2_DUAL_REPO_PUBLIC_APPROVAL_CLOSURE_ROOT",
+        "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_CLOSURE_SUMMARY",
+        "AO2_CP_PUBLIC_RELEASE_PAIR_VERIFICATION_SUMMARY",
+        "AO2_CP_STABLE_PROMOTION_EVIDENCE_INDEX_READBACK_SUMMARY",
+        "ao2.public-release-operator-checklist-closure.v1",
+        "ao2.cp-public-release-pair-verification.v1",
+        "ao2.cp-ao2-stable-promotion-evidence-index-readback.v1",
+        "control_plane_approves_release",
+        "mutates_github_releases",
+        "mutates_ao_artifacts",
+        "credential_material_included",
+        "provider_api_keys_allowed",
+        "operator_decision_fields_remain_unapproved",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+    ]:
+        assert needle in script
+    assert "gh release" not in script
+    assert "contents: write" not in script
+
+    ao2_checklist_closure = tmp_path / "ao2-public-release-operator-checklist-closure" / "summary.json"
+    ao2_checklist_closure.parent.mkdir(parents=True)
+    ao2_checklist_closure.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.public-release-operator-checklist-closure.v1",
+                "status": "passed",
+                "public_operator_checklist_closure_ready": True,
+                "operator_decision_fields_remain_unapproved": True,
+                "sources": {
+                    "operator_readiness_summary": {
+                        "schema_version": "ao2.operator-readiness-summary.v1",
+                        "status": "passed",
+                        "release_go_no_go": "go",
+                    },
+                    "public_release_operator_checklist": {
+                        "schema_version": "ao2.public-release-operator-checklist.v1",
+                        "status": "passed",
+                    },
+                },
+                "trust_boundary": {
+                    "local_only": True,
+                    "mutates_releases": False,
+                    "stores_credentials": False,
+                    "control_plane_approves_release": False,
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    cp_pair = tmp_path / "ao2-control-plane-public-release-pair-verification" / "summary.json"
+    cp_pair.parent.mkdir(parents=True)
+    cp_pair.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.cp-public-release-pair-verification.v1",
+                "status": "passed",
+                "ao2": {"release_repo": "uesugitorachiyo/ao2", "release_tag": "v0.4.80"},
+                "control_plane": {
+                    "release_repo": "uesugitorachiyo/ao2-control-plane",
+                    "release_tag": "v0.1.13",
+                },
+                "common_platforms": ["linux-x86_64", "macos-aarch64", "windows-x86_64"],
+                "gaps": [],
+                "trust_boundary": {
+                    "control_plane_approves_release": False,
+                    "downloads_archives": False,
+                    "mutates_ao_artifacts": False,
+                    "mutates_github_releases": False,
+                    "credential_material_included": False,
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    cp_readback = tmp_path / "ao2-control-plane-ao2-stable-promotion-evidence-index-readback" / "summary.json"
+    cp_readback.parent.mkdir(parents=True)
+    cp_readback.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.cp-ao2-stable-promotion-evidence-index-readback.v1",
+                "status": "passed",
+                "producer_schema_version": "ao2.stable-promotion-evidence-index.v1",
+                "producer_repo": "uesugitorachiyo/ao2",
+                "producer_ready": True,
+                "required_evidence": [
+                    "artifact_size_budget_audit",
+                    "post_release_verification_gate",
+                    "public_pair_digest_audit",
+                    "stable_release_evidence_packet",
+                ],
+                "gaps": [],
+                "trust_boundary": {
+                    "downloads_github_actions_artifacts": True,
+                    "control_plane_approves_release": False,
+                    "mutates_ao_artifacts": False,
+                    "mutates_github_releases": False,
+                    "credential_material_included": False,
+                    "provider_api_keys_allowed": False,
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    out_root = tmp_path / "dual-repo-public-approval-closure"
+    result = subprocess.run(
+        ["npm", "run", "release:dual-repo-public-approval-closure"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_DUAL_REPO_PUBLIC_APPROVAL_CLOSURE_ROOT": str(out_root),
+            "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_CLOSURE_SUMMARY": str(ao2_checklist_closure),
+            "AO2_CP_PUBLIC_RELEASE_PAIR_VERIFICATION_SUMMARY": str(cp_pair),
+            "AO2_CP_STABLE_PROMOTION_EVIDENCE_INDEX_READBACK_SUMMARY": str(cp_readback),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.dual-repo-public-approval-closure.v1"
+    assert summary["status"] == "passed"
+    assert summary["dual_repo_public_approval_closure_ready"] is True
+    assert summary["release_go_no_go"] == "go"
+    assert summary["operator_decision_fields_remain_unapproved"] is True
+    assert summary["source_artifacts"] == [
+        "ao2-public-release-operator-checklist-closure",
+        "ao2-control-plane-public-release-pair-verification",
+        "ao2-control-plane-ao2-stable-promotion-evidence-index-readback",
+    ]
+    assert len(summary["sources"]["ao2_public_release_operator_checklist_closure"]["source_sha256"]) == 64
+    assert len(summary["sources"]["control_plane_public_release_pair_verification"]["source_sha256"]) == 64
+    assert len(summary["sources"]["control_plane_ao2_stable_promotion_evidence_index_readback"]["source_sha256"]) == 64
+    assert summary["trust_boundary"] == {
+        "local_only": True,
+        "mutates_releases": False,
+        "stores_credentials": False,
+        "control_plane_approves_release": False,
+        "mutates_ao_artifacts": False,
+        "mutates_github_releases": False,
+        "credential_material_included": False,
+        "provider_api_keys_allowed": False,
+    }
+
+    bad = json.loads(cp_pair.read_text(encoding="utf-8"))
+    bad["gaps"] = [{"gap_kind": "control_plane_missing_checksum_entries"}]
+    cp_pair.write_text(json.dumps(bad, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    fail_root = tmp_path / "dual-repo-public-approval-closure-fail"
+    result = subprocess.run(
+        ["npm", "run", "release:dual-repo-public-approval-closure"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_DUAL_REPO_PUBLIC_APPROVAL_CLOSURE_ROOT": str(fail_root),
+            "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_CLOSURE_SUMMARY": str(ao2_checklist_closure),
+            "AO2_CP_PUBLIC_RELEASE_PAIR_VERIFICATION_SUMMARY": str(cp_pair),
+            "AO2_CP_STABLE_PROMOTION_EVIDENCE_INDEX_READBACK_SUMMARY": str(cp_readback),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    failed = json.loads((fail_root / "summary.json").read_text(encoding="utf-8"))
+    assert "control_plane_public_release_pair_gaps_present" in [
+        failure["code"] for failure in failed["failures"]
+    ]
+
+    workflow = read(".github/workflows/dual-repo-public-approval-closure.yml")
+    for needle in [
+        "name: Dual Repo Public Approval Closure",
+        "workflow_dispatch:",
+        "public_release_operator_checklist_closure_run_id:",
+        "control_plane_ci_run_id:",
+        "actions: read",
+        "contents: read",
+        "GH_TOKEN: ${{ github.token }}",
+        "ao2-public-release-operator-checklist-closure",
+        "ao2-control-plane-public-release-pair-verification",
+        "ao2-control-plane-ao2-stable-promotion-evidence-index-readback",
+        "AO2_DUAL_REPO_PUBLIC_APPROVAL_CLOSURE_ROOT=target/dual-repo-public-approval-closure/report",
+        "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_CLOSURE_SUMMARY=target/dual-repo-public-approval-closure/ao2-public-release-operator-checklist-closure/summary.json",
+        "AO2_CP_PUBLIC_RELEASE_PAIR_VERIFICATION_SUMMARY=target/dual-repo-public-approval-closure/ao2-control-plane-public-release-pair-verification/summary.json",
+        "AO2_CP_STABLE_PROMOTION_EVIDENCE_INDEX_READBACK_SUMMARY=target/dual-repo-public-approval-closure/ao2-control-plane-ao2-stable-promotion-evidence-index-readback/summary.json",
+        "npm run release:dual-repo-public-approval-closure",
+        "ao2.dual-repo-public-approval-closure.v1",
+        "ao2-dual-repo-public-approval-closure",
+        "uses: actions/upload-artifact@v7.0.1",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+    ]:
+        assert needle in workflow
+    assert "contents: write" not in workflow
+    assert "actions: write" not in workflow
+    assert "gh release" not in workflow
+
+    release_readiness = read("scripts/release-readiness.sh")
+    for needle in [
+        ".github/workflows/dual-repo-public-approval-closure.yml",
+        "dual_repo_public_approval_closure",
+        "release:dual-repo-public-approval-closure",
+        "ao2-dual-repo-public-approval-closure",
+    ]:
+        assert needle in release_readiness
+
+    verification = read("docs/VERIFICATION.md")
+    assert "npm run release:dual-repo-public-approval-closure" in verification
+    assert "ao2.dual-repo-public-approval-closure.v1" in verification
+
+
 def test_stable_promotion_dry_run_checklist_workflow_runs_from_stable_evidence_packet():
     workflow = read(".github/workflows/stable-promotion-dry-run-checklist.yml")
     for needle in [
@@ -3874,6 +4107,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "stable_promotion_dry_run_checklist",
         "public_release_operator_checklist",
         "public_release_operator_checklist_closure",
+        "dual_repo_public_approval_closure",
         "artifact_size_budget",
         "release_artifact_size_budget_audit",
         "release:artifact-size-budget-audit",
@@ -3889,6 +4123,9 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "size_budget_enforced",
         "release_metadata_drift_audit",
         "release_public_pair_digest_audit",
+        "dual_repo_public_approval_closure",
+        "release:dual-repo-public-approval-closure",
+        "ao2.dual-repo-public-approval-closure.v1",
     ]:
         assert needle in script
 
@@ -4169,6 +4406,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_stable_promotion_dry_run_checklist_workflow",
         "ci_stable_promotion_evidence_index_workflow",
         "public_release_operator_checklist_closure",
+        "dual_repo_public_approval_closure",
     ]:
         assert checks[name]["status"] == "passed"
     closure = json.loads(
@@ -4416,6 +4654,32 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "max_size_bytes": 1048576,
         "enforcement": "fail_if_hosted_artifact_exceeds_budget",
     }
+    assert artifacts["dual_repo_public_approval_closure"]["artifact_name"] == (
+        "ao2-dual-repo-public-approval-closure"
+    )
+    assert artifacts["dual_repo_public_approval_closure"]["producer_job"] == (
+        "Dual Repo Public Approval Closure / dual-repo-public-approval-closure"
+    )
+    assert artifacts["dual_repo_public_approval_closure"]["required_files"] == [
+        "summary.json",
+        "report.md",
+    ]
+    assert artifacts["dual_repo_public_approval_closure"]["schema_versions"] == [
+        "ao2.dual-repo-public-approval-closure.v1",
+        "ao2.public-release-operator-checklist-closure.v1",
+        "ao2.cp-public-release-pair-verification.v1",
+        "ao2.cp-ao2-stable-promotion-evidence-index-readback.v1",
+    ]
+    assert artifacts["dual_repo_public_approval_closure"]["source_artifacts"] == [
+        "ao2-public-release-operator-checklist-closure",
+        "ao2-control-plane-public-release-pair-verification",
+        "ao2-control-plane-ao2-stable-promotion-evidence-index-readback",
+    ]
+    assert artifacts["dual_repo_public_approval_closure"]["artifact_size_budget"] == {
+        "budget_scope": "lightweight_operator_approval_packet",
+        "max_size_bytes": 1048576,
+        "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+    }
     assert closure["artifact_size_budget"] == {
         "schema_version": "ao2.release-artifact-size-budget.v1",
         "status": "passed",
@@ -4426,6 +4690,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
             "stable_promotion_dry_run_checklist",
             "public_release_operator_checklist",
             "public_release_operator_checklist_closure",
+            "dual_repo_public_approval_closure",
         ],
     }
     assert artifacts["release_artifact_size_budget_audit"]["artifact_name"] == (

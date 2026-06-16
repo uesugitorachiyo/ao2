@@ -647,6 +647,54 @@ add(
     "manual read-only workflow verifies public release operator checklist source digest and unapproved decision fields",
 )
 
+dual_repo_public_approval_closure_script = read("scripts/dual-repo-public-approval-closure.sh")
+dual_repo_public_approval_closure_workflow = read(".github/workflows/dual-repo-public-approval-closure.yml")
+dual_repo_public_approval_closure_ok = (
+    scripts.get("release:dual-repo-public-approval-closure") == "node scripts/run-sh-script.js scripts/dual-repo-public-approval-closure.sh"
+    and "AO2_DUAL_REPO_PUBLIC_APPROVAL_CLOSURE_ROOT" in dual_repo_public_approval_closure_script
+    and "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_CLOSURE_SUMMARY" in dual_repo_public_approval_closure_script
+    and "AO2_CP_PUBLIC_RELEASE_PAIR_VERIFICATION_SUMMARY" in dual_repo_public_approval_closure_script
+    and "AO2_CP_STABLE_PROMOTION_EVIDENCE_INDEX_READBACK_SUMMARY" in dual_repo_public_approval_closure_script
+    and "ao2.dual-repo-public-approval-closure.v1" in dual_repo_public_approval_closure_script
+    and "ao2.public-release-operator-checklist-closure.v1" in dual_repo_public_approval_closure_script
+    and "ao2.cp-public-release-pair-verification.v1" in dual_repo_public_approval_closure_script
+    and "ao2.cp-ao2-stable-promotion-evidence-index-readback.v1" in dual_repo_public_approval_closure_script
+    and "control_plane_approves_release" in dual_repo_public_approval_closure_script
+    and "mutates_github_releases" in dual_repo_public_approval_closure_script
+    and "mutates_ao_artifacts" in dual_repo_public_approval_closure_script
+    and "credential_material_included" in dual_repo_public_approval_closure_script
+    and "provider_api_keys_allowed" in dual_repo_public_approval_closure_script
+    and "operator_decision_fields_remain_unapproved" in dual_repo_public_approval_closure_script
+    and "OPENAI_API_KEY" in dual_repo_public_approval_closure_script
+    and "ANTHROPIC_API_KEY" in dual_repo_public_approval_closure_script
+    and "gh release" not in dual_repo_public_approval_closure_script
+    and "contents: write" not in dual_repo_public_approval_closure_script
+    and "name: Dual Repo Public Approval Closure" in dual_repo_public_approval_closure_workflow
+    and "workflow_dispatch:" in dual_repo_public_approval_closure_workflow
+    and "public_release_operator_checklist_closure_run_id:" in dual_repo_public_approval_closure_workflow
+    and "control_plane_ci_run_id:" in dual_repo_public_approval_closure_workflow
+    and "actions: read" in dual_repo_public_approval_closure_workflow
+    and "contents: read" in dual_repo_public_approval_closure_workflow
+    and "GH_TOKEN: ${{ github.token }}" in dual_repo_public_approval_closure_workflow
+    and "ao2-public-release-operator-checklist-closure" in dual_repo_public_approval_closure_workflow
+    and "ao2-control-plane-public-release-pair-verification" in dual_repo_public_approval_closure_workflow
+    and "ao2-control-plane-ao2-stable-promotion-evidence-index-readback" in dual_repo_public_approval_closure_workflow
+    and "npm run release:dual-repo-public-approval-closure" in dual_repo_public_approval_closure_workflow
+    and "ao2.dual-repo-public-approval-closure.v1" in dual_repo_public_approval_closure_workflow
+    and "ao2-dual-repo-public-approval-closure" in dual_repo_public_approval_closure_workflow
+    and "actions/upload-artifact@v7.0.1" in dual_repo_public_approval_closure_workflow
+    and "OPENAI_API_KEY" in dual_repo_public_approval_closure_workflow
+    and "ANTHROPIC_API_KEY" in dual_repo_public_approval_closure_workflow
+    and "contents: write" not in dual_repo_public_approval_closure_workflow
+    and "actions: write" not in dual_repo_public_approval_closure_workflow
+    and "gh release" not in dual_repo_public_approval_closure_workflow
+)
+add(
+    "dual_repo_public_approval_closure",
+    "passed" if dual_repo_public_approval_closure_ok else "failed",
+    "manual read-only workflow composes AO2 approval closure with control-plane public release verification evidence",
+)
+
 release_readiness_artifact_consumer = workflow_job_block("release-readiness-artifact-consumer")
 release_readiness_artifact_consumer_script = read("scripts/release-readiness-artifact-consumer.sh")
 release_readiness_artifact_consumer_ok = (
@@ -959,6 +1007,7 @@ budgeted_artifact_ids = [
     "stable_promotion_dry_run_checklist",
     "public_release_operator_checklist",
     "public_release_operator_checklist_closure",
+    "dual_repo_public_approval_closure",
 ]
 artifact_size_budget = {
     "schema_version": "ao2.release-artifact-size-budget.v1",
@@ -979,6 +1028,7 @@ add(
             "stable_promotion_dry_run_checklist",
             "public_release_operator_checklist",
             "public_release_operator_checklist_closure",
+            "dual_repo_public_approval_closure",
         }
     )
     else "failed",
@@ -1313,6 +1363,32 @@ artifact_closure_index = {
             "source_artifacts": [
                 "ao2-operator-readiness-summary",
                 "ao2-public-release-operator-checklist",
+            ],
+        },
+        {
+            "id": "dual_repo_public_approval_closure",
+            "artifact_name": "ao2-dual-repo-public-approval-closure",
+            "producer_job": "Dual Repo Public Approval Closure / dual-repo-public-approval-closure",
+            "required_files": [
+                "summary.json",
+                "report.md",
+            ],
+            "schema_versions": [
+                "ao2.dual-repo-public-approval-closure.v1",
+                "ao2.public-release-operator-checklist-closure.v1",
+                "ao2.cp-public-release-pair-verification.v1",
+                "ao2.cp-ao2-stable-promotion-evidence-index-readback.v1",
+            ],
+            "artifact_size_budget": {
+                "budget_scope": "lightweight_operator_approval_packet",
+                "max_size_bytes": size_budget_bytes,
+                "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+            },
+            "required_checks": ["dual_repo_public_approval_closure"],
+            "source_artifacts": [
+                "ao2-public-release-operator-checklist-closure",
+                "ao2-control-plane-public-release-pair-verification",
+                "ao2-control-plane-ao2-stable-promotion-evidence-index-readback",
             ],
         },
         {

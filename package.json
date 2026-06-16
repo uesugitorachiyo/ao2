@@ -30,6 +30,7 @@
     "release:operator-readiness-summary": "node scripts/run-sh-script.js scripts/operator-readiness-summary.sh",
     "release:public-operator-checklist": "node scripts/run-sh-script.js scripts/public-release-operator-checklist.sh",
     "release:public-operator-checklist-closure": "node scripts/run-sh-script.js scripts/public-release-operator-checklist-closure.sh",
+    "release:dual-repo-public-approval-closure": "node scripts/run-sh-script.js scripts/dual-repo-public-approval-closure.sh",
     "release:operator-evidence-workflow-contract": "node scripts/run-sh-script.js scripts/operator-release-evidence-workflow-contract.sh",
     "release:immutability-audit": "node scripts/run-sh-script.js scripts/release-immutability-audit.sh",
     "release:sync-provenance-assets": "node scripts/run-sh-script.js scripts/release-sync-provenance-assets.sh",
