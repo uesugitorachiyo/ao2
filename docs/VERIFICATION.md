@@ -515,6 +515,16 @@ Result:
   `target/release-train-manifest-parity/latest/summary.json`; CI checks out
   `ao2-control-plane`, runs this as `Release train manifest parity`, and
   uploads `ao2-release-train-manifest-parity`.
+- `npm run release:candidate-readiness-packet`: composes the candidate
+  rehearsal bundle, `ao2.candidate-patch-release-rehearsal-audit.v1`,
+  `ao2.release-train-manifest-parity.v1`, and
+  `ao2.release-train-control-plane-bridge.v1` plus the
+  `ao2.cp-release-train-bridge-smoke.v1` readback into one local-only operator
+  packet. It emits `ao2.candidate-readiness-packet.v1` at
+  `target/candidate-readiness-packet/latest/summary.json` with `packet.md` and
+  `dashboard.html`, preserving the no-release-mutation trust boundary. The
+  manual `Candidate Readiness Packet` workflow uploads
+  `ao2-candidate-readiness-packet`.
 - `npm run risky-pr:product-readiness`: runs the Risky PR golden path once,
   then verifies local run record, static report/export, and evaluator closure
   evidence from that single run; emits
@@ -808,6 +818,12 @@ Result:
   `ao2.release-train-control-plane-bridge.v1` at
   `target/release-train-control-plane-bridge/latest/summary.json`; CI uploads
   this as `ao2-release-train-control-plane-bridge`
+- `npm run release:candidate-readiness-packet`: aggregates the next-patch
+  candidate rehearsal audit, release-train manifest parity, control-plane
+  bridge, and control-plane readback smoke into the operator-facing
+  `ao2.candidate-readiness-packet.v1` summary at
+  `target/candidate-readiness-packet/latest/summary.json`; the manual workflow
+  uploads this as `ao2-candidate-readiness-packet`.
 - `npm run next:lengthy:gate`: runs the five lengthy-task gates above and emits
   `ao2.next-lengthy-gate.v1` at
   `target/next-lengthy-gate/latest/summary.json`

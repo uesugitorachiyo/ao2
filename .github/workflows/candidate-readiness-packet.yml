@@ -1,0 +1,110 @@
+name: Candidate Readiness Packet
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_train:
+        description: "Release train manifest key to rehearse."
+        required: false
+        type: string
+        default: next_patch
+
+permissions:
+  contents: read
+
+concurrency:
+  group: candidate-readiness-packet-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  candidate-readiness-packet:
+    name: Candidate readiness packet
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout AO2
+        uses: actions/checkout@v6.0.3
+
+      - name: Checkout ao2-control-plane
+        uses: actions/checkout@v6.0.3
+        with:
+          repository: uesugitorachiyo/ao2-control-plane
+          path: ao2-control-plane
+
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run candidate release-train drill
+        shell: bash
+        env:
+          AO2_RELEASE_TRAIN: ${{ inputs.release_train || 'next_patch' }}
+          AO2_PUBLIC_RELEASE_TRAIN_CI_SAFE: "1"
+          AO2_PUBLIC_RELEASE_TRAIN_DRILL_ROOT: target/candidate-readiness-packet/candidate-rehearsal
+        run: |
+          set -euo pipefail
+          npm run release:train-drill
+
+      - name: Audit candidate rehearsal
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run release:candidate-rehearsal-audit -- target/candidate-readiness-packet/candidate-rehearsal
+
+      - name: Check release-train manifest parity
+        shell: bash
+        env:
+          AO2_RELEASE_TRAIN_MANIFEST_PARITY_ROOT: target/candidate-readiness-packet/manifest-parity
+        run: |
+          set -euo pipefail
+          npm run release:train-manifest-parity -- --control-plane-root ao2-control-plane
+
+      - name: Bridge candidate drill into control plane
+        shell: bash
+        env:
+          AO2_RELEASE_TRAIN_CP_BRIDGE_ROOT: target/candidate-readiness-packet/control-plane-bridge
+        run: |
+          set -euo pipefail
+          npm run release:train-control-plane-bridge -- --summary target/candidate-readiness-packet/candidate-rehearsal/summary.json --control-plane-root ao2-control-plane
+
+      - name: Compose candidate readiness packet
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run release:candidate-readiness-packet -- --candidate-bundle target/candidate-readiness-packet/candidate-rehearsal --manifest-parity-summary target/candidate-readiness-packet/manifest-parity/summary.json --control-plane-bridge-root target/candidate-readiness-packet/control-plane-bridge/latest --out-root target/candidate-readiness-packet/latest
+
+      - name: Validate candidate readiness packet
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary = json.loads(
+              Path("target/candidate-readiness-packet/latest/summary.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          assert summary["schema_version"] == "ao2.candidate-readiness-packet.v1", summary
+          assert summary["status"] == "passed", summary
+          assert summary["candidate_readiness_ready"] is True, summary
+          assert summary["components"]["candidate_rehearsal"]["status"] == "passed", summary
+          assert summary["components"]["manifest_parity"]["status"] == "passed", summary
+          assert summary["components"]["control_plane_bridge"]["status"] == "passed", summary
+          assert summary["components"]["control_plane_readback"]["status"] == "passed", summary
+          assert summary["trust_boundary"]["mutates_github_releases"] is False, summary
+          assert summary["trust_boundary"]["stores_credentials"] is False, summary
+          PY
+
+      - name: Upload candidate readiness packet
+        uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: ao2-candidate-readiness-packet
+          path: target/candidate-readiness-packet
+          if-no-files-found: error

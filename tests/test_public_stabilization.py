@@ -12540,6 +12540,300 @@ def test_release_train_control_plane_bridge_contract(tmp_path):
     )
 
 
+def test_candidate_readiness_packet_contract(tmp_path):
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+
+    assert (
+        package_json["scripts"]["release:candidate-readiness-packet"]
+        == "node scripts/run-sh-script.js scripts/candidate-readiness-packet.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "candidate-readiness-packet.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.candidate-readiness-packet.v1",
+        "ao2.public-release-train-drill.v1",
+        "ao2.candidate-patch-release-rehearsal-audit.v1",
+        "ao2.release-train-manifest-parity.v1",
+        "ao2.release-train-control-plane-bridge.v1",
+        "ao2.cp-release-train-bridge-smoke.v1",
+        "candidate_readiness_ready",
+        "control_plane_readback",
+        "release_targets",
+        "credential_material_included",
+        "mutates_github_releases",
+        "candidate_readiness_packet=passed",
+    ]:
+        assert needle in text
+    assert "git push origin" not in text
+    assert "gh release create" not in text
+
+    candidate = tmp_path / "candidate"
+    candidate.mkdir()
+    (candidate / "closure.html").write_text("<!doctype html><title>candidate</title>\n")
+    release_targets = {
+        "selected_train": "next_patch",
+        "ao2": {"tag": "v0.4.81", "version": "0.4.81"},
+        "ao2_control_plane": {"tag": "v0.1.14", "version": "0.1.14"},
+        "promotion_confirm": "promote-stable-v0.4.81-v0.1.14",
+        "public_operator_confirm": "public-release-reviewed-v0.4.81-v0.1.14",
+    }
+    (candidate / "summary.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.public-release-train-drill.v1",
+                "status": "passed",
+                "ci_safe_mode": True,
+                "release_train_manifest": {
+                    "schema_version": "ao2.release-train-manifest.v1",
+                    "selected_train": "next_patch",
+                },
+                "release_targets": release_targets,
+                "checks": [{"name": "fixture", "status": "passed", "exit_code": 0}],
+                "publish_guards": {
+                    "refuses_publish_side_effects_by_default": True,
+                    "tag_push_publish_deploy": "not executed by this drill",
+                },
+                "trust_boundary": {"local_only": True, "stores_credentials": False},
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (candidate / "candidate-patch-release-rehearsal-audit.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.candidate-patch-release-rehearsal-audit.v1",
+                "status": "passed",
+                "source_summary": str(candidate / "summary.json"),
+                "release_targets": release_targets,
+                "token_scan": {"credential_material_included": False, "matches": []},
+                "trust_boundary": {
+                    "local_only": True,
+                    "mutates_github_releases": False,
+                    "mutates_git_tags": False,
+                    "stores_credentials": False,
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    parity = tmp_path / "parity"
+    parity.mkdir()
+    parity_summary = parity / "summary.json"
+    parity_summary.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.release-train-manifest-parity.v1",
+                "status": "passed",
+                "byte_identical": True,
+                "schema_aligned": True,
+                "target_aligned": True,
+                "stable": {
+                    "ao2": {"tag": "v0.4.80", "version": "0.4.80"},
+                    "ao2_control_plane": {"tag": "v0.1.13", "version": "0.1.13"},
+                },
+                "next_patch": {
+                    "ao2": {"tag": "v0.4.81", "version": "0.4.81"},
+                    "ao2_control_plane": {"tag": "v0.1.14", "version": "0.1.14"},
+                    "promotion_confirm": "promote-stable-v0.4.81-v0.1.14",
+                    "public_operator_confirm": "public-release-reviewed-v0.4.81-v0.1.14",
+                },
+                "trust_boundary": {
+                    "local_only": True,
+                    "mutates_github_releases": False,
+                    "stores_credentials": False,
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    bridge = tmp_path / "bridge" / "latest"
+    smoke = bridge / "control-plane-smoke"
+    smoke.mkdir(parents=True)
+    smoke_summary = smoke / "summary.json"
+    smoke_summary.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.cp-release-train-bridge-smoke.v1",
+                "status": "passed",
+                "json_endpoint": "/api/v1/release/train.json",
+                "html_endpoint": "/api/v1/release/train",
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (bridge / "summary.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.release-train-control-plane-bridge.v1",
+                "status": "passed",
+                "source_summary": str(candidate / "summary.json"),
+                "release_train": {
+                    "schema_version": "ao2.public-release-train-drill.v1",
+                    "status": "passed",
+                    "check_count": 1,
+                },
+                "control_plane": {
+                    "observer_schema": "ao2.cp-release-train-bridge-smoke.v1",
+                    "configured_env": "AO2_CP_RELEASE_TRAIN_SUMMARY",
+                    "stable_summary": str(bridge / "release-train-summary.json"),
+                    "mirror_summary": str(bridge / "control-plane-mirror.json"),
+                    "env_file": str(bridge / "control-plane.env"),
+                    "role": "read-only-observer",
+                    "json_endpoint": "/api/v1/release/train.json",
+                    "html_endpoint": "/api/v1/release/train",
+                    "credential_material_included": False,
+                    "credential_material_in_urls": False,
+                    "smoke": "passed",
+                    "smoke_summary": str(smoke_summary),
+                },
+                "trust_boundary": {
+                    "local_only": True,
+                    "stores_credentials": False,
+                    "control_plane_approves_release": False,
+                    "mutates_ao2_artifacts": False,
+                    "mutates_observer_storage": False,
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    out_root = tmp_path / "packet"
+    result = subprocess.run(
+        [
+            "npm",
+            "run",
+            "release:candidate-readiness-packet",
+            "--",
+            "--candidate-bundle",
+            str(candidate),
+            "--manifest-parity-summary",
+            str(parity_summary),
+            "--control-plane-bridge-root",
+            str(bridge),
+            "--out-root",
+            str(out_root),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "candidate_readiness_packet=passed" in result.stdout
+
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.candidate-readiness-packet.v1"
+    assert summary["status"] == "passed"
+    assert summary["candidate_readiness_ready"] is True
+    assert summary["release_targets"]["ao2"]["tag"] == "v0.4.81"
+    assert summary["release_targets"]["ao2_control_plane"]["tag"] == "v0.1.14"
+    assert summary["components"]["candidate_rehearsal"]["status"] == "passed"
+    assert summary["components"]["manifest_parity"]["status"] == "passed"
+    assert summary["components"]["control_plane_bridge"]["status"] == "passed"
+    assert summary["components"]["control_plane_readback"]["status"] == "passed"
+    assert summary["trust_boundary"]["mutates_github_releases"] is False
+    assert summary["trust_boundary"]["mutates_git_tags"] is False
+    assert summary["trust_boundary"]["stores_credentials"] is False
+    assert summary["trust_boundary"]["control_plane_approves_release"] is False
+    assert (out_root / "packet.md").is_file()
+    assert (out_root / "dashboard.html").is_file()
+
+    parity_payload = json.loads(parity_summary.read_text(encoding="utf-8"))
+    parity_payload["status"] = "failed"
+    parity_payload["failures"] = ["fixture failure"]
+    parity_summary.write_text(json.dumps(parity_payload), encoding="utf-8")
+    bad_root = tmp_path / "bad-packet"
+    bad_result = subprocess.run(
+        [
+            "npm",
+            "run",
+            "release:candidate-readiness-packet",
+            "--",
+            "--candidate-bundle",
+            str(candidate),
+            "--manifest-parity-summary",
+            str(parity_summary),
+            "--control-plane-bridge-root",
+            str(bridge),
+            "--out-root",
+            str(bad_root),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert bad_result.returncode != 0
+    assert "candidate_readiness_packet=failed" in bad_result.stdout
+    failed_summary = json.loads((bad_root / "summary.json").read_text(encoding="utf-8"))
+    assert failed_summary["status"] == "failed"
+    assert failed_summary["candidate_readiness_ready"] is False
+    assert failed_summary["failures"]
+
+    for needle in [
+        "npm run release:candidate-readiness-packet",
+        "ao2.candidate-readiness-packet.v1",
+        "target/candidate-readiness-packet/latest/summary.json",
+        "ao2-candidate-readiness-packet",
+    ]:
+        assert needle in verification
+
+
+def test_candidate_readiness_packet_workflow_is_manual_and_uploads_packet():
+    workflow = read(".github/workflows/candidate-readiness-packet.yml")
+    for needle in [
+        "name: Candidate Readiness Packet",
+        "workflow_dispatch:",
+        "release_train:",
+        "default: next_patch",
+        "permissions:",
+        "contents: read",
+        "uses: actions/checkout@v6.0.3",
+        "repository: uesugitorachiyo/ao2-control-plane",
+        "path: ao2-control-plane",
+        "uses: dtolnay/rust-toolchain@stable",
+        "AO2_RELEASE_TRAIN: ${{ inputs.release_train || 'next_patch' }}",
+        "AO2_PUBLIC_RELEASE_TRAIN_CI_SAFE: \"1\"",
+        "AO2_PUBLIC_RELEASE_TRAIN_DRILL_ROOT: target/candidate-readiness-packet/candidate-rehearsal",
+        "npm run release:train-drill",
+        "npm run release:candidate-rehearsal-audit -- target/candidate-readiness-packet/candidate-rehearsal",
+        "npm run release:train-manifest-parity -- --control-plane-root ao2-control-plane",
+        "npm run release:train-control-plane-bridge -- --summary target/candidate-readiness-packet/candidate-rehearsal/summary.json --control-plane-root ao2-control-plane",
+        "npm run release:candidate-readiness-packet -- --candidate-bundle target/candidate-readiness-packet/candidate-rehearsal --manifest-parity-summary target/candidate-readiness-packet/manifest-parity/summary.json --control-plane-bridge-root target/candidate-readiness-packet/control-plane-bridge/latest --out-root target/candidate-readiness-packet/latest",
+        "ao2.candidate-readiness-packet.v1",
+        "candidate_readiness_ready",
+        "name: ao2-candidate-readiness-packet",
+        "target/candidate-readiness-packet",
+        "uses: actions/upload-artifact@v7.0.1",
+    ]:
+        assert needle in workflow
+    assert "contents: write" not in workflow
+    assert "gh release create" not in workflow
+    assert "git push origin" not in workflow
+
+
 def test_next_lengthy_gate_contract():
     package_json = json.loads(read("package.json"))
     verification = read("docs/VERIFICATION.md")
