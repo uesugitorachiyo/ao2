@@ -11683,6 +11683,13 @@ def test_public_release_train_drill_contract():
     text = script.read_text(encoding="utf-8")
     for needle in [
         "ao2.public-release-train-drill.v1",
+        "AO2_RELEASE_TRAIN",
+        "scripts/release-train-env.sh",
+        "ao2.release-train-manifest.v1",
+        "release_train_manifest",
+        "release_targets",
+        "selected_train",
+        "next_patch",
         "release:evidence-closure",
         "release:readiness:static",
         "release:readiness:regression-gate",
@@ -11731,6 +11738,100 @@ def test_public_release_train_drill_contract():
         "ao2.release-artifact-closure-index.v1",
     ]:
         assert needle in verification
+
+
+def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
+    manifest_path = REPO_ROOT / "docs" / "release" / "release-train.json"
+    assert manifest_path.is_file()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    assert manifest["schema_version"] == "ao2.release-train-manifest.v1"
+    assert manifest["stable"]["ao2"] == {"tag": "v0.4.80", "version": "0.4.80"}
+    assert manifest["stable"]["ao2_control_plane"] == {
+        "tag": "v0.1.13",
+        "version": "0.1.13",
+    }
+    assert manifest["next_patch"]["ao2"] == {"tag": "v0.4.81", "version": "0.4.81"}
+    assert manifest["next_patch"]["ao2_control_plane"] == {
+        "tag": "v0.1.14",
+        "version": "0.1.14",
+    }
+    assert (
+        manifest["stable"]["promotion_confirm"]
+        == "promote-stable-v0.4.80-v0.1.13"
+    )
+    assert (
+        manifest["next_patch"]["promotion_confirm"]
+        == "promote-stable-v0.4.81-v0.1.14"
+    )
+
+    helper = REPO_ROOT / "scripts" / "release-train-env.sh"
+    assert helper.is_file()
+    assert helper.stat().st_mode & stat.S_IXUSR
+    result = subprocess.run(
+        ["bash", str(helper), "next_patch"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+    exported = dict(line.split("=", 1) for line in result.stdout.splitlines())
+    assert exported["AO2_RELEASE_TRAIN_NAME"] == "next_patch"
+    assert exported["AO2_RELEASE_TRAIN_AO2_TAG"] == "v0.4.81"
+    assert exported["AO2_RELEASE_TRAIN_AO2_VERSION"] == "0.4.81"
+    assert exported["AO2_RELEASE_TRAIN_CP_TAG"] == "v0.1.14"
+    assert exported["AO2_RELEASE_TRAIN_CP_VERSION"] == "0.1.14"
+    assert exported["AO2_RELEASE_TRAIN_PROMOTION_CONFIRM"] == (
+        "promote-stable-v0.4.81-v0.1.14"
+    )
+    assert exported["AO2_RELEASE_TRAIN_PUBLIC_OPERATOR_CONFIRM"] == (
+        "public-release-reviewed-v0.4.81-v0.1.14"
+    )
+
+    stable_ao2_tag = manifest["stable"]["ao2"]["tag"]
+    stable_ao2_version = manifest["stable"]["ao2"]["version"]
+    stable_cp_tag = manifest["stable"]["ao2_control_plane"]["tag"]
+    for workflow_path in [
+        ".github/workflows/stable-release-promotion.yml",
+        ".github/workflows/post-stable-release-verification.yml",
+        ".github/workflows/public-release-consumer-smoke.yml",
+    ]:
+        workflow = read(workflow_path)
+        assert f"default: {stable_ao2_tag}" in workflow
+        assert f"default: {stable_cp_tag}" in workflow
+    post_stable = read(".github/workflows/post-stable-release-verification.yml")
+    windows_smoke = read(".github/workflows/windows-release-smoke.yml")
+    assert f"default: {stable_ao2_version}" in post_stable
+    assert f"default: {stable_ao2_tag}" in windows_smoke
+    assert f"default: {stable_ao2_version}" in windows_smoke
+
+
+def test_candidate_patch_release_rehearsal_workflow_produces_single_bundle():
+    workflow = read(".github/workflows/candidate-patch-release-rehearsal.yml")
+    for needle in [
+        "name: Candidate Patch Release Rehearsal",
+        "workflow_dispatch:",
+        "release_train:",
+        "default: next_patch",
+        "permissions:",
+        "contents: read",
+        "AO2_RELEASE_TRAIN: ${{ inputs.release_train || 'next_patch' }}",
+        "AO2_PUBLIC_RELEASE_TRAIN_CI_SAFE: \"1\"",
+        "AO2_PUBLIC_RELEASE_TRAIN_DRILL_ROOT: target/candidate-patch-release-rehearsal/report",
+        "npm run release:train-drill",
+        "ao2.public-release-train-drill.v1",
+        '"selected_train"] == "next_patch"',
+        '"v0.4.81"',
+        '"v0.1.14"',
+        "ao2-candidate-patch-release-rehearsal",
+        "target/candidate-patch-release-rehearsal/report",
+        "uses: actions/upload-artifact@v7.0.1",
+    ]:
+        assert needle in workflow
+    assert "contents: write" not in workflow
+    assert "gh release create" not in workflow
+    assert "git push origin" not in workflow
 
 
 def test_release_train_control_plane_bridge_contract(tmp_path):

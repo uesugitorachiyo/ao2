@@ -9,6 +9,18 @@ LOG_DIR="$OUT_ROOT/logs"
 FIXTURE_DIR="${AO2_PUBLIC_RELEASE_TRAIN_FIXTURE_DIR:-}"
 PULSE_SOURCE="${AO2_RELEASE_TRAIN_PULSE_SOURCE:-$OUT_ROOT/release-train-pulse-seed}"
 CI_SAFE="${AO2_PUBLIC_RELEASE_TRAIN_CI_SAFE:-0}"
+RELEASE_TRAIN="${AO2_RELEASE_TRAIN:-stable}"
+# Release train defaults come from scripts/release-train-env.sh.
+eval "$("$ROOT/scripts/release-train-env.sh" "$RELEASE_TRAIN")"
+export AO2_RELEASE_TRAIN_MANIFEST
+export AO2_RELEASE_TRAIN_MANIFEST_SCHEMA
+export AO2_RELEASE_TRAIN_NAME
+export AO2_RELEASE_TRAIN_AO2_TAG
+export AO2_RELEASE_TRAIN_AO2_VERSION
+export AO2_RELEASE_TRAIN_CP_TAG
+export AO2_RELEASE_TRAIN_CP_VERSION
+export AO2_RELEASE_TRAIN_PROMOTION_CONFIRM
+export AO2_RELEASE_TRAIN_PUBLIC_OPERATOR_CONFIRM
 
 rm -rf "$OUT_ROOT"
 mkdir -p "$LOG_DIR"
@@ -120,6 +132,7 @@ fi
 python3 - "$OUT_ROOT" "$SUMMARY" "$HTML" "$CI_SAFE" <<'PY'
 import html
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -129,6 +142,28 @@ summary_path = Path(sys.argv[2]).resolve()
 html_path = Path(sys.argv[3]).resolve()
 ci_safe = sys.argv[4] == "1"
 log_dir = out_root / "logs"
+manifest_path = Path(os.environ["AO2_RELEASE_TRAIN_MANIFEST"]).resolve()
+release_train_manifest_source = json.loads(manifest_path.read_text(encoding="utf-8"))
+if release_train_manifest_source.get("schema_version") != "ao2.release-train-manifest.v1":
+    raise SystemExit(
+        f"unexpected release train manifest schema: {release_train_manifest_source.get('schema_version')}"
+    )
+selected_train = os.environ["AO2_RELEASE_TRAIN_NAME"]
+selected_targets = release_train_manifest_source[selected_train]
+release_train_manifest = {
+    "schema_version": release_train_manifest_source["schema_version"],
+    "source": str(manifest_path),
+    "selected_train": selected_train,
+    "stable": release_train_manifest_source["stable"],
+    "next_patch": release_train_manifest_source["next_patch"],
+}
+release_targets = {
+    "selected_train": selected_train,
+    "ao2": selected_targets["ao2"],
+    "ao2_control_plane": selected_targets["ao2_control_plane"],
+    "promotion_confirm": selected_targets["promotion_confirm"],
+    "public_operator_confirm": selected_targets["public_operator_confirm"],
+}
 names = [
     "release_evidence_closure",
     "release_readiness_static",
@@ -260,6 +295,8 @@ payload = {
     "status": status,
     "artifact_root": str(out_root),
     "ci_safe_mode": ci_safe,
+    "release_train_manifest": release_train_manifest,
+    "release_targets": release_targets,
     "checks": checks,
     "publish_guards": publish_guards,
     "release_readiness_artifact_consumer_contract": release_readiness_artifact_consumer_contract,
