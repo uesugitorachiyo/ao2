@@ -94,6 +94,42 @@ def trust_boundary_blockers(source_name: str, payload: dict) -> list[dict]:
     return blockers
 
 
+def public_pair_required_archive_scope(payload: dict) -> Optional[str]:
+    if payload.get("required_archive_scope") == "full_archive_parity":
+        return "full_archive_parity"
+
+    archive_parity = payload.get("archive_parity")
+    if not isinstance(archive_parity, dict) or archive_parity.get("status") != "passed":
+        return None
+    components = archive_parity.get("components")
+    if not isinstance(components, dict):
+        return None
+
+    required_components = {"ao2", "ao2-control-plane"}
+    if not required_components.issubset(components):
+        return None
+
+    for component_name in required_components:
+        component = components.get(component_name)
+        if not isinstance(component, dict) or component.get("status") != "passed":
+            return None
+        required_names = component.get("required_archive_names")
+        if not isinstance(required_names, list) or not required_names:
+            return None
+        required_count = component.get("required_archive_count")
+        if required_count is not None and required_count != len(required_names):
+            return None
+        for field in [
+            "missing_assets",
+            "mismatched_assets",
+            "closure_without_published_assets",
+            "published_without_closure_assets",
+        ]:
+            if component.get(field, []) not in ([], None):
+                return None
+    return "full_archive_parity"
+
+
 blockers = []
 
 final_closure_path = find_schema(final_closure_root, FINAL_CLOSURE_SCHEMA)
@@ -126,11 +162,12 @@ stable_promotion_index_ready = (
     and stable_promotion_index.get("stable_promotion_evidence_index_ready") is True
 )
 archive_parity_status = public_pair_digest.get("archive_parity_status") or public_pair_digest.get("archive_parity", {}).get("status")
+required_archive_scope = public_pair_required_archive_scope(public_pair_digest)
 public_pair_digest_ready = (
     public_pair_digest.get("schema_version") == PUBLIC_PAIR_DIGEST_SCHEMA
     and public_pair_digest.get("status") == "passed"
     and archive_parity_status == "passed"
-    and public_pair_digest.get("required_archive_scope") == "full_archive_parity"
+    and required_archive_scope == "full_archive_parity"
 )
 artifact_size_budget_ready = (
     artifact_size_budget.get("schema_version") == ARTIFACT_SIZE_BUDGET_SCHEMA
@@ -210,7 +247,7 @@ payload = {
             "status": public_pair_digest.get("status"),
             "ready": public_pair_digest_ready,
             "archive_parity_status": archive_parity_status,
-            "required_archive_scope": public_pair_digest.get("required_archive_scope"),
+            "required_archive_scope": required_archive_scope,
         },
         "artifact_size_budget_audit": {
             "artifact": "ao2-release-artifact-size-budget-audit",

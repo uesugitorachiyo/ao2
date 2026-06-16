@@ -1993,8 +1993,32 @@ def test_operator_readiness_summary_composes_final_release_go_no_go(tmp_path):
             "schema_version": "ao2.public-release-pair-digest-audit.v1",
             "status": "passed",
             "archive_parity_status": "passed",
-            "archive_parity": {"status": "passed"},
-            "required_archive_scope": "full_archive_parity",
+            "archive_parity": {
+                "status": "passed",
+                "components": {
+                    "ao2": {
+                        "status": "passed",
+                        "required_archive_names": [
+                            "ao2-0.4.80-linux-aarch64.tar.gz",
+                            "ao2-0.4.80-linux-x86_64.tar.gz",
+                            "ao2-0.4.80-macos-aarch64.tar.gz",
+                            "ao2-0.4.80-windows-x86_64.tar.gz",
+                        ],
+                        "missing_assets": [],
+                        "mismatched_assets": [],
+                    },
+                    "ao2-control-plane": {
+                        "status": "passed",
+                        "required_archive_names": [
+                            "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
+                            "ao2-control-plane-0.1.13-macos-aarch64.tar.gz",
+                            "ao2-control-plane-0.1.13-windows-x86_64.tar.gz",
+                        ],
+                        "missing_assets": [],
+                        "mismatched_assets": [],
+                    },
+                },
+            },
             "trust_boundary": {
                 "mutates_releases": False,
                 "stores_credentials": False,
