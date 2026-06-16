@@ -153,6 +153,7 @@ for item in artifacts:
 
 checked = []
 violations = []
+pending_artifacts = []
 for artifact_id in budgeted_ids:
     contract = required.get(artifact_id, {})
     artifact_name = contract.get("artifact_name")
@@ -177,6 +178,20 @@ for artifact_id in budgeted_ids:
         checked.append({**violation, "status": "failed"})
         continue
     if metadata is None:
+        if (
+            artifact_budget.get("missing_hosted_artifact_policy")
+            == "pending_until_manual_approval_artifact_uploaded"
+        ):
+            pending = {
+                "artifact_id": artifact_id,
+                "artifact_name": artifact_name,
+                "observed_size_bytes": None,
+                "max_size_bytes": max_size,
+                "reason": "pending_manual_approval_artifact",
+            }
+            pending_artifacts.append(pending)
+            checked.append({**pending, "status": "pending"})
+            continue
         violation = {
             "artifact_id": artifact_id,
             "artifact_name": artifact_name,
@@ -220,8 +235,10 @@ summary = {
     "artifact_size_budget": budget,
     "check_count": len(checked),
     "passed_check_count": sum(1 for item in checked if item["status"] == "passed"),
-    "failed_check_count": sum(1 for item in checked if item["status"] != "passed"),
+    "pending_check_count": len(pending_artifacts),
+    "failed_check_count": sum(1 for item in checked if item["status"] == "failed"),
     "checked_artifacts": checked,
+    "pending_artifacts": pending_artifacts,
     "violations": violations,
     "trust_boundary": {
         "local_only": bool(fixture_dir),

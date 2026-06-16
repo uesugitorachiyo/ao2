@@ -4031,6 +4031,133 @@ print(json.dumps({
     ]
 
 
+def test_release_artifact_size_budget_audit_allows_pending_manual_approval_artifacts(tmp_path):
+    closure_index = tmp_path / "artifact-closure-index.json"
+    closure_index.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.release-artifact-closure-index.v1",
+                "status": "passed",
+                "artifact_size_budget": {
+                    "schema_version": "ao2.release-artifact-size-budget.v1",
+                    "status": "passed",
+                    "size_budget_enforced": True,
+                    "default_lightweight_operator_packet_max_size_bytes": 1048576,
+                    "budgeted_artifact_ids": [
+                        "stable_promotion_operator_checklist",
+                        "public_release_operator_checklist",
+                        "public_release_operator_checklist_closure",
+                    ],
+                },
+                "required_artifacts": [
+                    {
+                        "id": "stable_promotion_operator_checklist",
+                        "artifact_name": "ao2-stable-promotion-operator-checklist",
+                        "artifact_size_budget": {
+                            "budget_scope": "lightweight_operator_approval_packet",
+                            "max_size_bytes": 1048576,
+                            "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+                        },
+                    },
+                    {
+                        "id": "public_release_operator_checklist",
+                        "artifact_name": "ao2-public-release-operator-checklist",
+                        "artifact_size_budget": {
+                            "budget_scope": "lightweight_operator_approval_packet",
+                            "max_size_bytes": 1048576,
+                            "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+                            "missing_hosted_artifact_policy": "pending_until_manual_approval_artifact_uploaded",
+                        },
+                    },
+                    {
+                        "id": "public_release_operator_checklist_closure",
+                        "artifact_name": "ao2-public-release-operator-checklist-closure",
+                        "artifact_size_budget": {
+                            "budget_scope": "lightweight_operator_approval_packet",
+                            "max_size_bytes": 1048576,
+                            "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+                            "missing_hosted_artifact_policy": "pending_until_manual_approval_artifact_uploaded",
+                        },
+                    },
+                ],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    fixture = tmp_path / "fixture"
+    fixture.mkdir()
+    (fixture / "artifacts.json").write_text(
+        json.dumps(
+            {
+                "artifacts": [
+                    {
+                        "id": 1001,
+                        "name": "ao2-stable-promotion-operator-checklist",
+                        "size_in_bytes": 4096,
+                        "expired": False,
+                        "created_at": "2026-06-14T14:00:00Z",
+                    }
+                ]
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    out_root = tmp_path / "audit-pending"
+    result = subprocess.run(
+        [
+            "npm",
+            "run",
+            "release:artifact-size-budget-audit",
+            "--",
+            "--closure-index",
+            str(closure_index),
+            "--fixture-dir",
+            str(fixture),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        env={
+            **os.environ,
+            "AO2_RELEASE_ARTIFACT_SIZE_BUDGET_AUDIT_ROOT": str(out_root),
+        },
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "passed"
+    assert summary["check_count"] == 3
+    assert summary["passed_check_count"] == 1
+    assert summary["pending_check_count"] == 2
+    assert summary["failed_check_count"] == 0
+    assert summary["violations"] == []
+    assert summary["pending_artifacts"] == [
+        {
+            "artifact_id": "public_release_operator_checklist",
+            "artifact_name": "ao2-public-release-operator-checklist",
+            "observed_size_bytes": None,
+            "max_size_bytes": 1048576,
+            "reason": "pending_manual_approval_artifact",
+        },
+        {
+            "artifact_id": "public_release_operator_checklist_closure",
+            "artifact_name": "ao2-public-release-operator-checklist-closure",
+            "observed_size_bytes": None,
+            "max_size_bytes": 1048576,
+            "reason": "pending_manual_approval_artifact",
+        },
+    ]
+    assert summary["checked_artifacts"][1]["status"] == "pending"
+
+
 def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     script = read("scripts/release-readiness.sh")
     for needle in [
@@ -4653,6 +4780,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "budget_scope": "lightweight_operator_approval_packet",
         "max_size_bytes": 1048576,
         "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+        "missing_hosted_artifact_policy": "pending_until_manual_approval_artifact_uploaded",
     }
     assert artifacts["public_release_operator_checklist_closure"]["artifact_name"] == (
         "ao2-public-release-operator-checklist-closure"
@@ -4677,6 +4805,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "budget_scope": "lightweight_operator_approval_packet",
         "max_size_bytes": 1048576,
         "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+        "missing_hosted_artifact_policy": "pending_until_manual_approval_artifact_uploaded",
     }
     assert artifacts["dual_repo_public_approval_closure"]["artifact_name"] == (
         "ao2-dual-repo-public-approval-closure"
@@ -4703,6 +4832,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "budget_scope": "lightweight_operator_approval_packet",
         "max_size_bytes": 1048576,
         "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+        "missing_hosted_artifact_policy": "pending_until_manual_approval_artifact_uploaded",
     }
     assert closure["artifact_size_budget"] == {
         "schema_version": "ao2.release-artifact-size-budget.v1",

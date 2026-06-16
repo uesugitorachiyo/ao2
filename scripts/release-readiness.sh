@@ -1337,6 +1337,7 @@ artifact_closure_index = {
                 "budget_scope": "lightweight_operator_approval_packet",
                 "max_size_bytes": size_budget_bytes,
                 "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+                "missing_hosted_artifact_policy": "pending_until_manual_approval_artifact_uploaded",
             },
             "required_checks": ["public_release_operator_checklist"],
             "source_artifacts": ["ao2-operator-readiness-summary"],
@@ -1358,6 +1359,7 @@ artifact_closure_index = {
                 "budget_scope": "lightweight_operator_approval_packet",
                 "max_size_bytes": size_budget_bytes,
                 "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+                "missing_hosted_artifact_policy": "pending_until_manual_approval_artifact_uploaded",
             },
             "required_checks": ["public_release_operator_checklist_closure"],
             "source_artifacts": [
@@ -1383,6 +1385,7 @@ artifact_closure_index = {
                 "budget_scope": "lightweight_operator_approval_packet",
                 "max_size_bytes": size_budget_bytes,
                 "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+                "missing_hosted_artifact_policy": "pending_until_manual_approval_artifact_uploaded",
             },
             "required_checks": ["dual_repo_public_approval_closure"],
             "source_artifacts": [
