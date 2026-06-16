@@ -1,0 +1,83 @@
+name: Candidate Patch Release Rehearsal
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_train:
+        description: "Release train manifest key to rehearse."
+        required: false
+        type: string
+        default: next_patch
+
+permissions:
+  contents: read
+
+concurrency:
+  group: candidate-patch-release-rehearsal-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  candidate-patch-release-rehearsal:
+    name: Candidate patch release rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+
+      - name: Run candidate release-train drill
+        shell: bash
+        env:
+          AO2_RELEASE_TRAIN: ${{ inputs.release_train || 'next_patch' }}
+          AO2_PUBLIC_RELEASE_TRAIN_CI_SAFE: "1"
+          AO2_PUBLIC_RELEASE_TRAIN_DRILL_ROOT: target/candidate-patch-release-rehearsal/report
+        run: |
+          set -euo pipefail
+          npm run release:train-drill
+
+      - name: Validate candidate release-train evidence
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary = json.loads(
+              Path("target/candidate-patch-release-rehearsal/report/summary.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          assert summary["schema_version"] == "ao2.public-release-train-drill.v1", summary
+          assert summary["status"] == "passed", summary
+          assert summary["ci_safe_mode"] is True, summary
+          assert summary["release_train_manifest"]["schema_version"] == "ao2.release-train-manifest.v1", summary
+          assert summary["release_train_manifest"]["selected_train"] == "next_patch", summary
+          assert summary["release_targets"]["selected_train"] == "next_patch", summary
+          assert summary["release_targets"]["ao2"]["tag"] == "v0.4.81", summary
+          assert summary["release_targets"]["ao2"]["version"] == "0.4.81", summary
+          assert summary["release_targets"]["ao2_control_plane"]["tag"] == "v0.1.14", summary
+          assert summary["release_targets"]["ao2_control_plane"]["version"] == "0.1.14", summary
+          assert summary["release_targets"]["promotion_confirm"] == "promote-stable-v0.4.81-v0.1.14", summary
+          assert (
+              summary["release_targets"]["public_operator_confirm"]
+              == "public-release-reviewed-v0.4.81-v0.1.14"
+          ), summary
+          assert summary["trust_boundary"]["local_only"] is True, summary
+          assert summary["trust_boundary"]["stores_credentials"] is False, summary
+          assert summary["publish_guards"]["refuses_publish_side_effects_by_default"] is True, summary
+          PY
+          test -f target/candidate-patch-release-rehearsal/report/summary.json
+          test -f target/candidate-patch-release-rehearsal/report/closure.html
+
+      - name: Upload candidate patch release rehearsal evidence
+        uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: ao2-candidate-patch-release-rehearsal
+          path: target/candidate-patch-release-rehearsal/report
+          if-no-files-found: error

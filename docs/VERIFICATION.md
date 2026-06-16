@@ -496,6 +496,14 @@ Result:
   `Release train control-plane bridge artifacts` and uploads
   `ao2-release-train-control-plane-bridge` with both the bridge summary and the
   `ao2.cp-release-train-bridge-smoke.v1` readback evidence.
+- `Candidate Patch Release Rehearsal` in
+  `.github/workflows/candidate-patch-release-rehearsal.yml` dispatches
+  `npm run release:train-drill` with `AO2_RELEASE_TRAIN=next_patch`,
+  `AO2_PUBLIC_RELEASE_TRAIN_CI_SAFE=1`, and
+  `AO2_PUBLIC_RELEASE_TRAIN_DRILL_ROOT=target/candidate-patch-release-rehearsal/report`.
+  It validates the manifest-backed `v0.4.81` / `v0.1.14` candidate targets in
+  the `ao2.public-release-train-drill.v1` summary and uploads one read-only
+  `ao2-candidate-patch-release-rehearsal` evidence bundle.
 - `npm run risky-pr:product-readiness`: runs the Risky PR golden path once,
   then verifies local run record, static report/export, and evaluator closure
   evidence from that single run; emits
@@ -765,6 +773,12 @@ Result:
   release readiness static summary, release readiness regression, retention preflight
   with pruning disabled, artifact consumer dry-run, and post-merge canary
   without tag, push, publish, or deploy side effects. The release readiness
+  drill reads `docs/release/release-train.json` through
+  `scripts/release-train-env.sh`, defaults to the `stable` train, and records
+  `release_train_manifest` plus `release_targets` in the summary. Setting
+  `AO2_RELEASE_TRAIN=next_patch` rehearses the `v0.4.81` / `v0.1.14` candidate
+  train without publishing.
+  The release readiness
   static summary must include the
   `ci_release_readiness_artifact_consumer_job` proof and the
   `ci_dual_repo_release_publication_closure_index_job` and

@@ -1,0 +1,27 @@
+{
+  "next_patch": {
+    "ao2": {
+      "tag": "v0.4.81",
+      "version": "0.4.81"
+    },
+    "ao2_control_plane": {
+      "tag": "v0.1.14",
+      "version": "0.1.14"
+    },
+    "promotion_confirm": "promote-stable-v0.4.81-v0.1.14",
+    "public_operator_confirm": "public-release-reviewed-v0.4.81-v0.1.14"
+  },
+  "schema_version": "ao2.release-train-manifest.v1",
+  "stable": {
+    "ao2": {
+      "tag": "v0.4.80",
+      "version": "0.4.80"
+    },
+    "ao2_control_plane": {
+      "tag": "v0.1.13",
+      "version": "0.1.13"
+    },
+    "promotion_confirm": "promote-stable-v0.4.80-v0.1.13",
+    "public_operator_confirm": "public-release-reviewed-v0.4.80-v0.1.13"
+  }
+}
