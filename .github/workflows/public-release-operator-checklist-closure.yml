@@ -1,0 +1,140 @@
+name: Public Release Operator Checklist Closure
+
+on:
+  workflow_dispatch:
+    inputs:
+      operator_readiness_summary_run_id:
+        description: "Optional Operator Readiness Summary run id containing ao2-operator-readiness-summary."
+        required: false
+        type: string
+      public_release_operator_checklist_run_id:
+        description: "Optional Public Release Operator Checklist run id containing ao2-public-release-operator-checklist."
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  public-release-operator-checklist-closure:
+    name: Public release operator checklist closure
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+      - name: Reject provider API key environment
+        shell: bash
+        run: |
+          if [ "${OPENAI_API_KEY+x}" = "x" ] || [ "${ANTHROPIC_API_KEY+x}" = "x" ]; then
+            echo "provider API keys are not accepted by public release operator checklist closure" >&2
+            exit 1
+          fi
+      - name: Download operator readiness summary
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPERATOR_READINESS_SUMMARY_RUN_ID: ${{ inputs.operator_readiness_summary_run_id }}
+        run: |
+          set -euo pipefail
+          out="target/public-release-operator-checklist-closure/operator-readiness-summary"
+          rm -rf "$out"
+          mkdir -p "$out"
+
+          if [ -n "$OPERATOR_READINESS_SUMMARY_RUN_ID" ]; then
+            gh run download "$OPERATOR_READINESS_SUMMARY_RUN_ID" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name ao2-operator-readiness-summary \
+              --dir "$out"
+            printf "%s\n" "$OPERATOR_READINESS_SUMMARY_RUN_ID" > "$out/source-run-id.txt"
+            exit 0
+          fi
+
+          while IFS= read -r run_id; do
+            [ -n "$run_id" ] || continue
+            rm -rf "$out"
+            mkdir -p "$out"
+            if gh run download "$run_id" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name ao2-operator-readiness-summary \
+              --dir "$out"; then
+              printf "%s\n" "$run_id" > "$out/source-run-id.txt"
+              exit 0
+            fi
+          done < <(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --branch main \
+            --workflow operator-readiness-summary.yml \
+            --status success \
+            --limit 10 \
+            --json databaseId \
+            --jq '.[].databaseId')
+
+          echo "missing ao2-operator-readiness-summary from successful main workflow runs" >&2
+          exit 1
+      - name: Download public release operator checklist
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLIC_RELEASE_OPERATOR_CHECKLIST_RUN_ID: ${{ inputs.public_release_operator_checklist_run_id }}
+        run: |
+          set -euo pipefail
+          out="target/public-release-operator-checklist-closure/public-release-operator-checklist"
+          rm -rf "$out"
+          mkdir -p "$out"
+
+          if [ -n "$PUBLIC_RELEASE_OPERATOR_CHECKLIST_RUN_ID" ]; then
+            gh run download "$PUBLIC_RELEASE_OPERATOR_CHECKLIST_RUN_ID" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name ao2-public-release-operator-checklist \
+              --dir "$out"
+            printf "%s\n" "$PUBLIC_RELEASE_OPERATOR_CHECKLIST_RUN_ID" > "$out/source-run-id.txt"
+            exit 0
+          fi
+
+          while IFS= read -r run_id; do
+            [ -n "$run_id" ] || continue
+            rm -rf "$out"
+            mkdir -p "$out"
+            if gh run download "$run_id" \
+              --repo "$GITHUB_REPOSITORY" \
+              --name ao2-public-release-operator-checklist \
+              --dir "$out"; then
+              printf "%s\n" "$run_id" > "$out/source-run-id.txt"
+              exit 0
+            fi
+          done < <(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --branch main \
+            --workflow public-release-operator-checklist.yml \
+            --status success \
+            --limit 10 \
+            --json databaseId \
+            --jq '.[].databaseId')
+
+          echo "missing ao2-public-release-operator-checklist from successful main workflow runs" >&2
+          exit 1
+      - name: Verify public release operator checklist closure
+        shell: bash
+        run: |
+          AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_CLOSURE_ROOT=target/public-release-operator-checklist-closure/report \
+          AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_SUMMARY=target/public-release-operator-checklist-closure/public-release-operator-checklist/summary.json \
+          AO2_PUBLIC_RELEASE_OPERATOR_READINESS_SUMMARY=target/public-release-operator-checklist-closure/operator-readiness-summary/summary.json \
+            npm run release:public-operator-checklist-closure
+      - name: Verify public release operator checklist closure schema
+        if: always()
+        shell: bash
+        run: |
+          python3 -c 'import json; from pathlib import Path; summary = json.loads(Path("target/public-release-operator-checklist-closure/report/summary.json").read_text(encoding="utf-8")); assert summary["schema_version"] == "ao2.public-release-operator-checklist-closure.v1", summary'
+      - name: Upload public release operator checklist closure
+        uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: ao2-public-release-operator-checklist-closure
+          path: target/public-release-operator-checklist-closure/report
+          if-no-files-found: error

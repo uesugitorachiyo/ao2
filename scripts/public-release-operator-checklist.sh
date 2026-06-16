@@ -19,6 +19,7 @@ CHECKLIST="$AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_ROOT/checklist.md"
 
 python3 - "$AO2_PUBLIC_RELEASE_OPERATOR_READINESS_SUMMARY" "$SUMMARY" "$CHECKLIST" "$AO2_PUBLIC_RELEASE_OPERATOR_REQUIRED_CONFIRM" <<'PY'
 import json
+import hashlib
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,6 +30,7 @@ checklist_path = Path(sys.argv[3]).resolve()
 required_confirmation = sys.argv[4]
 
 failures = []
+readiness_bytes = b""
 
 
 def fail(code, message, details=None):
@@ -40,10 +42,12 @@ if not readiness_summary_path.is_file():
     readiness = {}
 else:
     try:
-        readiness = json.loads(readiness_summary_path.read_text(encoding="utf-8"))
+        readiness_bytes = readiness_summary_path.read_bytes()
+        readiness = json.loads(readiness_bytes.decode("utf-8"))
     except json.JSONDecodeError as exc:
         fail("operator_readiness_summary_invalid_json", "invalid operator readiness summary JSON", {"error": str(exc)})
         readiness = {}
+        readiness_bytes = b""
 
 evidence = readiness.get("evidence", {}) if isinstance(readiness.get("evidence"), dict) else {}
 public_pair_digest = evidence.get("public_pair_digest_audit", {}) if isinstance(evidence.get("public_pair_digest_audit"), dict) else {}
@@ -94,6 +98,7 @@ payload = {
     "operator_checklist_ready": ready,
     "source": {
         "operator_readiness_summary": str(readiness_summary_path),
+        "source_sha256": hashlib.sha256(readiness_bytes).hexdigest(),
         "schema_version": readiness.get("schema_version"),
         "status": readiness.get("status"),
         "release_go_no_go": readiness.get("release_go_no_go"),

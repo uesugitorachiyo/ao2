@@ -603,6 +603,50 @@ add(
     "manual read-only workflow emits a lightweight public release operator approval checklist from operator readiness evidence",
 )
 
+public_release_operator_checklist_closure_script = read("scripts/public-release-operator-checklist-closure.sh")
+public_release_operator_checklist_closure_workflow = read(".github/workflows/public-release-operator-checklist-closure.yml")
+public_release_operator_checklist_closure_ok = (
+    scripts.get("release:public-operator-checklist-closure") == "node scripts/run-sh-script.js scripts/public-release-operator-checklist-closure.sh"
+    and "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_CLOSURE_ROOT" in public_release_operator_checklist_closure_script
+    and "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_SUMMARY" in public_release_operator_checklist_closure_script
+    and "AO2_PUBLIC_RELEASE_OPERATOR_READINESS_SUMMARY" in public_release_operator_checklist_closure_script
+    and "ao2.public-release-operator-checklist-closure.v1" in public_release_operator_checklist_closure_script
+    and "ao2.public-release-operator-checklist.v1" in public_release_operator_checklist_closure_script
+    and "ao2.operator-readiness-summary.v1" in public_release_operator_checklist_closure_script
+    and "source_sha256" in public_release_operator_checklist_closure_script
+    and "operator_decision_fields_remain_unapproved" in public_release_operator_checklist_closure_script
+    and "mutates_releases" in public_release_operator_checklist_closure_script
+    and "stores_credentials" in public_release_operator_checklist_closure_script
+    and "control_plane_approves_release" in public_release_operator_checklist_closure_script
+    and "OPENAI_API_KEY" in public_release_operator_checklist_closure_script
+    and "ANTHROPIC_API_KEY" in public_release_operator_checklist_closure_script
+    and "gh release" not in public_release_operator_checklist_closure_script
+    and "contents: write" not in public_release_operator_checklist_closure_script
+    and "name: Public Release Operator Checklist Closure" in public_release_operator_checklist_closure_workflow
+    and "workflow_dispatch:" in public_release_operator_checklist_closure_workflow
+    and "operator_readiness_summary_run_id:" in public_release_operator_checklist_closure_workflow
+    and "public_release_operator_checklist_run_id:" in public_release_operator_checklist_closure_workflow
+    and "actions: read" in public_release_operator_checklist_closure_workflow
+    and "contents: read" in public_release_operator_checklist_closure_workflow
+    and "GH_TOKEN: ${{ github.token }}" in public_release_operator_checklist_closure_workflow
+    and "ao2-operator-readiness-summary" in public_release_operator_checklist_closure_workflow
+    and "ao2-public-release-operator-checklist" in public_release_operator_checklist_closure_workflow
+    and "npm run release:public-operator-checklist-closure" in public_release_operator_checklist_closure_workflow
+    and "ao2.public-release-operator-checklist-closure.v1" in public_release_operator_checklist_closure_workflow
+    and "ao2-public-release-operator-checklist-closure" in public_release_operator_checklist_closure_workflow
+    and "actions/upload-artifact@v7.0.1" in public_release_operator_checklist_closure_workflow
+    and "OPENAI_API_KEY" in public_release_operator_checklist_closure_workflow
+    and "ANTHROPIC_API_KEY" in public_release_operator_checklist_closure_workflow
+    and "contents: write" not in public_release_operator_checklist_closure_workflow
+    and "actions: write" not in public_release_operator_checklist_closure_workflow
+    and "gh release" not in public_release_operator_checklist_closure_workflow
+)
+add(
+    "public_release_operator_checklist_closure",
+    "passed" if public_release_operator_checklist_closure_ok else "failed",
+    "manual read-only workflow verifies public release operator checklist source digest and unapproved decision fields",
+)
+
 release_readiness_artifact_consumer = workflow_job_block("release-readiness-artifact-consumer")
 release_readiness_artifact_consumer_script = read("scripts/release-readiness-artifact-consumer.sh")
 release_readiness_artifact_consumer_ok = (
@@ -914,6 +958,7 @@ budgeted_artifact_ids = [
     "stable_promotion_operator_checklist",
     "stable_promotion_dry_run_checklist",
     "public_release_operator_checklist",
+    "public_release_operator_checklist_closure",
 ]
 artifact_size_budget = {
     "schema_version": "ao2.release-artifact-size-budget.v1",
@@ -933,6 +978,7 @@ add(
             "stable_promotion_operator_checklist",
             "stable_promotion_dry_run_checklist",
             "public_release_operator_checklist",
+            "public_release_operator_checklist_closure",
         }
     )
     else "failed",
@@ -1244,6 +1290,30 @@ artifact_closure_index = {
             },
             "required_checks": ["public_release_operator_checklist"],
             "source_artifacts": ["ao2-operator-readiness-summary"],
+        },
+        {
+            "id": "public_release_operator_checklist_closure",
+            "artifact_name": "ao2-public-release-operator-checklist-closure",
+            "producer_job": "Public Release Operator Checklist Closure / public-release-operator-checklist-closure",
+            "required_files": [
+                "summary.json",
+                "report.md",
+            ],
+            "schema_versions": [
+                "ao2.public-release-operator-checklist-closure.v1",
+                "ao2.public-release-operator-checklist.v1",
+                "ao2.operator-readiness-summary.v1",
+            ],
+            "artifact_size_budget": {
+                "budget_scope": "lightweight_operator_approval_packet",
+                "max_size_bytes": size_budget_bytes,
+                "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+            },
+            "required_checks": ["public_release_operator_checklist_closure"],
+            "source_artifacts": [
+                "ao2-operator-readiness-summary",
+                "ao2-public-release-operator-checklist",
+            ],
         },
         {
             "id": "stable_promotion_evidence_index",
