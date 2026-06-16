@@ -4,7 +4,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 AO2_PUBLIC_RELEASE_OPERATOR_READINESS_SUMMARY="${AO2_PUBLIC_RELEASE_OPERATOR_READINESS_SUMMARY:-$ROOT/target/operator-readiness-summary/latest/summary.json}"
 AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_ROOT="${AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_ROOT:-$ROOT/target/public-release-operator-checklist/latest}"
-AO2_PUBLIC_RELEASE_OPERATOR_REQUIRED_CONFIRM="${AO2_PUBLIC_RELEASE_OPERATOR_REQUIRED_CONFIRM:-public-release-reviewed-v0.4.80-v0.1.13}"
+AO2_RELEASE_TAG="${AO2_RELEASE_TAG:-v$("$ROOT/scripts/current-version.sh")}"
+AO2_CONTROL_PLANE_RELEASE_TAG="${AO2_CONTROL_PLANE_RELEASE_TAG:-v0.1.13}"
+AO2_PUBLIC_RELEASE_OPERATOR_REQUIRED_CONFIRM="${AO2_PUBLIC_RELEASE_OPERATOR_REQUIRED_CONFIRM:-public-release-reviewed-$AO2_RELEASE_TAG-$AO2_CONTROL_PLANE_RELEASE_TAG}"
 
 if [ "${OPENAI_API_KEY+x}" = "x" ] || [ "${ANTHROPIC_API_KEY+x}" = "x" ]; then
   echo "provider API keys are not accepted by public release operator checklist" >&2

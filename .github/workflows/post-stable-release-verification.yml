@@ -2,6 +2,22 @@ name: Post Stable Release Verification
 
 on:
   workflow_dispatch:
+    inputs:
+      ao2_release_tag:
+        description: "AO2 release tag to verify."
+        required: false
+        type: string
+        default: v0.4.80
+      ao2_release_version:
+        description: "AO2 release version used in archive names."
+        required: false
+        type: string
+        default: 0.4.80
+      ao2_cp_release_tag:
+        description: "ao2-control-plane release tag used by the dual public smoke."
+        required: false
+        type: string
+        default: v0.1.13
   schedule:
     - cron: "17 11 * * 1"
 
@@ -14,8 +30,9 @@ concurrency:
 
 env:
   AO2_RELEASE_REPO: uesugitorachiyo/ao2
-  AO2_RELEASE_TAG: v0.4.80
-  AO2_RELEASE_VERSION: 0.4.80
+  AO2_RELEASE_TAG: ${{ inputs.ao2_release_tag || 'v0.4.80' }}
+  AO2_RELEASE_VERSION: ${{ inputs.ao2_release_version || '0.4.80' }}
+  AO2_CP_RELEASE_TAG: ${{ inputs.ao2_cp_release_tag || 'v0.1.13' }}
 
 jobs:
   post-stable-release-smoke:
@@ -27,23 +44,17 @@ jobs:
         include:
           - label: Ubuntu stable release smoke
             os: ubuntu-latest
-            asset: ao2-0.4.80-linux-x86_64.tar.gz
-            asset_sha: ao2-0.4.80-linux-x86_64.tar.gz.sha256
-            asset_sig: ao2-0.4.80-linux-x86_64.tar.gz.sig
+            target_label: linux-x86_64
             binary: ao2
             shell: bash
           - label: macOS stable release smoke
             os: macos-14
-            asset: ao2-0.4.80-macos-aarch64.tar.gz
-            asset_sha: ao2-0.4.80-macos-aarch64.tar.gz.sha256
-            asset_sig: ao2-0.4.80-macos-aarch64.tar.gz.sig
+            target_label: macos-aarch64
             binary: ao2
             shell: bash
           - label: Windows stable release smoke
             os: windows-latest
-            asset: ao2-0.4.80-windows-x86_64.tar.gz
-            asset_sha: ao2-0.4.80-windows-x86_64.tar.gz.sha256
-            asset_sig: ao2-0.4.80-windows-x86_64.tar.gz.sig
+            target_label: windows-x86_64
             binary: ao2.exe
             shell: pwsh
 
@@ -54,10 +65,12 @@ jobs:
       - name: Download stable release asset
         env:
           GH_TOKEN: ${{ github.token }}
-          AO2_ASSET: ${{ matrix.asset }}
-          AO2_ASSET_SHA: ${{ matrix.asset_sha }}
-          AO2_ASSET_SIG: ${{ matrix.asset_sig }}
+          AO2_TARGET_LABEL: ${{ matrix.target_label }}
         run: |
+          set -euo pipefail
+          AO2_ASSET="ao2-${AO2_RELEASE_VERSION}-${AO2_TARGET_LABEL}.tar.gz"
+          AO2_ASSET_SHA="${AO2_ASSET}.sha256"
+          AO2_ASSET_SIG="${AO2_ASSET}.sig"
           mkdir -p release smoke/extract smoke/bin
           gh release download "$AO2_RELEASE_TAG" \
             --repo "$AO2_RELEASE_REPO" \
@@ -75,10 +88,11 @@ jobs:
       - name: Verify and install stable release on Unix
         if: matrix.shell == 'bash'
         env:
-          AO2_ASSET: ${{ matrix.asset }}
+          AO2_TARGET_LABEL: ${{ matrix.target_label }}
           AO2_BINARY: ${{ matrix.binary }}
         run: |
           set -euo pipefail
+          AO2_ASSET="ao2-${AO2_RELEASE_VERSION}-${AO2_TARGET_LABEL}.tar.gz"
           (cd release && grep "  $AO2_ASSET$" SHA256SUMS > SHA256SUMS.asset)
           (cd release && shasum -a 256 -c SHA256SUMS.asset)
           tar -xzf "release/$AO2_ASSET" -C smoke/extract
@@ -99,10 +113,11 @@ jobs:
       - name: Verify and install stable release on Windows
         if: matrix.shell == 'pwsh'
         env:
-          AO2_ASSET: ${{ matrix.asset }}
+          AO2_TARGET_LABEL: ${{ matrix.target_label }}
           AO2_BINARY: ${{ matrix.binary }}
         run: |
           $ErrorActionPreference = "Stop"
+          $env:AO2_ASSET = "ao2-$env:AO2_RELEASE_VERSION-$env:AO2_TARGET_LABEL.tar.gz"
           $manifestLine = Select-String -Path release/SHA256SUMS -Pattern "  $([Regex]::Escape($env:AO2_ASSET))$" | Select-Object -First 1
           if (-not $manifestLine) {
             throw "missing checksum entry for $env:AO2_ASSET"

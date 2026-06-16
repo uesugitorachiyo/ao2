@@ -488,11 +488,17 @@ def test_windows_release_smoke_verifies_public_archive_checksum():
     workflow = read(".github/workflows/windows-release-smoke.yml")
 
     for needle in [
-        "gh release download v0.4.80",
-        '--pattern "ao2-0.4.80-windows-x86_64.tar.gz"',
+        "workflow_dispatch:",
+        "release_tag:",
+        "release_version:",
+        "default: v0.4.80",
+        "default: 0.4.80",
+        "$archive = \"ao2-$env:AO2_RELEASE_VERSION-windows-x86_64.tar.gz\"",
+        "gh release download $env:AO2_RELEASE_TAG",
+        "--pattern $archive",
         '--pattern "SHA256SUMS"',
         "Get-FileHash -Algorithm SHA256",
-        "ao2-0.4.80-windows-x86_64.tar.gz",
+        '-Archive (Join-Path "dist-windows" $archive)',
         "Archive checksum mismatch",
     ]:
         assert needle in workflow
@@ -1339,12 +1345,18 @@ def test_stable_promotion_workflow_is_guarded_and_documented():
         "name: Stable Release Promotion",
         "workflow_dispatch:",
         "stable_release_evidence_run_id:",
+        "ao2_release_tag:",
+        "default: v0.4.80",
+        "ao2_cp_release_tag:",
+        "default: v0.1.13",
         "promotion_confirm:",
         "permissions:",
         "actions: read",
         "contents: write",
         "GH_TOKEN: ${{ github.token }}",
         "STABLE_RELEASE_EVIDENCE_RUN_ID: ${{ inputs.stable_release_evidence_run_id }}",
+        "AO2_RELEASE_TAG_INPUT: ${{ inputs.ao2_release_tag || 'v0.4.80' }}",
+        "AO2_CP_RELEASE_TAG_INPUT: ${{ inputs.ao2_cp_release_tag || 'v0.1.13' }}",
         "PROMOTION_CONFIRM_INPUT: ${{ inputs.promotion_confirm }}",
         "ao2-stable-release-evidence-packet",
         "target/stable-release-promotion/stable-release-evidence-packet",
@@ -1354,6 +1366,9 @@ def test_stable_promotion_workflow_is_guarded_and_documented():
         "mutates_releases",
         "stores_credentials",
         "AO2_STABLE_PROMOTION_EVIDENCE_FIXTURE_DIR=target/stable-release-promotion/stable-release-evidence-packet/stable-promotion-workflow/post-release-verification-evidence",
+        'required_confirm="promote-stable-${AO2_RELEASE_TAG_INPUT}-${AO2_CP_RELEASE_TAG_INPUT}"',
+        'AO2_RELEASE_TAG="$AO2_RELEASE_TAG_INPUT"',
+        'AO2_CP_RELEASE_TAG="$AO2_CP_RELEASE_TAG_INPUT"',
         'AO2_STABLE_PROMOTION_CONFIRM="$PROMOTION_CONFIRM_INPUT"',
         "npm run release:stable-promotion-workflow",
         "promote-stable-v0.4.80-v0.1.13",
@@ -1579,6 +1594,7 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
         "AO2_STABLE_PROMOTION_DRY_RUN_AUDIT_SUMMARY",
         "AO2_STABLE_PROMOTION_OPERATOR_CHECKLIST_ROOT",
         "promote-stable-v0.4.80-v0.1.13",
+        'AO2_STABLE_PROMOTION_REQUIRED_CONFIRM="${AO2_STABLE_PROMOTION_REQUIRED_CONFIRM:-promote-stable-$AO2_RELEASE_TAG-$AO2_CONTROL_PLANE_RELEASE_TAG}"',
         "dry_run_audit_ready",
         "promotion_status",
         "not_attempted",
@@ -1596,12 +1612,21 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
         "name: Stable Promotion Operator Checklist",
         "workflow_dispatch:",
         "stable_promotion_dry_run_audit_run_id:",
+        "ao2_release_tag:",
+        "default: v0.4.80",
+        "ao2_cp_release_tag:",
+        "default: v0.1.13",
         "permissions:",
         "actions: read",
         "contents: read",
         "GH_TOKEN: ${{ github.token }}",
+        "AO2_RELEASE_TAG_INPUT: ${{ inputs.ao2_release_tag || 'v0.4.80' }}",
+        "AO2_CP_RELEASE_TAG_INPUT: ${{ inputs.ao2_cp_release_tag || 'v0.1.13' }}",
         "ao2-stable-release-promotion-dry-run-audit",
         "target/stable-promotion-operator-checklist/dry-run-audit",
+        'AO2_RELEASE_TAG="${AO2_RELEASE_TAG_INPUT}"',
+        'AO2_CONTROL_PLANE_RELEASE_TAG="${AO2_CP_RELEASE_TAG_INPUT}"',
+        'AO2_STABLE_PROMOTION_REQUIRED_CONFIRM="promote-stable-${AO2_RELEASE_TAG_INPUT}-${AO2_CP_RELEASE_TAG_INPUT}"',
         "npm run release:stable-promotion-operator-checklist",
         "ao2-stable-promotion-operator-checklist",
         "path: target/stable-promotion-operator-checklist/report",
@@ -1665,6 +1690,8 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
             **os.environ,
             "AO2_STABLE_PROMOTION_DRY_RUN_AUDIT_SUMMARY": str(audit_summary),
             "AO2_STABLE_PROMOTION_OPERATOR_CHECKLIST_ROOT": str(out_root),
+            "AO2_RELEASE_TAG": "v0.4.81",
+            "AO2_CONTROL_PLANE_RELEASE_TAG": "v0.1.14",
         },
         capture_output=True,
         text=True,
@@ -1675,7 +1702,11 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
     assert summary["schema_version"] == "ao2.stable-promotion-operator-checklist.v1"
     assert summary["status"] == "passed"
     assert summary["operator_checklist_ready"] is True
-    assert summary["required_confirmation"] == "promote-stable-v0.4.80-v0.1.13"
+    assert summary["required_confirmation"] == "promote-stable-v0.4.81-v0.1.14"
+    assert summary["release_targets"] == {
+        "ao2": "v0.4.81",
+        "ao2_control_plane": "v0.1.14",
+    }
     assert summary["dry_run_audit"]["dry_run_audit_ready"] is True
     assert summary["dry_run_audit"]["workflow"]["promotion_status"] == "not_attempted"
     assert (
@@ -1690,7 +1721,7 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
 
     checklist = (out_root / "checklist.md").read_text(encoding="utf-8")
     assert "Stable Promotion Operator Checklist" in checklist
-    assert "promote-stable-v0.4.80-v0.1.13" in checklist
+    assert "promote-stable-v0.4.81-v0.1.14" in checklist
     assert "No provider API keys are required or accepted" in checklist
     assert "Archive parity status: `passed`" in checklist
     assert "Do not enter the confirmation string unless this checklist status is passed" in checklist
@@ -2197,6 +2228,9 @@ def test_public_release_operator_checklist_consumes_operator_readiness_summary(t
         "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_ROOT",
         "AO2_PUBLIC_RELEASE_OPERATOR_READINESS_SUMMARY",
         "AO2_PUBLIC_RELEASE_OPERATOR_REQUIRED_CONFIRM",
+        "AO2_RELEASE_TAG",
+        "AO2_CONTROL_PLANE_RELEASE_TAG",
+        'AO2_PUBLIC_RELEASE_OPERATOR_REQUIRED_CONFIRM="${AO2_PUBLIC_RELEASE_OPERATOR_REQUIRED_CONFIRM:-public-release-reviewed-$AO2_RELEASE_TAG-$AO2_CONTROL_PLANE_RELEASE_TAG}"',
         "ao2.operator-readiness-summary.v1",
         "release_go_no_go",
         "operator_readiness_ready",
@@ -2255,7 +2289,8 @@ def test_public_release_operator_checklist_consumes_operator_readiness_summary(t
             **os.environ,
             "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_ROOT": str(out_root),
             "AO2_PUBLIC_RELEASE_OPERATOR_READINESS_SUMMARY": str(readiness_summary),
-            "AO2_PUBLIC_RELEASE_OPERATOR_REQUIRED_CONFIRM": "public-release-reviewed-v0.4.80-v0.1.13",
+            "AO2_RELEASE_TAG": "v0.4.81",
+            "AO2_CONTROL_PLANE_RELEASE_TAG": "v0.1.14",
         },
         capture_output=True,
         text=True,
@@ -2269,7 +2304,7 @@ def test_public_release_operator_checklist_consumes_operator_readiness_summary(t
     assert summary["source"]["schema_version"] == "ao2.operator-readiness-summary.v1"
     assert summary["source"]["release_go_no_go"] == "go"
     assert summary["operator_decision"] == {
-        "required_confirmation": "public-release-reviewed-v0.4.80-v0.1.13",
+        "required_confirmation": "public-release-reviewed-v0.4.81-v0.1.14",
         "go_no_go_reviewed": False,
         "release_pages_reviewed": False,
         "artifact_digests_reviewed": False,
@@ -12697,20 +12732,23 @@ def test_post_stable_release_verification_workflow_runs_hosted_consumer_smoke():
     for needle in [
         "name: Post Stable Release Verification",
         "workflow_dispatch:",
+        "ao2_release_tag:",
+        "ao2_release_version:",
+        "default: v0.4.80",
+        "default: 0.4.80",
         "schedule:",
         "ubuntu-latest",
         "macos-14",
         "windows-latest",
-        "AO2_RELEASE_TAG: v0.4.80",
-        "ao2-0.4.80-linux-x86_64.tar.gz",
-        "ao2-0.4.80-linux-x86_64.tar.gz.sha256",
-        "ao2-0.4.80-linux-x86_64.tar.gz.sig",
-        "ao2-0.4.80-macos-aarch64.tar.gz",
-        "ao2-0.4.80-macos-aarch64.tar.gz.sha256",
-        "ao2-0.4.80-macos-aarch64.tar.gz.sig",
-        "ao2-0.4.80-windows-x86_64.tar.gz",
-        "ao2-0.4.80-windows-x86_64.tar.gz.sha256",
-        "ao2-0.4.80-windows-x86_64.tar.gz.sig",
+        "AO2_RELEASE_TAG: ${{ inputs.ao2_release_tag || 'v0.4.80' }}",
+        "AO2_RELEASE_VERSION: ${{ inputs.ao2_release_version || '0.4.80' }}",
+        "target_label: linux-x86_64",
+        "target_label: macos-aarch64",
+        "target_label: windows-x86_64",
+        "AO2_TARGET_LABEL: ${{ matrix.target_label }}",
+        'AO2_ASSET="ao2-${AO2_RELEASE_VERSION}-${AO2_TARGET_LABEL}.tar.gz"',
+        'AO2_ASSET_SHA="${AO2_ASSET}.sha256"',
+        'AO2_ASSET_SIG="${AO2_ASSET}.sig"',
         "ao2-release-provenance.json",
         "ao2-release-provenance.json.sig",
         "ao2-release-signing-public.pem",
@@ -12899,6 +12937,10 @@ def test_public_release_consumer_smoke_workflow_runs_public_assets_on_each_os():
     for needle in [
         "name: Public Release Consumer Smoke",
         "workflow_dispatch:",
+        "ao2_release_tag:",
+        "ao2_cp_release_tag:",
+        "default: v0.4.80",
+        "default: v0.1.13",
         "schedule:",
         "contents: read",
         "ubuntu-latest",
@@ -12907,6 +12949,8 @@ def test_public_release_consumer_smoke_workflow_runs_public_assets_on_each_os():
         "linux-x86_64",
         "macos-aarch64",
         "windows-x86_64",
+        "AO2_RELEASE_TAG: ${{ inputs.ao2_release_tag || 'v0.4.80' }}",
+        "AO2_CP_RELEASE_TAG: ${{ inputs.ao2_cp_release_tag || 'v0.1.13' }}",
         "AO2_PUBLIC_CONSUMER_SMOKE_ROOT=target/public-release-consumer-smoke",
         "npm run release:public-consumer-smoke",
         "--target-label",

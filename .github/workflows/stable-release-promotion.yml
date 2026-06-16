@@ -7,8 +7,18 @@ on:
         description: "Optional successful CI run id containing ao2-stable-release-evidence-packet."
         required: false
         type: string
+      ao2_release_tag:
+        description: "AO2 release tag to promote or rehearse."
+        required: false
+        type: string
+        default: v0.4.80
+      ao2_cp_release_tag:
+        description: "ao2-control-plane release tag paired with the AO2 promotion."
+        required: false
+        type: string
+        default: v0.1.13
       promotion_confirm:
-        description: "Leave empty for dry-run. Use promote-stable-v0.4.80-v0.1.13 to mutate releases."
+        description: "Leave empty for dry-run. Use promote-stable-v0.4.80-v0.1.13 for the default stable train."
         required: false
         type: string
 
@@ -101,10 +111,12 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          AO2_RELEASE_TAG_INPUT: ${{ inputs.ao2_release_tag || 'v0.4.80' }}
+          AO2_CP_RELEASE_TAG_INPUT: ${{ inputs.ao2_cp_release_tag || 'v0.1.13' }}
           PROMOTION_CONFIRM_INPUT: ${{ inputs.promotion_confirm }}
         run: |
           set -euo pipefail
-          required_confirm="promote-stable-v0.4.80-v0.1.13"
+          required_confirm="promote-stable-${AO2_RELEASE_TAG_INPUT}-${AO2_CP_RELEASE_TAG_INPUT}"
           if [ -n "$PROMOTION_CONFIRM_INPUT" ] && [ "$PROMOTION_CONFIRM_INPUT" != "$required_confirm" ]; then
             echo "refusing stable promotion because workflow input did not match required confirmation" >&2
             exit 1
@@ -113,6 +125,8 @@ jobs:
           env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY \
             AO2_STABLE_PROMOTION_ROOT=target/stable-release-promotion/workflow \
             AO2_STABLE_PROMOTION_EVIDENCE_FIXTURE_DIR=target/stable-release-promotion/stable-release-evidence-packet/stable-promotion-workflow/post-release-verification-evidence \
+            AO2_RELEASE_TAG="$AO2_RELEASE_TAG_INPUT" \
+            AO2_CP_RELEASE_TAG="$AO2_CP_RELEASE_TAG_INPUT" \
             AO2_STABLE_PROMOTION_CONFIRM="$PROMOTION_CONFIRM_INPUT" \
             npm run release:stable-promotion-workflow
       - name: Upload stable release promotion evidence
