@@ -53,6 +53,27 @@ def write_public_consumer_smoke_fixture(fixture: Path, name: str, target_label: 
     )
 
 
+def write_release_train_manifest(path: Path) -> dict:
+    manifest = {
+        "schema_version": "ao2.release-train-manifest.v1",
+        "stable": {
+            "ao2": {"tag": "v9.9.1", "version": "9.9.1"},
+            "ao2_control_plane": {"tag": "v8.8.1", "version": "8.8.1"},
+            "promotion_confirm": "promote-stable-v9.9.1-v8.8.1",
+            "public_operator_confirm": "public-release-reviewed-v9.9.1-v8.8.1",
+        },
+        "next_patch": {
+            "ao2": {"tag": "v9.9.2", "version": "9.9.2"},
+            "ao2_control_plane": {"tag": "v8.8.2", "version": "8.8.2"},
+            "promotion_confirm": "promote-stable-v9.9.2-v8.8.2",
+            "public_operator_confirm": "public-release-reviewed-v9.9.2-v8.8.2",
+        },
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return manifest
+
+
 def test_ci_runs_on_public_push_and_pull_request_while_release_gates_stay_manual():
     ci = read(".github/workflows/ci.yml")
     assert re.search(r"(?m)^\s*workflow_dispatch:\s*$", ci)
@@ -491,8 +512,10 @@ def test_windows_release_smoke_verifies_public_archive_checksum():
         "workflow_dispatch:",
         "release_tag:",
         "release_version:",
-        "default: v0.4.80",
-        "default: 0.4.80",
+        "Resolve stable release train defaults",
+        "scripts/release-train-env.sh stable",
+        "AO2_RELEASE_TAG=${AO2_RELEASE_TAG_INPUT:-$AO2_RELEASE_TRAIN_AO2_TAG}",
+        "AO2_RELEASE_VERSION=${AO2_RELEASE_VERSION_INPUT:-$AO2_RELEASE_TRAIN_AO2_VERSION}",
         "$archive = \"ao2-$env:AO2_RELEASE_VERSION-windows-x86_64.tar.gz\"",
         "gh release download $env:AO2_RELEASE_TAG",
         "--pattern $archive",
@@ -553,21 +576,25 @@ def test_release_asset_completeness_gate_covers_ao2_and_control_plane():
     text = script.read_text(encoding="utf-8")
     for needle in [
         "ao2.release-asset-completeness.v1",
+        "scripts/release-train-env.sh",
+        "AO2_RELEASE_TRAIN_AO2_TAG",
+        "AO2_RELEASE_TRAIN_AO2_VERSION",
+        "AO2_RELEASE_TRAIN_CP_TAG",
+        "AO2_RELEASE_TRAIN_CP_VERSION",
         "uesugitorachiyo/ao2",
         "uesugitorachiyo/ao2-control-plane",
-        "v0.4.80",
-        "v0.1.13",
-        "ao2-0.4.80-linux-aarch64.tar.gz",
-        "ao2-0.4.80-linux-x86_64.tar.gz",
-        "ao2-0.4.80-macos-aarch64.tar.gz",
-        "ao2-0.4.80-windows-x86_64.tar.gz",
+        "release_train",
+        'f"ao2-{ao2_version}-linux-aarch64.tar.gz"',
+        'f"ao2-{ao2_version}-linux-x86_64.tar.gz"',
+        'f"ao2-{ao2_version}-macos-aarch64.tar.gz"',
+        'f"ao2-{ao2_version}-windows-x86_64.tar.gz"',
         "ao2-release-provenance.json",
         "ao2-release-provenance.json.sig",
         "ao2-release-signing-public.pem",
         "ao2-release-readiness-summary.json",
-        "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
-        "ao2-control-plane-0.1.13-macos-aarch64.tar.gz",
-        "ao2-control-plane-0.1.13-windows-x86_64.tar.gz",
+        'f"ao2-control-plane-{cp_version}-linux-x86_64.tar.gz"',
+        'f"ao2-control-plane-{cp_version}-macos-aarch64.tar.gz"',
+        'f"ao2-control-plane-{cp_version}-windows-x86_64.tar.gz"',
         "summary.json",
         "SHA256SUMS",
         "missing_assets",
@@ -644,12 +671,14 @@ def test_release_metadata_drift_audit_is_exposed_and_documented():
 
     for needle in [
         "ao2.release-metadata-drift-audit.v1",
+        "scripts/release-train-env.sh",
+        "AO2_RELEASE_TRAIN_AO2_TAG",
+        "AO2_RELEASE_TRAIN_CP_TAG",
+        "release_train",
         "uesugitorachiyo/ao2",
         "uesugitorachiyo/ao2-control-plane",
-        "v0.4.80",
-        "v0.1.13",
-        "AO2 v0.4.80 stable",
-        "ao2-control-plane v0.1.13",
+        'f"AO2 {ao2_tag} stable"',
+        'f"ao2-control-plane {cp_tag}"',
         "docs/release/PUBLIC-RELEASE-VERIFICATION.md",
         "docs/INSTALL.md",
         "gh release view",
@@ -876,13 +905,16 @@ def test_public_release_pair_digest_audit_rejects_missing_or_mismatched_full_arc
         "full_archive_parity",
         "required_archive_names",
         "closure_archive_assets",
-        "ao2-0.4.80-linux-aarch64.tar.gz",
-        "ao2-0.4.80-linux-x86_64.tar.gz",
-        "ao2-0.4.80-macos-aarch64.tar.gz",
-        "ao2-0.4.80-windows-x86_64.tar.gz",
-        "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
-        "ao2-control-plane-0.1.13-macos-aarch64.tar.gz",
-        "ao2-control-plane-0.1.13-windows-x86_64.tar.gz",
+        "scripts/release-train-env.sh",
+        "AO2_RELEASE_TRAIN_AO2_VERSION",
+        "AO2_RELEASE_TRAIN_CP_VERSION",
+        'f"ao2-{ao2_version}-linux-aarch64.tar.gz"',
+        'f"ao2-{ao2_version}-linux-x86_64.tar.gz"',
+        'f"ao2-{ao2_version}-macos-aarch64.tar.gz"',
+        'f"ao2-{ao2_version}-windows-x86_64.tar.gz"',
+        'f"ao2-control-plane-{cp_version}-linux-x86_64.tar.gz"',
+        'f"ao2-control-plane-{cp_version}-macos-aarch64.tar.gz"',
+        'f"ao2-control-plane-{cp_version}-windows-x86_64.tar.gz"',
     ]:
         assert needle in script
 
@@ -1262,7 +1294,9 @@ def test_stable_promotion_workflow_is_guarded_and_documented():
         "ao2.stable-promotion-workflow.v1",
         "release:stable-readiness",
         "AO2_STABLE_PROMOTION_CONFIRM",
-        "promote-stable-v0.4.80-v0.1.13",
+        "scripts/release-train-env.sh",
+        "AO2_RELEASE_TRAIN_AO2_TAG",
+        "AO2_RELEASE_TRAIN_CP_TAG",
         "gh release edit",
         "--prerelease=false",
         "stable_channel_only",
@@ -1346,18 +1380,19 @@ def test_stable_promotion_workflow_is_guarded_and_documented():
         "workflow_dispatch:",
         "stable_release_evidence_run_id:",
         "ao2_release_tag:",
-        "default: v0.4.80",
         "ao2_cp_release_tag:",
-        "default: v0.1.13",
         "promotion_confirm:",
         "permissions:",
         "actions: read",
         "contents: write",
         "GH_TOKEN: ${{ github.token }}",
         "STABLE_RELEASE_EVIDENCE_RUN_ID: ${{ inputs.stable_release_evidence_run_id }}",
-        "AO2_RELEASE_TAG_INPUT: ${{ inputs.ao2_release_tag || 'v0.4.80' }}",
-        "AO2_CP_RELEASE_TAG_INPUT: ${{ inputs.ao2_cp_release_tag || 'v0.1.13' }}",
+        "AO2_RELEASE_TAG_INPUT: ${{ inputs.ao2_release_tag }}",
+        "AO2_CP_RELEASE_TAG_INPUT: ${{ inputs.ao2_cp_release_tag }}",
         "PROMOTION_CONFIRM_INPUT: ${{ inputs.promotion_confirm }}",
+        "scripts/release-train-env.sh stable",
+        'AO2_RELEASE_TAG_INPUT="${AO2_RELEASE_TAG_INPUT:-$AO2_RELEASE_TRAIN_AO2_TAG}"',
+        'AO2_CP_RELEASE_TAG_INPUT="${AO2_CP_RELEASE_TAG_INPUT:-$AO2_RELEASE_TRAIN_CP_TAG}"',
         "ao2-stable-release-evidence-packet",
         "target/stable-release-promotion/stable-release-evidence-packet",
         "ao2.stable-release-evidence-packet.v1",
@@ -1371,7 +1406,7 @@ def test_stable_promotion_workflow_is_guarded_and_documented():
         'AO2_CP_RELEASE_TAG="$AO2_CP_RELEASE_TAG_INPUT"',
         'AO2_STABLE_PROMOTION_CONFIRM="$PROMOTION_CONFIRM_INPUT"',
         "npm run release:stable-promotion-workflow",
-        "promote-stable-v0.4.80-v0.1.13",
+        "manifest-derived promote-stable-<ao2-tag>-<control-plane-tag>",
         "refusing stable promotion because workflow input did not match required confirmation",
         "actions/upload-artifact@v7.0.1",
         "ao2-stable-release-promotion-workflow",
@@ -1593,7 +1628,9 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
         "ao2.stable-promotion-operator-checklist.v1",
         "AO2_STABLE_PROMOTION_DRY_RUN_AUDIT_SUMMARY",
         "AO2_STABLE_PROMOTION_OPERATOR_CHECKLIST_ROOT",
-        "promote-stable-v0.4.80-v0.1.13",
+        "scripts/release-train-env.sh",
+        "AO2_RELEASE_TRAIN_AO2_TAG",
+        "AO2_RELEASE_TRAIN_CP_TAG",
         'AO2_STABLE_PROMOTION_REQUIRED_CONFIRM="${AO2_STABLE_PROMOTION_REQUIRED_CONFIRM:-promote-stable-$AO2_RELEASE_TAG-$AO2_CONTROL_PLANE_RELEASE_TAG}"',
         "dry_run_audit_ready",
         "promotion_status",
@@ -1613,15 +1650,16 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
         "workflow_dispatch:",
         "stable_promotion_dry_run_audit_run_id:",
         "ao2_release_tag:",
-        "default: v0.4.80",
         "ao2_cp_release_tag:",
-        "default: v0.1.13",
         "permissions:",
         "actions: read",
         "contents: read",
         "GH_TOKEN: ${{ github.token }}",
-        "AO2_RELEASE_TAG_INPUT: ${{ inputs.ao2_release_tag || 'v0.4.80' }}",
-        "AO2_CP_RELEASE_TAG_INPUT: ${{ inputs.ao2_cp_release_tag || 'v0.1.13' }}",
+        "AO2_RELEASE_TAG_INPUT: ${{ inputs.ao2_release_tag }}",
+        "AO2_CP_RELEASE_TAG_INPUT: ${{ inputs.ao2_cp_release_tag }}",
+        "scripts/release-train-env.sh stable",
+        'AO2_RELEASE_TAG_INPUT="${AO2_RELEASE_TAG_INPUT:-$AO2_RELEASE_TRAIN_AO2_TAG}"',
+        'AO2_CP_RELEASE_TAG_INPUT="${AO2_CP_RELEASE_TAG_INPUT:-$AO2_RELEASE_TRAIN_CP_TAG}"',
         "ao2-stable-release-promotion-dry-run-audit",
         "target/stable-promotion-operator-checklist/dry-run-audit",
         'AO2_RELEASE_TAG="${AO2_RELEASE_TAG_INPUT}"',
@@ -4230,13 +4268,16 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "release:public-pair-digest-audit",
         "target/post-release-pair-digest-audit/summary.json",
         "ao2.public-release-pair-digest-audit.v1",
-        "ao2-0.4.80-linux-aarch64.tar.gz",
-        "ao2-0.4.80-linux-x86_64.tar.gz",
-        "ao2-0.4.80-macos-aarch64.tar.gz",
-        "ao2-0.4.80-windows-x86_64.tar.gz",
-        "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
-        "ao2-control-plane-0.1.13-macos-aarch64.tar.gz",
-        "ao2-control-plane-0.1.13-windows-x86_64.tar.gz",
+        "scripts/release-train-env.sh",
+        "AO2_RELEASE_TRAIN_AO2_VERSION",
+        "AO2_RELEASE_TRAIN_CP_VERSION",
+        'f"ao2-{ao2_version}-linux-aarch64.tar.gz"',
+        'f"ao2-{ao2_version}-linux-x86_64.tar.gz"',
+        'f"ao2-{ao2_version}-macos-aarch64.tar.gz"',
+        'f"ao2-{ao2_version}-windows-x86_64.tar.gz"',
+        'f"ao2-control-plane-{cp_version}-linux-x86_64.tar.gz"',
+        'f"ao2-control-plane-{cp_version}-macos-aarch64.tar.gz"',
+        'f"ao2-control-plane-{cp_version}-windows-x86_64.tar.gz"',
         "target/release-readiness-consumer/ao2-release-readiness",
         "target/release-readiness-hosted-artifact-gate/input/ao2-release-readiness",
         "target/release-readiness-hosted-artifact-gate/report",
@@ -4319,21 +4360,27 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     for needle in [
         "release-publication-closure-artifacts:",
         "name: Release publication closure artifacts",
-        "dual-repo-release-publication-closure-index:",
-        "name: Dual-repo release publication closure index",
-        "--name ao2-control-plane-release-publication-closure",
+            "dual-repo-release-publication-closure-index:",
+            "name: Dual-repo release publication closure index",
+            "Checkout release train manifest",
+            "actions/checkout@v6.0.3",
+            "--name ao2-control-plane-release-publication-closure",
         "gh run list --repo uesugitorachiyo/ao2-control-plane --branch main --workflow CI",
         "gh run download \"$candidate_run_id\" --repo uesugitorachiyo/ao2-control-plane",
         "ao2.dual-repo-release-publication-closure-index.v1",
         "ao2.cp-release-publication-closure.v1",
-        "Download AO2 public archive assets for closure index",
-        "target/dual-repo-release-publication-closure-index/ao2-release-archives",
-        "ao2_archive_assets",
-        "hashlib.sha256(path.read_bytes()).hexdigest()",
-        "ao2-0.4.80-linux-aarch64.tar.gz",
-        "ao2-0.4.80-linux-x86_64.tar.gz",
-        "ao2-0.4.80-macos-aarch64.tar.gz",
-        "ao2-0.4.80-windows-x86_64.tar.gz",
+            "Download AO2 public archive assets for closure index",
+            "target/dual-repo-release-publication-closure-index/ao2-release-archives",
+            "scripts/release-train-env.sh stable",
+            'gh release download "$AO2_RELEASE_TRAIN_AO2_TAG"',
+            'release_train = json.loads(Path("docs/release/release-train.json").read_text(encoding="utf-8"))',
+            'stable_version = release_train["stable"]["ao2"]["version"]',
+            "ao2_archive_assets",
+            "hashlib.sha256(path.read_bytes()).hexdigest()",
+            'f"ao2-{stable_version}-linux-aarch64.tar.gz"',
+            'f"ao2-{stable_version}-linux-x86_64.tar.gz"',
+            'f"ao2-{stable_version}-macos-aarch64.tar.gz"',
+            'f"ao2-{stable_version}-windows-x86_64.tar.gz"',
         "ao2-control-plane-",
         ".tar.gz",
         "sha256",
@@ -5971,11 +6018,15 @@ def test_dual_public_release_smoke_contract():
         "AO2_PUBLIC_RELEASE_SMOKE_BIND",
         "AO2_RELEASE_TAG",
         "AO2_CP_RELEASE_TAG",
+        "scripts/release-train-env.sh",
+        "AO2_RELEASE_TRAIN_AO2_TAG",
+        "AO2_RELEASE_TRAIN_CP_TAG",
         "uesugitorachiyo/ao2",
         "uesugitorachiyo/ao2-control-plane",
         "gh release download",
-        "ao2-0.4.80-linux-x86_64.tar.gz",
-        "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
+        'AO2_ARCHIVE_NAME="ao2-$AO2_VERSION-$TARGET_LABEL.tar.gz"',
+        'AO2_CP_ARCHIVE_NAME="ao2-control-plane-$AO2_CP_VERSION-$TARGET_LABEL.tar.gz"',
+        'f"{ao2_tag}/{cp_tag}"',
         "SHA256SUMS",
         "ao2.release-manifest.v1",
         "ao2-control-plane.release-manifest.v1",
@@ -11789,22 +11840,372 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
         "public-release-reviewed-v0.4.81-v0.1.14"
     )
 
-    stable_ao2_tag = manifest["stable"]["ao2"]["tag"]
-    stable_ao2_version = manifest["stable"]["ao2"]["version"]
-    stable_cp_tag = manifest["stable"]["ao2_control_plane"]["tag"]
     for workflow_path in [
         ".github/workflows/stable-release-promotion.yml",
         ".github/workflows/post-stable-release-verification.yml",
         ".github/workflows/public-release-consumer-smoke.yml",
     ]:
         workflow = read(workflow_path)
-        assert f"default: {stable_ao2_tag}" in workflow
-        assert f"default: {stable_cp_tag}" in workflow
+        assert "stable release-train manifest" in workflow
+        assert "default: v0.4.80" not in workflow
+        assert "default: v0.1.13" not in workflow
     post_stable = read(".github/workflows/post-stable-release-verification.yml")
     windows_smoke = read(".github/workflows/windows-release-smoke.yml")
-    assert f"default: {stable_ao2_version}" in post_stable
-    assert f"default: {stable_ao2_tag}" in windows_smoke
-    assert f"default: {stable_ao2_version}" in windows_smoke
+    assert "Resolve stable release train defaults" in post_stable
+    assert "scripts/release-train-env.sh stable" in post_stable
+    assert "AO2_RELEASE_TRAIN_AO2_VERSION" in post_stable
+    assert "Resolve stable release train defaults" in windows_smoke
+    assert "scripts/release-train-env.sh stable" in windows_smoke
+    assert "AO2_RELEASE_TRAIN_AO2_VERSION" in windows_smoke
+    assert "default: 0.4.80" not in post_stable
+    assert "default: 0.4.80" not in windows_smoke
+
+
+def test_public_release_consumer_smoke_defaults_to_release_train_manifest(tmp_path):
+    manifest_path = tmp_path / "release-train.json"
+    manifest = write_release_train_manifest(manifest_path)
+    target_label = "linux-x86_64"
+    ao2_version = manifest["stable"]["ao2"]["version"]
+    cp_version = manifest["stable"]["ao2_control_plane"]["version"]
+    fixture = tmp_path / "fixture"
+    out_root = tmp_path / "out"
+
+    def write_executable(path: Path, body: str) -> None:
+        path.write_text(body, encoding="utf-8")
+        path.chmod(path.stat().st_mode | stat.S_IXUSR)
+
+    def build_archive(repo_dir: Path, archive_name: str, manifest_payload: dict, binary_body: str) -> None:
+        archive_root = tmp_path / f"{archive_name}.root"
+        (archive_root / "bin").mkdir(parents=True)
+        (archive_root / "RELEASE-MANIFEST.json").write_text(
+            json.dumps(manifest_payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        write_executable(archive_root / manifest_payload["binary_path"], binary_body)
+        repo_dir.mkdir(parents=True)
+        with tarfile.open(repo_dir / archive_name, "w:gz") as tar:
+            tar.add(archive_root / "RELEASE-MANIFEST.json", arcname="RELEASE-MANIFEST.json")
+            tar.add(archive_root / manifest_payload["binary_path"], arcname=manifest_payload["binary_path"])
+        digest = hashlib.sha256((repo_dir / archive_name).read_bytes()).hexdigest()
+        (repo_dir / "SHA256SUMS").write_text(f"{digest}  {archive_name}\n", encoding="utf-8")
+
+    ao2_dir = fixture / "ao2"
+    cp_dir = fixture / "control-plane"
+    build_archive(
+        ao2_dir,
+        f"ao2-{ao2_version}-{target_label}.tar.gz",
+        {
+            "schema_version": "ao2.release-manifest.v1",
+            "binary_path": "bin/ao2",
+            "version": ao2_version,
+            "target": target_label,
+        },
+        f"""#!/usr/bin/env sh
+set -eu
+if [ "${{1:-}}" = "version" ] && [ "${{2:-}}" = "--json" ]; then
+  printf '{{"package":"ao2","version":"{ao2_version}","target":"{target_label}","release_manifest_schema":"ao2.release-manifest.v1"}}\\n'
+  exit 0
+fi
+if [ "${{1:-}}" = "--help" ]; then
+  printf 'ao2 help\\n'
+  exit 0
+fi
+exit 2
+""",
+    )
+    build_archive(
+        cp_dir,
+        f"ao2-control-plane-{cp_version}-{target_label}.tar.gz",
+        {
+            "schema_version": "ao2-control-plane.release-manifest.v1",
+            "binary_path": "bin/ao2-cp-server",
+            "version": cp_version,
+            "target": target_label,
+        },
+        """#!/usr/bin/env sh
+set -eu
+if [ "${1:-}" = "--help" ]; then
+  printf 'ao2 control-plane help\n'
+  exit 0
+fi
+exit 2
+""",
+    )
+    (cp_dir / "summary.json").write_text(
+        json.dumps(
+            {"schema_version": "ao2-control-plane.release-summary.v1", "status": "passed"},
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    summary_digest = hashlib.sha256((cp_dir / "summary.json").read_bytes()).hexdigest()
+    with (cp_dir / "SHA256SUMS").open("a", encoding="utf-8") as handle:
+        handle.write(f"{summary_digest}  summary.json\n")
+
+    result = subprocess.run(
+        [
+            "npm",
+            "run",
+            "release:public-consumer-smoke",
+            "--",
+            "--fixture-dir",
+            str(fixture),
+            "--out-root",
+            str(out_root),
+            "--target-label",
+            target_label,
+        ],
+        cwd=REPO_ROOT,
+        env={**os.environ, "AO2_RELEASE_TRAIN_MANIFEST": str(manifest_path)},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "latest" / "summary.json").read_text(encoding="utf-8"))
+    assert summary["release_pair"]["ao2"]["tag"] == manifest["stable"]["ao2"]["tag"]
+    assert summary["release_pair"]["ao2_control_plane"]["tag"] == manifest["stable"]["ao2_control_plane"]["tag"]
+    assert f"ao2-{ao2_version}-{target_label}.tar.gz" in summary["archives"]["ao2"]["path"]
+    assert f"ao2-control-plane-{cp_version}-{target_label}.tar.gz" in summary["archives"]["ao2_control_plane"]["path"]
+
+
+def test_release_asset_completeness_defaults_to_release_train_manifest(tmp_path):
+    manifest_path = tmp_path / "release-train.json"
+    manifest = write_release_train_manifest(manifest_path)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    gh = bin_dir / "gh"
+    gh.write_text(
+        """#!/usr/bin/env python3
+import json
+import sys
+from pathlib import Path
+
+AO2_TAG = "v9.9.1"
+CP_TAG = "v8.8.1"
+AO2_ASSETS = [
+    "ao2-9.9.1-linux-aarch64.tar.gz",
+    "ao2-9.9.1-linux-aarch64.tar.gz.sha256",
+    "ao2-9.9.1-linux-aarch64.tar.gz.sig",
+    "ao2-9.9.1-linux-x86_64.tar.gz",
+    "ao2-9.9.1-linux-x86_64.tar.gz.sha256",
+    "ao2-9.9.1-linux-x86_64.tar.gz.sig",
+    "ao2-9.9.1-macos-aarch64.tar.gz",
+    "ao2-9.9.1-macos-aarch64.tar.gz.sha256",
+    "ao2-9.9.1-macos-aarch64.tar.gz.sig",
+    "ao2-9.9.1-windows-x86_64.tar.gz",
+    "ao2-9.9.1-windows-x86_64.tar.gz.sha256",
+    "ao2-9.9.1-windows-x86_64.tar.gz.sig",
+    "ao2-release-artifact-closure-index.json",
+    "ao2-release-provenance.json",
+    "ao2-release-provenance.json.sig",
+    "ao2-release-readiness-summary.json",
+    "ao2-release-signing-public.pem",
+    "ao2-release-train-control-plane-bridge-summary.json",
+    "SHA256SUMS",
+]
+CP_ASSETS = [
+    "ao2-control-plane-8.8.1-linux-x86_64.tar.gz",
+    "ao2-control-plane-8.8.1-macos-aarch64.tar.gz",
+    "ao2-control-plane-8.8.1-windows-x86_64.tar.gz",
+    "SHA256SUMS",
+    "summary.json",
+]
+
+args = sys.argv[1:]
+if args[:2] == ["release", "view"]:
+    tag = args[2]
+    if tag == AO2_TAG:
+        assets = AO2_ASSETS
+        name = "AO2 v9.9.1 stable"
+        url = "https://example.invalid/ao2"
+    elif tag == CP_TAG:
+        assets = CP_ASSETS
+        name = "ao2-control-plane v8.8.1"
+        url = "https://example.invalid/cp"
+    else:
+        raise SystemExit(f"unexpected tag {tag}")
+    print(json.dumps({
+        "tagName": tag,
+        "name": name,
+        "isPrerelease": False,
+        "publishedAt": "2026-06-16T00:00:00Z",
+        "url": url,
+        "assets": [{"name": name} for name in assets],
+    }))
+    raise SystemExit(0)
+if args[:2] == ["release", "download"]:
+    tag = args[2]
+    if tag == AO2_TAG:
+        assets = [name for name in AO2_ASSETS if name != "SHA256SUMS"]
+    elif tag == CP_TAG:
+        assets = [name for name in CP_ASSETS if name != "SHA256SUMS"]
+    else:
+        raise SystemExit(f"unexpected tag {tag}")
+    out_dir = Path(args[args.index("--dir") + 1])
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / "SHA256SUMS").write_text(
+        "".join(f"{'1' * 64}  {name}\\n" for name in assets),
+        encoding="utf-8",
+    )
+    raise SystemExit(0)
+raise SystemExit(f"unexpected gh command: {' '.join(args)}")
+""",
+        encoding="utf-8",
+    )
+    gh.chmod(gh.stat().st_mode | stat.S_IXUSR)
+
+    out_root = tmp_path / "asset-completeness"
+    result = subprocess.run(
+        ["npm", "run", "release:asset-completeness"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_RELEASE_TRAIN_MANIFEST": str(manifest_path),
+            "AO2_RELEASE_ASSET_COMPLETENESS_ROOT": str(out_root),
+            "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "passed"
+    assert summary["components"][0]["tag"] == manifest["stable"]["ao2"]["tag"]
+    assert summary["components"][1]["tag"] == manifest["stable"]["ao2_control_plane"]["tag"]
+    assert "ao2-9.9.1-linux-x86_64.tar.gz" in summary["components"][0]["expected_assets"]
+    assert "ao2-control-plane-8.8.1-linux-x86_64.tar.gz" in summary["components"][1]["expected_assets"]
+
+
+def test_stable_promotion_commands_default_to_release_train_manifest(tmp_path):
+    manifest_path = tmp_path / "release-train.json"
+    manifest = write_release_train_manifest(manifest_path)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    npm = bin_dir / "npm"
+    npm.write_text(
+        """#!/usr/bin/env python3
+import json
+import os
+from pathlib import Path
+
+root = Path(os.environ["AO2_STABLE_RELEASE_READINESS_ROOT"])
+root.mkdir(parents=True, exist_ok=True)
+(root / "summary.json").write_text(json.dumps({
+    "schema_version": "ao2.stable-release-readiness.v1",
+    "status": "blocked",
+    "stable_release_ready": False,
+    "promotion_blockers": [{"code": "stable_release_absent"}],
+    "components": [
+        {"name": "ao2", "repo": "uesugitorachiyo/ao2", "tag": "v9.9.1"},
+        {"name": "ao2-control-plane", "repo": "uesugitorachiyo/ao2-control-plane", "tag": "v8.8.1"},
+    ],
+}, sort_keys=True) + "\\n", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
+    npm.chmod(npm.stat().st_mode | stat.S_IXUSR)
+
+    workflow_root = tmp_path / "stable-promotion"
+    workflow_result = subprocess.run(
+        ["bash", "scripts/release-stable-promotion-workflow.sh"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_RELEASE_TRAIN_MANIFEST": str(manifest_path),
+            "AO2_STABLE_PROMOTION_ROOT": str(workflow_root),
+            "AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD": "1",
+            "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert workflow_result.returncode == 0, workflow_result.stderr + workflow_result.stdout
+    workflow_summary = json.loads((workflow_root / "summary.json").read_text(encoding="utf-8"))
+    assert workflow_summary["required_confirm"] == manifest["stable"]["promotion_confirm"]
+    assert workflow_summary["promotion_targets"] == [
+        {"name": "ao2", "repo": "uesugitorachiyo/ao2", "tag": manifest["stable"]["ao2"]["tag"]},
+        {
+            "name": "ao2-control-plane",
+            "repo": "uesugitorachiyo/ao2-control-plane",
+            "tag": manifest["stable"]["ao2_control_plane"]["tag"],
+        },
+    ]
+
+    audit_summary = tmp_path / "dry-run-audit" / "summary.json"
+    audit_summary.parent.mkdir(parents=True)
+    audit_summary.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.stable-promotion-dry-run-audit.v1",
+                "status": "passed",
+                "dry_run_audit_ready": True,
+                "workflow": {
+                    "schema_version": "ao2.stable-promotion-workflow.v1",
+                    "status": "already_stable",
+                    "dry_run": True,
+                    "confirmed": False,
+                    "promotion_status": "not_attempted",
+                    "post_release_evidence_ready": True,
+                    "evidence_gate_status": "passed",
+                },
+                "evidence_gate": {
+                    "schema_version": "ao2.stable-promotion-evidence-gate.v1",
+                    "status": "passed",
+                    "post_release_evidence_ready": True,
+                    "check_count": 1,
+                    "passed_check_count": 1,
+                },
+                "stable_release_evidence_packet": {
+                    "schema_version": "ao2.stable-release-evidence-packet.v1",
+                    "status": "passed",
+                    "stable_release_evidence_ready": True,
+                    "operator_release_evidence_ready": True,
+                    "public_pair_digest_audit": {
+                        "artifact": "ao2-public-release-pair-digest-audit",
+                        "schema_version": "ao2.public-release-pair-digest-audit.v1",
+                        "status": "passed",
+                        "archive_parity_status": "passed",
+                    },
+                },
+                "trust_boundary": {
+                    "local_only": True,
+                    "mutates_releases": False,
+                    "stores_credentials": False,
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    checklist_root = tmp_path / "operator-checklist"
+    checklist_result = subprocess.run(
+        ["npm", "run", "release:stable-promotion-operator-checklist"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_RELEASE_TRAIN_MANIFEST": str(manifest_path),
+            "AO2_STABLE_PROMOTION_DRY_RUN_AUDIT_SUMMARY": str(audit_summary),
+            "AO2_STABLE_PROMOTION_OPERATOR_CHECKLIST_ROOT": str(checklist_root),
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert checklist_result.returncode == 0, checklist_result.stderr + checklist_result.stdout
+    checklist_summary = json.loads((checklist_root / "summary.json").read_text(encoding="utf-8"))
+    assert checklist_summary["required_confirmation"] == manifest["stable"]["promotion_confirm"]
+    assert checklist_summary["release_targets"] == {
+        "ao2": manifest["stable"]["ao2"]["tag"],
+        "ao2_control_plane": manifest["stable"]["ao2_control_plane"]["tag"],
+    }
 
 
 def test_candidate_patch_release_rehearsal_workflow_produces_single_bundle():
@@ -13004,14 +13405,19 @@ def test_post_stable_release_verification_workflow_runs_hosted_consumer_smoke():
         "workflow_dispatch:",
         "ao2_release_tag:",
         "ao2_release_version:",
-        "default: v0.4.80",
-        "default: 0.4.80",
+        "ao2_cp_release_tag:",
+        "Resolve stable release train defaults",
+        "scripts/release-train-env.sh stable",
+        "AO2_RELEASE_TAG=${AO2_RELEASE_TAG:-$AO2_RELEASE_TRAIN_AO2_TAG}",
+        "AO2_RELEASE_VERSION=${AO2_RELEASE_VERSION:-$AO2_RELEASE_TRAIN_AO2_VERSION}",
+        "AO2_CP_RELEASE_TAG=${AO2_CP_RELEASE_TAG:-$AO2_RELEASE_TRAIN_CP_TAG}",
         "schedule:",
         "ubuntu-latest",
         "macos-14",
         "windows-latest",
-        "AO2_RELEASE_TAG: ${{ inputs.ao2_release_tag || 'v0.4.80' }}",
-        "AO2_RELEASE_VERSION: ${{ inputs.ao2_release_version || '0.4.80' }}",
+        "AO2_RELEASE_TAG: ${{ inputs.ao2_release_tag }}",
+        "AO2_RELEASE_VERSION: ${{ inputs.ao2_release_version }}",
+        "AO2_CP_RELEASE_TAG: ${{ inputs.ao2_cp_release_tag }}",
         "target_label: linux-x86_64",
         "target_label: macos-aarch64",
         "target_label: windows-x86_64",
@@ -13209,8 +13615,7 @@ def test_public_release_consumer_smoke_workflow_runs_public_assets_on_each_os():
         "workflow_dispatch:",
         "ao2_release_tag:",
         "ao2_cp_release_tag:",
-        "default: v0.4.80",
-        "default: v0.1.13",
+        "Defaults to the stable release-train manifest when omitted.",
         "schedule:",
         "contents: read",
         "ubuntu-latest",
@@ -13219,8 +13624,8 @@ def test_public_release_consumer_smoke_workflow_runs_public_assets_on_each_os():
         "linux-x86_64",
         "macos-aarch64",
         "windows-x86_64",
-        "AO2_RELEASE_TAG: ${{ inputs.ao2_release_tag || 'v0.4.80' }}",
-        "AO2_CP_RELEASE_TAG: ${{ inputs.ao2_cp_release_tag || 'v0.1.13' }}",
+        "AO2_RELEASE_TAG: ${{ inputs.ao2_release_tag }}",
+        "AO2_CP_RELEASE_TAG: ${{ inputs.ao2_cp_release_tag }}",
         "AO2_PUBLIC_CONSUMER_SMOKE_ROOT=target/public-release-consumer-smoke",
         "npm run release:public-consumer-smoke",
         "--target-label",

@@ -4,20 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       ao2_release_tag:
-        description: "AO2 release tag to verify."
+        description: "AO2 release tag to verify. Defaults to the stable release-train manifest when omitted."
         required: false
         type: string
-        default: v0.4.80
       ao2_release_version:
-        description: "AO2 release version used in archive names."
+        description: "AO2 release version used in archive names. Defaults to the stable release-train manifest when omitted."
         required: false
         type: string
-        default: 0.4.80
       ao2_cp_release_tag:
-        description: "ao2-control-plane release tag used by the dual public smoke."
+        description: "ao2-control-plane release tag used by the dual public smoke. Defaults to the stable release-train manifest when omitted."
         required: false
         type: string
-        default: v0.1.13
   schedule:
     - cron: "17 11 * * 1"
 
@@ -30,9 +27,9 @@ concurrency:
 
 env:
   AO2_RELEASE_REPO: uesugitorachiyo/ao2
-  AO2_RELEASE_TAG: ${{ inputs.ao2_release_tag || 'v0.4.80' }}
-  AO2_RELEASE_VERSION: ${{ inputs.ao2_release_version || '0.4.80' }}
-  AO2_CP_RELEASE_TAG: ${{ inputs.ao2_cp_release_tag || 'v0.1.13' }}
+  AO2_RELEASE_TAG: ${{ inputs.ao2_release_tag }}
+  AO2_RELEASE_VERSION: ${{ inputs.ao2_release_version }}
+  AO2_CP_RELEASE_TAG: ${{ inputs.ao2_cp_release_tag }}
 
 jobs:
   post-stable-release-smoke:
@@ -61,6 +58,17 @@ jobs:
     steps:
       - name: Checkout smoke helpers
         uses: actions/checkout@v6.0.3
+
+      - name: Resolve stable release train defaults
+        shell: bash
+        run: |
+          set -euo pipefail
+          eval "$(scripts/release-train-env.sh stable)"
+          {
+            echo "AO2_RELEASE_TAG=${AO2_RELEASE_TAG:-$AO2_RELEASE_TRAIN_AO2_TAG}"
+            echo "AO2_RELEASE_VERSION=${AO2_RELEASE_VERSION:-$AO2_RELEASE_TRAIN_AO2_VERSION}"
+            echo "AO2_CP_RELEASE_TAG=${AO2_CP_RELEASE_TAG:-$AO2_RELEASE_TRAIN_CP_TAG}"
+          } >> "$GITHUB_ENV"
 
       - name: Download stable release asset
         env:

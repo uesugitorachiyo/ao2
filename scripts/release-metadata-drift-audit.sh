@@ -4,6 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_ROOT="${AO2_RELEASE_METADATA_DRIFT_AUDIT_ROOT:-$ROOT/target/release-metadata-drift-audit/latest}"
 SUMMARY="$OUT_ROOT/summary.json"
+eval "$("$ROOT/scripts/release-train-env.sh" "${AO2_RELEASE_TRAIN:-stable}")"
 
 rm -rf "$OUT_ROOT"
 mkdir -p "$OUT_ROOT"
@@ -11,7 +12,11 @@ mkdir -p "$OUT_ROOT"
 # Reads public GitHub Release metadata with `gh release view` plus tracked
 # public docs. This audit is intentionally read-only: it does not edit releases,
 # push branches, or store credentials.
-python3 - "$ROOT" "$SUMMARY" <<'PY'
+python3 - "$ROOT" "$SUMMARY" \
+  "$AO2_RELEASE_TRAIN_MANIFEST" \
+  "$AO2_RELEASE_TRAIN_NAME" \
+  "$AO2_RELEASE_TRAIN_AO2_TAG" \
+  "$AO2_RELEASE_TRAIN_CP_TAG" <<'PY'
 import html
 import json
 import subprocess
@@ -21,36 +26,40 @@ from pathlib import Path
 
 root = Path(sys.argv[1])
 summary_path = Path(sys.argv[2])
+manifest_path = Path(sys.argv[3])
+release_train_name = sys.argv[4]
+ao2_tag = sys.argv[5]
+cp_tag = sys.argv[6]
 
 components = [
     {
         "component": "ao2",
         "repo": "uesugitorachiyo/ao2",
-        "tag": "v0.4.80",
-        "expected_release_name": "AO2 v0.4.80 stable",
+        "tag": ao2_tag,
+        "expected_release_name": f"AO2 {ao2_tag} stable",
         "expected_channel": "stable",
         "doc_expectations": {
             "docs/release/PUBLIC-RELEASE-VERIFICATION.md": [
-                "AO2 stable release: `v0.4.80`",
+                f"AO2 stable release: `{ao2_tag}`",
             ],
             "docs/INSTALL.md": [
-                "The current stable public release line is `v0.4.80`.",
+                f"The current stable public release line is `{ao2_tag}`.",
             ],
         },
         "forbidden_doc_fragments": [
-            "AO2 prerelease: `v0.4.80`",
+            f"AO2 prerelease: `{ao2_tag}`",
             "AO2 public alpha",
         ],
     },
     {
         "component": "ao2-control-plane",
         "repo": "uesugitorachiyo/ao2-control-plane",
-        "tag": "v0.1.13",
-        "expected_release_name": "ao2-control-plane v0.1.13",
+        "tag": cp_tag,
+        "expected_release_name": f"ao2-control-plane {cp_tag}",
         "expected_channel": "stable",
         "doc_expectations": {
             "docs/release/PUBLIC-RELEASE-VERIFICATION.md": [
-                "AO2 control-plane stable release: `v0.1.13`",
+                f"AO2 control-plane stable release: `{cp_tag}`",
             ],
         },
         "forbidden_doc_fragments": [
@@ -162,6 +171,12 @@ payload = {
     "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     "status": status,
     "artifact_root": str(summary_path.parent),
+    "release_train": {
+        "name": release_train_name,
+        "manifest": str(manifest_path),
+        "ao2": {"tag": ao2_tag},
+        "ao2_control_plane": {"tag": cp_tag},
+    },
     "components": components_out,
     "checks": checks,
     "trust_boundary": {

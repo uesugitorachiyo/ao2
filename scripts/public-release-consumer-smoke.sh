@@ -4,10 +4,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_ROOT="${AO2_PUBLIC_CONSUMER_SMOKE_ROOT:-$ROOT/target/public-release-consumer-smoke}"
 LATEST_ROOT="$OUT_ROOT/latest"
+eval "$("$ROOT/scripts/release-train-env.sh" "${AO2_RELEASE_TRAIN:-stable}")"
 AO2_RELEASE_REPO="${AO2_RELEASE_REPO:-uesugitorachiyo/ao2}"
-AO2_RELEASE_TAG="${AO2_RELEASE_TAG:-v0.4.80}"
+AO2_RELEASE_TAG="${AO2_RELEASE_TAG:-$AO2_RELEASE_TRAIN_AO2_TAG}"
 AO2_CP_RELEASE_REPO="${AO2_CP_RELEASE_REPO:-uesugitorachiyo/ao2-control-plane}"
-AO2_CP_RELEASE_TAG="${AO2_CP_RELEASE_TAG:-v0.1.13}"
+AO2_CP_RELEASE_TAG="${AO2_CP_RELEASE_TAG:-$AO2_RELEASE_TRAIN_CP_TAG}"
 TARGET_LABEL="${AO2_PUBLIC_CONSUMER_SMOKE_TARGET:-}"
 FIXTURE_DIR=""
 
