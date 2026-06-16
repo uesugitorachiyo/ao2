@@ -982,14 +982,24 @@ Result:
   `ao2-operator-readiness-summary`, runs the command, and uploads
   `ao2-public-release-operator-checklist` with read-only repository
   permissions.
+- `npm run release:public-operator-checklist-closure`: verifies that
+  `ao2-public-release-operator-checklist` was generated from the matching
+  `ao2-operator-readiness-summary` source digest and that the operator decision
+  fields still remain unapproved. It emits
+  `ao2.public-release-operator-checklist-closure.v1`, `summary.json`, and
+  `report.md` without mutating releases or storing credentials. The manual
+  `Public Release Operator Checklist Closure` workflow downloads both upstream
+  artifacts by explicit run id or latest successful main workflow run and
+  uploads `ao2-public-release-operator-checklist-closure`.
 - `npm run release:readiness:static` records
   `ao2.release-artifact-size-budget.v1` inside the release artifact closure
   index and budgets lightweight operator approval artifacts at 1 MiB. The
   budget currently covers `ao2-stable-promotion-operator-checklist`,
-  `ao2-stable-promotion-dry-run-checklist`, and
-  `ao2-public-release-operator-checklist`; the dry-run checklist baseline is
-  5,436 bytes. This keeps future workflow edits from silently turning approval
-  packets back into large evidence-tree uploads.
+  `ao2-stable-promotion-dry-run-checklist`,
+  `ao2-public-release-operator-checklist`, and
+  `ao2-public-release-operator-checklist-closure`; the dry-run checklist
+  baseline is 5,436 bytes. This keeps future workflow edits from silently
+  turning approval packets back into large evidence-tree uploads.
 - `npm run release:artifact-size-budget-audit`: reads the release artifact
   closure index and checks the latest non-expired GitHub Actions artifact
   metadata for each budgeted artifact. It emits

@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import re
@@ -2323,6 +2324,193 @@ def test_public_release_operator_checklist_consumes_operator_readiness_summary(t
     assert "ao2.public-release-operator-checklist.v1" in verification
 
 
+def test_public_release_operator_checklist_closure_verifies_unapproved_checklist_sources(tmp_path):
+    package_json = json.loads(read("package.json"))
+    assert package_json["scripts"]["release:public-operator-checklist-closure"] == (
+        "node scripts/run-sh-script.js scripts/public-release-operator-checklist-closure.sh"
+    )
+
+    script_path = REPO_ROOT / "scripts" / "public-release-operator-checklist-closure.sh"
+    assert script_path.is_file()
+    assert script_path.stat().st_mode & stat.S_IXUSR
+    script = script_path.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.public-release-operator-checklist-closure.v1",
+        "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_CLOSURE_ROOT",
+        "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_SUMMARY",
+        "AO2_PUBLIC_RELEASE_OPERATOR_READINESS_SUMMARY",
+        "ao2.public-release-operator-checklist.v1",
+        "ao2.operator-readiness-summary.v1",
+        "source_sha256",
+        "operator_decision_fields_remain_unapproved",
+        "mutates_releases",
+        "stores_credentials",
+        "control_plane_approves_release",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+    ]:
+        assert needle in script
+    assert "gh release" not in script
+    assert "contents: write" not in script
+
+    readiness_summary = tmp_path / "operator-readiness-summary" / "summary.json"
+    readiness_summary.parent.mkdir(parents=True)
+    readiness_summary.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.operator-readiness-summary.v1",
+                "status": "passed",
+                "release_go_no_go": "go",
+                "operator_readiness_ready": True,
+                "trust_boundary": {
+                    "local_only": True,
+                    "mutates_releases": False,
+                    "stores_credentials": False,
+                    "control_plane_approves_release": False,
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    checklist_summary = tmp_path / "public-release-operator-checklist" / "summary.json"
+    checklist_summary.parent.mkdir(parents=True)
+    readiness_source_sha256 = hashlib.sha256(readiness_summary.read_bytes()).hexdigest()
+    checklist_summary.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.public-release-operator-checklist.v1",
+                "status": "passed",
+                "operator_checklist_ready": True,
+                "source": {
+                    "operator_readiness_summary": str(readiness_summary),
+                    "source_sha256": readiness_source_sha256,
+                    "schema_version": "ao2.operator-readiness-summary.v1",
+                    "status": "passed",
+                    "release_go_no_go": "go",
+                    "operator_readiness_ready": True,
+                },
+                "operator_decision": {
+                    "required_confirmation": "public-release-reviewed-v0.4.80-v0.1.13",
+                    "go_no_go_reviewed": False,
+                    "release_pages_reviewed": False,
+                    "artifact_digests_reviewed": False,
+                    "approval_confirmation_entered": False,
+                },
+                "trust_boundary": {
+                    "local_only": True,
+                    "mutates_releases": False,
+                    "stores_credentials": False,
+                    "control_plane_approves_release": False,
+                },
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    out_root = tmp_path / "public-release-operator-checklist-closure"
+    result = subprocess.run(
+        ["npm", "run", "release:public-operator-checklist-closure"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_CLOSURE_ROOT": str(out_root),
+            "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_SUMMARY": str(checklist_summary),
+            "AO2_PUBLIC_RELEASE_OPERATOR_READINESS_SUMMARY": str(readiness_summary),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.public-release-operator-checklist-closure.v1"
+    assert summary["status"] == "passed"
+    assert summary["public_operator_checklist_closure_ready"] is True
+    assert summary["operator_decision_fields_remain_unapproved"] is True
+    assert summary["sources"]["operator_readiness_summary"]["schema_version"] == (
+        "ao2.operator-readiness-summary.v1"
+    )
+    assert summary["sources"]["public_release_operator_checklist"]["schema_version"] == (
+        "ao2.public-release-operator-checklist.v1"
+    )
+    assert len(summary["sources"]["operator_readiness_summary"]["source_sha256"]) == 64
+    assert len(summary["sources"]["public_release_operator_checklist"]["source_sha256"]) == 64
+    assert summary["trust_boundary"] == {
+        "local_only": True,
+        "mutates_releases": False,
+        "stores_credentials": False,
+        "control_plane_approves_release": False,
+    }
+
+    bad = json.loads(checklist_summary.read_text(encoding="utf-8"))
+    bad["operator_decision"]["approval_confirmation_entered"] = True
+    checklist_summary.write_text(json.dumps(bad, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    fail_root = tmp_path / "public-release-operator-checklist-closure-fail"
+    result = subprocess.run(
+        ["npm", "run", "release:public-operator-checklist-closure"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_CLOSURE_ROOT": str(fail_root),
+            "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_SUMMARY": str(checklist_summary),
+            "AO2_PUBLIC_RELEASE_OPERATOR_READINESS_SUMMARY": str(readiness_summary),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 1
+    failed = json.loads((fail_root / "summary.json").read_text(encoding="utf-8"))
+    assert "operator_decision_already_approved" in [
+        failure["code"] for failure in failed["failures"]
+    ]
+
+    workflow = read(".github/workflows/public-release-operator-checklist-closure.yml")
+    for needle in [
+        "name: Public Release Operator Checklist Closure",
+        "workflow_dispatch:",
+        "operator_readiness_summary_run_id:",
+        "public_release_operator_checklist_run_id:",
+        "actions: read",
+        "contents: read",
+        "GH_TOKEN: ${{ github.token }}",
+        "ao2-operator-readiness-summary",
+        "ao2-public-release-operator-checklist",
+        "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_CLOSURE_ROOT=target/public-release-operator-checklist-closure/report",
+        "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_SUMMARY=target/public-release-operator-checklist-closure/public-release-operator-checklist/summary.json",
+        "AO2_PUBLIC_RELEASE_OPERATOR_READINESS_SUMMARY=target/public-release-operator-checklist-closure/operator-readiness-summary/summary.json",
+        "npm run release:public-operator-checklist-closure",
+        "ao2.public-release-operator-checklist-closure.v1",
+        "ao2-public-release-operator-checklist-closure",
+        "uses: actions/upload-artifact@v7.0.1",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+    ]:
+        assert needle in workflow
+    assert "contents: write" not in workflow
+    assert "actions: write" not in workflow
+    assert "gh release" not in workflow
+
+    release_readiness = read("scripts/release-readiness.sh")
+    for needle in [
+        ".github/workflows/public-release-operator-checklist-closure.yml",
+        "public_release_operator_checklist_closure",
+        "release:public-operator-checklist-closure",
+        "ao2-public-release-operator-checklist-closure",
+    ]:
+        assert needle in release_readiness
+
+    verification = read("docs/VERIFICATION.md")
+    assert "npm run release:public-operator-checklist-closure" in verification
+    assert "ao2.public-release-operator-checklist-closure.v1" in verification
+
+
 def test_stable_promotion_dry_run_checklist_workflow_runs_from_stable_evidence_packet():
     workflow = read(".github/workflows/stable-promotion-dry-run-checklist.yml")
     for needle in [
@@ -3685,6 +3873,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "stable_promotion_operator_checklist",
         "stable_promotion_dry_run_checklist",
         "public_release_operator_checklist",
+        "public_release_operator_checklist_closure",
         "artifact_size_budget",
         "release_artifact_size_budget_audit",
         "release:artifact-size-budget-audit",
@@ -3979,6 +4168,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_stable_promotion_operator_checklist_workflow",
         "ci_stable_promotion_dry_run_checklist_workflow",
         "ci_stable_promotion_evidence_index_workflow",
+        "public_release_operator_checklist_closure",
     ]:
         assert checks[name]["status"] == "passed"
     closure = json.loads(
@@ -4202,6 +4392,30 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "max_size_bytes": 1048576,
         "enforcement": "fail_if_hosted_artifact_exceeds_budget",
     }
+    assert artifacts["public_release_operator_checklist_closure"]["artifact_name"] == (
+        "ao2-public-release-operator-checklist-closure"
+    )
+    assert artifacts["public_release_operator_checklist_closure"]["producer_job"] == (
+        "Public Release Operator Checklist Closure / public-release-operator-checklist-closure"
+    )
+    assert artifacts["public_release_operator_checklist_closure"]["required_files"] == [
+        "summary.json",
+        "report.md",
+    ]
+    assert artifacts["public_release_operator_checklist_closure"]["schema_versions"] == [
+        "ao2.public-release-operator-checklist-closure.v1",
+        "ao2.public-release-operator-checklist.v1",
+        "ao2.operator-readiness-summary.v1",
+    ]
+    assert artifacts["public_release_operator_checklist_closure"]["source_artifacts"] == [
+        "ao2-operator-readiness-summary",
+        "ao2-public-release-operator-checklist",
+    ]
+    assert artifacts["public_release_operator_checklist_closure"]["artifact_size_budget"] == {
+        "budget_scope": "lightweight_operator_approval_packet",
+        "max_size_bytes": 1048576,
+        "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+    }
     assert closure["artifact_size_budget"] == {
         "schema_version": "ao2.release-artifact-size-budget.v1",
         "status": "passed",
@@ -4211,6 +4425,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
             "stable_promotion_operator_checklist",
             "stable_promotion_dry_run_checklist",
             "public_release_operator_checklist",
+            "public_release_operator_checklist_closure",
         ],
     }
     assert artifacts["release_artifact_size_budget_audit"]["artifact_name"] == (
