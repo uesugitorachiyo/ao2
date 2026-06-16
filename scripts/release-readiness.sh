@@ -65,6 +65,7 @@ for name in [
     "release:artifact-size-budget-audit",
     "release:stable-promotion-evidence-index",
     "release:operator-readiness-summary",
+    "release:public-operator-checklist",
     "release:readiness:regression-gate",
     "release:metadata-drift-audit",
     "smoke:evidence-control-plane",
@@ -560,6 +561,48 @@ add(
     "manual read-only workflow uploads ao2-operator-readiness-summary from hosted readiness evidence",
 )
 
+public_release_operator_checklist_script = read("scripts/public-release-operator-checklist.sh")
+public_release_operator_checklist_workflow = read(".github/workflows/public-release-operator-checklist.yml")
+public_release_operator_checklist_ok = (
+    scripts.get("release:public-operator-checklist") == "node scripts/run-sh-script.js scripts/public-release-operator-checklist.sh"
+    and "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_ROOT" in public_release_operator_checklist_script
+    and "AO2_PUBLIC_RELEASE_OPERATOR_READINESS_SUMMARY" in public_release_operator_checklist_script
+    and "ao2.public-release-operator-checklist.v1" in public_release_operator_checklist_script
+    and "ao2.operator-readiness-summary.v1" in public_release_operator_checklist_script
+    and "go_no_go_reviewed" in public_release_operator_checklist_script
+    and "release_pages_reviewed" in public_release_operator_checklist_script
+    and "artifact_digests_reviewed" in public_release_operator_checklist_script
+    and "approval_confirmation_entered" in public_release_operator_checklist_script
+    and "mutates_releases" in public_release_operator_checklist_script
+    and "stores_credentials" in public_release_operator_checklist_script
+    and "control_plane_approves_release" in public_release_operator_checklist_script
+    and "OPENAI_API_KEY" in public_release_operator_checklist_script
+    and "ANTHROPIC_API_KEY" in public_release_operator_checklist_script
+    and "gh release" not in public_release_operator_checklist_script
+    and "contents: write" not in public_release_operator_checklist_script
+    and "name: Public Release Operator Checklist" in public_release_operator_checklist_workflow
+    and "workflow_dispatch:" in public_release_operator_checklist_workflow
+    and "operator_readiness_summary_run_id:" in public_release_operator_checklist_workflow
+    and "actions: read" in public_release_operator_checklist_workflow
+    and "contents: read" in public_release_operator_checklist_workflow
+    and "GH_TOKEN: ${{ github.token }}" in public_release_operator_checklist_workflow
+    and "ao2-operator-readiness-summary" in public_release_operator_checklist_workflow
+    and "npm run release:public-operator-checklist" in public_release_operator_checklist_workflow
+    and "ao2.public-release-operator-checklist.v1" in public_release_operator_checklist_workflow
+    and "ao2-public-release-operator-checklist" in public_release_operator_checklist_workflow
+    and "actions/upload-artifact@v7.0.1" in public_release_operator_checklist_workflow
+    and "OPENAI_API_KEY" in public_release_operator_checklist_workflow
+    and "ANTHROPIC_API_KEY" in public_release_operator_checklist_workflow
+    and "contents: write" not in public_release_operator_checklist_workflow
+    and "actions: write" not in public_release_operator_checklist_workflow
+    and "gh release" not in public_release_operator_checklist_workflow
+)
+add(
+    "public_release_operator_checklist",
+    "passed" if public_release_operator_checklist_ok else "failed",
+    "manual read-only workflow emits a lightweight public release operator approval checklist from operator readiness evidence",
+)
+
 release_readiness_artifact_consumer = workflow_job_block("release-readiness-artifact-consumer")
 release_readiness_artifact_consumer_script = read("scripts/release-readiness-artifact-consumer.sh")
 release_readiness_artifact_consumer_ok = (
@@ -786,6 +829,7 @@ for script in [
     "scripts/release-readiness-artifact-consumer.sh",
     "scripts/release-readiness-final-closure-verifier.sh",
     "scripts/operator-readiness-summary.sh",
+    "scripts/public-release-operator-checklist.sh",
     "scripts/smoke-evidence-pack-control-plane.sh",
     "scripts/release-metadata-drift-audit.sh",
 ]:
@@ -798,6 +842,7 @@ for forbidden in ["OPENAI_API_" + "KEY=", "ANTHROPIC_API_" + "KEY=", "cat target
         "scripts/risky-pr-golden-path.sh",
         "scripts/release-readiness.sh",
         "scripts/operator-readiness-summary.sh",
+        "scripts/public-release-operator-checklist.sh",
         "scripts/smoke-evidence-pack-control-plane.sh",
         "scripts/release-metadata-drift-audit.sh",
     ])

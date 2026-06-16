@@ -28,6 +28,7 @@
     "release:stable-promotion-operator-checklist": "node scripts/run-sh-script.js scripts/stable-promotion-operator-checklist.sh",
     "release:stable-promotion-evidence-index": "node scripts/run-sh-script.js scripts/stable-promotion-evidence-index.sh",
     "release:operator-readiness-summary": "node scripts/run-sh-script.js scripts/operator-readiness-summary.sh",
+    "release:public-operator-checklist": "node scripts/run-sh-script.js scripts/public-release-operator-checklist.sh",
     "release:operator-evidence-workflow-contract": "node scripts/run-sh-script.js scripts/operator-release-evidence-workflow-contract.sh",
     "release:immutability-audit": "node scripts/run-sh-script.js scripts/release-immutability-audit.sh",
     "release:sync-provenance-assets": "node scripts/run-sh-script.js scripts/release-sync-provenance-assets.sh",

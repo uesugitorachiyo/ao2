@@ -972,6 +972,16 @@ Result:
   `ao2-public-release-pair-digest-audit`, and
   `ao2-release-artifact-size-budget-audit` by explicit run id or latest
   successful main workflow run, then uploads `ao2-operator-readiness-summary`.
+- `npm run release:public-operator-checklist`: converts a passed
+  `ao2.operator-readiness-summary.v1` summary into a lightweight human approval
+  packet. It emits `ao2.public-release-operator-checklist.v1`, `summary.json`,
+  and `checklist.md`; the checklist keeps `go_no_go_reviewed=false`,
+  `release_pages_reviewed=false`, `artifact_digests_reviewed=false`, and
+  `approval_confirmation_entered=false` until an operator performs the manual
+  review. The manual `Public Release Operator Checklist` workflow downloads
+  `ao2-operator-readiness-summary`, runs the command, and uploads
+  `ao2-public-release-operator-checklist` with read-only repository
+  permissions.
 - `npm run release:readiness:static` records
   `ao2.release-artifact-size-budget.v1` inside the release artifact closure
   index and budgets lightweight operator approval artifacts at 1 MiB. The
