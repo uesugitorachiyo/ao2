@@ -1178,6 +1178,60 @@ jobs:
           path: ao2/target/release-support-fixture-parity
           if-no-files-found: error
 
+  release-train-manifest-parity:
+    name: Release train manifest parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout AO2
+        uses: actions/checkout@v6.0.3
+      - name: Checkout ao2-control-plane
+        uses: actions/checkout@v6.0.3
+        with:
+          repository: uesugitorachiyo/ao2-control-plane
+          path: ao2-control-plane
+      - name: Use matching ao2-control-plane branch when present
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          head_ref="${{ github.head_ref }}"
+          if git -C ao2-control-plane ls-remote --exit-code origin "refs/heads/${head_ref}" >/dev/null 2>&1; then
+            git -C ao2-control-plane fetch --depth=1 origin "${head_ref}"
+            git -C ao2-control-plane checkout --detach FETCH_HEAD
+          fi
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+      - name: Compare release train manifests
+        shell: bash
+        run: |
+          AO2_RELEASE_TRAIN_MANIFEST_PARITY_ROOT=target/release-train-manifest-parity-ci \
+            npm run release:train-manifest-parity -- --control-plane-root ao2-control-plane
+      - name: Verify release train manifest parity evidence
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary = json.loads(Path("target/release-train-manifest-parity-ci/summary.json").read_text(encoding="utf-8"))
+          assert summary["schema_version"] == "ao2.release-train-manifest-parity.v1", summary
+          assert summary["status"] == "passed", summary
+          assert summary["byte_identical"] is True, summary
+          assert summary["schema_aligned"] is True, summary
+          assert summary["target_aligned"] is True, summary
+          assert summary["next_patch"]["ao2"]["tag"] == "v0.4.81", summary
+          assert summary["trust_boundary"]["mutates_github_releases"] is False, summary
+          PY
+      - name: Upload release train manifest parity
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-release-train-manifest-parity
+          path: target/release-train-manifest-parity-ci
+          if-no-files-found: error
+
   release-train-control-plane-bridge-artifacts:
     name: Release train control-plane bridge artifacts
     runs-on: ubuntu-latest

@@ -74,6 +74,26 @@ jobs:
           test -f target/candidate-patch-release-rehearsal/report/summary.json
           test -f target/candidate-patch-release-rehearsal/report/closure.html
 
+      - name: Audit candidate patch release rehearsal bundle
+        shell: bash
+        run: |
+          npm run release:candidate-rehearsal-audit -- target/candidate-patch-release-rehearsal/report
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          audit = json.loads(
+              Path(
+                  "target/candidate-patch-release-rehearsal/report/candidate-patch-release-rehearsal-audit.json"
+              ).read_text(encoding="utf-8")
+          )
+          assert audit["schema_version"] == "ao2.candidate-patch-release-rehearsal-audit.v1", audit
+          assert audit["status"] == "passed", audit
+          assert audit["release_targets"]["selected_train"] == "next_patch", audit
+          assert audit["token_scan"]["credential_material_included"] is False, audit
+          assert audit["trust_boundary"]["mutates_github_releases"] is False, audit
+          PY
+
       - name: Upload candidate patch release rehearsal evidence
         uses: actions/upload-artifact@v7.0.1
         if: always()

@@ -503,7 +503,18 @@ Result:
   `AO2_PUBLIC_RELEASE_TRAIN_DRILL_ROOT=target/candidate-patch-release-rehearsal/report`.
   It validates the manifest-backed `v0.4.81` / `v0.1.14` candidate targets in
   the `ao2.public-release-train-drill.v1` summary and uploads one read-only
-  `ao2-candidate-patch-release-rehearsal` evidence bundle.
+  `ao2-candidate-patch-release-rehearsal` evidence bundle. The workflow also
+  runs `npm run release:candidate-rehearsal-audit`, emits
+  `ao2.candidate-patch-release-rehearsal-audit.v1`, and stores
+  `candidate-patch-release-rehearsal-audit.json` inside the uploaded bundle.
+- `npm run release:train-manifest-parity`: compares
+  `docs/release/release-train.json` against
+  `../ao2-control-plane/docs/release/release-train.json` by raw bytes,
+  schema, and normalized `stable` / `next_patch` targets. It emits
+  `ao2.release-train-manifest-parity.v1` at
+  `target/release-train-manifest-parity/latest/summary.json`; CI checks out
+  `ao2-control-plane`, runs this as `Release train manifest parity`, and
+  uploads `ao2-release-train-manifest-parity`.
 - `npm run risky-pr:product-readiness`: runs the Risky PR golden path once,
   then verifies local run record, static report/export, and evaluator closure
   evidence from that single run; emits

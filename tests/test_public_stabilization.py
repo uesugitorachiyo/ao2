@@ -11808,7 +11808,12 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
 
 
 def test_candidate_patch_release_rehearsal_workflow_produces_single_bundle():
+    package_json = json.loads(read("package.json"))
     workflow = read(".github/workflows/candidate-patch-release-rehearsal.yml")
+    assert (
+        package_json["scripts"]["release:candidate-rehearsal-audit"]
+        == "node scripts/run-sh-script.js scripts/candidate-patch-release-rehearsal-audit.sh"
+    )
     for needle in [
         "name: Candidate Patch Release Rehearsal",
         "workflow_dispatch:",
@@ -11820,6 +11825,8 @@ def test_candidate_patch_release_rehearsal_workflow_produces_single_bundle():
         "AO2_PUBLIC_RELEASE_TRAIN_CI_SAFE: \"1\"",
         "AO2_PUBLIC_RELEASE_TRAIN_DRILL_ROOT: target/candidate-patch-release-rehearsal/report",
         "npm run release:train-drill",
+        "npm run release:candidate-rehearsal-audit -- target/candidate-patch-release-rehearsal/report",
+        "ao2.candidate-patch-release-rehearsal-audit.v1",
         "ao2.public-release-train-drill.v1",
         '"selected_train"] == "next_patch"',
         '"v0.4.81"',
@@ -11832,6 +11839,168 @@ def test_candidate_patch_release_rehearsal_workflow_produces_single_bundle():
     assert "contents: write" not in workflow
     assert "gh release create" not in workflow
     assert "git push origin" not in workflow
+
+
+def test_candidate_patch_release_rehearsal_audit_contract(tmp_path):
+    script = REPO_ROOT / "scripts" / "candidate-patch-release-rehearsal-audit.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.candidate-patch-release-rehearsal-audit.v1",
+        "ao2.public-release-train-drill.v1",
+        "release_train_manifest",
+        "release_targets",
+        "next_patch",
+        "v0.4.81",
+        "v0.1.14",
+        "refuses_publish_side_effects_by_default",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "candidate_rehearsal_bundle_audit=passed",
+    ]:
+        assert needle in text
+    assert "gh release create" not in text
+    assert "git push origin" not in text
+
+    bundle = tmp_path / "bundle"
+    logs = bundle / "logs"
+    logs.mkdir(parents=True)
+    (bundle / "closure.html").write_text("<!doctype html><title>ok</title>\n", encoding="utf-8")
+    for name in [
+        "release_evidence_closure",
+        "release_readiness_static",
+        "release_readiness_regression_gate",
+        "retention_preflight",
+        "artifact_consumer",
+        "post_merge_canary",
+    ]:
+        (logs / f"{name}.log").write_text(f"{name} passed\n", encoding="utf-8")
+    (bundle / "summary.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.public-release-train-drill.v1",
+                "status": "passed",
+                "ci_safe_mode": True,
+                "release_train_manifest": {
+                    "schema_version": "ao2.release-train-manifest.v1",
+                    "selected_train": "next_patch",
+                },
+                "release_targets": {
+                    "selected_train": "next_patch",
+                    "ao2": {"tag": "v0.4.81", "version": "0.4.81"},
+                    "ao2_control_plane": {"tag": "v0.1.14", "version": "0.1.14"},
+                    "promotion_confirm": "promote-stable-v0.4.81-v0.1.14",
+                    "public_operator_confirm": "public-release-reviewed-v0.4.81-v0.1.14",
+                },
+                "checks": [{"name": "fixture", "status": "passed", "exit_code": 0}],
+                "publish_guards": {
+                    "refuses_publish_side_effects_by_default": True,
+                    "tag_push_publish_deploy": "not executed by this drill",
+                },
+                "trust_boundary": {"local_only": True, "stores_credentials": False},
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "release:candidate-rehearsal-audit", "--", str(bundle)],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "candidate_rehearsal_bundle_audit=passed" in result.stdout
+    audit = json.loads((bundle / "candidate-patch-release-rehearsal-audit.json").read_text())
+    assert audit["schema_version"] == "ao2.candidate-patch-release-rehearsal-audit.v1"
+    assert audit["status"] == "passed"
+    assert audit["release_targets"]["ao2"]["tag"] == "v0.4.81"
+    assert audit["release_targets"]["ao2_control_plane"]["tag"] == "v0.1.14"
+    assert audit["token_scan"]["credential_material_included"] is False
+    assert audit["trust_boundary"]["mutates_github_releases"] is False
+
+
+def test_release_train_manifest_parity_audit_contract(tmp_path):
+    package_json = json.loads(read("package.json"))
+    ci = read(".github/workflows/ci.yml")
+    verification = read("docs/VERIFICATION.md")
+    assert (
+        package_json["scripts"]["release:train-manifest-parity"]
+        == "node scripts/run-sh-script.js scripts/release-train-manifest-parity.sh"
+    )
+
+    script = REPO_ROOT / "scripts" / "release-train-manifest-parity.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.release-train-manifest-parity.v1",
+        "docs/release/release-train.json",
+        "ao2.release-train-manifest.v1",
+        "stable",
+        "next_patch",
+        "byte_identical",
+        "canonical_sha256",
+        "release_train_manifest_parity=passed",
+    ]:
+        assert needle in text
+
+    cp_root = tmp_path / "ao2-control-plane"
+    cp_manifest = cp_root / "docs" / "release" / "release-train.json"
+    cp_manifest.parent.mkdir(parents=True)
+    cp_manifest.write_text(read("docs/release/release-train.json"), encoding="utf-8")
+    out_root = tmp_path / "out"
+    result = subprocess.run(
+        [
+            "npm",
+            "run",
+            "release:train-manifest-parity",
+            "--",
+            "--control-plane-root",
+            str(cp_root),
+            "--out-root",
+            str(out_root),
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "release_train_manifest_parity=passed" in result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.release-train-manifest-parity.v1"
+    assert summary["status"] == "passed"
+    assert summary["byte_identical"] is True
+    assert summary["schema_aligned"] is True
+    assert summary["target_aligned"] is True
+    assert summary["stable"]["ao2"]["tag"] == "v0.4.80"
+    assert summary["next_patch"]["ao2"]["tag"] == "v0.4.81"
+
+    for needle in [
+        "release-train-manifest-parity:",
+        "name: Release train manifest parity",
+        "repository: uesugitorachiyo/ao2-control-plane",
+        "AO2_RELEASE_TRAIN_MANIFEST_PARITY_ROOT=target/release-train-manifest-parity-ci",
+        "npm run release:train-manifest-parity -- --control-plane-root ao2-control-plane",
+        "ao2.release-train-manifest-parity.v1",
+        "name: ao2-release-train-manifest-parity",
+        "uses: actions/upload-artifact@v7.0.1",
+    ]:
+        assert needle in ci
+
+    for needle in [
+        "npm run release:train-manifest-parity",
+        "ao2.release-train-manifest-parity.v1",
+        "target/release-train-manifest-parity/latest/summary.json",
+        "ao2-release-train-manifest-parity",
+    ]:
+        assert needle in verification
 
 
 def test_release_train_control_plane_bridge_contract(tmp_path):
