@@ -355,11 +355,15 @@ stable_release_promotion_workflow_ok = (
     "name: Stable Release Promotion" in stable_release_promotion_workflow
     and "workflow_dispatch:" in stable_release_promotion_workflow
     and "stable_release_evidence_run_id:" in stable_release_promotion_workflow
+    and "ao2_release_tag:" in stable_release_promotion_workflow
+    and "ao2_cp_release_tag:" in stable_release_promotion_workflow
     and "promotion_confirm:" in stable_release_promotion_workflow
     and "actions: read" in stable_release_promotion_workflow
     and "contents: write" in stable_release_promotion_workflow
     and "GH_TOKEN: ${{ github.token }}" in stable_release_promotion_workflow
     and "STABLE_RELEASE_EVIDENCE_RUN_ID: ${{ inputs.stable_release_evidence_run_id }}" in stable_release_promotion_workflow
+    and "AO2_RELEASE_TAG_INPUT: ${{ inputs.ao2_release_tag || 'v0.4.80' }}" in stable_release_promotion_workflow
+    and "AO2_CP_RELEASE_TAG_INPUT: ${{ inputs.ao2_cp_release_tag || 'v0.1.13' }}" in stable_release_promotion_workflow
     and "PROMOTION_CONFIRM_INPUT: ${{ inputs.promotion_confirm }}" in stable_release_promotion_workflow
     and "ao2-stable-release-evidence-packet" in stable_release_promotion_workflow
     and "target/stable-release-promotion/stable-release-evidence-packet" in stable_release_promotion_workflow
@@ -367,6 +371,9 @@ stable_release_promotion_workflow_ok = (
     and "stable_release_evidence_ready" in stable_release_promotion_workflow
     and "operator_release_evidence_ready" in stable_release_promotion_workflow
     and "AO2_STABLE_PROMOTION_EVIDENCE_FIXTURE_DIR=target/stable-release-promotion/stable-release-evidence-packet/stable-promotion-workflow/post-release-verification-evidence" in stable_release_promotion_workflow
+    and 'required_confirm="promote-stable-${AO2_RELEASE_TAG_INPUT}-${AO2_CP_RELEASE_TAG_INPUT}"' in stable_release_promotion_workflow
+    and 'AO2_RELEASE_TAG="$AO2_RELEASE_TAG_INPUT"' in stable_release_promotion_workflow
+    and 'AO2_CP_RELEASE_TAG="$AO2_CP_RELEASE_TAG_INPUT"' in stable_release_promotion_workflow
     and 'AO2_STABLE_PROMOTION_CONFIRM="$PROMOTION_CONFIRM_INPUT"' in stable_release_promotion_workflow
     and "npm run release:stable-promotion-workflow" in stable_release_promotion_workflow
     and "promote-stable-v0.4.80-v0.1.13" in stable_release_promotion_workflow
@@ -410,12 +417,19 @@ stable_promotion_operator_checklist_ok = (
     "name: Stable Promotion Operator Checklist" in stable_promotion_operator_checklist
     and "workflow_dispatch:" in stable_promotion_operator_checklist
     and "stable_promotion_dry_run_audit_run_id:" in stable_promotion_operator_checklist
+    and "ao2_release_tag:" in stable_promotion_operator_checklist
+    and "ao2_cp_release_tag:" in stable_promotion_operator_checklist
     and "actions: read" in stable_promotion_operator_checklist
     and "contents: read" in stable_promotion_operator_checklist
     and "GH_TOKEN: ${{ github.token }}" in stable_promotion_operator_checklist
     and "STABLE_PROMOTION_DRY_RUN_AUDIT_RUN_ID: ${{ inputs.stable_promotion_dry_run_audit_run_id }}" in stable_promotion_operator_checklist
+    and "AO2_RELEASE_TAG_INPUT: ${{ inputs.ao2_release_tag || 'v0.4.80' }}" in stable_promotion_operator_checklist
+    and "AO2_CP_RELEASE_TAG_INPUT: ${{ inputs.ao2_cp_release_tag || 'v0.1.13' }}" in stable_promotion_operator_checklist
     and "ao2-stable-release-promotion-dry-run-audit" in stable_promotion_operator_checklist
     and "target/stable-promotion-operator-checklist/dry-run-audit" in stable_promotion_operator_checklist
+    and 'AO2_RELEASE_TAG="${AO2_RELEASE_TAG_INPUT}"' in stable_promotion_operator_checklist
+    and 'AO2_CONTROL_PLANE_RELEASE_TAG="${AO2_CP_RELEASE_TAG_INPUT}"' in stable_promotion_operator_checklist
+    and 'AO2_STABLE_PROMOTION_REQUIRED_CONFIRM="promote-stable-${AO2_RELEASE_TAG_INPUT}-${AO2_CP_RELEASE_TAG_INPUT}"' in stable_promotion_operator_checklist
     and "npm run release:stable-promotion-operator-checklist" in stable_promotion_operator_checklist
     and "ao2-stable-promotion-operator-checklist" in stable_promotion_operator_checklist
     and "path: target/stable-promotion-operator-checklist/report" in stable_promotion_operator_checklist
@@ -423,6 +437,7 @@ stable_promotion_operator_checklist_ok = (
     and scripts.get("release:stable-promotion-operator-checklist") == "node scripts/run-sh-script.js scripts/stable-promotion-operator-checklist.sh"
     and "ao2.stable-promotion-operator-checklist.v1" in stable_promotion_operator_checklist_script
     and "promote-stable-v0.4.80-v0.1.13" in stable_promotion_operator_checklist_script
+    and 'AO2_STABLE_PROMOTION_REQUIRED_CONFIRM="${AO2_STABLE_PROMOTION_REQUIRED_CONFIRM:-promote-stable-$AO2_RELEASE_TAG-$AO2_CONTROL_PLANE_RELEASE_TAG}"' in stable_promotion_operator_checklist_script
     and "No provider API keys are required or accepted" in stable_promotion_operator_checklist_script
 )
 add(
@@ -567,6 +582,9 @@ public_release_operator_checklist_ok = (
     scripts.get("release:public-operator-checklist") == "node scripts/run-sh-script.js scripts/public-release-operator-checklist.sh"
     and "AO2_PUBLIC_RELEASE_OPERATOR_CHECKLIST_ROOT" in public_release_operator_checklist_script
     and "AO2_PUBLIC_RELEASE_OPERATOR_READINESS_SUMMARY" in public_release_operator_checklist_script
+    and "AO2_RELEASE_TAG" in public_release_operator_checklist_script
+    and "AO2_CONTROL_PLANE_RELEASE_TAG" in public_release_operator_checklist_script
+    and 'AO2_PUBLIC_RELEASE_OPERATOR_REQUIRED_CONFIRM="${AO2_PUBLIC_RELEASE_OPERATOR_REQUIRED_CONFIRM:-public-release-reviewed-$AO2_RELEASE_TAG-$AO2_CONTROL_PLANE_RELEASE_TAG}"' in public_release_operator_checklist_script
     and "ao2.public-release-operator-checklist.v1" in public_release_operator_checklist_script
     and "ao2.operator-readiness-summary.v1" in public_release_operator_checklist_script
     and "go_no_go_reviewed" in public_release_operator_checklist_script

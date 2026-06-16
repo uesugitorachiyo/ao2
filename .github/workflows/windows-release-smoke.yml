@@ -2,6 +2,17 @@ name: Windows Release Smoke
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "AO2 release tag to smoke on Windows."
+        required: false
+        type: string
+        default: v0.4.80
+      release_version:
+        description: "AO2 release version used in the Windows archive name."
+        required: false
+        type: string
+        default: 0.4.80
 
 permissions:
   contents: read
@@ -18,19 +29,24 @@ jobs:
       - name: Download public release archive
         env:
           GH_TOKEN: ${{ github.token }}
+          AO2_RELEASE_TAG: ${{ inputs.release_tag || 'v0.4.80' }}
+          AO2_RELEASE_VERSION: ${{ inputs.release_version || '0.4.80' }}
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist-windows | Out-Null
-          gh release download v0.4.80 `
+          $archive = "ao2-$env:AO2_RELEASE_VERSION-windows-x86_64.tar.gz"
+          gh release download $env:AO2_RELEASE_TAG `
             --repo $env:GITHUB_REPOSITORY `
-            --pattern "ao2-0.4.80-windows-x86_64.tar.gz" `
+            --pattern $archive `
             --pattern "SHA256SUMS" `
             --dir dist-windows
 
       - name: Verify public release archive checksum
+        env:
+          AO2_RELEASE_VERSION: ${{ inputs.release_version || '0.4.80' }}
         shell: pwsh
         run: |
-          $archive = "ao2-0.4.80-windows-x86_64.tar.gz"
+          $archive = "ao2-$env:AO2_RELEASE_VERSION-windows-x86_64.tar.gz"
           $expected = Select-String -Path dist-windows/SHA256SUMS -Pattern $archive |
             ForEach-Object { ($_ -split "\s+")[0] } |
             Select-Object -First 1
@@ -43,8 +59,11 @@ jobs:
           }
 
       - name: Smoke installed release
+        env:
+          AO2_RELEASE_VERSION: ${{ inputs.release_version || '0.4.80' }}
         shell: pwsh
         run: |
+          $archive = "ao2-$env:AO2_RELEASE_VERSION-windows-x86_64.tar.gz"
           ./scripts/smoke-windows-release.ps1 `
-            -Archive dist-windows/ao2-0.4.80-windows-x86_64.tar.gz `
+            -Archive (Join-Path "dist-windows" $archive) `
             -SmokeRoot "$env:RUNNER_TEMP/ao2-windows-release-smoke"

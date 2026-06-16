@@ -7,6 +7,16 @@ on:
         description: "Stable Release Promotion Dry-Run Audit workflow run id."
         required: true
         type: string
+      ao2_release_tag:
+        description: "AO2 release tag covered by the dry-run audit."
+        required: false
+        type: string
+        default: v0.4.80
+      ao2_cp_release_tag:
+        description: "ao2-control-plane release tag covered by the dry-run audit."
+        required: false
+        type: string
+        default: v0.1.13
 
 permissions:
   actions: read
@@ -38,9 +48,15 @@ jobs:
             --dir target/stable-promotion-operator-checklist/dry-run-audit
       - name: Generate operator checklist
         shell: bash
+        env:
+          AO2_RELEASE_TAG_INPUT: ${{ inputs.ao2_release_tag || 'v0.4.80' }}
+          AO2_CP_RELEASE_TAG_INPUT: ${{ inputs.ao2_cp_release_tag || 'v0.1.13' }}
         run: |
           AO2_STABLE_PROMOTION_DRY_RUN_AUDIT_SUMMARY=target/stable-promotion-operator-checklist/dry-run-audit/report/summary.json \
           AO2_STABLE_PROMOTION_OPERATOR_CHECKLIST_ROOT=target/stable-promotion-operator-checklist/report \
+          AO2_RELEASE_TAG="${AO2_RELEASE_TAG_INPUT}" \
+          AO2_CONTROL_PLANE_RELEASE_TAG="${AO2_CP_RELEASE_TAG_INPUT}" \
+          AO2_STABLE_PROMOTION_REQUIRED_CONFIRM="promote-stable-${AO2_RELEASE_TAG_INPUT}-${AO2_CP_RELEASE_TAG_INPUT}" \
             npm run release:stable-promotion-operator-checklist
       - name: Upload stable promotion operator checklist
         uses: actions/upload-artifact@v7.0.1
