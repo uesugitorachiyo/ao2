@@ -913,6 +913,7 @@ size_budget_bytes = 1048576
 budgeted_artifact_ids = [
     "stable_promotion_operator_checklist",
     "stable_promotion_dry_run_checklist",
+    "public_release_operator_checklist",
 ]
 artifact_size_budget = {
     "schema_version": "ao2.release-artifact-size-budget.v1",
@@ -928,7 +929,11 @@ add(
         artifact_size_budget["size_budget_enforced"] is True
         and artifact_size_budget["default_lightweight_operator_packet_max_size_bytes"] > 0
         and set(budgeted_artifact_ids)
-        == {"stable_promotion_operator_checklist", "stable_promotion_dry_run_checklist"}
+        == {
+            "stable_promotion_operator_checklist",
+            "stable_promotion_dry_run_checklist",
+            "public_release_operator_checklist",
+        }
     )
     else "failed",
     f"size_budget_bytes={size_budget_bytes}",
@@ -1218,6 +1223,27 @@ artifact_closure_index = {
             },
             "required_checks": ["ci_stable_promotion_dry_run_checklist_workflow"],
             "source_artifacts": ["ao2-stable-release-evidence-packet"],
+        },
+        {
+            "id": "public_release_operator_checklist",
+            "artifact_name": "ao2-public-release-operator-checklist",
+            "producer_job": "Public Release Operator Checklist / public-release-operator-checklist",
+            "required_files": [
+                "operator-readiness-summary/summary.json",
+                "report/summary.json",
+                "report/checklist.md",
+            ],
+            "schema_versions": [
+                "ao2.public-release-operator-checklist.v1",
+                "ao2.operator-readiness-summary.v1",
+            ],
+            "artifact_size_budget": {
+                "budget_scope": "lightweight_operator_approval_packet",
+                "max_size_bytes": size_budget_bytes,
+                "enforcement": "fail_if_hosted_artifact_exceeds_budget",
+            },
+            "required_checks": ["public_release_operator_checklist"],
+            "source_artifacts": ["ao2-operator-readiness-summary"],
         },
         {
             "id": "stable_promotion_evidence_index",

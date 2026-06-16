@@ -985,8 +985,9 @@ Result:
 - `npm run release:readiness:static` records
   `ao2.release-artifact-size-budget.v1` inside the release artifact closure
   index and budgets lightweight operator approval artifacts at 1 MiB. The
-  budget currently covers `ao2-stable-promotion-operator-checklist` and
-  `ao2-stable-promotion-dry-run-checklist`; the dry-run checklist baseline is
+  budget currently covers `ao2-stable-promotion-operator-checklist`,
+  `ao2-stable-promotion-dry-run-checklist`, and
+  `ao2-public-release-operator-checklist`; the dry-run checklist baseline is
   5,436 bytes. This keeps future workflow edits from silently turning approval
   packets back into large evidence-tree uploads.
 - `npm run release:artifact-size-budget-audit`: reads the release artifact
