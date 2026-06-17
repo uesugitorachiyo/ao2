@@ -1326,6 +1326,64 @@ fn cli_pulse_run_once_records_post_c85_ready_state_when_packet_says_passed() {
 }
 
 #[test]
+fn cli_pulse_run_loop_consumes_decision_file_and_writes_summary() {
+    let temp = tempfile::tempdir().unwrap();
+    let decision = temp.path().join("decision.json");
+    fs::write(
+        &decision,
+        serde_json::to_string_pretty(&serde_json::json!({
+            "schema_version": "ao2.pulse-event-loop-decision.v1",
+            "event_loop": {
+                "action": "stop",
+                "reason": "operator requested stop after one iteration",
+                "next_task_id": "pulse-next-safe-task"
+            }
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let out_dir = temp.path().join("pulse-run-loop");
+    let command = format!("\"{}\" version", env!("CARGO_BIN_EXE_ao2"));
+
+    let run_loop = ao2([
+        "pulse",
+        "run-loop",
+        "--command",
+        &command,
+        "--decision-file",
+        decision.to_str().unwrap(),
+        "--max-chain-runs",
+        "3",
+        "--max-runtime-seconds",
+        "60",
+        "--out-dir",
+        out_dir.to_str().unwrap(),
+        "--apply-root",
+        temp.path().to_str().unwrap(),
+        "--json",
+    ]);
+    assert!(run_loop.status.success(), "{}", stderr(&run_loop));
+    let json: serde_json::Value = serde_json::from_str(&stdout(&run_loop)).unwrap();
+
+    assert_eq!(json["schema_version"], "ao2.pulse-event-loop-run.v1");
+    assert_eq!(json["status"], "stopped");
+    assert_eq!(json["iterations"], 1);
+    assert_eq!(json["decision_source"], "file");
+    assert_eq!(json["next_task_id"], "pulse-next-safe-task");
+    assert_eq!(json["decisions"][0]["action"], "stop");
+    assert_eq!(
+        json["decisions"][0]["decision_file"].as_str().unwrap(),
+        decision.to_string_lossy().as_ref()
+    );
+
+    let summary_path = out_dir.join("summary.json");
+    let summary: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&summary_path).unwrap()).unwrap();
+    assert_eq!(summary, json);
+    assert!(out_dir.join("logs").join("iteration-01.log").is_file());
+}
+
+#[test]
 fn cli_pulse_eval_loop_run_once_recommends_next_task_without_mutation() {
     let temp = tempfile::tempdir().unwrap();
     let packet = temp.path().join("prompt.txt");

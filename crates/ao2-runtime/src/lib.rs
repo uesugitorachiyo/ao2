@@ -26,6 +26,8 @@ use serde_json::json;
 
 pub use ao2_core::RunStatus;
 
+pub mod pulse_event_loop;
+
 #[derive(Debug, Clone)]
 pub struct RunOptions {
     pub target_repo: PathBuf,

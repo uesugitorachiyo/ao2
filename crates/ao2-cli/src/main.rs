@@ -452,6 +452,24 @@ enum PulseCommand {
         #[command(subcommand)]
         command: PulseEvalLoopCommand,
     },
+    RunLoop {
+        #[arg(long)]
+        command: String,
+        #[arg(long = "decision-file")]
+        decision_file: Option<PathBuf>,
+        #[arg(long = "max-chain-runs", default_value_t = 3)]
+        max_chain_runs: u32,
+        #[arg(long = "max-runtime-seconds", default_value_t = 2700)]
+        max_runtime_seconds: u64,
+        #[arg(long = "out-dir", default_value = "target/ao2-pulse-run-loop")]
+        out_dir: PathBuf,
+        #[arg(long = "stdout-fallback")]
+        stdout_fallback: bool,
+        #[arg(long = "apply-root", default_value = ".")]
+        apply_root: PathBuf,
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -4069,6 +4087,43 @@ fn pulse(command: PulseCommand) -> Result<()> {
                         pulse_artifact_key(once, chain, execute)
                     )
                 );
+            }
+            Ok(())
+        }
+        PulseCommand::RunLoop {
+            command,
+            decision_file,
+            max_chain_runs,
+            max_runtime_seconds,
+            out_dir,
+            stdout_fallback,
+            apply_root,
+            json,
+        } => {
+            let summary = ao2_runtime::pulse_event_loop::run_pulse_event_loop(
+                &command,
+                decision_file.as_deref(),
+                max_chain_runs,
+                max_runtime_seconds,
+                &out_dir,
+                stdout_fallback,
+                &apply_root,
+            )?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+            } else {
+                println!("status={}", summary.status);
+                println!("iterations={}", summary.iterations);
+                println!("decision_source={}", summary.decision_source);
+                if let Some(ref path) = summary.decision_path {
+                    println!("decision_path={}", path);
+                }
+                if let Some(ref task_id) = summary.next_task_id {
+                    println!("next_task_id={}", task_id);
+                }
+            }
+            if summary.status == "failed" {
+                anyhow::bail!("Pulse event-loop run failed");
             }
             Ok(())
         }
