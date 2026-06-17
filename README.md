@@ -192,6 +192,22 @@ and generated next-task packet.
 This keeps the MVP local-first: PRs and GitHub CI are useful review surfaces,
 but they are not required for AO2 to leave an auditable local record.
 
+## Pulse Event-Loop Runtime
+
+AO2 contains a typed, durable, cross-platform Pulse event-loop runtime in Rust.
+It can execute a bounded loop over a command, reading a decision file
+(supporting `codex-cron` and native AO2 decision schemas), and writing durable
+summary evidence:
+
+```sh
+ao2 pulse run-loop \
+  --command "npm run pulse:generate-next" \
+  --decision-file "target/pulse-next-recommended-tasks/codex-cron-event-loop-decision.json" \
+  --max-chain-runs 3 \
+  --max-runtime-seconds 2700 \
+  --out-dir "target/pulse-event-loop"
+```
+
 ## Documentation
 
 - [Install](docs/INSTALL.md)
