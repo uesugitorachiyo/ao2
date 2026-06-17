@@ -94,6 +94,7 @@
     "release:candidate-rehearsal-audit": "node scripts/run-sh-script.js scripts/candidate-patch-release-rehearsal-audit.sh",
     "release:train-manifest-parity": "node scripts/run-sh-script.js scripts/release-train-manifest-parity.sh",
     "release:train-control-plane-bridge": "node scripts/run-sh-script.js scripts/release-train-control-plane-bridge.sh",
+    "release:candidate-readiness-packet": "node scripts/run-sh-script.js scripts/candidate-readiness-packet.sh",
     "release:dual-repo-installed-smoke": "node scripts/run-sh-script.js scripts/dual-repo-installed-release-smoke.sh",
     "release:dual-public-smoke": "node scripts/run-sh-script.js scripts/dual-public-release-smoke.sh",
     "release:public-consumer-smoke": "node scripts/run-sh-script.js scripts/public-release-consumer-smoke.sh",
