@@ -71,6 +71,7 @@ npm run pulse:quality-filter-negative-corpus # Pulse quality filter negative fix
 npm run pulse:quality-filter-required-gate # required Pulse quality gate boundary evidence
 npm run pulse:resume -- --dry-run # validate the resumable Pulse event-loop command
 npm run pulse:resume -- --execute # explicitly resume the latest local Pulse event loop
+cargo test -p ao2-runtime --test pulse_event_loop # verify the typed Pulse event-loop runtime in Rust
 npm run pulse:execute-safety-corpus # Pulse execute-mode refusal/simulation corpus
 npm run pulse:real-execute-containment # bounded real Pulse execute fixture
 npm run phase1:promotion-golden # Phase 1 promotion golden readback/token-boundary evidence
