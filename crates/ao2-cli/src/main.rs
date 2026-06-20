@@ -70929,6 +70929,8 @@ fn package_release(
     let binary_sha256 = sha256_file(&staged_binary)?;
     write_installer_scripts(&stage_dir, binary_name)?;
     write_release_verifier_scripts(&stage_dir)?;
+    fs::copy("LICENSE", stage_dir.join("LICENSE")).context("copy LICENSE into release stage")?;
+    fs::copy("NOTICE", stage_dir.join("NOTICE")).context("copy NOTICE into release stage")?;
     fs::write(stage_dir.join("VERSION"), format!("{version}\n"))?;
     fs::write(
         stage_dir.join("README.txt"),
@@ -70948,7 +70950,8 @@ fn package_release(
         "installers": ["install.sh", "install.ps1"],
         "verifiers": ["verify-release.sh", "Verify-Release.ps1"],
         "verification_report": "RELEASE-VERIFICATION.json",
-        "checksum_file": "SHA256SUMS"
+        "checksum_file": "SHA256SUMS",
+        "legal_files": ["LICENSE", "NOTICE"]
     });
     fs::write(
         stage_dir.join("RELEASE-MANIFEST.json"),
@@ -70964,6 +70967,8 @@ fn package_release(
         "verify-release.sh".to_string(),
         "Verify-Release.ps1".to_string(),
         "README.txt".to_string(),
+        "LICENSE".to_string(),
+        "NOTICE".to_string(),
         "VERSION".to_string(),
     ];
     let verification_report = serde_json::json!({
@@ -70998,6 +71003,8 @@ fn package_release(
         "verify-release.sh".to_string(),
         "Verify-Release.ps1".to_string(),
         "README.txt".to_string(),
+        "LICENSE".to_string(),
+        "NOTICE".to_string(),
         "VERSION".to_string(),
     ] {
         let digest = sha256_file(&stage_dir.join(&relative_path))?;
