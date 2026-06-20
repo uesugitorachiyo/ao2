@@ -38,6 +38,9 @@ jobs:
       - name: Build release assets (3 archives + provenance)
         run: npm run release:build-all
 
+      - name: Check release archive license files
+        run: scripts/check-license-policy.sh --scan-archives
+
       - name: Run gate:full
         env:
           AO2_HOSTED_RELEASE_GATE: "1"

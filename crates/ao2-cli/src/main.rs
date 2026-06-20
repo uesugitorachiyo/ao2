@@ -70929,6 +70929,10 @@ fn package_release(
     let binary_sha256 = sha256_file(&staged_binary)?;
     write_installer_scripts(&stage_dir, binary_name)?;
     write_release_verifier_scripts(&stage_dir)?;
+    fs::copy(release_legal_file("LICENSE")?, stage_dir.join("LICENSE"))
+        .context("copy LICENSE into release stage")?;
+    fs::copy(release_legal_file("NOTICE")?, stage_dir.join("NOTICE"))
+        .context("copy NOTICE into release stage")?;
     fs::write(stage_dir.join("VERSION"), format!("{version}\n"))?;
     fs::write(
         stage_dir.join("README.txt"),
@@ -70948,7 +70952,8 @@ fn package_release(
         "installers": ["install.sh", "install.ps1"],
         "verifiers": ["verify-release.sh", "Verify-Release.ps1"],
         "verification_report": "RELEASE-VERIFICATION.json",
-        "checksum_file": "SHA256SUMS"
+        "checksum_file": "SHA256SUMS",
+        "legal_files": ["LICENSE", "NOTICE"]
     });
     fs::write(
         stage_dir.join("RELEASE-MANIFEST.json"),
@@ -70964,6 +70969,8 @@ fn package_release(
         "verify-release.sh".to_string(),
         "Verify-Release.ps1".to_string(),
         "README.txt".to_string(),
+        "LICENSE".to_string(),
+        "NOTICE".to_string(),
         "VERSION".to_string(),
     ];
     let verification_report = serde_json::json!({
@@ -70998,6 +71005,8 @@ fn package_release(
         "verify-release.sh".to_string(),
         "Verify-Release.ps1".to_string(),
         "README.txt".to_string(),
+        "LICENSE".to_string(),
+        "NOTICE".to_string(),
         "VERSION".to_string(),
     ] {
         let digest = sha256_file(&stage_dir.join(&relative_path))?;
@@ -71045,6 +71054,27 @@ fn write_installer_scripts(stage_dir: &Path, binary_name: &str) -> Result<()> {
         windows_installer_script(binary_name),
     )?;
     Ok(())
+}
+
+fn release_legal_file(name: &str) -> Result<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Ok(current_dir) = std::env::current_dir() {
+        candidates.push(current_dir.join(name));
+        candidates.push(current_dir.join("../..").join(name));
+    }
+    candidates.push(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join(name),
+    );
+
+    for candidate in candidates {
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+
+    anyhow::bail!("release legal file {name} not found; run from the repository root")
 }
 
 fn write_release_verifier_scripts(stage_dir: &Path) -> Result<()> {
