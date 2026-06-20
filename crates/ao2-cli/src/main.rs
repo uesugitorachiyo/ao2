@@ -70929,8 +70929,10 @@ fn package_release(
     let binary_sha256 = sha256_file(&staged_binary)?;
     write_installer_scripts(&stage_dir, binary_name)?;
     write_release_verifier_scripts(&stage_dir)?;
-    fs::copy("LICENSE", stage_dir.join("LICENSE")).context("copy LICENSE into release stage")?;
-    fs::copy("NOTICE", stage_dir.join("NOTICE")).context("copy NOTICE into release stage")?;
+    fs::copy(release_legal_file("LICENSE")?, stage_dir.join("LICENSE"))
+        .context("copy LICENSE into release stage")?;
+    fs::copy(release_legal_file("NOTICE")?, stage_dir.join("NOTICE"))
+        .context("copy NOTICE into release stage")?;
     fs::write(stage_dir.join("VERSION"), format!("{version}\n"))?;
     fs::write(
         stage_dir.join("README.txt"),
@@ -71052,6 +71054,27 @@ fn write_installer_scripts(stage_dir: &Path, binary_name: &str) -> Result<()> {
         windows_installer_script(binary_name),
     )?;
     Ok(())
+}
+
+fn release_legal_file(name: &str) -> Result<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Ok(current_dir) = std::env::current_dir() {
+        candidates.push(current_dir.join(name));
+        candidates.push(current_dir.join("../..").join(name));
+    }
+    candidates.push(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join(name),
+    );
+
+    for candidate in candidates {
+        if candidate.is_file() {
+            return Ok(candidate);
+        }
+    }
+
+    anyhow::bail!("release legal file {name} not found; run from the repository root")
 }
 
 fn write_release_verifier_scripts(stage_dir: &Path) -> Result<()> {

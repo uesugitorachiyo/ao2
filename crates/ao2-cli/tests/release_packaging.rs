@@ -64,6 +64,8 @@ fn cli_packages_current_binary_for_local_distribution() {
     assert!(entries
         .iter()
         .any(|entry| entry == "RELEASE-VERIFICATION.json"));
+    assert!(entries.iter().any(|entry| entry == "LICENSE"));
+    assert!(entries.iter().any(|entry| entry == "NOTICE"));
 
     let packaged_checksum = archive_text_entry(Path::new(archive_path), "SHA256SUMS");
     let manifest = archive_text_entry(Path::new(archive_path), "RELEASE-MANIFEST.json");
@@ -101,6 +103,8 @@ fn cli_packages_current_binary_for_local_distribution() {
         "verify-release.sh".to_string(),
         "Verify-Release.ps1".to_string(),
         "README.txt".to_string(),
+        "LICENSE".to_string(),
+        "NOTICE".to_string(),
         "VERSION".to_string(),
     ] {
         assert!(
@@ -183,6 +187,8 @@ fn cli_packages_explicit_binary_for_cross_target_distribution() {
     assert!(entries
         .iter()
         .any(|entry| entry == "RELEASE-VERIFICATION.json"));
+    assert!(entries.iter().any(|entry| entry == "LICENSE"));
+    assert!(entries.iter().any(|entry| entry == "NOTICE"));
 
     let manifest = archive_text_entry(
         Path::new(json["archive"].as_str().expect("archive")),
