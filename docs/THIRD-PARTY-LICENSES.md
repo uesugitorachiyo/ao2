@@ -1,7 +1,6 @@
 # Third-Party Licenses
 
-AO2 is licensed as `MIT OR Apache-2.0`. See `../LICENSE`,
-`../LICENSE-MIT`, and `../LICENSE-APACHE`.
+AO2 is licensed as `Apache-2.0`. See `../LICENSE`.
 
 This notice is generated from local Cargo package metadata for the current
 workspace dependency graph. It is an engineering inventory, not legal advice.
@@ -24,7 +23,7 @@ cargo metadata --format-version 1 | jq -r '.packages[] | [.name,.version,(.licen
 - `Unlicense`
 - `Zlib`
 
-Most dependencies are licensed as `MIT OR Apache-2.0` or equivalent. The
+Most third-party dependencies are licensed as `MIT OR Apache-2.0` or equivalent. The
 non-MIT/Apache-only license families currently appear through these packages:
 
 | License expression | Packages |
@@ -50,12 +49,12 @@ non-MIT/Apache-only license families currently appear through these packages:
 | `anstyle-query` | `1.1.5` | `MIT OR Apache-2.0` |
 | `anstyle-wincon` | `3.0.11` | `MIT OR Apache-2.0` |
 | `anyhow` | `1.0.102` | `MIT OR Apache-2.0` |
-| `ao2-adapters` | `0.4.75` | `MIT OR Apache-2.0` |
-| `ao2-artifacts` | `0.4.75` | `MIT OR Apache-2.0` |
-| `ao2-cli` | `0.4.75` | `MIT OR Apache-2.0` |
-| `ao2-core` | `0.4.75` | `MIT OR Apache-2.0` |
-| `ao2-policy` | `0.4.75` | `MIT OR Apache-2.0` |
-| `ao2-runtime` | `0.4.75` | `MIT OR Apache-2.0` |
+| `ao2-adapters` | `0.4.75` | `Apache-2.0` |
+| `ao2-artifacts` | `0.4.75` | `Apache-2.0` |
+| `ao2-cli` | `0.4.75` | `Apache-2.0` |
+| `ao2-core` | `0.4.75` | `Apache-2.0` |
+| `ao2-policy` | `0.4.75` | `Apache-2.0` |
+| `ao2-runtime` | `0.4.75` | `Apache-2.0` |
 | `autocfg` | `1.5.0` | `Apache-2.0 OR MIT` |
 | `bitflags` | `2.11.1` | `MIT OR Apache-2.0` |
 | `block-buffer` | `0.10.4` | `MIT OR Apache-2.0` |

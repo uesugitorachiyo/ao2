@@ -2130,7 +2130,7 @@ fn release_operational_scripts_cover_three_os_ci_and_download_verification() {
     assert!(release_archives.contains("ubuntu_install_smoke=passed"));
     assert!(release_archives.contains("windows_static_smoke=passed"));
 
-    assert!(gate.contains("MIT OR Apache-2.0"));
+    assert!(gate.contains("Apache-2.0"));
     assert!(gate.contains("THIRD-PARTY-LICENSES.md"));
     assert!(gate.contains("release:verify-provenance"));
     assert!(gate.contains("GPL"));
@@ -3631,25 +3631,20 @@ fn ci_workflow_runs_on_public_changes_while_release_gates_stay_manual() {
 }
 
 #[test]
-fn project_declares_dual_mit_or_apache_license_and_third_party_notice() {
+fn project_declares_apache_license_and_third_party_notice() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let cargo_toml = fs::read_to_string(root.join("Cargo.toml")).expect("cargo toml exists");
     let package_json = fs::read_to_string(root.join("package.json")).expect("package json exists");
     let readme = fs::read_to_string(root.join("README.md")).expect("readme exists");
     let license = fs::read_to_string(root.join("LICENSE")).expect("license exists");
-    let mit_license = fs::read_to_string(root.join("LICENSE-MIT")).expect("MIT license exists");
-    let apache_license =
-        fs::read_to_string(root.join("LICENSE-APACHE")).expect("Apache license exists");
     let third_party = fs::read_to_string(root.join("docs/THIRD-PARTY-LICENSES.md"))
         .expect("third-party license notice exists");
 
-    assert!(cargo_toml.contains("license = \"MIT OR Apache-2.0\""));
-    assert!(package_json.contains("\"license\": \"MIT OR Apache-2.0\""));
-    assert!(license.contains("Apache License, Version 2.0"));
-    assert!(license.contains("MIT License"));
-    assert!(mit_license.contains("MIT License"));
-    assert!(apache_license.contains("Apache License"));
-    assert!(readme.contains("MIT OR Apache-2.0"));
+    assert!(cargo_toml.contains("license = \"Apache-2.0\""));
+    assert!(package_json.contains("\"license\": \"Apache-2.0\""));
+    assert!(license.contains("Apache License"));
+    assert!(license.contains("Version 2.0"));
+    assert!(readme.contains("Apache-2.0"));
     assert!(readme.contains("docs/THIRD-PARTY-LICENSES.md"));
     assert!(third_party.contains("Unicode-3.0"));
     assert!(third_party.contains("Zlib"));

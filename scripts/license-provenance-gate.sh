@@ -11,13 +11,12 @@ grep_file() {
   fi
 }
 
-grep_file 'license = "MIT OR Apache-2.0"' Cargo.toml
-grep_file '"license": "MIT OR Apache-2.0"' package.json
+grep_file 'license = "Apache-2.0"' Cargo.toml
+grep_file '"license": "Apache-2.0"' package.json
 test -f LICENSE
-test -f LICENSE-MIT
-test -f LICENSE-APACHE
 test -f docs/THIRD-PARTY-LICENSES.md
 
+mkdir -p target
 cargo metadata --format-version 1 > target/ao2-license-metadata.json
 node -e '
 const fs = require("fs");

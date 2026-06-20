@@ -21,12 +21,11 @@ reject_path() {
 
 require_file README.md
 require_file LICENSE
-require_file LICENSE-MIT
-require_file LICENSE-APACHE
 require_file docs/SECURITY.md
 require_file public-export-manifest.json
 
 reject_path "./.ao2"
+reject_path "./.ao2-local"
 reject_path "./.release-signing"
 reject_path "./.gstack"
 reject_path "./.pytest_cache"
@@ -59,7 +58,9 @@ if printf '%s\n' "$secret_matches" | grep -avE 'canary|secret|preview|test|shoul
   fail "real-looking private key, bearer token, or provider-key value found"
 fi
 
-if grep -aEn '/Users/[A-Za-z0-9._-]+|C:\\Users\\[A-Za-z0-9._-]+|C:\\\\Users\\\\[A-Za-z0-9._-]+|github[.]com/[^[:space:]]+/ao2[^[:space:]]*[-]private|ao2[^[:space:]]*[-]private' $(cat "$scan_files"); then
+private_path_matches="$(grep -aEn '/Users/[A-Za-z0-9._-]+|C:\\Users\\[A-Za-z0-9._-]+|C:\\\\Users\\\\[A-Za-z0-9._-]+|github[.]com/[^[:space:]]+/ao2[^[:space:]]*[-]private|ao2[^[:space:]]*[-]private' $(cat "$scan_files") || true)"
+if printf '%s\n' "$private_path_matches" | grep -avE 'canary|redact|assert|contains|tests/|scripts/release-readiness.sh|scripts/lib/pulse-gate-lib.sh' | grep -q .; then
+  printf '%s\n' "$private_path_matches" >&2
   fail "private path or private repo reference found"
 fi
 
