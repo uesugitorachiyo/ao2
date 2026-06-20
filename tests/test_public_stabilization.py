@@ -463,15 +463,13 @@ def test_release_asset_publication_readiness_uses_local_artifact_fixture():
     assert "release-artifact-fixture" in verification
 
 
-def test_public_agent_coordination_doc_exists_and_matches_agents_contract():
+def test_public_agent_coordination_rules_stay_in_root_agents_contract():
     agents = read("AGENTS.md")
-    assert "docs/AGENT-COORDINATION.md" in agents
-    coordination = read("docs/AGENT-COORDINATION.md")
-    assert "public-safe" in coordination
-    assert "reserve" in coordination
-    assert "release" in coordination
-    assert "Do not record secrets" in coordination
-    assert "target/" in coordination
+    assert "public, local-first" in agents
+    assert "reserve your write scope" in agents
+    assert "release it in the handoff" in agents
+    assert "Do not record secrets" in agents
+    assert "target/" in agents
 
 
 def test_public_ci_docs_do_not_claim_manual_only_private_ci():

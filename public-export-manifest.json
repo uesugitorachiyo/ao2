@@ -17,8 +17,6 @@
     "rust-toolchain.toml",
     "deny.toml",
     "LICENSE",
-    "LICENSE-MIT",
-    "LICENSE-APACHE",
     "NOTICE",
     "README.md",
     "CODEOWNERS.md",

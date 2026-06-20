@@ -222,8 +222,7 @@ ao2 pulse run-loop \
 
 ## License
 
-AO2 is licensed under `MIT OR Apache-2.0`, at your option. See `LICENSE`,
-`LICENSE-MIT`, and `LICENSE-APACHE`.
+AO2 is licensed under `Apache-2.0`. See `LICENSE`.
 
 Third-party dependency license metadata is tracked in
 [`docs/THIRD-PARTY-LICENSES.md`](docs/THIRD-PARTY-LICENSES.md).
