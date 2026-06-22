@@ -501,6 +501,32 @@ pub fn resume_risky_pr_provider_free(options: ResumeOptions) -> Result<RunSummar
         ));
     }
 
+    if ctx.is_real_project_template() {
+        run_real_project_provider_free_workflow(&mut ctx)?;
+        let evidence_pack_path = export_evidence_pack(&ctx)?;
+        let report_path = render_static_report(&ctx, &evidence_pack_path)?;
+        write_run_record(&ctx, RunStatus::Accepted, &evidence_pack_path, &report_path)?;
+        let denied_actions = denied_actions(&ctx.policy_decisions);
+        let approvals = ctx.approvals.clone();
+        let rejection_count = ctx
+            .closure_reports
+            .iter()
+            .filter(|report| report.verdict == "rejected")
+            .count();
+
+        return Ok(RunSummary {
+            run_id: options.run_id,
+            status: RunStatus::Accepted,
+            run_dir: ctx.run_dir.clone(),
+            evidence_pack_path,
+            report_path,
+            run_record_path: ctx.run_dir.join("run-record.json"),
+            denied_actions,
+            approvals,
+            rejection_count,
+        });
+    }
+
     apply_first_patch(&mut ctx)?;
     let review = reviewer_concern(&mut ctx)?;
     reject_for_missing_tests(&mut ctx, &review)?;
@@ -533,6 +559,258 @@ pub fn resume_risky_pr_provider_free(options: ResumeOptions) -> Result<RunSummar
         approvals,
         rejection_count,
     })
+}
+
+fn run_real_project_provider_free_workflow(ctx: &mut RunContext) -> Result<()> {
+    record_provider_free_real_project_tasks(ctx)?;
+    let verifier = run_verifier(ctx)?;
+    if !verifier.success {
+        let review = reviewer_verifier_failure(ctx, &verifier.artifact)?;
+        reject_real_project_verifier_failure(ctx, &review, &verifier.artifact)?;
+        return Err(anyhow!("verifier failed: {}", verifier.content));
+    }
+    let review = reviewer_accept_real_project(ctx, &verifier.artifact)?;
+    accept_real_project_final(ctx, &verifier.artifact, &review)?;
+    Ok(())
+}
+
+fn record_provider_free_real_project_tasks(ctx: &mut RunContext) -> Result<()> {
+    let tasks = sdd_workflow_task_order(ctx)?.unwrap_or_default();
+    if tasks.is_empty() {
+        emit(
+            ctx,
+            "role.started",
+            Some("implementer"),
+            Some("real_project_provider_free"),
+            Actor::role("implementer"),
+            json!({"status": "started"}),
+        )?;
+        emit(
+            ctx,
+            "role.completed",
+            Some("implementer"),
+            Some("real_project_provider_free"),
+            Actor::role("implementer"),
+            json!({"status": "completed", "changed_files": [], "provider_free": true}),
+        )?;
+        return Ok(());
+    }
+
+    for task in tasks {
+        let task_id = task
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .context("SDD workflow task id is required")?;
+        emit(
+            ctx,
+            "role.started",
+            Some(task_id),
+            Some(task_id),
+            Actor::role(task_id),
+            json!({"status": "started", "provider_free": true}),
+        )?;
+        let command_logs = run_provider_free_task_commands(ctx, &task, task_id)?;
+        let summary = ctx.artifact_store.put_text(
+            "provider_free_task_summary",
+            task_id,
+            &format!("{task_id}-provider-free-summary.json"),
+            "application/json",
+            &serde_json::to_string_pretty(&json!({
+                "task_id": task_id,
+                "status": "completed",
+                "changed_files": [],
+                "provider_free": true,
+                "command_log_artifacts": command_logs,
+                "summary": "AO2 provider-free SDD task recorded without applying fixture-specific repository patches."
+            }))?,
+            command_logs.clone(),
+        )?;
+        artifact_created(ctx, &summary)?;
+        emit(
+            ctx,
+            "role.completed",
+            Some(task_id),
+            Some(task_id),
+            Actor::role(task_id),
+            json!({
+                "status": "completed",
+                "changed_files": [],
+                "provider_free": true,
+                "command_log_artifacts": command_logs,
+                "artifact": summary.artifact_id
+            }),
+        )?;
+    }
+    Ok(())
+}
+
+fn run_provider_free_task_commands(
+    ctx: &mut RunContext,
+    task: &serde_json::Value,
+    task_id: &str,
+) -> Result<Vec<String>> {
+    let commands = provider_free_task_commands(task)?;
+    let mut artifact_ids = Vec::with_capacity(commands.len());
+    for (index, raw_command) in commands.iter().enumerate() {
+        let command = resolve_verifier_command(raw_command);
+        emit(
+            ctx,
+            "task.started",
+            Some(task_id),
+            Some(task_id),
+            Actor::role(task_id),
+            json!({
+                "provider_free": true,
+                "command_index": index,
+                "command": command
+            }),
+        )?;
+        let output = verifier_command(&command)
+            .current_dir(&ctx.target_repo)
+            .output()
+            .with_context(|| format!("run provider-free command for {task_id}: {command}"))?;
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let payload = json!({
+            "schema_version": "ao2.provider-free-command-log.v1",
+            "task_id": task_id,
+            "command_index": index,
+            "command": command,
+            "exit_code": output.status.code().unwrap_or(-1),
+            "stdout": stdout,
+            "stderr": stderr,
+            "success": output.status.success()
+        });
+        let artifact = ctx.artifact_store.put_text(
+            "provider_free_command_log",
+            task_id,
+            &format!(
+                "{}-provider-free-command-{}.json",
+                task_id.replace('/', "_"),
+                index + 1
+            ),
+            "application/json",
+            &serde_json::to_string_pretty(&payload)?,
+            vec![],
+        )?;
+        artifact_created(ctx, &artifact)?;
+        artifact_ids.push(artifact.artifact_id.clone());
+        emit(
+            ctx,
+            if output.status.success() {
+                "task.completed"
+            } else {
+                "task.failed"
+            },
+            Some(task_id),
+            Some(task_id),
+            Actor::role(task_id),
+            json!({
+                "provider_free": true,
+                "command_index": index,
+                "command": command,
+                "exit_code": output.status.code().unwrap_or(-1),
+                "artifact": artifact.artifact_id
+            }),
+        )?;
+        if !output.status.success() {
+            return Err(anyhow!(
+                "provider-free command failed for {task_id}: {command}"
+            ));
+        }
+    }
+    Ok(artifact_ids)
+}
+
+fn provider_free_task_commands(task: &serde_json::Value) -> Result<Vec<String>> {
+    let Some(provider_free) = task.get("provider_free") else {
+        return Ok(Vec::new());
+    };
+    let Some(commands) = provider_free
+        .get("commands")
+        .and_then(serde_json::Value::as_array)
+    else {
+        return Ok(Vec::new());
+    };
+    let task_denied_patterns = provider_free_denied_patterns(provider_free)?;
+    commands
+        .iter()
+        .enumerate()
+        .map(|(index, command)| {
+            let command = command
+                .as_str()
+                .map(str::trim)
+                .filter(|command| !command.is_empty())
+                .map(str::to_string)
+                .with_context(|| {
+                    format!("provider_free.commands[{index}] must be a non-empty string")
+                })?;
+            validate_provider_free_command(index, &command, &task_denied_patterns)?;
+            Ok(command)
+        })
+        .collect()
+}
+
+fn provider_free_denied_patterns(provider_free: &serde_json::Value) -> Result<Vec<String>> {
+    let Some(patterns) = provider_free
+        .get("policy")
+        .and_then(|policy| policy.get("denied_patterns"))
+    else {
+        return Ok(Vec::new());
+    };
+    let patterns = patterns
+        .as_array()
+        .context("provider_free.policy.denied_patterns must be an array")?;
+    patterns
+        .iter()
+        .enumerate()
+        .map(|(index, pattern)| {
+            pattern
+                .as_str()
+                .map(str::trim)
+                .filter(|pattern| !pattern.is_empty())
+                .map(str::to_string)
+                .with_context(|| {
+                    format!(
+                        "provider_free.policy.denied_patterns[{index}] must be a non-empty string"
+                    )
+                })
+        })
+        .collect()
+}
+
+fn validate_provider_free_command(
+    index: usize,
+    command: &str,
+    task_denied_patterns: &[String],
+) -> Result<()> {
+    let lower = command.to_lowercase();
+    let default_denied = [
+        "git push",
+        "git tag",
+        "gh release",
+        "npm publish",
+        "cargo publish",
+        "twine upload",
+        "curl ",
+        "wget ",
+        "scp ",
+        "ssh ",
+        "rsync ",
+    ];
+    if default_denied.iter().any(|pattern| lower.contains(pattern)) {
+        return Err(anyhow!(
+            "provider_free.commands[{index}] is not allowed by provider-free local policy: {command}"
+        ));
+    }
+    for (pattern_index, pattern) in task_denied_patterns.iter().enumerate() {
+        if lower.contains(&pattern.to_lowercase()) {
+            return Err(anyhow!(
+                "provider_free.policy.denied_patterns[{pattern_index}] blocked provider_free.commands[{index}]: {command}"
+            ));
+        }
+    }
+    Ok(())
 }
 
 pub fn replay_run(options: ReplayOptions) -> Result<ReplaySummary> {
@@ -2522,8 +2800,13 @@ fn artifact_json_payloads(ctx: &RunContext, artifact_type: &str) -> Result<Vec<s
         if artifact.artifact_type != artifact_type {
             continue;
         }
-        let content = fs::read_to_string(&artifact.uri)
-            .with_context(|| format!("read artifact payload {}", artifact.uri))?;
+        let content = match fs::read_to_string(&artifact.uri) {
+            Ok(content) => content,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(err) => {
+                return Err(err).with_context(|| format!("read artifact payload {}", artifact.uri))
+            }
+        };
         payloads.push(serde_json::from_str(&content)?);
     }
     Ok(payloads)
@@ -3205,5 +3488,64 @@ mod load_run_context_tests {
             summary.rejection_count, 1,
             "run-record reload must preserve the full closure history, not just the final accepted closure"
         );
+    }
+
+    #[test]
+    fn provider_summary_payload_collection_skips_missing_stale_refs() {
+        let dir = tempfile::tempdir().unwrap();
+        let run_dir = dir.path().join(".ao2").join("runs").join("run-test");
+        fs::create_dir_all(run_dir.join("artifacts")).unwrap();
+        let artifact_store = ArtifactStore::new(run_dir.join("artifacts"));
+        let present = artifact_store
+            .put_text(
+                "provider_transcript_summary",
+                "implementer",
+                "provider-transcript-summary.json",
+                "application/json",
+                r#"{"provider":"codex","status":"completed"}"#,
+                vec![],
+            )
+            .unwrap();
+        let missing = ArtifactRef {
+            artifact_id: "art-missing".to_string(),
+            artifact_type: "provider_transcript_summary".to_string(),
+            uri: run_dir
+                .join("artifacts")
+                .join("art-missing")
+                .join("provider-transcript-summary.json")
+                .to_string_lossy()
+                .to_string(),
+            media_type: "application/json".to_string(),
+            digest: "0".repeat(64),
+            producer: "implementer".to_string(),
+            input_refs: vec![],
+            sensitivity: "internal".to_string(),
+        };
+        let ctx = RunContext {
+            run_id: "run-test".to_string(),
+            workflow_id: "workflow-test".to_string(),
+            template_kind: Some("real_project".to_string()),
+            objective: "test provider summary collection".to_string(),
+            roles: vec![],
+            workflow_tasks: vec![],
+            workflow_dependencies: vec![],
+            factory_v3_compatibility: None,
+            acceptance: vec![],
+            verifier_command: "true".to_string(),
+            target_repo: dir.path().to_path_buf(),
+            run_dir,
+            events_path: dir.path().join("events.jsonl"),
+            artifact_store,
+            artifacts: vec![missing, present],
+            policy_decisions: vec![],
+            approvals: vec![],
+            closure_reports: vec![],
+            repair_attempts: vec![],
+        };
+
+        let payloads = artifact_json_payloads(&ctx, "provider_transcript_summary").unwrap();
+
+        assert_eq!(payloads.len(), 1);
+        assert_eq!(payloads[0]["provider"], "codex");
     }
 }

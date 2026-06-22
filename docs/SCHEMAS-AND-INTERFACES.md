@@ -179,6 +179,30 @@ MVP artifact types:
 
 ### `policy_decision.schema.json`
 
+## SDD Run Spec Provider Modes
+
+`ao2 sdd dispatch --runner ao2` translates an `ao2.sdd-plan.v1` document into
+an AO2 run spec that can be executed with `ao2 run --spec <path>`.
+
+For `template_kind: real_project`, the default `ao2 run --spec` path is a
+provider-free real_project execution. It is evidence-only: AO2 records the
+dependency-ordered SDD task graph, records provider-free task summaries, runs the
+configured verifier commands, writes the normal evidence pack and run record,
+and does not apply fixture-specific patches or scaffold files from another
+template.
+
+Provider-free real-project runs may execute explicitly declared local commands
+when a task includes `provider_free.commands`. These commands run in dependency
+order from the target repository root, use the same portable command wrapper as
+verifier commands, fail the run on a non-zero exit, and are recorded as
+`provider_free_command_log` artifacts. AO2 does not infer or synthesize these
+commands from prose acceptance criteria.
+
+Implementation work for a real project requires provider-backed execution, for
+example `ao2 run --spec <path> --provider scripted` or another configured
+provider. In provider-backed mode, AO2 builds prompts from the SDD task graph and
+executes each task through the governed runtime before verification and closure.
+
 Required fields:
 
 - `decision_id`

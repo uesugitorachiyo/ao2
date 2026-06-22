@@ -30851,6 +30851,12 @@ fn ao2_run_spec_task_execution_records(
             task_id,
             &["sandbox_patch_preview", "sandbox_patch_apply"],
         );
+        let provider_free_command_refs = ao2_run_spec_artifact_refs_for_task(
+            &evidence_pack,
+            task_id,
+            &["provider_free_command_log"],
+        );
+        let provider_free_command_count = provider_free_command_refs.len();
         let status = if closure_status == "accepted" {
             "accepted"
         } else if task_events.iter().any(|event| {
@@ -30877,6 +30883,8 @@ fn ao2_run_spec_task_execution_records(
             "provider_summary_count": provider_summary_refs.len(),
             "sandbox_patch_refs": sandbox_patch_refs,
             "sandbox_patch_count": sandbox_patch_refs.len(),
+            "provider_free_command_refs": provider_free_command_refs,
+            "provider_free_command_count": provider_free_command_count,
             "verifier_refs": verifier_refs,
             "verifier_ref_count": verifier_refs.len(),
             "closure_status": closure_status,
@@ -31155,7 +31163,7 @@ fn ao2_run_spec_workflow_task(task: &serde_json::Value) -> Result<serde_json::Va
         .get("id")
         .and_then(serde_json::Value::as_str)
         .context("ao2 run spec task.id is required")?;
-    Ok(serde_json::json!({
+    let mut workflow_task = serde_json::json!({
         "id": id,
         "role": id,
         "kind": task.get("kind").and_then(serde_json::Value::as_str).unwrap_or("agent"),
@@ -31164,7 +31172,11 @@ fn ao2_run_spec_workflow_task(task: &serde_json::Value) -> Result<serde_json::Va
         "rationale": task.get("rationale").and_then(serde_json::Value::as_str).unwrap_or(""),
         "acceptance": task.get("acceptance").cloned().unwrap_or_else(|| serde_json::json!([])),
         "policy_profile": "ao2-sdd-run-task"
-    }))
+    });
+    if let Some(provider_free) = task.get("provider_free") {
+        workflow_task["provider_free"] = provider_free.clone();
+    }
+    Ok(workflow_task)
 }
 
 fn ao2_run_spec_workflow_dependencies(task: &serde_json::Value) -> Vec<serde_json::Value> {

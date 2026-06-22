@@ -136,6 +136,49 @@ fn ao2_run_dry_run_accepts_generated_sdd_runspec_without_mutation() {
 }
 
 #[test]
+fn ao2_run_spec_provider_free_real_project_behavior_is_documented() {
+    let docs = fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/SCHEMAS-AND-INTERFACES.md"),
+    )
+    .unwrap();
+    for required in [
+        "ao2 run --spec",
+        "provider-free real_project",
+        "evidence-only",
+        "does not apply fixture-specific patches",
+        "provider_free.commands",
+        "provider_free_command_log",
+        "--provider scripted",
+    ] {
+        assert!(
+            docs.contains(required),
+            "SDD interface docs missing provider-free real-project detail {required:?}"
+        );
+    }
+}
+
+#[test]
+fn provider_free_command_contract_fixture_is_documented() {
+    let contract_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../docs/contracts/ao2-provider-free-commands-v0.1.schema.json");
+    let contract_text = fs::read_to_string(&contract_path).unwrap();
+    let contract: serde_json::Value = serde_json::from_str(&contract_text).unwrap();
+    assert_eq!(
+        contract["properties"]["schema_version"]["const"],
+        "ao2.provider-free-commands.v0.1"
+    );
+    assert!(contract_text.contains("provider_free_command_log"));
+    assert!(contract_text.contains("git push"));
+
+    let fixture_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../sdd-planner/tests/fixtures/provider-free-command-runspec.yaml");
+    let fixture_text = fs::read_to_string(&fixture_path).unwrap();
+    assert!(fixture_text.contains("provider_free:"));
+    assert!(fixture_text.contains("commands:"));
+    assert!(fixture_text.contains("generated.txt"));
+}
+
+#[test]
 fn sdd_dispatch_dry_run_invokes_ao2_spec_preflight() {
     let temp = tempfile::tempdir().unwrap();
     let plan = fixture("valid_full.json");
@@ -249,6 +292,265 @@ fn ao2_run_executes_generated_sdd_runspec_through_governed_runtime() {
         repo.join(".ao2/generated-workflows/01jfulldefghjkmnpqrstvwxyz1-sdd-run.yaml")
     );
     assert!(Path::new(&workflow).is_file());
+}
+
+#[test]
+fn ao2_run_spec_provider_free_real_project_does_not_use_discount_fixture() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("real-project");
+    fs::create_dir_all(&repo).unwrap();
+    fs::write(
+        repo.join("go.mod"),
+        "module example.com/real-project\n\ngo 1.22\n",
+    )
+    .unwrap();
+    fs::write(
+        repo.join("main_test.go"),
+        "package main\n\nimport \"testing\"\n\nfunc TestSmoke(t *testing.T) {}\n",
+    )
+    .unwrap();
+
+    let spec = temp.path().join("ao2-run.yaml");
+    let spec_text = fs::read_to_string(fixture("expected-ao2-runspec.yaml"))
+        .unwrap()
+        .replace(
+            "repo_path: /tmp/repo-full",
+            &format!("repo_path: {}", repo.display()),
+        )
+        .replace("cargo test --release", "go test ./...")
+        .replace("cargo clippy --workspace -- -D warnings", "go test ./...");
+    fs::write(&spec, spec_text).unwrap();
+
+    let output = ao2(
+        [
+            "run",
+            "--spec",
+            spec.to_str().unwrap(),
+            "--run-id",
+            "sdd-provider-free-real-project",
+        ],
+        [],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let stdout = stdout(&output);
+    assert!(stdout.contains("status=Accepted"), "{stdout}");
+    assert!(
+        !repo.join("discount_service").exists(),
+        "provider-free SDD run must not materialize the discount fixture"
+    );
+    let sdd_task_graph = value_for(&stdout, "sdd_task_graph=");
+    let task_graph: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(sdd_task_graph).unwrap()).unwrap();
+    assert_eq!(task_graph["execution_mode"], "provider_free");
+    assert_eq!(task_graph["task_count"], 3);
+}
+
+#[test]
+fn ao2_run_spec_provider_free_real_project_executes_explicit_local_commands() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("real-project-local-command");
+    fs::create_dir_all(&repo).unwrap();
+    fs::write(
+        repo.join("go.mod"),
+        "module example.com/real-project-local-command\n\ngo 1.22\n",
+    )
+    .unwrap();
+
+    let spec = temp.path().join("ao2-run.yaml");
+    let spec_text = fs::read_to_string(fixture("expected-ao2-runspec.yaml"))
+        .unwrap()
+        .replace(
+            "repo_path: /tmp/repo-full",
+            &format!("repo_path: {}", repo.display()),
+        )
+        .replace(
+            "cargo test --release",
+            "python -c 'from pathlib import Path; raise SystemExit(0 if Path(\"generated.txt\").read_text() == \"generated\" + chr(10) else 1)'",
+        )
+        .replace(
+            "cargo clippy --workspace -- -D warnings",
+            "python -c 'from pathlib import Path; raise SystemExit(0 if Path(\"generated.txt\").is_file() else 1)'",
+        );
+    let mut spec_value: serde_yaml::Value = serde_yaml::from_str(&spec_text).unwrap();
+    spec_value["spec"]["tasks"][0]["provider_free"] = serde_yaml::Value::Mapping({
+        let mut mapping = serde_yaml::Mapping::new();
+        mapping.insert(
+            serde_yaml::Value::String("commands".to_string()),
+            serde_yaml::Value::Sequence(vec![serde_yaml::Value::String(
+                "python -c 'from pathlib import Path; Path(\"generated.txt\").write_text(\"generated\" + chr(10))'"
+                    .to_string(),
+            )]),
+        );
+        mapping
+    });
+    fs::write(&spec, serde_yaml::to_string(&spec_value).unwrap()).unwrap();
+
+    let output = ao2(
+        [
+            "run",
+            "--spec",
+            spec.to_str().unwrap(),
+            "--run-id",
+            "sdd-provider-free-local-command",
+        ],
+        [],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let stdout = stdout(&output);
+    assert!(stdout.contains("status=Accepted"), "{stdout}");
+    assert_eq!(
+        fs::read_to_string(repo.join("generated.txt")).unwrap(),
+        "generated\n"
+    );
+
+    let evidence_pack = value_for(&stdout, "evidence_pack=");
+    let evidence: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(evidence_pack).unwrap()).unwrap();
+    assert!(
+        evidence["artifacts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|artifact| artifact["artifact_type"] == "provider_free_command_log"),
+        "provider-free command execution must be recorded in evidence pack"
+    );
+
+    let sdd_task_graph = value_for(&stdout, "sdd_task_graph=");
+    let task_graph: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(sdd_task_graph).unwrap()).unwrap();
+    assert_eq!(task_graph["execution_mode"], "provider_free");
+    assert_eq!(
+        task_graph["task_executions"][0]["provider_free_command_count"],
+        1
+    );
+}
+
+#[test]
+fn ao2_run_spec_provider_free_rejects_unsafe_local_commands_before_execution() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("real-project-unsafe-command");
+    fs::create_dir_all(&repo).unwrap();
+    fs::write(
+        repo.join("go.mod"),
+        "module example.com/real-project-unsafe-command\n\ngo 1.22\n",
+    )
+    .unwrap();
+
+    let spec = temp.path().join("ao2-run.yaml");
+    let spec_text = fs::read_to_string(fixture("expected-ao2-runspec.yaml"))
+        .unwrap()
+        .replace(
+            "repo_path: /tmp/repo-full",
+            &format!("repo_path: {}", repo.display()),
+        )
+        .replace("cargo test --release", "true")
+        .replace("cargo clippy --workspace -- -D warnings", "true");
+    let mut spec_value: serde_yaml::Value = serde_yaml::from_str(&spec_text).unwrap();
+    spec_value["spec"]["tasks"][0]["provider_free"] = serde_yaml::Value::Mapping({
+        let mut mapping = serde_yaml::Mapping::new();
+        mapping.insert(
+            serde_yaml::Value::String("commands".to_string()),
+            serde_yaml::Value::Sequence(vec![serde_yaml::Value::String(
+                "git push origin main".to_string(),
+            )]),
+        );
+        mapping
+    });
+    fs::write(&spec, serde_yaml::to_string(&spec_value).unwrap()).unwrap();
+
+    let output = ao2(
+        [
+            "run",
+            "--spec",
+            spec.to_str().unwrap(),
+            "--run-id",
+            "sdd-provider-free-unsafe-command",
+        ],
+        [],
+    );
+    assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
+    let stderr = stderr(&output);
+    assert!(
+        stderr.contains("provider_free.commands[0] is not allowed"),
+        "{stderr}"
+    );
+    assert!(
+        !repo
+            .join(".ao2/runs/sdd-provider-free-unsafe-command/evidence-pack/evidence-pack.json")
+            .exists(),
+        "unsafe provider-free command should fail before accepted evidence pack export"
+    );
+}
+
+#[test]
+fn ao2_run_spec_provider_free_applies_task_denied_patterns() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("real-project-task-policy");
+    fs::create_dir_all(&repo).unwrap();
+    fs::write(
+        repo.join("go.mod"),
+        "module example.com/real-project-task-policy\n\ngo 1.22\n",
+    )
+    .unwrap();
+
+    let spec = temp.path().join("ao2-run.yaml");
+    let spec_text = fs::read_to_string(fixture("expected-ao2-runspec.yaml"))
+        .unwrap()
+        .replace(
+            "repo_path: /tmp/repo-full",
+            &format!("repo_path: {}", repo.display()),
+        )
+        .replace("cargo test --release", "true")
+        .replace("cargo clippy --workspace -- -D warnings", "true");
+    let mut spec_value: serde_yaml::Value = serde_yaml::from_str(&spec_text).unwrap();
+    spec_value["spec"]["exit_criteria"]["tests"] =
+        serde_yaml::Value::Sequence(vec![serde_yaml::Value::String("true".to_string())]);
+    spec_value["spec"]["exit_criteria"]["gates"] =
+        serde_yaml::Value::Sequence(vec![serde_yaml::Value::String("true".to_string())]);
+    spec_value["spec"]["tasks"][0]["provider_free"] = serde_yaml::Value::Mapping({
+        let mut provider_free = serde_yaml::Mapping::new();
+        provider_free.insert(
+            serde_yaml::Value::String("commands".to_string()),
+            serde_yaml::Value::Sequence(vec![serde_yaml::Value::String(
+                "python -c 'print(\"blocked by task policy\")'".to_string(),
+            )]),
+        );
+        provider_free.insert(
+            serde_yaml::Value::String("policy".to_string()),
+            serde_yaml::Value::Mapping({
+                let mut policy = serde_yaml::Mapping::new();
+                policy.insert(
+                    serde_yaml::Value::String("denied_patterns".to_string()),
+                    serde_yaml::Value::Sequence(vec![serde_yaml::Value::String(
+                        "python -c".to_string(),
+                    )]),
+                );
+                policy
+            }),
+        );
+        provider_free
+    });
+    fs::write(&spec, serde_yaml::to_string(&spec_value).unwrap()).unwrap();
+
+    let output = ao2(
+        [
+            "run",
+            "--spec",
+            spec.to_str().unwrap(),
+            "--run-id",
+            "sdd-provider-free-task-policy",
+        ],
+        [],
+    );
+    assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
+    let stderr = stderr(&output);
+    assert!(
+        stderr.contains("provider_free.policy.denied_patterns[0]"),
+        "{stderr}"
+    );
+    assert!(!repo
+        .join(".ao2/runs/sdd-provider-free-task-policy/evidence-pack/evidence-pack.json")
+        .exists());
 }
 
 #[test]

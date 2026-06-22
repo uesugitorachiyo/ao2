@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/uesugitorachiyo/ao2/docs/contracts/ao2-provider-free-commands-v0.1.schema.json",
+  "title": "AO2 provider-free commands v0.1",
+  "type": "object",
+  "required": ["schema_version", "provider_free", "evidence"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "ao2.provider-free-commands.v0.1"
+    },
+    "provider_free": {
+      "type": "object",
+      "required": ["commands", "policy"],
+      "additionalProperties": false,
+      "properties": {
+        "commands": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "policy": {
+          "type": "object",
+          "required": ["working_directory", "denied_patterns"],
+          "additionalProperties": false,
+          "properties": {
+            "working_directory": {
+              "const": "target_repo_root"
+            },
+            "denied_patterns": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "git push",
+                  "git tag",
+                  "gh release",
+                  "npm publish",
+                  "cargo publish",
+                  "twine upload",
+                  "curl ",
+                  "wget ",
+                  "scp ",
+                  "ssh ",
+                  "rsync "
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["artifact_type"],
+      "additionalProperties": false,
+      "properties": {
+        "artifact_type": {
+          "const": "provider_free_command_log"
+        }
+      }
+    }
+  }
+}

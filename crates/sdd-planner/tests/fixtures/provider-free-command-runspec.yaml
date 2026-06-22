@@ -1,0 +1,59 @@
+apiVersion: ao2.run/v1
+kind: Run
+metadata:
+  name: provider-free-command-example
+  description: Provider-free real-project local command example
+spec:
+  source:
+    schema_version: ao2.sdd-plan.v1
+    plan_id: 01JPROVIDERFREECOMMANDS000000
+    generated_at_utc: 2026-06-22T00:00:00.000000Z
+  plan_kind: build
+  goal: Demonstrate an explicit provider-free local command.
+  non_goals:
+    - do not use provider-backed execution
+  prompt:
+    text: Generate a local evidence file.
+    sha256: '1111111111111111111111111111111111111111111111111111111111111111'
+  target:
+    repo_path: /tmp/repo-provider-free-command
+    head_sha: '1111111111111111111111111111111111111111'
+    head_subject: Provider-free command fixture
+    surface_map_sha256: '2222222222222222222222222222222222222222222222222222222222222222'
+  provenance:
+    attempts: 1
+    provider: codex
+    engine_sha: '2222222222222222222222222222222222222222'
+    cli_version: 0.4.80
+  trust_boundary:
+    control_plane_role: read_only_observer
+    mutates_ao_artifacts: false
+    ingest_authority: ao-operator
+    release_acceptance_owner: factory-v3 evaluator-closer
+  tasks:
+    - id: write_local_evidence
+      kind: create
+      deps: []
+      paths:
+        - generated.txt
+      rationale: Exercise explicit provider-free local command execution.
+      acceptance:
+        - generated.txt exists
+      provider_free:
+        commands:
+          - python -c 'from pathlib import Path; Path("generated.txt").write_text("generated" + chr(10))'
+        policy:
+          working_directory: target_repo_root
+          denied_patterns:
+            - git push
+            - git tag
+            - gh release
+            - npm publish
+            - cargo publish
+  exit_criteria:
+    tests:
+      - python -c 'from pathlib import Path; raise SystemExit(0 if Path("generated.txt").is_file() else 1)'
+    gates:
+      - true
+    manual:
+      - operator inspects provider_free_command_log evidence
