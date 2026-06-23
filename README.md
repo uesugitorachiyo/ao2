@@ -20,6 +20,14 @@ AO2 owns execution and evidence production. The optional
 [`ao2-control-plane`](https://github.com/uesugitorachiyo/ao2-control-plane)
 repo is a separate self-hosted read-only observer for signed AO2 evidence.
 
+## Successor Boundary
+
+AO2 replaces the deprecated AO Operator / AO Runtime execution path for active
+AO work. New execution, provider-free command, SDD command, runtime behavior,
+and evaluator-closure work belongs here. Typed state, evidence readback,
+retention, and observer workflows belong in
+[`ao2-control-plane`](https://github.com/uesugitorachiyo/ao2-control-plane).
+
 ## Why AO2?
 
 Most agent systems focus on doing work. AO2 focuses on making the work
