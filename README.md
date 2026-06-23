@@ -27,6 +27,8 @@ AO work. New execution, provider-free command, SDD command, runtime behavior,
 and evaluator-closure work belongs here. Typed state, evidence readback,
 retention, and observer workflows belong in
 [`ao2-control-plane`](https://github.com/uesugitorachiyo/ao2-control-plane).
+The runtime used by AO2 is the in-repo `crates/ao2-runtime` workspace crate;
+AO2 does not depend on the deprecated standalone `ao-runtime` repository.
 
 ## Why AO2?
 
