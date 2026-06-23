@@ -256,19 +256,13 @@ if [ "$AO2_RELEASE_ANTIGRAVITY_PILOT_ACCEPTANCE" = "1" ] \
 fi
 
 if [ "${AO2_SYNC_PUBLIC_MIRRORS:-0}" = "1" ]; then
-  echo "[release-ship] syncing ao-*-private → ao-* public mirrors (AO2_SYNC_PUBLIC_MIRRORS=1)"
+  echo "[release-ship] syncing configured public mirrors (AO2_SYNC_PUBLIC_MIRRORS=1)"
   AO2_PUBLIC_MIRROR_DRY_RUN="${AO2_PUBLIC_MIRROR_DRY_RUN:-0}"
   mirror_extra=""
   if [ "$AO2_PUBLIC_MIRROR_DRY_RUN" = "1" ]; then mirror_extra="--dry-run"; fi
   # Default mirror pair set. Each pair runs only if both --source and
   # --target are checked out on this host; otherwise it is skipped with a
   # log line so a partial workstation doesn't fail the ship.
-  AO2_SYNC_AO_RUNTIME_SOURCE="${AO2_SYNC_AO_RUNTIME_SOURCE:-../ao-runtime}"
-  AO2_SYNC_AO_RUNTIME_TARGET="${AO2_SYNC_AO_RUNTIME_TARGET:-../ao-runtime-public}"
-  AO2_SYNC_AO_CONTROL_PLANE_SOURCE="${AO2_SYNC_AO_CONTROL_PLANE_SOURCE:-../ao-control-plane}"
-  AO2_SYNC_AO_CONTROL_PLANE_TARGET="${AO2_SYNC_AO_CONTROL_PLANE_TARGET:-../ao-control-plane-public}"
-  AO2_SYNC_AO_OPERATOR_SOURCE="${AO2_SYNC_AO_OPERATOR_SOURCE:-../factory-v3}"
-  AO2_SYNC_AO_OPERATOR_TARGET="${AO2_SYNC_AO_OPERATOR_TARGET:-../ao-operator-public}"
   AO2_SYNC_SECURE_AGENT_PROFILE_SOURCE="${AO2_SYNC_SECURE_AGENT_PROFILE_SOURCE:-/tmp/ao2-public/secure-agent-profile}"
   AO2_SYNC_SECURE_AGENT_PROFILE_TARGET="${AO2_SYNC_SECURE_AGENT_PROFILE_TARGET:-../secure-agent-profile-public}"
   AO2_SYNC_FINANCIAL_SERVICES_PROFILE_SOURCE="${AO2_SYNC_FINANCIAL_SERVICES_PROFILE_SOURCE:-../financial-services-profile}"
@@ -288,14 +282,9 @@ if [ "${AO2_SYNC_PUBLIC_MIRRORS:-0}" = "1" ]; then
       exit 1
     fi
   }
-  # ao-runtime + ao-operator (factory-v3) have no public-only README
-  # additions to preserve. ao-control-plane, secure-agent-profile, and
-  # financial-services-profile each carry a public-only README language
-  # selector that the private export would clobber, so README.md is
-  # preserved on those.
-  mirror_run_pair ao-runtime "$AO2_SYNC_AO_RUNTIME_SOURCE" "$AO2_SYNC_AO_RUNTIME_TARGET"
-  mirror_run_pair ao-control-plane "$AO2_SYNC_AO_CONTROL_PLANE_SOURCE" "$AO2_SYNC_AO_CONTROL_PLANE_TARGET" --preserve README.md
-  mirror_run_pair ao-operator "$AO2_SYNC_AO_OPERATOR_SOURCE" "$AO2_SYNC_AO_OPERATOR_TARGET"
+  # secure-agent-profile and financial-services-profile each carry a public-only
+  # README language selector that the private export would clobber, so README.md
+  # is preserved on those.
   mirror_run_pair secure-agent-profile "$AO2_SYNC_SECURE_AGENT_PROFILE_SOURCE" "$AO2_SYNC_SECURE_AGENT_PROFILE_TARGET" --preserve README.md
   mirror_run_pair financial-services-profile "$AO2_SYNC_FINANCIAL_SERVICES_PROFILE_SOURCE" "$AO2_SYNC_FINANCIAL_SERVICES_PROFILE_TARGET" --preserve README.md
   printf "public_mirror_sync_attempted=%d\n" "$mirror_pushed_count"

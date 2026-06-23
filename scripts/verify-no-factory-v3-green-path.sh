@@ -3,8 +3,7 @@
 #
 # Phase 2 guardrail: fail if AO2 green-path automation starts invoking
 # factory-v3 as an executor again. factory-v3 may remain as a read-only
-# parity oracle, audit reference, evaluator-closer owner, or explicit public
-# mirror source for ao-operator export.
+# parity oracle, audit reference, or evaluator-closer owner.
 set -eu
 
 AO2_ROOT="${AO2_ROOT:-$PWD}"
@@ -131,12 +130,6 @@ def classify(rel: str, line: str) -> tuple[bool, str]:
         "evaluator_closer" in normalized or "sampling_auditor" in normalized
     ):
         return True, "evaluator_closer_owner"
-    if rel == "scripts/release-ship.sh" and (
-        "AO2_SYNC_AO_OPERATOR_SOURCE" in line
-        or "mirror_run_pair ao-operator" in line
-        or "ao-operator (factory-v3)" in line
-    ):
-        return True, "public_mirror_source_only"
     if rel == "scripts/smoke-phase1-control-plane-readback.sh" and (
         "factory-v3/ao2-phase1-promotion" in line
         or "factory-v3 evaluator-closer" in line

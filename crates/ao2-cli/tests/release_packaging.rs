@@ -3403,6 +3403,12 @@ fn release_build_all_script_and_manual_workflow_cover_public_release_sequence() 
     assert!(ship_script.contains("npm run release:gate"));
     assert!(ship_script.contains("git tag -a"));
     assert!(ship_script.contains("gh release create"));
+    assert!(!ship_script.contains("AO2_SYNC_AO_RUNTIME_SOURCE"));
+    assert!(!ship_script.contains("AO2_SYNC_AO_CONTROL_PLANE_SOURCE"));
+    assert!(!ship_script.contains("AO2_SYNC_AO_OPERATOR_SOURCE"));
+    assert!(!ship_script.contains("mirror_run_pair ao-runtime"));
+    assert!(!ship_script.contains("mirror_run_pair ao-control-plane"));
+    assert!(!ship_script.contains("mirror_run_pair ao-operator"));
     assert!(ship_script.contains("dist-linux-x86_64/ao2-\"$AO2_VERSION\"-linux-x86_64.tar.gz"));
     assert!(ship_script.contains("dist-provenance/ao2-\"$AO2_VERSION\"-linux-x86_64.tar.gz.sha256"));
     assert!(
@@ -3506,6 +3512,7 @@ fn w4_release_workflows_include_no_factory_v3_guard_artifacts() {
     assert!(guard.contains("sampling_auditor"));
     assert!(guard.contains("scripts/parity-oracle-snapshots/"));
     assert!(guard.contains("parity_oracle_snapshot"));
+    assert!(!guard.contains("public_mirror_source_only"));
 
     let release_gate_script =
         fs::read_to_string(root.join("scripts/release-gate.sh")).expect("release gate exists");
