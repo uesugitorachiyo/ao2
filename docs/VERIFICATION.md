@@ -182,16 +182,15 @@ operators to a stale generated identifier. It also writes
 generation snapshots under
 `${AO2_PULSE_TASK_BOARD_HISTORY_ROOT:-.ao2-local/pulse/task-board-history}` so
 operators can see whether the selected work changed between Pulse generations.
-For codex-cron event-loop handoff, the packet also includes
-`codex-cron-event-loop-decision.json` with
-`codex-cron.event-loop-decision.v1` at the top level and AO2 metadata under
-`ao2.pulse-codex-cron-event-loop-decision.v1`, allowing event-loop jobs to
+For native AO2 event-loop handoff, the packet includes
+`ao2-event-loop-decision.json` with `ao2.pulse-event-loop-decision.v1` at the
+top level and AO2 metadata under
+`ao2.pulse-event-loop-decision-metadata.v1`, allowing event-loop jobs to
 consume a structured continue/backoff decision without prompt scraping.
-`npm run pulse:codex-cron-event-loop-smoke` builds or uses an installed
-codex-cron binary, runs `npm run pulse:generate-next` through a bounded
-codex-cron event-loop job configured with `--event-loop-decision-file`, and
-emits `ao2.pulse-codex-cron-event-loop-smoke.v1` evidence proving
-`decision_source=file` for the generated `codex-cron-event-loop-decision.json`.
+`npm run pulse:ao2-event-loop-smoke` runs `npm run pulse:generate-next` through
+AO2's bounded event-loop runtime and emits `ao2.pulse-event-loop-smoke.v1`
+evidence proving `decision_source=file` for the generated
+`ao2-event-loop-decision.json`.
 When `AO2_PULSE_TASK_BOARD_STATUS_EVIDENCE` points at an
 `ao2.ai-task-board-status-evidence.v1` JSON file, the generated board applies
 task-id or stable-task-id keyed status transitions and records
@@ -561,7 +560,7 @@ Result:
   `ao2-release-readiness`, `ao2-release-train-control-plane-bridge`,
   `ao2-ai-task-board-control-plane-bridge`,
   `ao2-pulse-task-board-closure-packet`,
-  `ao2-pulse-codex-cron-event-loop-smoke`,
+  `ao2-pulse-ao2-event-loop-smoke`,
   `ao2-dual-repo-installed-release-smoke`,
   `ao2-release-publication-closure`,
   `ao2-dual-repo-release-publication-closure-index`,
@@ -581,18 +580,18 @@ Result:
   `ao2-release-train-control-plane-bridge`,
   `ao2-ai-task-board-control-plane-bridge`,
   `ao2-pulse-task-board-closure-packet`,
-  `ao2-pulse-codex-cron-event-loop-smoke`,
+  `ao2-pulse-ao2-event-loop-smoke`,
   `ao2-dual-repo-installed-release-smoke`, and
   `ao2-release-publication-closure`; validates the
   `ao2.release-readiness-local.v1` summary/status/core cross-OS checks, the
   control-plane bridge/readback schemas, the
   `ao2.pulse-task-board-closure-packet.v1` task alignment and safety-field
   preservation checks, the
-  `ao2.pulse-codex-cron-event-loop-smoke.v1` event-loop handoff with
+  `ao2.pulse-event-loop-smoke.v1` event-loop handoff with
   `decision_source=file`, the nested ready
   `ao2.pulse-generate-next.v1` summary, the
-  `codex-cron.event-loop-decision.v1` decision file, the embedded
-  `ao2.pulse-codex-cron-event-loop-decision.v1` metadata, and the
+  `ao2.pulse-event-loop-decision.v1` decision file, the embedded
+  `ao2.pulse-event-loop-decision-metadata.v1` metadata, and the
   `ao2.release-publication-dry-run-closure.v1` publication/stable readiness
   fields. The companion `Dual-repo release publication closure index` job
   downloads AO2's `ao2-release-publication-closure` and the latest successful

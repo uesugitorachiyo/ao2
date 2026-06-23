@@ -38,7 +38,7 @@ required_source_artifacts = [
     "ao2-release-train-control-plane-bridge",
     "ao2-ai-task-board-control-plane-bridge",
     "ao2-pulse-task-board-closure-packet",
-    "ao2-pulse-codex-cron-event-loop-smoke",
+    "ao2-pulse-ao2-event-loop-smoke",
     "ao2-dual-repo-installed-release-smoke",
     "ao2-release-publication-closure",
     "ao2-dual-repo-release-publication-closure-index",

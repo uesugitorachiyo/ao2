@@ -113,24 +113,25 @@ require(
     pulse_task_board_closure_summary,
 )
 
-pulse_codex_cron_smoke_summary_path, pulse_codex_cron_smoke_summary = load_json("ao2-pulse-codex-cron-event-loop-smoke/latest/summary.json")
-require(pulse_codex_cron_smoke_summary.get("schema_version") == "ao2.pulse-codex-cron-event-loop-smoke.v1", "unexpected Pulse codex-cron smoke schema", pulse_codex_cron_smoke_summary)
-require(pulse_codex_cron_smoke_summary.get("status") == "passed", "Pulse codex-cron smoke did not pass", pulse_codex_cron_smoke_summary)
-require(pulse_codex_cron_smoke_summary.get("codex_cron", {}).get("decision_source") == "file", "Pulse codex-cron smoke did not use file decision source", pulse_codex_cron_smoke_summary)
-require(pulse_codex_cron_smoke_summary.get("ao2", {}).get("decision_schema") == "codex-cron.event-loop-decision.v1", "unexpected codex-cron decision schema", pulse_codex_cron_smoke_summary)
-require(pulse_codex_cron_smoke_summary.get("ao2", {}).get("ao2_decision_schema") == "ao2.pulse-codex-cron-event-loop-decision.v1", "unexpected AO2 codex-cron decision schema", pulse_codex_cron_smoke_summary)
-require(pulse_codex_cron_smoke_summary.get("trust_boundary", {}).get("provider_execution") is False, "Pulse codex-cron smoke must not execute providers", pulse_codex_cron_smoke_summary)
-pulse_generate_next_rel = "ao2-pulse-codex-cron-event-loop-smoke/latest/pulse-generate-next/summary.json"
-codex_cron_decision_rel = "ao2-pulse-codex-cron-event-loop-smoke/latest/pulse-next-recommended-tasks/codex-cron-event-loop-decision.json"
-codex_cron_stdout_rel = "ao2-pulse-codex-cron-event-loop-smoke/latest/codex-cron-run-loop.stdout"
-for rel_path in [pulse_generate_next_rel, codex_cron_decision_rel, codex_cron_stdout_rel]:
-    require((consumer_root / rel_path).is_file(), f"missing Pulse codex-cron smoke file {rel_path}")
+pulse_ao2_smoke_summary_path, pulse_ao2_smoke_summary = load_json("ao2-pulse-ao2-event-loop-smoke/latest/summary.json")
+require(pulse_ao2_smoke_summary.get("schema_version") == "ao2.pulse-event-loop-smoke.v1", "unexpected Pulse AO2 smoke schema", pulse_ao2_smoke_summary)
+require(pulse_ao2_smoke_summary.get("status") == "passed", "Pulse AO2 smoke did not pass", pulse_ao2_smoke_summary)
+require(pulse_ao2_smoke_summary.get("ao2", {}).get("decision_source") == "file", "Pulse AO2 smoke did not use file decision source", pulse_ao2_smoke_summary)
+require(pulse_ao2_smoke_summary.get("ao2", {}).get("run_loop_schema") == "ao2.pulse-event-loop-run.v1", "unexpected AO2 run-loop schema", pulse_ao2_smoke_summary)
+require(pulse_ao2_smoke_summary.get("ao2", {}).get("decision_schema") == "ao2.pulse-event-loop-decision.v1", "unexpected AO2 decision schema", pulse_ao2_smoke_summary)
+require(pulse_ao2_smoke_summary.get("ao2", {}).get("decision_metadata_schema") == "ao2.pulse-event-loop-decision-metadata.v1", "unexpected AO2 decision metadata schema", pulse_ao2_smoke_summary)
+require(pulse_ao2_smoke_summary.get("trust_boundary", {}).get("provider_execution") is False, "Pulse AO2 smoke must not execute providers", pulse_ao2_smoke_summary)
+pulse_generate_next_rel = "ao2-pulse-ao2-event-loop-smoke/latest/pulse-generate-next/summary.json"
+ao2_decision_rel = "ao2-pulse-ao2-event-loop-smoke/latest/pulse-next-recommended-tasks/ao2-event-loop-decision.json"
+ao2_stdout_rel = "ao2-pulse-ao2-event-loop-smoke/latest/ao2-run-loop.stdout"
+for rel_path in [pulse_generate_next_rel, ao2_decision_rel, ao2_stdout_rel]:
+    require((consumer_root / rel_path).is_file(), f"missing Pulse AO2 smoke file {rel_path}")
 pulse_generate_next_summary_path, pulse_generate_next_summary = load_json(pulse_generate_next_rel)
 require(pulse_generate_next_summary.get("schema_version") == "ao2.pulse-generate-next.v1", "unexpected Pulse generate-next schema", pulse_generate_next_summary)
 require(pulse_generate_next_summary.get("status") == "ready", "Pulse generate-next was not ready", pulse_generate_next_summary)
-codex_cron_decision_path, codex_cron_decision = load_json(codex_cron_decision_rel)
-require(codex_cron_decision.get("schema_version") == "codex-cron.event-loop-decision.v1", "unexpected codex-cron decision file schema", codex_cron_decision)
-require(codex_cron_decision.get("ao2", {}).get("schema_version") == "ao2.pulse-codex-cron-event-loop-decision.v1", "unexpected AO2 codex-cron decision file schema", codex_cron_decision)
+ao2_decision_path, ao2_decision = load_json(ao2_decision_rel)
+require(ao2_decision.get("schema_version") == "ao2.pulse-event-loop-decision.v1", "unexpected AO2 decision file schema", ao2_decision)
+require(ao2_decision.get("ao2", {}).get("schema_version") == "ao2.pulse-event-loop-decision-metadata.v1", "unexpected AO2 decision metadata file schema", ao2_decision)
 
 dual_repo_summary_path, dual_repo_summary = load_json("ao2-dual-repo-installed-release-smoke/latest/summary.json")
 require(dual_repo_summary.get("schema_version") == "ao2.dual-repo-installed-release-smoke.v1", "unexpected dual-repo installed smoke schema", dual_repo_summary)
@@ -207,7 +208,7 @@ required_checks = [
     "ci_release_train_control_plane_bridge_artifact_job",
     "ci_ai_task_board_control_plane_bridge_artifact_job",
     "ci_pulse_task_board_closure_packet_artifact_job",
-    "ci_pulse_codex_cron_event_loop_smoke_artifact_job",
+    "ci_pulse_ao2_event_loop_smoke_artifact_job",
     "ci_dual_repo_installed_release_smoke_artifact_job",
     "ci_release_publication_closure_artifact_job",
     "ci_dual_repo_release_publication_closure_index_job",
@@ -231,7 +232,7 @@ consumer_summary = {
         "ao2-release-train-control-plane-bridge",
         "ao2-ai-task-board-control-plane-bridge",
         "ao2-pulse-task-board-closure-packet",
-        "ao2-pulse-codex-cron-event-loop-smoke",
+        "ao2-pulse-ao2-event-loop-smoke",
         "ao2-dual-repo-installed-release-smoke",
         "ao2-release-publication-closure",
         "ao2-dual-repo-release-publication-closure-index",
@@ -245,9 +246,9 @@ consumer_summary = {
         str(bridge_summary_path),
         str(task_board_bridge_summary_path),
         str(pulse_task_board_closure_summary_path),
-        str(pulse_codex_cron_smoke_summary_path),
+        str(pulse_ao2_smoke_summary_path),
         str(pulse_generate_next_summary_path),
-        str(codex_cron_decision_path),
+        str(ao2_decision_path),
         str(dual_repo_summary_path),
         str(publication_closure_summary_path),
         str(dual_repo_publication_closure_summary_path),
