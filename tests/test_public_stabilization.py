@@ -1,4 +1,5 @@
 import hashlib
+import ast
 import json
 import os
 import re
@@ -127,6 +128,8 @@ def test_production_readiness_ops_workflow_verifies_branch_protection_drift():
         'mode="${AO2_BRANCH_PROTECTION_MODE:-full}"',
         "ao2.branch-protection-audit.v1",
         "required_status_checks_strict",
+        "ruleset_status_checks_current",
+        'gh api "repos/${repository}/rulesets"',
         "enforce_admins_enabled",
         "required_linear_history_enabled",
         "required_status_checks_enforced_for_everyone",
@@ -139,11 +142,98 @@ def test_production_readiness_ops_workflow_verifies_branch_protection_drift():
         "scripts/verify-branch-protection.sh",
         "AO2_BRANCH_PROTECTION_MODE=limited",
         "Production Readiness Ops",
+        "active branch rulesets",
     ]:
         assert needle in runbook
 
     assert "docs/BRANCH-PROTECTION.md" in readme
     assert "Production Readiness Ops" in verification
+
+
+def test_branch_protection_verifier_rejects_stale_active_ruleset(tmp_path):
+    verifier = read("scripts/verify-branch-protection.sh")
+    required_checks_match = re.search(
+        r"required_checks = (\[.*?\])\n\nrulesets_checked = False",
+        verifier,
+        re.DOTALL,
+    )
+    assert required_checks_match
+    required_checks = ast.literal_eval(required_checks_match.group(1))
+
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_gh = fake_bin / "gh"
+    fake_gh.write_text(
+        f"""#!/usr/bin/env python3
+import json
+import sys
+
+required_checks = {required_checks!r}
+endpoint = sys.argv[2] if len(sys.argv) > 2 and sys.argv[1] == "api" else ""
+
+if endpoint == "repos/uesugitorachiyo/ao2/branches/main/protection":
+    print(json.dumps({{
+        "required_status_checks": {{
+            "strict": True,
+            "contexts": required_checks,
+        }},
+        "enforce_admins": {{"enabled": True}},
+        "required_linear_history": {{"enabled": True}},
+        "allow_force_pushes": {{"enabled": False}},
+        "allow_deletions": {{"enabled": False}},
+    }}))
+elif endpoint == "repos/uesugitorachiyo/ao2/rulesets":
+    print(json.dumps([
+        {{
+            "id": 1729,
+            "name": "main stale required checks",
+            "target": "branch",
+            "enforcement": "active",
+            "conditions": {{
+                "ref_name": {{
+                    "include": ["~DEFAULT_BRANCH"],
+                    "exclude": [],
+                }},
+            }},
+            "rules": [
+                {{
+                    "type": "required_status_checks",
+                    "parameters": {{
+                        "required_status_checks": [
+                            {{"context": "Verify macos-13 / build-release"}}
+                        ],
+                    }},
+                }}
+            ],
+        }}
+    ]))
+else:
+    print(f"unexpected gh endpoint: {{endpoint}}", file=sys.stderr)
+    sys.exit(1)
+""",
+        encoding="utf-8",
+    )
+    fake_gh.chmod(fake_gh.stat().st_mode | stat.S_IXUSR)
+
+    audit_path = tmp_path / "branch-protection-audit.json"
+    result = subprocess.run(
+        ["scripts/verify-branch-protection.sh"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
+            "AO2_BRANCH_PROTECTION_AUDIT": str(audit_path),
+        },
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    audit = json.loads(audit_path.read_text(encoding="utf-8"))
+    assert audit["checks"]["ruleset_status_checks_current"] is False
+    assert audit["rulesets_checked"] is True
+    assert audit["rulesets_count"] == 1
+    assert "Verify macos-13 / build-release" in "\n".join(audit["errors"])
 
 
 def test_ci_matrix_entries_do_not_repeat_top_level_keys():

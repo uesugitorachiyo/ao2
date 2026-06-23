@@ -569,7 +569,9 @@ Result:
   `ao2-release-readiness-final-closure-verifier`
 - `Production Readiness Ops`: scheduled/manual read-only GitHub workflow that
   runs `scripts/verify-branch-protection.sh` in limited token mode to detect
-  `main` branch-protection drift between release-readiness runs.
+  `main` branch-protection drift between release-readiness runs. Full local
+  verification also reads active branch rulesets so stale required-check
+  contexts cannot hide outside classic branch protection.
 - `Release readiness artifact consumer`: CI job that depends on
   `Release readiness artifacts` and `Release train control-plane bridge
   artifacts`, the AI task-board bridge, Pulse task-board closure packet,

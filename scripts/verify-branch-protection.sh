@@ -11,6 +11,7 @@ trap 'rm -rf "$tmpdir"' EXIT
 
 if [[ "$mode" == "full" ]]; then
   gh api "repos/${repository}/branches/${branch}/protection" >"${tmpdir}/protection.json"
+  gh api "repos/${repository}/rulesets" >"${tmpdir}/rulesets.json"
 elif [[ "$mode" == "limited" ]]; then
   gh api "repos/${repository}/branches/${branch}" >"${tmpdir}/branch.json"
 else
@@ -20,6 +21,7 @@ fi
 
 python3 - "$repository" "$branch" "$mode" "$tmpdir" "$out" <<'PY'
 import datetime
+import fnmatch
 import json
 import pathlib
 import sys
@@ -94,14 +96,66 @@ required_checks = [
     'Verify windows-latest / test-workspace-non-cli',
 ]
 
+rulesets_checked = False
+rulesets_count = 0
+ruleset_status_check_errors = []
+
+def _matches_branch_pattern(pattern, branch_name):
+    full_ref = f"refs/heads/{branch_name}"
+    if pattern in {"~DEFAULT_BRANCH", branch_name, full_ref}:
+        return True
+    return fnmatch.fnmatch(branch_name, pattern) or fnmatch.fnmatch(full_ref, pattern)
+
+
+def _ruleset_applies_to_branch(ruleset, branch_name):
+    if ruleset.get("target") != "branch":
+        return False
+    if ruleset.get("enforcement") != "active":
+        return False
+
+    ref_name = ((ruleset.get("conditions") or {}).get("ref_name") or {})
+    includes = ref_name.get("include") or []
+    excludes = ref_name.get("exclude") or []
+
+    if any(_matches_branch_pattern(pattern, branch_name) for pattern in excludes):
+        return False
+    return not includes or any(_matches_branch_pattern(pattern, branch_name) for pattern in includes)
+
+
+def _required_status_check_contexts(ruleset):
+    for rule in ruleset.get("rules") or []:
+        if rule.get("type") != "required_status_checks":
+            continue
+        parameters = rule.get("parameters") or {}
+        for status_check in parameters.get("required_status_checks") or []:
+            context = status_check.get("context")
+            if context:
+                yield context
+
+
 if mode == "full":
     protection = json.loads((tmpdir / "protection.json").read_text())
+    rulesets = json.loads((tmpdir / "rulesets.json").read_text())
+    rulesets_checked = True
+    rulesets_count = len(rulesets)
+    required_check_set = set(required_checks)
+    for ruleset in rulesets:
+        if not _ruleset_applies_to_branch(ruleset, branch):
+            continue
+        for context in _required_status_check_contexts(ruleset):
+            if context not in required_check_set:
+                ruleset_status_check_errors.append(
+                    "active ruleset "
+                    f"{ruleset.get('name', ruleset.get('id', '<unnamed>'))!r} "
+                    f"requires unexpected status check: {context}"
+                )
     required_status_checks = protection.get("required_status_checks") or {}
     observed_checks = required_status_checks.get("contexts") or []
     checks = {
         "branch_protection_api_available": True,
         "required_status_checks_strict": required_status_checks.get("strict") is True,
         "required_status_checks_complete": False,
+        "ruleset_status_checks_current": not ruleset_status_check_errors,
         "enforce_admins_enabled": (protection.get("enforce_admins") or {}).get("enabled") is True,
         "required_linear_history_enabled": (protection.get("required_linear_history") or {}).get("enabled") is True,
         "force_pushes_disabled": (protection.get("allow_force_pushes") or {}).get("enabled") is False,
@@ -132,6 +186,7 @@ if missing_checks:
     errors.append(f"missing required status checks: {', '.join(missing_checks)}")
 if unexpected_checks:
     errors.append(f"unexpected required status checks: {', '.join(unexpected_checks)}")
+errors.extend(ruleset_status_check_errors)
 
 audit = {
     "schema_version": "ao2.branch-protection-audit.v1",
@@ -140,6 +195,8 @@ audit = {
     "repository": repository,
     "branch": branch,
     "mode": mode,
+    "rulesets_checked": rulesets_checked,
+    "rulesets_count": rulesets_count,
     "required_checks": required_checks,
     "observed_checks": observed_checks,
     "checks": checks,
