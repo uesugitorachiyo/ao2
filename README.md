@@ -20,6 +20,14 @@ AO2 owns execution and evidence production. The optional
 [`ao2-control-plane`](https://github.com/uesugitorachiyo/ao2-control-plane)
 repo is a separate self-hosted read-only observer for signed AO2 evidence.
 
+## AO Stack Architecture
+
+This repository is part of the AO agent orchestration stack. Start with the
+central architecture guide at
+[uesugitorachiyo/ao-architecture](https://github.com/uesugitorachiyo/ao-architecture);
+the AO2-specific architecture page is
+[ao2](https://github.com/uesugitorachiyo/ao-architecture/tree/main/ao2).
+
 ## Successor Boundary
 
 AO2 replaces the deprecated AO Operator / AO Runtime execution path for active
