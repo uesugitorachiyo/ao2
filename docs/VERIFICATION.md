@@ -568,6 +568,9 @@ Result:
   `ao2-stable-release-evidence-packet`, and
   `ao2-release-readiness-consumer`; the hosted CI chain closes with
   `ao2-release-readiness-final-closure-verifier`
+- `Production Readiness Ops`: scheduled/manual read-only GitHub workflow that
+  runs `scripts/verify-branch-protection.sh` in limited token mode to detect
+  `main` branch-protection drift between release-readiness runs.
 - `Release readiness artifact consumer`: CI job that depends on
   `Release readiness artifacts` and `Release train control-plane bridge
   artifacts`, the AI task-board bridge, Pulse task-board closure packet,
