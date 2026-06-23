@@ -1,0 +1,25 @@
+name: Production Readiness Ops
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "43 10 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  branch-protection:
+    name: Branch protection drift
+    runs-on: ubuntu-latest
+
+    env:
+      GH_TOKEN: ${{ github.token }}
+      AO2_BRANCH_PROTECTION_MODE: limited
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+
+      - name: Verify branch protection
+        run: scripts/verify-branch-protection.sh

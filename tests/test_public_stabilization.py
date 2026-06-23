@@ -97,6 +97,55 @@ def test_ci_runs_on_public_push_and_pull_request_while_release_gates_stay_manual
         assert not re.search(r"(?m)^\s*push:\s*$", text)
 
 
+def test_production_readiness_ops_workflow_verifies_branch_protection_drift():
+    workflow = read(".github/workflows/production-readiness-ops.yml")
+    verifier = read("scripts/verify-branch-protection.sh")
+    runbook = read("docs/BRANCH-PROTECTION.md")
+    readme = read("README.md")
+    verification = read("docs/VERIFICATION.md")
+
+    for needle in [
+        "name: Production Readiness Ops",
+        "workflow_dispatch:",
+        'cron: "43 10 * * *"',
+        "permissions:",
+        "contents: read",
+        "GH_TOKEN: ${{ github.token }}",
+        "AO2_BRANCH_PROTECTION_MODE: limited",
+        "scripts/verify-branch-protection.sh",
+    ]:
+        assert needle in workflow
+
+    for forbidden in [
+        "contents: write",
+        "pull-requests: write",
+        "id-token: write",
+    ]:
+        assert forbidden not in workflow
+
+    for needle in [
+        'mode="${AO2_BRANCH_PROTECTION_MODE:-full}"',
+        "ao2.branch-protection-audit.v1",
+        "required_status_checks_strict",
+        "enforce_admins_enabled",
+        "required_linear_history_enabled",
+        "required_status_checks_enforced_for_everyone",
+        "Verify ubuntu-latest / fmt",
+        "Cargo deny (supply chain)",
+    ]:
+        assert needle in verifier
+
+    for needle in [
+        "scripts/verify-branch-protection.sh",
+        "AO2_BRANCH_PROTECTION_MODE=limited",
+        "Production Readiness Ops",
+    ]:
+        assert needle in runbook
+
+    assert "docs/BRANCH-PROTECTION.md" in readme
+    assert "Production Readiness Ops" in verification
+
+
 def test_ci_matrix_entries_do_not_repeat_top_level_keys():
     ci = read(".github/workflows/ci.yml")
     duplicates = []

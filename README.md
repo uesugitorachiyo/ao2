@@ -164,6 +164,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\smoke-windows-release.ps1 `
 The main CI workflow in `.github/workflows/ci.yml` runs on pull request and
 `main` push, and can also be dispatched manually. Release workflows such as
 `release-gate.yml` and `public-release-build.yml` remain manual operator gates.
+Branch protection requirements and the scheduled/manual read-only drift check
+are documented in `docs/BRANCH-PROTECTION.md`.
 
 ## Release readiness evidence chain
 
