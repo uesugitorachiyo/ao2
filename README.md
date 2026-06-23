@@ -173,7 +173,8 @@ The main CI workflow in `.github/workflows/ci.yml` runs on pull request and
 `main` push, and can also be dispatched manually. Release workflows such as
 `release-gate.yml` and `public-release-build.yml` remain manual operator gates.
 Branch protection requirements and the scheduled/manual read-only drift check
-are documented in `docs/BRANCH-PROTECTION.md`.
+are documented in `docs/BRANCH-PROTECTION.md`, including the full local audit
+for stale required checks in active branch rulesets.
 
 ## Release readiness evidence chain
 

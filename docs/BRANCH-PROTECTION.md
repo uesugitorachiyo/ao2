@@ -41,7 +41,10 @@ scripts/verify-branch-protection.sh
 ```
 
 The verifier is read-only and defaults to `AO2_BRANCH_PROTECTION_MODE=full`,
-which checks the administrative branch-protection endpoint. The scheduled/manual
+which checks the administrative branch-protection endpoint and active branch
+rulesets that apply to `main`. These active branch rulesets are audited so stale
+required-check contexts added through repository rulesets fail the verifier just
+like drift in classic branch protection. The scheduled/manual
 `Production Readiness Ops` workflow uses:
 
 ```sh
@@ -49,5 +52,6 @@ AO2_BRANCH_PROTECTION_MODE=limited scripts/verify-branch-protection.sh
 ```
 
 Limited mode is used because the default GitHub Actions token cannot read every
-administrative branch-protection field. It still verifies that `main` is
-protected and that the exact required status checks are enforced for everyone.
+administrative branch-protection field or repository ruleset. It still verifies
+that `main` is protected and that the exact required status checks are enforced
+for everyone.
