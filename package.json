@@ -99,7 +99,7 @@
     "release:dual-public-smoke": "node scripts/run-sh-script.js scripts/dual-public-release-smoke.sh",
     "release:public-consumer-smoke": "node scripts/run-sh-script.js scripts/public-release-consumer-smoke.sh",
     "ai-task-board:control-plane-bridge": "node scripts/run-sh-script.js scripts/ai-task-board-control-plane-bridge.sh",
-    "pulse:codex-cron-event-loop-smoke": "node scripts/run-sh-script.js scripts/pulse-codex-cron-event-loop-smoke.sh",
+    "pulse:ao2-event-loop-smoke": "node scripts/run-sh-script.js scripts/pulse-ao2-event-loop-smoke.sh",
     "next:lengthy:gate": "node scripts/run-sh-script.js scripts/next-lengthy-gate.sh",
     "post-merge:canary": "node scripts/run-sh-script.js scripts/post-merge-canary.sh",
     "ci:license-provenance": "node scripts/run-sh-script.js scripts/license-provenance-gate.sh",

@@ -4293,7 +4293,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_release_readiness_final_closure_verifier_job",
         "ci_ai_task_board_control_plane_bridge_artifact_job",
         "ci_pulse_task_board_closure_packet_artifact_job",
-        "ci_pulse_codex_cron_event_loop_smoke_artifact_job",
+        "ci_pulse_ao2_event_loop_smoke_artifact_job",
         "ci_dual_repo_installed_release_smoke_artifact_job",
         "ci_release_publication_closure_artifact_job",
         "ci_dual_repo_release_publication_closure_index_job",
@@ -4335,7 +4335,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "target/release-readiness-consumer/ao2-release-train-control-plane-bridge",
         "target/release-readiness-consumer/ao2-ai-task-board-control-plane-bridge",
         "target/release-readiness-consumer/ao2-pulse-task-board-closure-packet",
-        "target/release-readiness-consumer/ao2-pulse-codex-cron-event-loop-smoke",
+        "target/release-readiness-consumer/ao2-pulse-ao2-event-loop-smoke",
         "target/release-readiness-consumer/ao2-dual-repo-installed-release-smoke",
         "target/release-readiness-consumer/ao2-release-publication-closure",
         "target/release-readiness-consumer/ao2-dual-repo-release-publication-closure-index",
@@ -4348,8 +4348,10 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.release-train-control-plane-bridge.v1",
         "ao2.ai-task-board-control-plane-bridge.v1",
         "ao2.pulse-task-board-closure-packet.v1",
-        "ao2.pulse-codex-cron-event-loop-smoke.v1",
-        "codex-cron.event-loop-decision.v1",
+        "ao2.pulse-event-loop-smoke.v1",
+        "ao2.pulse-event-loop-run.v1",
+        "ao2.pulse-event-loop-decision.v1",
+        "ao2.pulse-event-loop-decision-metadata.v1",
         "ao2.dual-repo-installed-release-smoke.v1",
         "ao2.release-publication-dry-run-closure.v1",
         "ao2.cp-release-publication-closure.v1",
@@ -4370,7 +4372,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "release_train_control_plane_bridge",
         "ai_task_board_control_plane_bridge",
         "pulse_task_board_closure_packet",
-        "pulse_codex_cron_event_loop_smoke",
+        "pulse_ao2_event_loop_smoke",
         "dual_repo_installed_release_smoke",
         "release_publication_closure",
         "dual_repo_release_publication_closure_index",
@@ -4444,9 +4446,9 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "npm run pulse:task-board-closure-packet",
         "ao2.pulse-task-board-closure-packet.v1",
         "ao2-pulse-task-board-closure-packet",
-        "pulse-codex-cron-event-loop-smoke-artifacts:",
-        "name: Pulse codex-cron event-loop smoke artifacts",
-        "ao2-pulse-codex-cron-event-loop-smoke",
+        "pulse-ao2-event-loop-smoke-artifacts:",
+        "name: Pulse AO2 event-loop smoke artifacts",
+        "ao2-pulse-ao2-event-loop-smoke",
         "release-readiness-artifact-consumer:",
         "name: Release readiness artifact consumer",
         "release-readiness-hosted-artifact-gate:",
@@ -4460,7 +4462,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "AO2_RELEASE_READINESS_REGRESSION_HOSTED_ARTIFACT_FIXTURE_DIR=target/release-readiness-hosted-artifact-gate/input/ao2-release-readiness",
         "npm run release:readiness:regression-gate",
         "ao2-release-readiness-hosted-artifact-gate",
-        "needs: [release-readiness-artifacts, release-readiness-hosted-artifact-gate, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-codex-cron-event-loop-smoke-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index, stable-release-evidence-packet-artifacts]",
+        "needs: [release-readiness-artifacts, release-readiness-hosted-artifact-gate, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-ao2-event-loop-smoke-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index, stable-release-evidence-packet-artifacts]",
         "uses: actions/checkout@v6.0.3",
         "uses: actions/download-artifact@v8.0.1",
         "name: ao2-release-readiness",
@@ -4473,8 +4475,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "path: target/release-readiness-consumer/ao2-ai-task-board-control-plane-bridge",
         "name: ao2-pulse-task-board-closure-packet",
         "path: target/release-readiness-consumer/ao2-pulse-task-board-closure-packet",
-        "name: ao2-pulse-codex-cron-event-loop-smoke",
-        "path: target/release-readiness-consumer/ao2-pulse-codex-cron-event-loop-smoke",
+        "name: ao2-pulse-ao2-event-loop-smoke",
+        "path: target/release-readiness-consumer/ao2-pulse-ao2-event-loop-smoke",
         "name: ao2-dual-repo-installed-release-smoke",
         "path: target/release-readiness-consumer/ao2-dual-repo-installed-release-smoke",
         "name: ao2-release-publication-closure",
@@ -4607,8 +4609,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.release-train-control-plane-bridge.v1",
         "ao2-pulse-task-board-closure-packet",
         "ao2.pulse-task-board-closure-packet.v1",
-        "ao2-pulse-codex-cron-event-loop-smoke",
-        "ao2.pulse-codex-cron-event-loop-smoke.v1",
+        "ao2-pulse-ao2-event-loop-smoke",
+        "ao2.pulse-event-loop-smoke.v1",
         "ao2-release-publication-closure",
         "ao2.release-publication-dry-run-closure.v1",
         "ao2-control-plane-release-publication-closure",
@@ -4678,7 +4680,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_release_train_control_plane_bridge_artifact_job",
         "ci_ai_task_board_control_plane_bridge_artifact_job",
         "ci_pulse_task_board_closure_packet_artifact_job",
-        "ci_pulse_codex_cron_event_loop_smoke_artifact_job",
+        "ci_pulse_ao2_event_loop_smoke_artifact_job",
         "ci_dual_repo_installed_release_smoke_artifact_job",
         "ci_release_publication_closure_artifact_job",
         "ci_dual_repo_release_publication_closure_index_job",
@@ -4721,7 +4723,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     assert artifacts["release_readiness_artifact_consumer"]["schema_versions"] == [
         "ao2.release-readiness-artifact-consumer.v1"
     ]
-    assert "ao2-pulse-codex-cron-event-loop-smoke" in artifacts[
+    assert "ao2-pulse-ao2-event-loop-smoke" in artifacts[
         "release_readiness_artifact_consumer"
     ]["consumes"]
     assert "ao2-release-readiness-hosted-artifact-gate" in artifacts[
@@ -4773,26 +4775,27 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.pulse-task-board-state.v1",
         "ao2.control-plane-fixture-consumer-smoke.v1",
     ]
-    assert artifacts["pulse_codex_cron_event_loop_smoke"]["artifact_name"] == (
-        "ao2-pulse-codex-cron-event-loop-smoke"
+    assert artifacts["pulse_ao2_event_loop_smoke"]["artifact_name"] == (
+        "ao2-pulse-ao2-event-loop-smoke"
     )
-    assert artifacts["pulse_codex_cron_event_loop_smoke"]["producer_job"] == (
-        "pulse-codex-cron-event-loop-smoke-artifacts"
+    assert artifacts["pulse_ao2_event_loop_smoke"]["producer_job"] == (
+        "pulse-ao2-event-loop-smoke-artifacts"
     )
-    assert artifacts["pulse_codex_cron_event_loop_smoke"]["required_files"] == [
+    assert artifacts["pulse_ao2_event_loop_smoke"]["required_files"] == [
         "latest/summary.json",
         "latest/pulse-generate-next/summary.json",
-        "latest/pulse-next-recommended-tasks/codex-cron-event-loop-decision.json",
-        "latest/codex-cron-run-loop.stdout",
+        "latest/pulse-next-recommended-tasks/ao2-event-loop-decision.json",
+        "latest/ao2-run-loop.stdout",
     ]
-    assert artifacts["pulse_codex_cron_event_loop_smoke"]["schema_versions"] == [
-        "ao2.pulse-codex-cron-event-loop-smoke.v1",
-        "codex-cron.event-loop-decision.v1",
-        "ao2.pulse-codex-cron-event-loop-decision.v1",
+    assert artifacts["pulse_ao2_event_loop_smoke"]["schema_versions"] == [
+        "ao2.pulse-event-loop-smoke.v1",
+        "ao2.pulse-event-loop-run.v1",
+        "ao2.pulse-event-loop-decision.v1",
+        "ao2.pulse-event-loop-decision-metadata.v1",
         "ao2.pulse-generate-next.v1",
     ]
-    assert artifacts["pulse_codex_cron_event_loop_smoke"]["required_checks"] == [
-        "ci_pulse_codex_cron_event_loop_smoke_artifact_job"
+    assert artifacts["pulse_ao2_event_loop_smoke"]["required_checks"] == [
+        "ci_pulse_ao2_event_loop_smoke_artifact_job"
     ]
     assert artifacts["dual_repo_installed_release_smoke"]["artifact_name"] == (
         "ao2-dual-repo-installed-release-smoke"
@@ -5049,7 +5052,7 @@ def _write_release_readiness_consumer_fixture(root: Path):
         "ci_release_train_control_plane_bridge_artifact_job",
         "ci_ai_task_board_control_plane_bridge_artifact_job",
         "ci_pulse_task_board_closure_packet_artifact_job",
-        "ci_pulse_codex_cron_event_loop_smoke_artifact_job",
+        "ci_pulse_ao2_event_loop_smoke_artifact_job",
         "ci_dual_repo_installed_release_smoke_artifact_job",
         "ci_release_publication_closure_artifact_job",
         "ci_dual_repo_release_publication_closure_index_job",
@@ -5186,36 +5189,37 @@ def _write_release_readiness_consumer_fixture(root: Path):
     )
     _write_release_readiness_consumer_json(
         root,
-        "ao2-pulse-codex-cron-event-loop-smoke/latest/summary.json",
+        "ao2-pulse-ao2-event-loop-smoke/latest/summary.json",
         {
-            "schema_version": "ao2.pulse-codex-cron-event-loop-smoke.v1",
+            "schema_version": "ao2.pulse-event-loop-smoke.v1",
             "status": "passed",
-            "codex_cron": {"decision_source": "file"},
             "ao2": {
-                "decision_schema": "codex-cron.event-loop-decision.v1",
-                "ao2_decision_schema": "ao2.pulse-codex-cron-event-loop-decision.v1",
+                "decision_source": "file",
+                "run_loop_schema": "ao2.pulse-event-loop-run.v1",
+                "decision_schema": "ao2.pulse-event-loop-decision.v1",
+                "decision_metadata_schema": "ao2.pulse-event-loop-decision-metadata.v1",
             },
             "trust_boundary": {"provider_execution": False},
         },
     )
     _write_release_readiness_consumer_json(
         root,
-        "ao2-pulse-codex-cron-event-loop-smoke/latest/pulse-generate-next/summary.json",
+        "ao2-pulse-ao2-event-loop-smoke/latest/pulse-generate-next/summary.json",
         {"schema_version": "ao2.pulse-generate-next.v1", "status": "ready"},
     )
     _write_release_readiness_consumer_json(
         root,
-        "ao2-pulse-codex-cron-event-loop-smoke/latest/pulse-next-recommended-tasks/codex-cron-event-loop-decision.json",
+        "ao2-pulse-ao2-event-loop-smoke/latest/pulse-next-recommended-tasks/ao2-event-loop-decision.json",
         {
-            "schema_version": "codex-cron.event-loop-decision.v1",
+            "schema_version": "ao2.pulse-event-loop-decision.v1",
             "ao2": {
-                "schema_version": "ao2.pulse-codex-cron-event-loop-decision.v1"
+                "schema_version": "ao2.pulse-event-loop-decision-metadata.v1"
             },
         },
     )
     stdout_path = (
         root
-        / "ao2-pulse-codex-cron-event-loop-smoke/latest/codex-cron-run-loop.stdout"
+        / "ao2-pulse-ao2-event-loop-smoke/latest/ao2-run-loop.stdout"
     )
     stdout_path.parent.mkdir(parents=True, exist_ok=True)
     stdout_path.write_text("ok\n", encoding="utf-8")
@@ -5340,10 +5344,11 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
         "ao2.release-readiness-regression-gate.v1",
         "ao2.release-readiness-hosted-artifact-gate.v1",
         "ao2-release-readiness-hosted-artifact-gate",
-        "ao2.pulse-codex-cron-event-loop-smoke.v1",
-        "codex-cron.event-loop-decision.v1",
+        "ao2.pulse-event-loop-smoke.v1",
+        "ao2.pulse-event-loop-decision.v1",
+        "ao2.pulse-event-loop-decision-metadata.v1",
         "ci_release_readiness_hosted_artifact_gate_job",
-        "ci_pulse_codex_cron_event_loop_smoke_artifact_job",
+        "ci_pulse_ao2_event_loop_smoke_artifact_job",
         "github_actions_artifact_download",
         "provider_execution",
         "ao2-control-plane-",
@@ -5383,11 +5388,11 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
     summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
     assert summary["schema_version"] == "ao2.release-readiness-artifact-consumer.v1"
     assert summary["status"] == "passed"
-    assert "ao2-pulse-codex-cron-event-loop-smoke" in summary["source_artifacts"]
+    assert "ao2-pulse-ao2-event-loop-smoke" in summary["source_artifacts"]
     assert "ao2-release-readiness-hosted-artifact-gate" in summary["source_artifacts"]
     assert "ao2-stable-release-evidence-packet" in summary["source_artifacts"]
     assert "ci_release_readiness_hosted_artifact_gate_job" in summary["required_checks"]
-    assert "ci_pulse_codex_cron_event_loop_smoke_artifact_job" in summary["required_checks"]
+    assert "ci_pulse_ao2_event_loop_smoke_artifact_job" in summary["required_checks"]
     assert "ci_stable_release_evidence_packet_artifact_job" in summary["required_checks"]
     assert summary["hosted_release_readiness_artifact_gate"]["status"] == "passed"
     assert (
@@ -5506,41 +5511,41 @@ def test_release_readiness_artifact_consumer_rejects_bad_fixture_evidence(tmp_pa
             "hosted release-readiness public pair digest gate was not ready",
         ),
         (
-            "missing_codex_cron_decision",
+            "missing_ao2_decision",
             lambda root: (
                 root
-                / "ao2-pulse-codex-cron-event-loop-smoke/latest/pulse-next-recommended-tasks/codex-cron-event-loop-decision.json"
+                / "ao2-pulse-ao2-event-loop-smoke/latest/pulse-next-recommended-tasks/ao2-event-loop-decision.json"
             ).unlink(),
-            "missing Pulse codex-cron smoke file",
+            "missing Pulse AO2 smoke file",
         ),
         (
             "wrong_pulse_generate_next_schema",
             lambda root: _write_release_readiness_consumer_json(
                 root,
-                "ao2-pulse-codex-cron-event-loop-smoke/latest/pulse-generate-next/summary.json",
+                "ao2-pulse-ao2-event-loop-smoke/latest/pulse-generate-next/summary.json",
                 {"schema_version": "ao2.wrong-pulse-generate-next.v1"},
             ),
             "unexpected Pulse generate-next schema",
         ),
         (
-            "wrong_codex_cron_decision_schema",
+            "wrong_ao2_decision_schema",
             lambda root: _write_release_readiness_consumer_json(
                 root,
-                "ao2-pulse-codex-cron-event-loop-smoke/latest/pulse-next-recommended-tasks/codex-cron-event-loop-decision.json",
+                "ao2-pulse-ao2-event-loop-smoke/latest/pulse-next-recommended-tasks/ao2-event-loop-decision.json",
                 {
-                    "schema_version": "codex-cron.wrong-event-loop-decision.v1",
+                    "schema_version": "ao2.wrong-event-loop-decision.v1",
                     "ao2": {
-                        "schema_version": "ao2.pulse-codex-cron-event-loop-decision.v1"
+                        "schema_version": "ao2.pulse-event-loop-decision-metadata.v1"
                     },
                 },
             ),
-            "unexpected codex-cron decision file schema",
+            "unexpected AO2 decision file schema",
         ),
         (
             "blocked_pulse_generate_next_status",
             lambda root: _write_release_readiness_consumer_json(
                 root,
-                "ao2-pulse-codex-cron-event-loop-smoke/latest/pulse-generate-next/summary.json",
+                "ao2-pulse-ao2-event-loop-smoke/latest/pulse-generate-next/summary.json",
                 {"schema_version": "ao2.pulse-generate-next.v1", "status": "blocked"},
             ),
             "Pulse generate-next was not ready",
@@ -5549,21 +5554,20 @@ def test_release_readiness_artifact_consumer_rejects_bad_fixture_evidence(tmp_pa
             "provider_execution_enabled",
             lambda root: _write_release_readiness_consumer_json(
                 root,
-                "ao2-pulse-codex-cron-event-loop-smoke/latest/summary.json",
+                "ao2-pulse-ao2-event-loop-smoke/latest/summary.json",
                 {
-                    "schema_version": "ao2.pulse-codex-cron-event-loop-smoke.v1",
+                    "schema_version": "ao2.pulse-event-loop-smoke.v1",
                     "status": "passed",
-                    "codex_cron": {"decision_source": "file"},
                     "ao2": {
-                        "decision_schema": "codex-cron.event-loop-decision.v1",
-                        "ao2_decision_schema": (
-                            "ao2.pulse-codex-cron-event-loop-decision.v1"
-                        ),
+                        "decision_source": "file",
+                        "run_loop_schema": "ao2.pulse-event-loop-run.v1",
+                        "decision_schema": "ao2.pulse-event-loop-decision.v1",
+                        "decision_metadata_schema": "ao2.pulse-event-loop-decision-metadata.v1",
                     },
                     "trust_boundary": {"provider_execution": True},
                 },
             ),
-            "Pulse codex-cron smoke must not execute providers",
+            "Pulse AO2 smoke must not execute providers",
         ),
         (
             "control_plane_checksum_valid_without_archive_asset",
@@ -5857,7 +5861,7 @@ def test_release_readiness_final_closure_verifier_rejects_bad_consumer_artifact(
                         "ao2-release-train-control-plane-bridge",
                         "ao2-ai-task-board-control-plane-bridge",
                         "ao2-pulse-task-board-closure-packet",
-                        "ao2-pulse-codex-cron-event-loop-smoke",
+                        "ao2-pulse-ao2-event-loop-smoke",
                         "ao2-dual-repo-installed-release-smoke",
                         "ao2-release-publication-closure",
                         "ao2-dual-repo-release-publication-closure-index",
@@ -5983,25 +5987,23 @@ def test_dual_repo_installed_release_smoke_ci_and_release_note_contract():
         assert needle in release_doc
 
 
-def test_pulse_codex_cron_event_loop_smoke_contract():
+def test_pulse_ao2_event_loop_smoke_contract():
     package_json = json.loads(read("package.json"))
     assert (
-        package_json["scripts"]["pulse:codex-cron-event-loop-smoke"]
-        == "node scripts/run-sh-script.js scripts/pulse-codex-cron-event-loop-smoke.sh"
+        package_json["scripts"]["pulse:ao2-event-loop-smoke"]
+        == "node scripts/run-sh-script.js scripts/pulse-ao2-event-loop-smoke.sh"
     )
 
-    script = REPO_ROOT / "scripts" / "pulse-codex-cron-event-loop-smoke.sh"
+    script = REPO_ROOT / "scripts" / "pulse-ao2-event-loop-smoke.sh"
     assert script.stat().st_mode & stat.S_IXUSR
     text = script.read_text(encoding="utf-8")
     for needle in [
-        "ao2.pulse-codex-cron-event-loop-smoke.v1",
-        "AO2_PULSE_CODEX_CRON_SMOKE_ROOT",
-        "AO2_CODEX_CRON_BIN",
-        "AO2_CODEX_CRON_ROOT",
-        "codex-cron-event-loop-decision.json",
-        "codex-cron.event-loop-decision.v1",
-        "ao2.pulse-codex-cron-event-loop-decision.v1",
-        "--event-loop-decision-file",
+        "ao2.pulse-event-loop-smoke.v1",
+        "AO2_PULSE_AO2_EVENT_LOOP_SMOKE_ROOT",
+        "ao2-event-loop-decision.json",
+        "ao2.pulse-event-loop-decision.v1",
+        "ao2.pulse-event-loop-decision-metadata.v1",
+        "cargo run -p ao2-cli -- pulse run-loop",
         'generator_summary_path = root / pulse_generate_root_rel / "summary.json"',
         "decision_source",
         "file",
@@ -6016,6 +6018,9 @@ def test_pulse_codex_cron_event_loop_smoke_contract():
         "/Users/torachiyouesugi/Documents/private",
         "target/long-lived-control-plane/api-token",
         'generator_summary_path = root / "target/pulse-codex-cron-event-loop-smoke/latest/pulse-generate-next/summary.json"',
+        "AO2_CODEX_CRON_BIN",
+        "AO2_CODEX_CRON_ROOT",
+        "--event-loop-decision-file",
         "gh release create",
         "git push origin",
         "npm publish",
@@ -6023,27 +6028,26 @@ def test_pulse_codex_cron_event_loop_smoke_contract():
         assert forbidden not in text
 
 
-def test_pulse_codex_cron_event_loop_smoke_ci_contract():
+def test_pulse_ao2_event_loop_smoke_ci_contract():
     ci = read(".github/workflows/ci.yml")
     for needle in [
-        "pulse-codex-cron-event-loop-smoke-artifacts:",
-        "name: Pulse codex-cron event-loop smoke artifacts",
-        "repository: uesugitorachiyo/codex-cron",
-        "AO2_PULSE_CODEX_CRON_SMOKE_ROOT=target/pulse-codex-cron-event-loop-smoke-ci",
-        "npm run pulse:codex-cron-event-loop-smoke -- --codex-cron-root codex-cron",
-        "ao2.pulse-codex-cron-event-loop-smoke.v1",
-        "codex-cron.event-loop-decision.v1",
+        "pulse-ao2-event-loop-smoke-artifacts:",
+        "name: Pulse AO2 event-loop smoke artifacts",
+        "AO2_PULSE_AO2_EVENT_LOOP_SMOKE_ROOT=target/pulse-ao2-event-loop-smoke-ci",
+        "npm run pulse:ao2-event-loop-smoke",
+        "ao2.pulse-event-loop-smoke.v1",
+        "ao2.pulse-event-loop-decision.v1",
         "decision_source",
-        "name: ao2-pulse-codex-cron-event-loop-smoke",
-        "target/pulse-codex-cron-event-loop-smoke-ci/latest/summary.json",
+        "name: ao2-pulse-ao2-event-loop-smoke",
+        "target/pulse-ao2-event-loop-smoke-ci/latest/summary.json",
     ]:
         assert needle in ci
 
     verification = read("docs/VERIFICATION.md")
     for needle in [
-        "npm run pulse:codex-cron-event-loop-smoke",
-        "ao2.pulse-codex-cron-event-loop-smoke.v1",
-        "codex-cron-event-loop-decision.json",
+        "npm run pulse:ao2-event-loop-smoke",
+        "ao2.pulse-event-loop-smoke.v1",
+        "ao2-event-loop-decision.json",
         "decision_source=file",
     ]:
         assert needle in verification
@@ -7924,11 +7928,15 @@ def test_pulse_generate_next_auto_registration_contract():
         "release:cross-os-attestation",
         "ao2.cross-os-release-attestation.v1",
         "pulse-eval-loop.json",
-        "pulse-task-manifest.json",
-        "ao2.pulse-task-manifest.v1",
-        "codex-cron-event-loop-decision.json",
-        "codex_cron_event_loop_decision",
-        "codex-cron.event-loop-decision.v1",
+            "pulse-task-manifest.json",
+            "ao2.pulse-task-manifest.v1",
+            "ao2-event-loop-decision.json",
+            "ao2_event_loop_decision",
+            "ao2.pulse-event-loop-decision.v1",
+            "ao2.pulse-event-loop-decision-metadata.v1",
+            "codex-cron-event-loop-decision.json",
+            "codex_cron_event_loop_decision",
+            "codex-cron.event-loop-decision.v1",
         "ao2.pulse-codex-cron-event-loop-decision.v1",
         "product_code_execution",
         "packet.md",
@@ -7994,8 +8002,8 @@ def test_pulse_generate_next_auto_registration_contract():
         "AO2_PULSE_AUTO_ADVANCE_LOCAL_ONLY_WHILE_PR_BLOCKED=1",
         "local-only while PR-blocked mode",
         "target/pulse-generate-next/latest/summary.json",
-        "codex-cron.event-loop-decision.v1",
-        "ao2.pulse-codex-cron-event-loop-decision.v1",
+        "ao2.pulse-event-loop-decision.v1",
+        "ao2.pulse-event-loop-decision-metadata.v1",
     ]:
         assert needle in verification
 
@@ -8074,12 +8082,17 @@ def test_pulse_generate_next_writes_codex_cron_event_loop_decision(tmp_path):
 
     assert result.returncode == 0, result.stderr + result.stdout
     decision_path = packet_root / "codex-cron-event-loop-decision.json"
+    ao2_decision_path = packet_root / "ao2-event-loop-decision.json"
     decision = json.loads(decision_path.read_text(encoding="utf-8"))
+    ao2_decision = json.loads(ao2_decision_path.read_text(encoding="utf-8"))
     assert decision["schema_version"] == "codex-cron.event-loop-decision.v1"
+    assert ao2_decision["schema_version"] == "ao2.pulse-event-loop-decision.v1"
     assert decision["event_loop"]["action"] == "continue"
+    assert ao2_decision["event_loop"] == decision["event_loop"]
     assert decision["event_loop"]["reason"]
     assert decision["event_loop"]["next_task_id"]
     assert decision["ao2"]["schema_version"] == "ao2.pulse-codex-cron-event-loop-decision.v1"
+    assert ao2_decision["ao2"]["schema_version"] == "ao2.pulse-event-loop-decision-metadata.v1"
     assert decision["ao2"]["task_count"] > 0
     assert decision["ao2"]["task_board_summary"] == str(task_board_root / "summary.json")
     assert decision["ao2"]["trust_boundary"] == {
@@ -8091,9 +8104,13 @@ def test_pulse_generate_next_writes_codex_cron_event_loop_decision(tmp_path):
     summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
     packet_summary = json.loads((packet_root / "summary.json").read_text(encoding="utf-8"))
     assert summary["codex_cron_event_loop_decision"] == str(decision_path)
+    assert summary["ao2_event_loop_decision"] == str(ao2_decision_path)
     assert packet_summary["codex_cron_event_loop_decision"] == str(decision_path)
+    assert packet_summary["ao2_event_loop_decision"] == str(ao2_decision_path)
     assert any(item["path"] == "codex-cron-event-loop-decision.json" for item in summary["files"])
     assert any(item["path"] == "codex-cron-event-loop-decision.json" for item in packet_summary["files"])
+    assert any(item["path"] == "ao2-event-loop-decision.json" for item in summary["files"])
+    assert any(item["path"] == "ao2-event-loop-decision.json" for item in packet_summary["files"])
 
 
 def test_pulse_generate_next_emits_ai_task_board_control_surface(tmp_path):

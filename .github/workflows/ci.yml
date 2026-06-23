@@ -1047,7 +1047,7 @@ jobs:
   release-readiness-artifact-consumer:
     name: Release readiness artifact consumer
     runs-on: ubuntu-latest
-    needs: [release-readiness-artifacts, release-readiness-hosted-artifact-gate, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-codex-cron-event-loop-smoke-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index, stable-release-evidence-packet-artifacts]
+    needs: [release-readiness-artifacts, release-readiness-hosted-artifact-gate, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-ao2-event-loop-smoke-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index, stable-release-evidence-packet-artifacts]
     timeout-minutes: 5
     steps:
       - name: Checkout
@@ -1077,11 +1077,11 @@ jobs:
         with:
           name: ao2-pulse-task-board-closure-packet
           path: target/release-readiness-consumer/ao2-pulse-task-board-closure-packet
-      - name: Download Pulse codex-cron event-loop smoke artifact
+      - name: Download Pulse AO2 event-loop smoke artifact
         uses: actions/download-artifact@v8.0.1
         with:
-          name: ao2-pulse-codex-cron-event-loop-smoke
-          path: target/release-readiness-consumer/ao2-pulse-codex-cron-event-loop-smoke
+          name: ao2-pulse-ao2-event-loop-smoke
+          path: target/release-readiness-consumer/ao2-pulse-ao2-event-loop-smoke
       - name: Download dual-repo installed release smoke artifact
         uses: actions/download-artifact@v8.0.1
         with:
@@ -1399,54 +1399,50 @@ jobs:
           path: target/pulse-task-board-closure-packet-ci
           if-no-files-found: error
 
-  pulse-codex-cron-event-loop-smoke-artifacts:
-    name: Pulse codex-cron event-loop smoke artifacts
+  pulse-ao2-event-loop-smoke-artifacts:
+    name: Pulse AO2 event-loop smoke artifacts
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.3
-      - name: Checkout codex-cron
-        uses: actions/checkout@v6.0.3
-        with:
-          repository: uesugitorachiyo/codex-cron
-          path: codex-cron
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Setup Node
         uses: actions/setup-node@v6.4.0
         with:
           node-version: "22"
-      - name: Run Pulse codex-cron event-loop smoke
+      - name: Run Pulse AO2 event-loop smoke
         shell: bash
         run: |
-          AO2_PULSE_CODEX_CRON_SMOKE_ROOT=target/pulse-codex-cron-event-loop-smoke-ci \
-            npm run pulse:codex-cron-event-loop-smoke -- --codex-cron-root codex-cron
-      - name: Verify Pulse codex-cron event-loop evidence
+          AO2_PULSE_AO2_EVENT_LOOP_SMOKE_ROOT=target/pulse-ao2-event-loop-smoke-ci \
+            npm run pulse:ao2-event-loop-smoke
+      - name: Verify Pulse AO2 event-loop evidence
         shell: bash
         run: |
           python3 - <<'PY'
           import json
           from pathlib import Path
 
-          root = Path("target/pulse-codex-cron-event-loop-smoke-ci/latest")
+          root = Path("target/pulse-ao2-event-loop-smoke-ci/latest")
           summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
-          assert summary["schema_version"] == "ao2.pulse-codex-cron-event-loop-smoke.v1", summary
+          assert summary["schema_version"] == "ao2.pulse-event-loop-smoke.v1", summary
           assert summary["status"] == "passed", summary
-          assert summary["codex_cron"]["decision_source"] == "file", summary
-          assert summary["ao2"]["decision_schema"] == "codex-cron.event-loop-decision.v1", summary
-          assert summary["ao2"]["ao2_decision_schema"] == "ao2.pulse-codex-cron-event-loop-decision.v1", summary
+          assert summary["ao2"]["decision_source"] == "file", summary
+          assert summary["ao2"]["run_loop_schema"] == "ao2.pulse-event-loop-run.v1", summary
+          assert summary["ao2"]["decision_schema"] == "ao2.pulse-event-loop-decision.v1", summary
+          assert summary["ao2"]["decision_metadata_schema"] == "ao2.pulse-event-loop-decision-metadata.v1", summary
           assert summary["trust_boundary"]["stores_credentials"] is False, summary
           assert summary["trust_boundary"]["provider_execution"] is False, summary
           PY
-          test -f target/pulse-codex-cron-event-loop-smoke-ci/latest/summary.json
-          test -f target/pulse-codex-cron-event-loop-smoke-ci/latest/pulse-next-recommended-tasks/codex-cron-event-loop-decision.json
-          test -f target/pulse-codex-cron-event-loop-smoke-ci/latest/codex-cron-run-loop.stdout
-      - name: Upload Pulse codex-cron event-loop smoke evidence
+          test -f target/pulse-ao2-event-loop-smoke-ci/latest/summary.json
+          test -f target/pulse-ao2-event-loop-smoke-ci/latest/pulse-next-recommended-tasks/ao2-event-loop-decision.json
+          test -f target/pulse-ao2-event-loop-smoke-ci/latest/ao2-run-loop.stdout
+      - name: Upload Pulse AO2 event-loop smoke evidence
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: ao2-pulse-codex-cron-event-loop-smoke
-          path: target/pulse-codex-cron-event-loop-smoke-ci
+          name: ao2-pulse-ao2-event-loop-smoke
+          path: target/pulse-ao2-event-loop-smoke-ci
           if-no-files-found: error
 
   dual-repo-installed-release-smoke-artifacts:
