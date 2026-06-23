@@ -30,6 +30,18 @@ retention, and observer workflows belong in
 The runtime used by AO2 is the in-repo `crates/ao2-runtime` workspace crate;
 AO2 does not depend on the deprecated standalone `ao-runtime` repository.
 
+## AO2 Native Runtime And Platform Evidence
+
+AO2's executable path uses the workspace `ao2-runtime` crate directly from
+`crates/ao2-cli`; `Cargo.lock` must not contain standalone `ao-runtime` or
+`ao-operator` packages. The Python guard
+`tests/test_ao2_native_runtime_platform_evidence.py` enforces that boundary in
+CI.
+
+Pull request CI also builds and smokes AO2 release archives on Ubuntu, macOS,
+and Windows through the hosted release archive smoke job. Native Windows release
+downloads remain covered by `.github/workflows/windows-release-smoke.yml`.
+
 ## Why AO2?
 
 Most agent systems focus on doing work. AO2 focuses on making the work

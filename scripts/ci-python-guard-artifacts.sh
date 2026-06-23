@@ -12,6 +12,7 @@ set +e
 PYTHONDONTWRITEBYTECODE=1 python3 -m pytest \
   tests/test_public_stabilization.py \
   tests/test_phase1_promote_wrapper.py \
+  tests/test_ao2_native_runtime_platform_evidence.py \
   -q 2>&1 | tee "$LOG"
 status="${PIPESTATUS[0]}"
 set -e
@@ -29,7 +30,7 @@ status_code = int(sys.argv[4])
 payload = {
     "schema_version": "ao2.python-guard-ci-artifacts.v1",
     "status": "passed" if status_code == 0 else "failed",
-    "command": "python3 -m pytest tests/test_public_stabilization.py tests/test_phase1_promote_wrapper.py -q",
+    "command": "python3 -m pytest tests/test_public_stabilization.py tests/test_phase1_promote_wrapper.py tests/test_ao2_native_runtime_platform_evidence.py -q",
     "log": str(log),
     "log_bytes": log.stat().st_size if log.exists() else 0,
     "artifact_root": str(out_root),
