@@ -43,3 +43,16 @@ def test_ci_proves_ubuntu_and_windows_release_runtime_smoke_evidence():
     assert "./scripts/release-archive-hosted-smoke.ps1" in ci
     assert "runs-on: windows-latest" in windows_smoke
     assert "./scripts/smoke-windows-release.ps1" in windows_smoke
+
+
+def test_branch_protection_requires_hosted_release_archive_smoke_for_platforms():
+    verifier = read("scripts/verify-branch-protection.sh")
+    runbook = read("docs/BRANCH-PROTECTION.md")
+
+    for check_name in [
+        "Release archive hosted smoke ubuntu-latest",
+        "Release archive hosted smoke macos-latest",
+        "Release archive hosted smoke windows-latest",
+    ]:
+        assert check_name in verifier
+        assert check_name in runbook

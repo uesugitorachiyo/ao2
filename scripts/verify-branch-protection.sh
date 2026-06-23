@@ -29,6 +29,9 @@ tmpdir = pathlib.Path(tmpdir)
 
 required_checks = [
     'Cargo deny (supply chain)',
+    'Release archive hosted smoke macos-latest',
+    'Release archive hosted smoke ubuntu-latest',
+    'Release archive hosted smoke windows-latest',
     'Verify macos-latest / build-release',
     'Verify macos-latest / clippy',
     'Verify macos-latest / test-cli-approval-control-plane',

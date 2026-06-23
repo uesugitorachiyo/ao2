@@ -17,7 +17,8 @@ Configure `main` with these controls:
 ## Required Checks
 
 AO2 uses the `CI` matrix as the required merge gate, plus `Cargo deny (supply
-chain)`. The exact required context list is intentionally mirrored in
+chain)` and the hosted release archive smoke jobs for the public platform
+archives. The exact required context list is intentionally mirrored in
 `scripts/verify-branch-protection.sh` so job-name drift is visible.
 
 Representative required checks include:
@@ -27,6 +28,9 @@ Representative required checks include:
 - `Verify ubuntu-latest / build-release`
 - `Verify macos-latest / build-release`
 - `Verify windows-latest / build-release`
+- `Release archive hosted smoke ubuntu-latest`
+- `Release archive hosted smoke macos-latest`
+- `Release archive hosted smoke windows-latest`
 
 ## Live Verification
 
