@@ -398,10 +398,8 @@ fn ao2_run_spec_provider_free_real_project_executes_explicit_local_commands() {
     assert!(output.status.success(), "{}", stderr(&output));
     let stdout = stdout(&output);
     assert!(stdout.contains("status=Accepted"), "{stdout}");
-    assert_eq!(
-        fs::read_to_string(repo.join("generated.txt")).unwrap(),
-        "generated\n"
-    );
+    let generated = fs::read_to_string(repo.join("generated.txt")).unwrap();
+    assert_eq!(generated.replace("\r\n", "\n"), "generated\n");
 
     let evidence_pack = value_for(&stdout, "evidence_pack=");
     let evidence: serde_json::Value =
