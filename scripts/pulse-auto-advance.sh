@@ -465,9 +465,20 @@ while True:
     if payload["operator_prompt_sha256_matches"] is not True:
         payload["reason"] = "operator_prompt_hash_mismatch"
         break
-    if not resume.get("auto_advance", {}).get("continue_until_stopped"):
-        payload["reason"] = "auto_advance_continue_until_stopped_missing"
+    if not resume.get("auto_advance", {}).get("continue_until_exit_gate"):
+        payload["reason"] = "auto_advance_continue_until_exit_gate_missing"
         break
+
+    event_loop_decision_path = resume_json.parent / "ao2-event-loop-decision.json"
+    if event_loop_decision_path.is_file():
+        event_loop_decision = json.loads(event_loop_decision_path.read_text(encoding="utf-8"))
+        payload["event_loop_decision"] = str(event_loop_decision_path)
+        payload["event_loop_action"] = event_loop_decision.get("event_loop", {}).get("action")
+        payload["exit_gate"] = event_loop_decision.get("ao2", {}).get("exit_gate")
+        if payload["event_loop_action"] == "stop":
+            payload["status"] = "stopped"
+            payload["reason"] = "readiness_exit_gate_satisfied"
+            break
 
     seen = load_seen()
     if eval_loop_sha256 in seen and not allow_duplicate:

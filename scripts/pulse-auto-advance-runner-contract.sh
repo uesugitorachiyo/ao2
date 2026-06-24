@@ -29,7 +29,7 @@ needles = [
     "pulse-auto-advance-ledger.jsonl",
     "AO2_PULSE_AUTO_ADVANCE_STOP_FILE",
     "duplicate_eval_loop_digest",
-    "continue_until_stopped",
+    "continue_until_exit_gate",
     "AO2_PULSE_AUTO_ADVANCE_DIRECT_MAIN_PUBLISH",
     "pulse:direct-main-publish",
     "direct_main_publish",

@@ -6888,7 +6888,8 @@ def test_pulse_auto_advance_prompt_registration_contract():
         "they directly unlock a product-slice or release-readiness bottleneck. "
         "Avoid narrow recursion or low-value daemon work unless it is the bottleneck. "
         "Generate next lengthy tasks with rationale, required evidence, and stop "
-        "conditions, then register and continue through the AO2 event loop."
+        "conditions only when the readiness exit gate is not satisfied; emit stop "
+        "when AO2 and ao2-control-plane readiness gates are green."
     )
 
     assert (
@@ -6912,7 +6913,7 @@ def test_pulse_auto_advance_prompt_registration_contract():
         "operator_prompt_sha256",
         "auto_advance",
         "registered_once",
-        "continue_until_stopped",
+        "continue_until_exit_gate",
         "stop_signal",
         "stores_credentials",
     ]:
@@ -6985,7 +6986,7 @@ def test_pulse_auto_advance_runner_restart_contract():
         "AO2_PULSE_TASK_EXECUTOR_MANIFEST",
         "duplicate_eval_loop_digest",
         "waiting_for_new_eval_loop_digest",
-        "continue_until_stopped",
+        "continue_until_exit_gate",
         "--forever",
         "MAX_ITERATIONS=0",
         "sleep_seconds",
@@ -7358,7 +7359,7 @@ def test_pulse_auto_advance_delegates_structured_manifest_to_task_executor(tmp_p
         "pulse_eval_loop_sha256": __import__("hashlib").sha256(eval_loop_path.read_bytes()).hexdigest(),
         "operator_prompt_path": "operator-prompt.txt",
         "operator_prompt_sha256": __import__("hashlib").sha256(prompt_path.read_bytes()).hexdigest(),
-        "auto_advance": {"continue_until_stopped": True, "stores_credentials": False},
+        "auto_advance": {"continue_until_exit_gate": True, "stores_credentials": False},
         "trust_boundary": {"local_only": True, "stores_credentials": False},
     }
     resume_path = pulse_dir / "resume.json"
@@ -7445,7 +7446,7 @@ def test_pulse_auto_advance_keeps_structured_manifest_mode_if_manifest_is_rewrit
         "pulse_eval_loop_sha256": __import__("hashlib").sha256(eval_loop_path.read_bytes()).hexdigest(),
         "operator_prompt_path": "operator-prompt.txt",
         "operator_prompt_sha256": __import__("hashlib").sha256(prompt_path.read_bytes()).hexdigest(),
-        "auto_advance": {"continue_until_stopped": True, "stores_credentials": False},
+        "auto_advance": {"continue_until_exit_gate": True, "stores_credentials": False},
         "trust_boundary": {"local_only": True, "stores_credentials": False},
     }
     resume_path = pulse_dir / "resume.json"
@@ -7511,7 +7512,7 @@ def test_pulse_auto_advance_forever_pauses_generate_next_when_pr_ci_gate_waits(t
         "pulse_eval_loop_sha256": eval_loop_sha256,
         "operator_prompt_path": "operator-prompt.txt",
         "operator_prompt_sha256": __import__("hashlib").sha256(prompt_path.read_bytes()).hexdigest(),
-        "auto_advance": {"continue_until_stopped": True, "stores_credentials": False},
+        "auto_advance": {"continue_until_exit_gate": True, "stores_credentials": False},
         "trust_boundary": {"local_only": True, "stores_credentials": False},
     }
     resume_path = pulse_dir / "resume.json"
@@ -7637,7 +7638,7 @@ def test_pulse_auto_advance_can_generate_local_only_packet_when_pr_ci_gate_waits
         "pulse_eval_loop_sha256": eval_loop_sha256,
         "operator_prompt_path": "operator-prompt.txt",
         "operator_prompt_sha256": __import__("hashlib").sha256(prompt_path.read_bytes()).hexdigest(),
-        "auto_advance": {"continue_until_stopped": True, "stores_credentials": False},
+        "auto_advance": {"continue_until_exit_gate": True, "stores_credentials": False},
         "trust_boundary": {"local_only": True, "stores_credentials": False},
     }
     resume_path = pulse_dir / "resume.json"
@@ -7766,7 +7767,7 @@ def test_pulse_auto_advance_invokes_direct_main_publish_when_enabled(tmp_path):
         "pulse_eval_loop_sha256": __import__("hashlib").sha256(eval_loop_path.read_bytes()).hexdigest(),
         "operator_prompt_path": "operator-prompt.txt",
         "operator_prompt_sha256": __import__("hashlib").sha256(prompt_path.read_bytes()).hexdigest(),
-        "auto_advance": {"continue_until_stopped": True, "stores_credentials": False},
+        "auto_advance": {"continue_until_exit_gate": True, "stores_credentials": False},
         "trust_boundary": {"local_only": True, "stores_credentials": False},
     }
     resume_path = pulse_dir / "resume.json"
@@ -7837,7 +7838,7 @@ def test_pulse_auto_advance_forever_refreshes_pr_ci_gate_before_generate_next(tm
         "pulse_eval_loop_sha256": eval_loop_sha256,
         "operator_prompt_path": "operator-prompt.txt",
         "operator_prompt_sha256": __import__("hashlib").sha256(prompt_path.read_bytes()).hexdigest(),
-        "auto_advance": {"continue_until_stopped": True, "stores_credentials": False},
+        "auto_advance": {"continue_until_exit_gate": True, "stores_credentials": False},
         "trust_boundary": {"local_only": True, "stores_credentials": False},
     }
     resume_path = pulse_dir / "resume.json"
@@ -8201,6 +8202,70 @@ def test_pulse_generate_next_writes_codex_cron_event_loop_decision(tmp_path):
     assert any(item["path"] == "codex-cron-event-loop-decision.json" for item in packet_summary["files"])
     assert any(item["path"] == "ao2-event-loop-decision.json" for item in summary["files"])
     assert any(item["path"] == "ao2-event-loop-decision.json" for item in packet_summary["files"])
+
+
+def test_pulse_generate_next_stops_when_readiness_exit_gate_is_satisfied(tmp_path):
+    out_root = tmp_path / "generate-next"
+    packet_root = tmp_path / "packet"
+    task_board_root = tmp_path / "task-board"
+    cursor = tmp_path / "cursor.json"
+    exit_gate = tmp_path / "exit-gate.json"
+    exit_gate.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.pulse-readiness-exit-gate.v1",
+                "status": "ready",
+                "repos": [
+                    {
+                        "id": "ao2",
+                        "status": "ready",
+                        "readiness_percent": 100,
+                        "blocking_next_actions": [],
+                    },
+                    {
+                        "id": "ao2-control-plane",
+                        "status": "ready",
+                        "readiness_percent": 100,
+                        "blocking_next_actions": [],
+                    },
+                ],
+                "blocking_next_actions": [],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:generate-next"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_GENERATE_NEXT_REGISTER": "0",
+            "AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY": "0",
+            "AO2_PULSE_GENERATE_NEXT_ROOT": str(out_root),
+            "AO2_PULSE_GENERATE_NEXT_PACKET_ROOT": str(packet_root),
+            "AO2_PULSE_TASK_BOARD_ROOT": str(task_board_root),
+            "AO2_PULSE_GENERATE_NEXT_CURSOR": str(cursor),
+            "AO2_PULSE_EXIT_GATE_FILE": str(exit_gate),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    decision = json.loads((packet_root / "codex-cron-event-loop-decision.json").read_text(encoding="utf-8"))
+    ao2_decision = json.loads((packet_root / "ao2-event-loop-decision.json").read_text(encoding="utf-8"))
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert decision["event_loop"]["action"] == "stop"
+    assert decision["event_loop"]["next_task_id"] is None
+    assert "readiness exit gate satisfied" in decision["event_loop"]["reason"]
+    assert ao2_decision["event_loop"] == decision["event_loop"]
+    assert decision["ao2"]["exit_gate"]["status"] == "ready"
+    assert summary["exit_gate"]["status"] == "ready"
 
 
 def test_pulse_generate_next_emits_ai_task_board_control_surface(tmp_path):
