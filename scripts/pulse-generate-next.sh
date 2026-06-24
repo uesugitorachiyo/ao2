@@ -14,13 +14,14 @@ LOCAL_ONLY="${AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY:-0}"
 TASK_EXECUTOR_ROOT="${AO2_PULSE_TASK_EXECUTOR_ROOT:-$ROOT/target/pulse-task-executor/latest}"
 DEFAULT_STATUS_EVIDENCE="$TASK_EXECUTOR_ROOT/task-board-status-evidence.json"
 STATUS_EVIDENCE="${AO2_PULSE_TASK_BOARD_STATUS_EVIDENCE:-$DEFAULT_STATUS_EVIDENCE}"
-DEFAULT_AUTO_ADVANCE_PROMPT="After each task batch, re-evaluate AO2 and ao2-control-plane at project level. Choose next tasks by highest long-term value, not similarity to last tasks. Prefer the Risky PR Run MVP product loop, local run record, static report/export, evaluator closure evidence, public reliability, Ubuntu/macOS/Windows correctness, CI confidence, evidence quality, security/safety boundaries, control-plane integration, release readiness, and developer/operator usability. Do not create new shell wrappers unless they directly unlock a product-slice or release-readiness bottleneck. Avoid narrow recursion or low-value daemon work unless it is the bottleneck. Generate next lengthy tasks with rationale, required evidence, and stop conditions, then register and continue through the AO2 event loop."
+DEFAULT_AUTO_ADVANCE_PROMPT="After each task batch, re-evaluate AO2 and ao2-control-plane at project level. Choose next tasks by highest long-term value, not similarity to last tasks. Prefer the Risky PR Run MVP product loop, local run record, static report/export, evaluator closure evidence, public reliability, Ubuntu/macOS/Windows correctness, CI confidence, evidence quality, security/safety boundaries, control-plane integration, release readiness, and developer/operator usability. Do not create new shell wrappers unless they directly unlock a product-slice or release-readiness bottleneck. Avoid narrow recursion or low-value daemon work unless it is the bottleneck. Generate next lengthy tasks with rationale, required evidence, and stop conditions only when the readiness exit gate is not satisfied; emit stop when AO2 and ao2-control-plane readiness gates are green."
 AUTO_ADVANCE_PROMPT="${AO2_PULSE_AUTO_ADVANCE_PROMPT:-$DEFAULT_AUTO_ADVANCE_PROMPT}"
+EXIT_GATE_FILE="${AO2_PULSE_EXIT_GATE_FILE:-}"
 
 rm -rf "$OUT_ROOT" "$PACKET_ROOT" "$TASK_BOARD_ROOT"
 mkdir -p "$OUT_ROOT" "$LOG_DIR" "$PACKET_ROOT" "$TASK_BOARD_ROOT" "$TASK_BOARD_HISTORY_ROOT" "$(dirname "$CURSOR_FILE")"
 
-python3 - "$ROOT" "$OUT_ROOT" "$PACKET_ROOT" "$TASK_BOARD_ROOT" "$TASK_BOARD_HISTORY_ROOT" "$SUMMARY" "$CURSOR_FILE" "$STATUS_EVIDENCE" "$LOCAL_ONLY" <<'PY'
+python3 - "$ROOT" "$OUT_ROOT" "$PACKET_ROOT" "$TASK_BOARD_ROOT" "$TASK_BOARD_HISTORY_ROOT" "$SUMMARY" "$CURSOR_FILE" "$STATUS_EVIDENCE" "$LOCAL_ONLY" "$EXIT_GATE_FILE" <<'PY'
 import html
 import hashlib
 import json
@@ -39,9 +40,118 @@ status_evidence_arg = sys.argv[8]
 status_evidence_path = Path(status_evidence_arg).resolve() if status_evidence_arg else None
 local_only_while_pr_blocked = sys.argv[9] == "1"
 generation_mode = "local_only_while_pr_blocked" if local_only_while_pr_blocked else "normal"
+exit_gate_arg = sys.argv[10] if len(sys.argv) > 10 else ""
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+def normalized_blockers(value):
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item).strip()]
+    if isinstance(value, str) and value.strip():
+        return [value.strip()]
+    return []
+
+def numeric_value(value):
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        text = value.strip().rstrip("%")
+        try:
+            return float(text)
+        except ValueError:
+            return None
+    return None
+
+def load_exit_gate(path_arg: str) -> dict:
+    if not path_arg:
+        return {
+            "schema_version": "ao2.pulse-readiness-exit-gate-observation.v1",
+            "status": "not_configured",
+            "ready": False,
+            "path": None,
+            "reason": "AO2_PULSE_EXIT_GATE_FILE is not set",
+            "blocking_next_actions": ["configure AO2_PULSE_EXIT_GATE_FILE to enable stop-on-ready semantics"],
+            "repos": [],
+        }
+    path = Path(path_arg).expanduser().resolve()
+    if not path.is_file():
+        return {
+            "schema_version": "ao2.pulse-readiness-exit-gate-observation.v1",
+            "status": "failed",
+            "ready": False,
+            "path": str(path),
+            "reason": "readiness exit gate file is missing",
+            "blocking_next_actions": [f"create readiness exit gate file: {path}"],
+            "repos": [],
+        }
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        return {
+            "schema_version": "ao2.pulse-readiness-exit-gate-observation.v1",
+            "status": "failed",
+            "ready": False,
+            "path": str(path),
+            "reason": f"readiness exit gate file is invalid JSON: {exc}",
+            "blocking_next_actions": ["repair readiness exit gate JSON"],
+            "repos": [],
+        }
+
+    top_status = str(payload.get("status", "")).lower()
+    blockers = normalized_blockers(payload.get("blocking_next_actions"))
+    repos = []
+    repo_blockers = []
+    raw_repos = payload.get("repos")
+    if isinstance(raw_repos, list):
+        for index, repo in enumerate(raw_repos):
+            if not isinstance(repo, dict):
+                repo_blockers.append(f"repo[{index}] is not an object")
+                continue
+            repo_id = str(repo.get("id") or repo.get("name") or f"repo-{index + 1}")
+            repo_status = str(repo.get("status", "")).lower()
+            repo_blocking = normalized_blockers(repo.get("blocking_next_actions"))
+            readiness_percent = numeric_value(
+                repo.get("readiness_percent", repo.get("production_readiness_percent"))
+            )
+            score = numeric_value(repo.get("score"))
+            max_score = numeric_value(repo.get("max_score"))
+            percent_ok = readiness_percent is None or readiness_percent >= 100
+            score_ok = score is None or max_score is None or score >= max_score
+            status_ok = repo_status in {"ready", "passed", "green", "satisfied"}
+            repo_ready = status_ok and percent_ok and score_ok and not repo_blocking
+            if not repo_ready:
+                repo_blockers.append(f"{repo_id} readiness exit gate is not satisfied")
+            repos.append({
+                "id": repo_id,
+                "status": repo_status or "unknown",
+                "ready": repo_ready,
+                "readiness_percent": readiness_percent,
+                "blocking_next_actions": repo_blocking,
+            })
+
+    top_score = numeric_value(payload.get("score"))
+    top_max_score = numeric_value(payload.get("max_score"))
+    score_ready = top_score is not None and top_max_score is not None and top_score >= top_max_score
+    status_ready = top_status in {"ready", "passed", "green", "satisfied"} or score_ready
+    repos_ready = all(item["ready"] for item in repos) if repos else True
+    ready = status_ready and repos_ready and not blockers and not repo_blockers
+    all_blockers = blockers + repo_blockers
+    return {
+        "schema_version": "ao2.pulse-readiness-exit-gate-observation.v1",
+        "status": "ready" if ready else "blocked",
+        "ready": ready,
+        "path": str(path),
+        "reason": (
+            "readiness exit gate satisfied"
+            if ready
+            else "readiness exit gate has blocking next actions or incomplete repo readiness"
+        ),
+        "source_schema_version": payload.get("schema_version"),
+        "source_status": payload.get("status"),
+        "blocking_next_actions": all_blockers,
+        "repos": repos,
+    }
 
 dimensions = [
     "product_mvp_slice",
@@ -588,25 +698,36 @@ task_manifest = {
         "side_effects": "local_process_execution_and_packet_materialization",
     },
 }
+exit_gate = load_exit_gate(exit_gate_arg)
+exit_gate_ready = exit_gate.get("ready") is True
+event_loop_action = "stop" if exit_gate_ready else ("continue" if tasks else "backoff")
+event_loop_reason = (
+    "AO2 Pulse readiness exit gate satisfied; stopping event loop."
+    if exit_gate_ready
+    else (
+        f"AO2 Pulse generated {len(tasks)} next task(s) for {selection['id']}"
+        if tasks
+        else "AO2 Pulse generated no actionable tasks"
+    )
+)
+event_loop_next_task_id = None if exit_gate_ready else (tasks[0]["id"] if tasks else None)
+event_loop_status = "ready" if exit_gate_ready or tasks else "backoff"
 codex_cron_event_loop_decision = {
     "schema_version": "codex-cron.event-loop-decision.v1",
     "event_loop": {
-        "action": "continue" if tasks else "backoff",
-        "reason": (
-            f"AO2 Pulse generated {len(tasks)} next task(s) for {selection['id']}"
-            if tasks
-            else "AO2 Pulse generated no actionable tasks"
-        ),
-        "next_task_id": tasks[0]["id"] if tasks else None,
+        "action": event_loop_action,
+        "reason": event_loop_reason,
+        "next_task_id": event_loop_next_task_id,
     },
     "ao2": {
         "schema_version": "ao2.pulse-codex-cron-event-loop-decision.v1",
         "generated_at_utc": utc_now(),
-        "status": "ready" if tasks else "backoff",
+        "status": event_loop_status,
         "selection": selection["id"],
         "generation_mode": generation_mode,
         "local_only_while_pr_blocked": local_only_while_pr_blocked,
         "task_count": len(tasks),
+        "exit_gate": exit_gate,
         "task_board_summary": str(task_board_root / "summary.json"),
         "packet_summary": str(packet_root / "summary.json"),
         "pulse_eval_loop": str(packet_root / "pulse-eval-loop.json"),
@@ -624,11 +745,12 @@ ao2_event_loop_decision = {
     "ao2": {
         "schema_version": "ao2.pulse-event-loop-decision-metadata.v1",
         "generated_at_utc": utc_now(),
-        "status": "ready" if tasks else "backoff",
+        "status": event_loop_status,
         "selection": selection["id"],
         "generation_mode": generation_mode,
         "local_only_while_pr_blocked": local_only_while_pr_blocked,
         "task_count": len(tasks),
+        "exit_gate": exit_gate,
         "task_board_summary": str(task_board_root / "summary.json"),
         "packet_summary": str(packet_root / "summary.json"),
         "pulse_eval_loop": str(packet_root / "pulse-eval-loop.json"),
@@ -1035,6 +1157,7 @@ packet_summary = {
     "selection": selection["id"],
     "generation_mode": generation_mode,
     "local_only_while_pr_blocked": local_only_while_pr_blocked,
+    "exit_gate": exit_gate,
     "task_board_summary": str(task_board_root / "summary.json"),
     "codex_cron_event_loop_decision": str(packet_root / "codex-cron-event-loop-decision.json"),
     "ao2_event_loop_decision": str(packet_root / "ao2-event-loop-decision.json"),
@@ -1063,6 +1186,7 @@ summary = {
     "selection": selection["id"],
     "generation_mode": generation_mode,
     "local_only_while_pr_blocked": local_only_while_pr_blocked,
+    "exit_gate": exit_gate,
     "task_board_summary": str(task_board_root / "summary.json"),
     "codex_cron_event_loop_decision": str(packet_root / "codex-cron-event-loop-decision.json"),
     "ao2_event_loop_decision": str(packet_root / "ao2-event-loop-decision.json"),
