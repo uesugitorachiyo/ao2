@@ -129,6 +129,36 @@ if not (
         "RSI claim-publish boundary was not denied in the stable release evidence packet",
         rsi_cross_repo_e2e,
     )
+rsi_improvement_evidence = packet.get("rsi_improvement_evidence", {})
+if not (
+    rsi_improvement_evidence.get("schema_version") == "ao2.rsi-improvement-evidence-gate.v1"
+    and rsi_improvement_evidence.get("status") == "passed"
+    and rsi_improvement_evidence.get("improvement_ready") is True
+    and rsi_improvement_evidence.get("measured_improvement_percent", 0) >= rsi_improvement_evidence.get("target_percent", 5)
+    and rsi_improvement_evidence.get("target_percent", 0) >= 5
+    and rsi_improvement_evidence.get("claim_publish_decision") == "deny"
+    and rsi_improvement_evidence.get("claim_publish_authority") is False
+):
+    fail(
+        "rsi_improvement_evidence_not_ready",
+        "RSI improvement evidence was not ready in the stable release evidence packet",
+        rsi_improvement_evidence,
+    )
+rsi_improvement_trend = packet.get("rsi_improvement_trend", {})
+if not (
+    rsi_improvement_trend.get("schema_version") == "ao2.rsi-improvement-trend.v1"
+    and rsi_improvement_trend.get("status") == "passed"
+    and rsi_improvement_trend.get("trend_ready") is True
+    and rsi_improvement_trend.get("current_measured_improvement_percent", 0) >= rsi_improvement_trend.get("target_percent", 5)
+    and rsi_improvement_trend.get("target_percent", 0) >= 5
+    and rsi_improvement_trend.get("claim_publish_decision") == "deny"
+    and rsi_improvement_trend.get("claim_publish_authority") is False
+):
+    fail(
+        "rsi_improvement_trend_not_ready",
+        "RSI improvement trend was not ready in the stable release evidence packet",
+        rsi_improvement_trend,
+    )
 if trust_boundary.get("mutates_releases") is not False:
     fail("dry_run_audit_mutates_releases", "stable promotion dry-run audit trust boundary mutates releases", trust_boundary)
 if trust_boundary.get("stores_credentials") is not False:
@@ -188,6 +218,27 @@ payload = {
                 "covenant_gate_schema_version": rsi_cross_repo_e2e.get("covenant_gate_schema_version"),
                 "covenant_gate_status": rsi_cross_repo_e2e.get("covenant_gate_status"),
             },
+            "rsi_improvement_evidence": {
+                "schema_version": rsi_improvement_evidence.get("schema_version"),
+                "status": rsi_improvement_evidence.get("status"),
+                "improvement_ready": rsi_improvement_evidence.get("improvement_ready"),
+                "target_percent": rsi_improvement_evidence.get("target_percent"),
+                "measured_improvement_percent": rsi_improvement_evidence.get("measured_improvement_percent"),
+                "claim_publish_decision": rsi_improvement_evidence.get("claim_publish_decision"),
+                "claim_publish_authority": rsi_improvement_evidence.get("claim_publish_authority"),
+            },
+            "rsi_improvement_trend": {
+                "schema_version": rsi_improvement_trend.get("schema_version"),
+                "status": rsi_improvement_trend.get("status"),
+                "trend_ready": rsi_improvement_trend.get("trend_ready"),
+                "run_count": rsi_improvement_trend.get("run_count"),
+                "previous_measured_improvement_percent": rsi_improvement_trend.get("previous_measured_improvement_percent"),
+                "current_measured_improvement_percent": rsi_improvement_trend.get("current_measured_improvement_percent"),
+                "delta_from_previous_percent": rsi_improvement_trend.get("delta_from_previous_percent"),
+                "target_percent": rsi_improvement_trend.get("target_percent"),
+                "claim_publish_decision": rsi_improvement_trend.get("claim_publish_decision"),
+                "claim_publish_authority": rsi_improvement_trend.get("claim_publish_authority"),
+            },
         },
     },
     "operator_decision": {
@@ -228,6 +279,9 @@ lines = [
     "- Confirm post-release evidence and the stable release evidence packet passed.",
     f"- Archive parity status: `{public_pair_digest_audit.get('archive_parity_status')}`.",
     f"- RSI claim-publish decision: `{rsi_cross_repo_e2e.get('claim_publish_decision')}`.",
+    f"- RSI improvement measured: `{rsi_improvement_evidence.get('measured_improvement_percent')}`.",
+    f"- RSI improvement trend delta: `{rsi_improvement_trend.get('delta_from_previous_percent')}`.",
+    f"- RSI improvement trend runs: `{rsi_improvement_trend.get('run_count')}`.",
     "- Confirm the public GitHub Release pages show the intended AO2 and ao2-control-plane assets.",
     "- No provider API keys are required or accepted.",
     "- The control plane records evidence; it does not approve the release.",
