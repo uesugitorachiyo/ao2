@@ -1596,6 +1596,10 @@ def test_stable_promotion_dry_run_audit_validates_dispatch_artifact(tmp_path):
         "public_pair_digest_audit",
         "archive_parity_status",
         "rsi_cross_repo_e2e",
+        "rsi_improvement_evidence",
+        "rsi_improvement_trend",
+        "measured_improvement_percent",
+        "delta_from_previous_percent",
         "claim_publish_decision",
         "covenant.rsi-claim-publish-gate.v1",
     ]:
@@ -1693,6 +1697,27 @@ def test_stable_promotion_dry_run_audit_validates_dispatch_artifact(tmp_path):
                     "covenant_gate_schema_version": "covenant.rsi-claim-publish-gate.v1",
                     "covenant_gate_status": "denied",
                 },
+                "rsi_improvement_evidence": {
+                    "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
+                    "status": "passed",
+                    "improvement_ready": True,
+                    "target_percent": 5.0,
+                    "measured_improvement_percent": 16.6667,
+                    "claim_publish_decision": "deny",
+                    "claim_publish_authority": False,
+                },
+                "rsi_improvement_trend": {
+                    "schema_version": "ao2.rsi-improvement-trend.v1",
+                    "status": "passed",
+                    "trend_ready": True,
+                    "run_count": 2,
+                    "previous_measured_improvement_percent": 16.6667,
+                    "current_measured_improvement_percent": 16.6667,
+                    "delta_from_previous_percent": 0.0,
+                    "target_percent": 5.0,
+                    "claim_publish_decision": "deny",
+                    "claim_publish_authority": False,
+                },
                 "trust_boundary": {
                     "mutates_releases": False,
                     "stores_credentials": False,
@@ -1738,6 +1763,27 @@ def test_stable_promotion_dry_run_audit_validates_dispatch_artifact(tmp_path):
         "claim_publish_authority": False,
         "covenant_gate_schema_version": "covenant.rsi-claim-publish-gate.v1",
         "covenant_gate_status": "denied",
+    }
+    assert summary["stable_release_evidence_packet"]["rsi_improvement_evidence"] == {
+        "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
+        "status": "passed",
+        "improvement_ready": True,
+        "target_percent": 5.0,
+        "measured_improvement_percent": 16.6667,
+        "claim_publish_decision": "deny",
+        "claim_publish_authority": False,
+    }
+    assert summary["stable_release_evidence_packet"]["rsi_improvement_trend"] == {
+        "schema_version": "ao2.rsi-improvement-trend.v1",
+        "status": "passed",
+        "trend_ready": True,
+        "run_count": 2,
+        "previous_measured_improvement_percent": 16.6667,
+        "current_measured_improvement_percent": 16.6667,
+        "delta_from_previous_percent": 0.0,
+        "target_percent": 5.0,
+        "claim_publish_decision": "deny",
+        "claim_publish_authority": False,
     }
 
     bad = json.loads(workflow_summary.read_text(encoding="utf-8"))
@@ -1876,6 +1922,27 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
                         ),
                         "covenant_gate_status": "denied",
                     },
+                    "rsi_improvement_evidence": {
+                        "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
+                        "status": "passed",
+                        "improvement_ready": True,
+                        "target_percent": 5.0,
+                        "measured_improvement_percent": 16.6667,
+                        "claim_publish_decision": "deny",
+                        "claim_publish_authority": False,
+                    },
+                    "rsi_improvement_trend": {
+                        "schema_version": "ao2.rsi-improvement-trend.v1",
+                        "status": "passed",
+                        "trend_ready": True,
+                        "run_count": 2,
+                        "previous_measured_improvement_percent": 16.6667,
+                        "current_measured_improvement_percent": 16.6667,
+                        "delta_from_previous_percent": 0.0,
+                        "target_percent": 5.0,
+                        "claim_publish_decision": "deny",
+                        "claim_publish_authority": False,
+                    },
                 },
                 "trust_boundary": {
                     "local_only": True,
@@ -1932,6 +1999,31 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
         "covenant_gate_schema_version": "covenant.rsi-claim-publish-gate.v1",
         "covenant_gate_status": "denied",
     }
+    assert summary["dry_run_audit"]["stable_release_evidence_packet"][
+        "rsi_improvement_evidence"
+    ] == {
+        "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
+        "status": "passed",
+        "improvement_ready": True,
+        "target_percent": 5.0,
+        "measured_improvement_percent": 16.6667,
+        "claim_publish_decision": "deny",
+        "claim_publish_authority": False,
+    }
+    assert summary["dry_run_audit"]["stable_release_evidence_packet"][
+        "rsi_improvement_trend"
+    ] == {
+        "schema_version": "ao2.rsi-improvement-trend.v1",
+        "status": "passed",
+        "trend_ready": True,
+        "run_count": 2,
+        "previous_measured_improvement_percent": 16.6667,
+        "current_measured_improvement_percent": 16.6667,
+        "delta_from_previous_percent": 0.0,
+        "target_percent": 5.0,
+        "claim_publish_decision": "deny",
+        "claim_publish_authority": False,
+    }
     assert summary["operator_decision"]["confirmation_entered"] is False
     assert summary["trust_boundary"]["mutates_releases"] is False
     assert summary["trust_boundary"]["stores_credentials"] is False
@@ -1942,6 +2034,9 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
     assert "No provider API keys are required or accepted" in checklist
     assert "Archive parity status: `passed`" in checklist
     assert "RSI claim-publish decision: `deny`" in checklist
+    assert "RSI improvement measured: `16.6667`" in checklist
+    assert "RSI improvement trend delta: `0.0`" in checklist
+    assert "RSI improvement trend runs: `2`" in checklist
     assert "Do not enter the confirmation string unless this checklist status is passed" in checklist
 
     bad = json.loads(audit_summary.read_text(encoding="utf-8"))
@@ -1967,9 +2062,11 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
     verification = read("docs/VERIFICATION.md")
     assert "npm run release:stable-promotion-operator-checklist" in verification
     assert "ao2.stable-promotion-operator-checklist.v1" in verification
+    assert "ao2.rsi-improvement-trend.v1" in verification
 
     public_release_index = read("docs/release/PUBLIC-RELEASE-VERIFICATION.md")
     assert "Stable promotion operator checklist" in public_release_index
+    assert "RSI improvement trend" in public_release_index
 
 
 def test_stable_promotion_evidence_index_links_release_gates(tmp_path):

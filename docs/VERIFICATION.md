@@ -1002,7 +1002,10 @@ Result:
   `ao2.stable-promotion-dry-run-audit.v1` and fails closed unless
   `dry_run=true`, `confirmed=false`, `promotion_status=not_attempted`,
   `post_release_evidence_ready=true`, the stable evidence packet is ready, and
-  all release-mutation trust-boundary fields remain false. The manual
+  all release-mutation trust-boundary fields remain false. It preserves the
+  stable packet RSI improvement evidence and `ao2.rsi-improvement-trend.v1`
+  fields for the downstream operator checklist while keeping
+  `claim_publish_decision=deny`. The manual
   `Stable Release Promotion Dry-Run Audit` workflow downloads a dry-run artifact
   by `stable_promotion_run_id`, runs this command, and uploads
   `ao2-stable-release-promotion-dry-run-audit`.
@@ -1013,6 +1016,12 @@ Result:
   command emits `ao2.stable-promotion-operator-checklist.v1`,
   `summary.json`, and `checklist.md`, then fails closed unless the dry-run audit
   is ready, unconfirmed, non-mutating, and backed by the stable evidence packet.
+  The checklist also surfaces `ao2.rsi-improvement-trend.v1`,
+  `measured_improvement_percent`, `delta_from_previous_percent`, and the
+  continuing `claim_publish_decision=deny` /
+  `claim_publish_authority=false` boundary so operators can review RSI
+  workflow-hardening evidence without treating it as authority to publish the
+  full autonomous RSI claim.
   The checklist records the exact
   `promote-stable-v0.4.80-v0.1.13` confirmation string, but does not enter it.
   The manual `Stable Promotion Operator Checklist` workflow downloads the
