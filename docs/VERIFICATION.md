@@ -90,6 +90,7 @@ npm run workbench:browser-qa # no-archaeology workbench browser-review evidence
 npm run provider:adversarial-corpus # adversarial provider transcript corpus gate
 npm run release:dr-retention-snapshot # DR/retention long-run fixture snapshot
 npm run frontier:lengthy:gate # aggregate local gate for the frontier lengthy task set
+npm run rsi:improvement-evidence-gate # local RSI evidence hardening improvement gate
 npm run rsi:cross-repo-e2e # AO2/control-plane/Covenant RSI claim publish-denial smoke
 npm run gate:full            # 3-stage ready-to-ship gate (guard + replacement + release-gate)
 scripts/smoke-release-archives.sh
@@ -848,11 +849,21 @@ Result:
   `target/cross-repo-control-plane-observer/latest/summary.json`
 - `npm run rsi:cross-repo-e2e`: runs the AO2 live self-change rehearsal through
   ao2-control-plane readback, AO2 readback indexing, AO2 claim readiness, and
-  the AO Covenant claim-publish gate; emits `ao2.rsi-cross-repo-e2e.v1` at
+  the AO Covenant claim-publish gate, then runs the RSI improvement evidence
+  gate; emits `ao2.rsi-cross-repo-e2e.v1` at
   `target/rsi-cross-repo-e2e/latest/summary.json`. Current expected evidence is
-  `claim_publish_decision=deny` and `publish_authority=false` for the full
+  `ao2.rsi-improvement-evidence-gate.v1`, `measured_improvement_percent >= 5`,
+  `claim_publish_decision=deny`, and `publish_authority=false` for the full
   autonomous self-mutating RSI claim. CI uploads the evidence directory as
   `ao2-rsi-cross-repo-e2e`.
+- `npm run rsi:improvement-evidence-gate`: validates the local RSI evidence
+  chain, preserves the Covenant claim-publish denial boundary, and emits
+  `ao2.rsi-improvement-evidence-gate.v1` at
+  `target/rsi-improvement-evidence-gate/latest/summary.json`. The default
+  `measured_improvement_percent` metric compares the previous six enforced RSI
+  evidence checks with seven enforced checks after this gate is added; it is a
+  workflow-hardening coverage metric, not proof that the full RSI claim is
+  publishable.
 - `npm run release:install-update-fixture`: builds a local signed fixture
   archive with `SHA256SUMS`, `provenance.json`, and a signature sidecar,
   verifies checksum/install/update behavior, references `release:download-verify`
