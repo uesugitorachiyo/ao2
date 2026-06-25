@@ -1596,10 +1596,14 @@ def test_stable_promotion_dry_run_audit_validates_dispatch_artifact(tmp_path):
         "public_pair_digest_audit",
         "archive_parity_status",
         "rsi_cross_repo_e2e",
+        "rsi_blueprint_authorization",
         "rsi_improvement_evidence",
         "rsi_improvement_trend",
         "measured_improvement_percent",
         "delta_from_previous_percent",
+        "ao2.rsi-blueprint-authorization-gate.v1",
+        "self_authorized_by_rsi",
+        "authorizes_ao_blueprint_self_change",
         "claim_publish_decision",
         "covenant.rsi-claim-publish-gate.v1",
     ]:
@@ -1697,12 +1701,23 @@ def test_stable_promotion_dry_run_audit_validates_dispatch_artifact(tmp_path):
                     "covenant_gate_schema_version": "covenant.rsi-claim-publish-gate.v1",
                     "covenant_gate_status": "denied",
                 },
+                "rsi_blueprint_authorization": {
+                    "schema_version": "ao2.rsi-blueprint-authorization-gate.v1",
+                    "status": "passed",
+                    "blueprint_authorization_ready": True,
+                    "gate_model": "tiered",
+                    "candidate_id": "ao2-rsi-evidence-hardening",
+                    "source": "ao-blueprint",
+                    "self_authorized_by_rsi": False,
+                    "authorizes_claim_publication": False,
+                    "authorizes_ao_blueprint_self_change": False,
+                },
                 "rsi_improvement_evidence": {
                     "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
                     "status": "passed",
                     "improvement_ready": True,
                     "target_percent": 5.0,
-                    "measured_improvement_percent": 16.6667,
+                    "measured_improvement_percent": 33.3333,
                     "claim_publish_decision": "deny",
                     "claim_publish_authority": False,
                 },
@@ -1711,8 +1726,8 @@ def test_stable_promotion_dry_run_audit_validates_dispatch_artifact(tmp_path):
                     "status": "passed",
                     "trend_ready": True,
                     "run_count": 2,
-                    "previous_measured_improvement_percent": 16.6667,
-                    "current_measured_improvement_percent": 16.6667,
+                    "previous_measured_improvement_percent": 33.3333,
+                    "current_measured_improvement_percent": 33.3333,
                     "delta_from_previous_percent": 0.0,
                     "target_percent": 5.0,
                     "claim_publish_decision": "deny",
@@ -1764,12 +1779,23 @@ def test_stable_promotion_dry_run_audit_validates_dispatch_artifact(tmp_path):
         "covenant_gate_schema_version": "covenant.rsi-claim-publish-gate.v1",
         "covenant_gate_status": "denied",
     }
+    assert summary["stable_release_evidence_packet"]["rsi_blueprint_authorization"] == {
+        "schema_version": "ao2.rsi-blueprint-authorization-gate.v1",
+        "status": "passed",
+        "blueprint_authorization_ready": True,
+        "gate_model": "tiered",
+        "candidate_id": "ao2-rsi-evidence-hardening",
+        "source": "ao-blueprint",
+        "self_authorized_by_rsi": False,
+        "authorizes_claim_publication": False,
+        "authorizes_ao_blueprint_self_change": False,
+    }
     assert summary["stable_release_evidence_packet"]["rsi_improvement_evidence"] == {
         "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
         "status": "passed",
         "improvement_ready": True,
         "target_percent": 5.0,
-        "measured_improvement_percent": 16.6667,
+        "measured_improvement_percent": 33.3333,
         "claim_publish_decision": "deny",
         "claim_publish_authority": False,
     }
@@ -1778,8 +1804,8 @@ def test_stable_promotion_dry_run_audit_validates_dispatch_artifact(tmp_path):
         "status": "passed",
         "trend_ready": True,
         "run_count": 2,
-        "previous_measured_improvement_percent": 16.6667,
-        "current_measured_improvement_percent": 16.6667,
+        "previous_measured_improvement_percent": 33.3333,
+        "current_measured_improvement_percent": 33.3333,
         "delta_from_previous_percent": 0.0,
         "target_percent": 5.0,
         "claim_publish_decision": "deny",
@@ -1922,12 +1948,23 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
                         ),
                         "covenant_gate_status": "denied",
                     },
+                    "rsi_blueprint_authorization": {
+                        "schema_version": "ao2.rsi-blueprint-authorization-gate.v1",
+                        "status": "passed",
+                        "blueprint_authorization_ready": True,
+                        "gate_model": "tiered",
+                        "candidate_id": "ao2-rsi-evidence-hardening",
+                        "source": "ao-blueprint",
+                        "self_authorized_by_rsi": False,
+                        "authorizes_claim_publication": False,
+                        "authorizes_ao_blueprint_self_change": False,
+                    },
                     "rsi_improvement_evidence": {
                         "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
                         "status": "passed",
                         "improvement_ready": True,
                         "target_percent": 5.0,
-                        "measured_improvement_percent": 16.6667,
+                        "measured_improvement_percent": 33.3333,
                         "claim_publish_decision": "deny",
                         "claim_publish_authority": False,
                     },
@@ -1936,8 +1973,8 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
                         "status": "passed",
                         "trend_ready": True,
                         "run_count": 2,
-                        "previous_measured_improvement_percent": 16.6667,
-                        "current_measured_improvement_percent": 16.6667,
+                        "previous_measured_improvement_percent": 33.3333,
+                        "current_measured_improvement_percent": 33.3333,
                         "delta_from_previous_percent": 0.0,
                         "target_percent": 5.0,
                         "claim_publish_decision": "deny",
@@ -2000,13 +2037,26 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
         "covenant_gate_status": "denied",
     }
     assert summary["dry_run_audit"]["stable_release_evidence_packet"][
+        "rsi_blueprint_authorization"
+    ] == {
+        "schema_version": "ao2.rsi-blueprint-authorization-gate.v1",
+        "status": "passed",
+        "blueprint_authorization_ready": True,
+        "gate_model": "tiered",
+        "candidate_id": "ao2-rsi-evidence-hardening",
+        "source": "ao-blueprint",
+        "self_authorized_by_rsi": False,
+        "authorizes_claim_publication": False,
+        "authorizes_ao_blueprint_self_change": False,
+    }
+    assert summary["dry_run_audit"]["stable_release_evidence_packet"][
         "rsi_improvement_evidence"
     ] == {
         "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
         "status": "passed",
         "improvement_ready": True,
         "target_percent": 5.0,
-        "measured_improvement_percent": 16.6667,
+        "measured_improvement_percent": 33.3333,
         "claim_publish_decision": "deny",
         "claim_publish_authority": False,
     }
@@ -2017,8 +2067,8 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
         "status": "passed",
         "trend_ready": True,
         "run_count": 2,
-        "previous_measured_improvement_percent": 16.6667,
-        "current_measured_improvement_percent": 16.6667,
+        "previous_measured_improvement_percent": 33.3333,
+        "current_measured_improvement_percent": 33.3333,
         "delta_from_previous_percent": 0.0,
         "target_percent": 5.0,
         "claim_publish_decision": "deny",
@@ -2034,7 +2084,9 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
     assert "No provider API keys are required or accepted" in checklist
     assert "Archive parity status: `passed`" in checklist
     assert "RSI claim-publish decision: `deny`" in checklist
-    assert "RSI improvement measured: `16.6667`" in checklist
+    assert "RSI Blueprint authorization gate: `tiered`" in checklist
+    assert "RSI Blueprint self-authorized by RSI: `False`" in checklist
+    assert "RSI improvement measured: `33.3333`" in checklist
     assert "RSI improvement trend delta: `0.0`" in checklist
     assert "RSI improvement trend runs: `2`" in checklist
     assert "Do not enter the confirmation string unless this checklist status is passed" in checklist
@@ -3812,11 +3864,15 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
         "ao2.stable-promotion-workflow.v1",
         "ao2.operator-release-evidence-bundle.v1",
         "ao2.rsi-cross-repo-e2e.v1",
+        "ao2.rsi-blueprint-authorization-gate.v1",
         "ao2.rsi-improvement-evidence-gate.v1",
         "ao2.rsi-improvement-trend.v1",
         "covenant.rsi-claim-publish-gate.v1",
         "post_release_evidence_ready",
         "operator_release_evidence_ready",
+        "rsi_blueprint_authorization",
+        "self_authorized_by_rsi",
+        "authorizes_ao_blueprint_self_change",
         "measured_improvement_percent",
         "delta_from_previous_percent",
         "rsi_improvement_evidence",
@@ -3918,9 +3974,23 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
                     "improvement_evidence_schema_version": (
                         "ao2.rsi-improvement-evidence-gate.v1"
                     ),
-                    "improvement_measured_percent": 16.6667,
+                    "blueprint_authorization_status": "passed",
+                    "blueprint_authorization_gate_model": "tiered",
+                    "blueprint_authorization_self_authorized_by_rsi": False,
+                    "improvement_measured_percent": 33.3333,
                     "improvement_target_percent": 5.0,
                     "improvement_status": "passed",
+                },
+                "blueprint_authorization": {
+                    "schema_version": "ao2.rsi-blueprint-authorization-gate.v1",
+                    "status": "passed",
+                    "blueprint_authorization_ready": True,
+                    "gate_model": "tiered",
+                    "candidate_id": "ao2-rsi-evidence-hardening",
+                    "source": "ao-blueprint",
+                    "self_authorized_by_rsi": False,
+                    "authorizes_claim_publication": False,
+                    "authorizes_ao_blueprint_self_change": False,
                 },
                 "improvement_evidence": {
                     "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
@@ -3928,9 +3998,9 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
                     "improvement_ready": True,
                     "unit": "enforced_rsi_evidence_checks",
                     "baseline_check_count": 6,
-                    "observed_check_count": 7,
+                    "observed_check_count": 8,
                     "target_percent": 5.0,
-                    "measured_improvement_percent": 16.6667,
+                    "measured_improvement_percent": 33.3333,
                     "claim_publish_decision": "deny",
                     "claim_publish_authority": False,
                 },
@@ -3940,8 +4010,8 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
                     "trend_ready": True,
                     "history_path": str(tmp_path / "trend.jsonl"),
                     "run_count": 2,
-                    "previous_measured_improvement_percent": 16.6667,
-                    "current_measured_improvement_percent": 16.6667,
+                    "previous_measured_improvement_percent": 33.3333,
+                    "current_measured_improvement_percent": 33.3333,
                     "delta_from_previous_percent": 0.0,
                     "target_percent": 5.0,
                     "claim_publish_decision": "deny",
@@ -3997,15 +4067,26 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
         "covenant_gate_schema_version": "covenant.rsi-claim-publish-gate.v1",
         "covenant_gate_status": "denied",
     }
+    assert summary["rsi_blueprint_authorization"] == {
+        "schema_version": "ao2.rsi-blueprint-authorization-gate.v1",
+        "status": "passed",
+        "blueprint_authorization_ready": True,
+        "gate_model": "tiered",
+        "candidate_id": "ao2-rsi-evidence-hardening",
+        "source": "ao-blueprint",
+        "self_authorized_by_rsi": False,
+        "authorizes_claim_publication": False,
+        "authorizes_ao_blueprint_self_change": False,
+    }
     assert summary["rsi_improvement_evidence"] == {
         "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
         "status": "passed",
         "improvement_ready": True,
         "unit": "enforced_rsi_evidence_checks",
         "baseline_check_count": 6,
-        "observed_check_count": 7,
+        "observed_check_count": 8,
         "target_percent": 5.0,
-        "measured_improvement_percent": 16.6667,
+        "measured_improvement_percent": 33.3333,
         "claim_publish_decision": "deny",
         "claim_publish_authority": False,
     }
@@ -4015,8 +4096,8 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
         "trend_ready": True,
         "history_path": str(tmp_path / "trend.jsonl"),
         "run_count": 2,
-        "previous_measured_improvement_percent": 16.6667,
-        "current_measured_improvement_percent": 16.6667,
+        "previous_measured_improvement_percent": 33.3333,
+        "current_measured_improvement_percent": 33.3333,
         "delta_from_previous_percent": 0.0,
         "target_percent": 5.0,
         "claim_publish_decision": "deny",
@@ -4044,11 +4125,15 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
     assert "ao2-public-release-pair-digest-audit" in dashboard
     assert "RSI claim-publish boundary" in dashboard
     assert "covenant.rsi-claim-publish-gate.v1" in dashboard
+    assert "RSI Blueprint Authorization" in dashboard
+    assert "ao2.rsi-blueprint-authorization-gate.v1" in dashboard
+    assert "tiered" in dashboard
+    assert "ao-blueprint" in dashboard
     assert "RSI improvement evidence" in dashboard
     assert "ao2.rsi-improvement-evidence-gate.v1" in dashboard
     assert "RSI improvement trend" in dashboard
     assert "ao2.rsi-improvement-trend.v1" in dashboard
-    assert "16.6667" in dashboard
+    assert "33.3333" in dashboard
     assert "Archive parity" in dashboard
 
     verification = read("docs/VERIFICATION.md")
@@ -4056,6 +4141,7 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
     assert "ao2.stable-release-evidence-packet.v1" in verification
     assert "AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY" in verification
     assert "claim_publish_decision=deny" in verification
+    assert "ao2.rsi-blueprint-authorization-gate.v1" in verification
     assert "ao2.rsi-improvement-evidence-gate.v1" in verification
     assert "ao2.rsi-improvement-trend.v1" in verification
     assert "measured_improvement_percent >= 5" in verification
@@ -4064,6 +4150,7 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
     assert "Stable release evidence packet" in public_release_index
     assert "release:stable-evidence-packet" in public_release_index
     assert "ao2.rsi-cross-repo-e2e.v1" in public_release_index
+    assert "ao2.rsi-blueprint-authorization-gate.v1" in public_release_index
     assert "ao2.rsi-improvement-evidence-gate.v1" in public_release_index
     assert "ao2.rsi-improvement-trend.v1" in public_release_index
 
@@ -4085,6 +4172,10 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
         "npm run release:stable-evidence-packet",
         "ao2.stable-release-evidence-packet.v1",
         "ao2.rsi-cross-repo-e2e.v1",
+        "ao2.rsi-blueprint-authorization-gate.v1",
+        "rsi_blueprint_authorization",
+        "self_authorized_by_rsi",
+        "authorizes_ao_blueprint_self_change",
         "ao2.rsi-improvement-evidence-gate.v1",
         "ao2.rsi-improvement-trend.v1",
         "measured_improvement_percent",
@@ -5187,6 +5278,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "latest/readback-index/summary.json",
         "latest/claim-readiness/summary.json",
         "latest/covenant-gate/summary.json",
+        "latest/blueprint-authorization/summary.json",
         "latest/improvement-evidence-gate/summary.json",
         "latest/improvement-trend/summary.json",
     ]
@@ -5197,6 +5289,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.rsi-live-self-change-readback-evidence-index.v1",
         "ao2.rsi-claim-readiness-audit.v1",
         "covenant.rsi-claim-publish-gate.v1",
+        "ao2.rsi-blueprint-authorization-gate.v1",
         "ao2.rsi-improvement-evidence-gate.v1",
         "ao2.rsi-improvement-trend.v1",
     ]
@@ -5255,6 +5348,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "stable-promotion-workflow/summary.json",
         "operator-release-evidence-bundle/summary.json",
         "rsi-cross-repo-e2e/latest/summary.json",
+        "rsi-cross-repo-e2e/latest/blueprint-authorization/summary.json",
         "rsi-cross-repo-e2e/latest/improvement-evidence-gate/summary.json",
         "rsi-cross-repo-e2e/latest/improvement-trend/summary.json",
     ]
@@ -5263,6 +5357,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.stable-promotion-workflow.v1",
         "ao2.operator-release-evidence-bundle.v1",
         "ao2.rsi-cross-repo-e2e.v1",
+        "ao2.rsi-blueprint-authorization-gate.v1",
         "ao2.rsi-improvement-evidence-gate.v1",
         "ao2.rsi-improvement-trend.v1",
     ]
@@ -5686,6 +5781,20 @@ def _write_release_readiness_consumer_fixture(root: Path):
                     "covenant.rsi-claim-publish-gate.v1"
                 ),
                 "covenant_gate_status": "denied",
+                "blueprint_authorization_status": "passed",
+                "blueprint_authorization_gate_model": "tiered",
+                "blueprint_authorization_self_authorized_by_rsi": False,
+            },
+            "blueprint_authorization": {
+                "schema_version": "ao2.rsi-blueprint-authorization-gate.v1",
+                "status": "passed",
+                "blueprint_authorization_ready": True,
+                "gate_model": "tiered",
+                "candidate_id": "ao2-rsi-evidence-hardening",
+                "source": "ao-blueprint",
+                "self_authorized_by_rsi": False,
+                "authorizes_claim_publication": False,
+                "authorizes_ao_blueprint_self_change": False,
             },
             "improvement_evidence": {
                 "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
@@ -5693,9 +5802,9 @@ def _write_release_readiness_consumer_fixture(root: Path):
                 "improvement_ready": True,
                 "unit": "enforced_rsi_evidence_checks",
                 "baseline_check_count": 6,
-                "observed_check_count": 7,
+                "observed_check_count": 8,
                 "target_percent": 5.0,
-                "measured_improvement_percent": 16.6667,
+                "measured_improvement_percent": 33.3333,
                 "claim_publish_decision": "deny",
                 "claim_publish_authority": False,
             },
@@ -5705,6 +5814,21 @@ def _write_release_readiness_consumer_fixture(root: Path):
                 "publishes_claims": False,
                 "approves_rsi_claims": False,
             },
+        },
+    )
+    _write_release_readiness_consumer_json(
+        root,
+        "ao2-rsi-cross-repo-e2e/latest/blueprint-authorization/summary.json",
+        {
+            "schema_version": "ao2.rsi-blueprint-authorization-gate.v1",
+            "status": "passed",
+            "blueprint_authorization_ready": True,
+            "gate_model": "tiered",
+            "candidate_id": "ao2-rsi-evidence-hardening",
+            "source": "ao-blueprint",
+            "self_authorized_by_rsi": False,
+            "authorizes_claim_publication": False,
+            "authorizes_ao_blueprint_self_change": False,
         },
     )
     _write_release_readiness_consumer_json(
@@ -5783,12 +5907,23 @@ def _write_release_readiness_consumer_fixture(root: Path):
                 "covenant_gate_schema_version": "covenant.rsi-claim-publish-gate.v1",
                 "covenant_gate_status": "denied",
             },
+            "rsi_blueprint_authorization": {
+                "schema_version": "ao2.rsi-blueprint-authorization-gate.v1",
+                "status": "passed",
+                "blueprint_authorization_ready": True,
+                "gate_model": "tiered",
+                "candidate_id": "ao2-rsi-evidence-hardening",
+                "source": "ao-blueprint",
+                "self_authorized_by_rsi": False,
+                "authorizes_claim_publication": False,
+                "authorizes_ao_blueprint_self_change": False,
+            },
             "rsi_improvement_evidence": {
                 "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
                 "status": "passed",
                 "improvement_ready": True,
                 "target_percent": 5.0,
-                "measured_improvement_percent": 16.6667,
+                "measured_improvement_percent": 33.3333,
                 "claim_publish_decision": "deny",
                 "claim_publish_authority": False,
             },
@@ -5797,7 +5932,7 @@ def _write_release_readiness_consumer_fixture(root: Path):
                 "status": "passed",
                 "trend_ready": True,
                 "run_count": 2,
-                "current_measured_improvement_percent": 16.6667,
+                "current_measured_improvement_percent": 33.3333,
                 "target_percent": 5.0,
                 "claim_publish_decision": "deny",
                 "claim_publish_authority": False,
@@ -12908,12 +13043,23 @@ root.mkdir(parents=True, exist_ok=True)
                         ),
                         "covenant_gate_status": "denied",
                     },
+                    "rsi_blueprint_authorization": {
+                        "schema_version": "ao2.rsi-blueprint-authorization-gate.v1",
+                        "status": "passed",
+                        "blueprint_authorization_ready": True,
+                        "gate_model": "tiered",
+                        "candidate_id": "ao2-rsi-evidence-hardening",
+                        "source": "ao-blueprint",
+                        "self_authorized_by_rsi": False,
+                        "authorizes_claim_publication": False,
+                        "authorizes_ao_blueprint_self_change": False,
+                    },
                     "rsi_improvement_evidence": {
                         "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
                         "status": "passed",
                         "improvement_ready": True,
                         "target_percent": 5.0,
-                        "measured_improvement_percent": 16.6667,
+                        "measured_improvement_percent": 33.3333,
                         "claim_publish_decision": "deny",
                         "claim_publish_authority": False,
                     },
@@ -12922,7 +13068,7 @@ root.mkdir(parents=True, exist_ok=True)
                         "status": "passed",
                         "trend_ready": True,
                         "run_count": 2,
-                        "current_measured_improvement_percent": 16.6667,
+                        "current_measured_improvement_percent": 33.3333,
                         "target_percent": 5.0,
                         "claim_publish_decision": "deny",
                         "claim_publish_authority": False,

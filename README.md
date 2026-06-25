@@ -135,8 +135,9 @@ The gate emits `ao2.rsi-improvement-evidence-gate.v1` under
 `target/rsi-improvement-evidence-gate/latest/summary.json`. It measures
 workflow-hardening coverage as `measured_improvement_percent` for enforced RSI
 evidence checks. The default target is 5%, and the current gate compares the
-previous six-check RSI evidence baseline with seven enforced checks after this
-gate is added. This is evidence of stronger verification coverage, not proof
+previous six-check RSI evidence baseline with eight enforced checks after the
+AO Blueprint authorization prerequisite and improvement gate are added. This is
+evidence of stronger verification coverage, not proof
 that the full RSI claim is publishable.
 
 Persist the local improvement trend with:
@@ -162,12 +163,17 @@ npm run rsi:cross-repo-e2e
 The E2E smoke emits `ao2.rsi-cross-repo-e2e.v1` under
 `target/rsi-cross-repo-e2e/latest/summary.json`. It runs the AO2 live
 self-change rehearsal, ao2-control-plane readback,
-`rsi:live-self-change-readback-index`, `rsi:claim-readiness`, and Covenant
-`policy claim-publish-gate`, then runs the improvement evidence gate. The
+`rsi:live-self-change-readback-index`, `rsi:claim-readiness`,
+`rsi:blueprint-authorization-gate`, and Covenant `policy claim-publish-gate`,
+then runs the improvement evidence gate. Set
+`AO2_RSI_BLUEPRINT_AUTHORIZATION_SUMMARY` to a real AO Blueprint
+`ao.blueprint.build-authorization.v0.1` output when replacing the local fixture.
+The
 expected final Covenant gate remains `publish_authority=false` with schema
 `covenant.rsi-claim-publish-gate.v1`; the E2E summary also carries
 `ao2.rsi-improvement-evidence-gate.v1`,
-`ao2.rsi-improvement-trend.v1`, `measured_improvement_percent`, and
+`ao2.rsi-improvement-trend.v1`,
+`ao2.rsi-blueprint-authorization-gate.v1`, `measured_improvement_percent`, and
 `delta_from_previous_percent`.
 The smoke proves the denial chain and 5% workflow-hardening measurement are
 wired end to end, not that the full RSI claim is publishable.

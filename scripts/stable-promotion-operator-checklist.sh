@@ -144,6 +144,22 @@ if not (
         "RSI improvement evidence was not ready in the stable release evidence packet",
         rsi_improvement_evidence,
     )
+rsi_blueprint_authorization = packet.get("rsi_blueprint_authorization", {})
+if not (
+    rsi_blueprint_authorization.get("schema_version") == "ao2.rsi-blueprint-authorization-gate.v1"
+    and rsi_blueprint_authorization.get("status") == "passed"
+    and rsi_blueprint_authorization.get("blueprint_authorization_ready") is True
+    and rsi_blueprint_authorization.get("gate_model") == "tiered"
+    and rsi_blueprint_authorization.get("source") == "ao-blueprint"
+    and rsi_blueprint_authorization.get("self_authorized_by_rsi") is False
+    and rsi_blueprint_authorization.get("authorizes_claim_publication") is False
+    and rsi_blueprint_authorization.get("authorizes_ao_blueprint_self_change") is False
+):
+    fail(
+        "rsi_blueprint_authorization_not_ready",
+        "RSI Blueprint authorization was not ready",
+        rsi_blueprint_authorization,
+    )
 rsi_improvement_trend = packet.get("rsi_improvement_trend", {})
 if not (
     rsi_improvement_trend.get("schema_version") == "ao2.rsi-improvement-trend.v1"
@@ -227,6 +243,17 @@ payload = {
                 "claim_publish_decision": rsi_improvement_evidence.get("claim_publish_decision"),
                 "claim_publish_authority": rsi_improvement_evidence.get("claim_publish_authority"),
             },
+            "rsi_blueprint_authorization": {
+                "schema_version": rsi_blueprint_authorization.get("schema_version"),
+                "status": rsi_blueprint_authorization.get("status"),
+                "blueprint_authorization_ready": rsi_blueprint_authorization.get("blueprint_authorization_ready"),
+                "gate_model": rsi_blueprint_authorization.get("gate_model"),
+                "candidate_id": rsi_blueprint_authorization.get("candidate_id"),
+                "source": rsi_blueprint_authorization.get("source"),
+                "self_authorized_by_rsi": rsi_blueprint_authorization.get("self_authorized_by_rsi"),
+                "authorizes_claim_publication": rsi_blueprint_authorization.get("authorizes_claim_publication"),
+                "authorizes_ao_blueprint_self_change": rsi_blueprint_authorization.get("authorizes_ao_blueprint_self_change"),
+            },
             "rsi_improvement_trend": {
                 "schema_version": rsi_improvement_trend.get("schema_version"),
                 "status": rsi_improvement_trend.get("status"),
@@ -279,6 +306,8 @@ lines = [
     "- Confirm post-release evidence and the stable release evidence packet passed.",
     f"- Archive parity status: `{public_pair_digest_audit.get('archive_parity_status')}`.",
     f"- RSI claim-publish decision: `{rsi_cross_repo_e2e.get('claim_publish_decision')}`.",
+    f"- RSI Blueprint authorization gate: `{rsi_blueprint_authorization.get('gate_model')}`.",
+    f"- RSI Blueprint self-authorized by RSI: `{rsi_blueprint_authorization.get('self_authorized_by_rsi')}`.",
     f"- RSI improvement measured: `{rsi_improvement_evidence.get('measured_improvement_percent')}`.",
     f"- RSI improvement trend delta: `{rsi_improvement_trend.get('delta_from_previous_percent')}`.",
     f"- RSI improvement trend runs: `{rsi_improvement_trend.get('run_count')}`.",

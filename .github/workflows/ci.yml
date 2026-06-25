@@ -794,6 +794,14 @@ jobs:
           assert summary["rsi_cross_repo_e2e"]["claim_publish_decision"] == "deny", summary
           assert summary["rsi_cross_repo_e2e"]["claim_publish_authority"] is False, summary
           assert summary["rsi_cross_repo_e2e"]["covenant_gate_schema_version"] == "covenant.rsi-claim-publish-gate.v1", summary
+          assert summary["rsi_blueprint_authorization"]["schema_version"] == "ao2.rsi-blueprint-authorization-gate.v1", summary
+          assert summary["rsi_blueprint_authorization"]["status"] == "passed", summary
+          assert summary["rsi_blueprint_authorization"]["blueprint_authorization_ready"] is True, summary
+          assert summary["rsi_blueprint_authorization"]["gate_model"] == "tiered", summary
+          assert summary["rsi_blueprint_authorization"]["source"] == "ao-blueprint", summary
+          assert summary["rsi_blueprint_authorization"]["self_authorized_by_rsi"] is False, summary
+          assert summary["rsi_blueprint_authorization"]["authorizes_claim_publication"] is False, summary
+          assert summary["rsi_blueprint_authorization"]["authorizes_ao_blueprint_self_change"] is False, summary
           assert summary["rsi_improvement_evidence"]["schema_version"] == "ao2.rsi-improvement-evidence-gate.v1", summary
           assert summary["rsi_improvement_evidence"]["status"] == "passed", summary
           assert summary["rsi_improvement_evidence"]["improvement_ready"] is True, summary
@@ -1377,10 +1385,20 @@ jobs:
           root = Path("target/rsi-cross-repo-e2e-ci/latest")
           summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
           gate = json.loads((root / "covenant-gate" / "summary.json").read_text(encoding="utf-8"))
+          blueprint = json.loads((root / "blueprint-authorization" / "summary.json").read_text(encoding="utf-8"))
           improvement = json.loads((root / "improvement-evidence-gate" / "summary.json").read_text(encoding="utf-8"))
           trend = json.loads((root / "improvement-trend" / "summary.json").read_text(encoding="utf-8"))
           assert summary["schema_version"] == "ao2.rsi-cross-repo-e2e.v1", summary
           assert summary["status"] == "passed", summary
+          assert blueprint["schema_version"] == "ao2.rsi-blueprint-authorization-gate.v1", blueprint
+          assert blueprint["blueprint_authorization_ready"] is True, blueprint
+          assert blueprint["authorization_scope"]["gate_model"] == "tiered", blueprint
+          assert blueprint["authority_boundary"]["source"] == "ao-blueprint", blueprint
+          assert blueprint["authority_boundary"]["self_authorized_by_rsi"] is False, blueprint
+          assert blueprint["authority_boundary"]["authorizes_claim_publication"] is False, blueprint
+          assert blueprint["authority_boundary"]["authorizes_ao_blueprint_self_change"] is False, blueprint
+          assert summary["blueprint_authorization"]["schema_version"] == "ao2.rsi-blueprint-authorization-gate.v1", summary
+          assert summary["blueprint_authorization"]["self_authorized_by_rsi"] is False, summary
           assert improvement["schema_version"] == "ao2.rsi-improvement-evidence-gate.v1", improvement
           assert improvement["metric"]["measured_improvement_percent"] >= 5.0, improvement
           assert summary["improvement_evidence"]["measured_improvement_percent"] >= 5.0, summary
@@ -1402,6 +1420,7 @@ jobs:
           test -f target/rsi-cross-repo-e2e-ci/latest/control-plane-readback/summary.json
           test -f target/rsi-cross-repo-e2e-ci/latest/readback-index/summary.json
           test -f target/rsi-cross-repo-e2e-ci/latest/claim-readiness/summary.json
+          test -f target/rsi-cross-repo-e2e-ci/latest/blueprint-authorization/summary.json
           test -f target/rsi-cross-repo-e2e-ci/latest/covenant-gate/summary.json
           test -f target/rsi-cross-repo-e2e-ci/latest/improvement-evidence-gate/summary.json
           test -f target/rsi-cross-repo-e2e-ci/latest/improvement-trend/summary.json

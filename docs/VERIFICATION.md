@@ -848,23 +848,32 @@ Result:
   `ao2.cross-repo-control-plane-observer.v1` at
   `target/cross-repo-control-plane-observer/latest/summary.json`
 - `npm run rsi:cross-repo-e2e`: runs the AO2 live self-change rehearsal through
-  ao2-control-plane readback, AO2 readback indexing, AO2 claim readiness, and
-  the AO Covenant claim-publish gate, then runs the RSI improvement evidence
-  gate; emits `ao2.rsi-cross-repo-e2e.v1` at
+  ao2-control-plane readback, AO2 readback indexing, AO2 claim readiness,
+  AO Blueprint authorization, and the AO Covenant claim-publish gate, then runs
+  the RSI improvement evidence gate; emits `ao2.rsi-cross-repo-e2e.v1` at
   `target/rsi-cross-repo-e2e/latest/summary.json`. Current expected evidence is
+  `ao2.rsi-blueprint-authorization-gate.v1`,
   `ao2.rsi-improvement-evidence-gate.v1`, `measured_improvement_percent >= 5`,
   `ao2.rsi-improvement-trend.v1`, `delta_from_previous_percent`,
   `claim_publish_decision=deny`, and `publish_authority=false` for the full
   autonomous self-mutating RSI claim. CI uploads the evidence directory as
   `ao2-rsi-cross-repo-e2e`.
+- `npm run rsi:blueprint-authorization-gate`: validates an AO Blueprint
+  `ao.blueprint.build-authorization.v0.1` packet as the RSI Tiered Gate intake
+  boundary and emits `ao2.rsi-blueprint-authorization-gate.v1` at
+  `target/rsi-blueprint-authorization-gate/latest/summary.json`. It fails closed
+  unless the Blueprint authorization is ready, scores 100, is user approved,
+  is scoped to RSI with `gate_model=tiered`, is downstream of operator intent,
+  and explicitly does not self-authorize RSI, publish claims, or authorize AO
+  Blueprint self-change.
 - `npm run rsi:improvement-evidence-gate`: validates the local RSI evidence
   chain, preserves the Covenant claim-publish denial boundary, and emits
   `ao2.rsi-improvement-evidence-gate.v1` at
   `target/rsi-improvement-evidence-gate/latest/summary.json`. The default
   `measured_improvement_percent` metric compares the previous six enforced RSI
-  evidence checks with seven enforced checks after this gate is added; it is a
-  workflow-hardening coverage metric, not proof that the full RSI claim is
-  publishable.
+  evidence checks with eight enforced checks after AO Blueprint authorization
+  and this gate are added; it is a workflow-hardening coverage metric, not proof
+  that the full RSI claim is publishable.
 - `npm run rsi:improvement-trend`: persists the local RSI improvement metric
   to `target/rsi-improvement-trend/history.jsonl` and emits
   `ao2.rsi-improvement-trend.v1` at

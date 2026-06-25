@@ -68,6 +68,7 @@ from pathlib import Path
 STABLE_SCHEMA = "ao2.stable-promotion-workflow.v1"
 OPERATOR_SCHEMA = "ao2.operator-release-evidence-bundle.v1"
 RSI_SCHEMA = "ao2.rsi-cross-repo-e2e.v1"
+RSI_BLUEPRINT_AUTHORIZATION_SCHEMA = "ao2.rsi-blueprint-authorization-gate.v1"
 RSI_IMPROVEMENT_SCHEMA = "ao2.rsi-improvement-evidence-gate.v1"
 RSI_IMPROVEMENT_TREND_SCHEMA = "ao2.rsi-improvement-trend.v1"
 RSI_COVENANT_GATE_SCHEMA = "covenant.rsi-claim-publish-gate.v1"
@@ -173,6 +174,22 @@ rsi_improvement = (
     rsi.get("improvement_evidence")
     if isinstance(rsi.get("improvement_evidence"), dict)
     else {}
+)
+rsi_blueprint_authorization = (
+    rsi.get("blueprint_authorization")
+    if isinstance(rsi.get("blueprint_authorization"), dict)
+    else {}
+)
+rsi_blueprint_authorization_ready = (
+    rsi_schema_ok
+    and rsi_blueprint_authorization.get("schema_version") == RSI_BLUEPRINT_AUTHORIZATION_SCHEMA
+    and rsi_blueprint_authorization.get("status") == "passed"
+    and rsi_blueprint_authorization.get("blueprint_authorization_ready") is True
+    and rsi_blueprint_authorization.get("gate_model") == "tiered"
+    and rsi_blueprint_authorization.get("source") == "ao-blueprint"
+    and rsi_blueprint_authorization.get("self_authorized_by_rsi") is False
+    and rsi_blueprint_authorization.get("authorizes_claim_publication") is False
+    and rsi_blueprint_authorization.get("authorizes_ao_blueprint_self_change") is False
 )
 rsi_improvement_metric_ok = (
     isinstance(rsi_improvement.get("measured_improvement_percent"), (int, float))
@@ -281,6 +298,19 @@ if rsi and not rsi_claim_publish_denied:
             "covenant_gate_status": rsi.get("observed_evidence", {}).get("covenant_gate_status"),
         }
     )
+if rsi and not rsi_blueprint_authorization_ready:
+    blockers.append(
+        {
+            "code": "rsi_blueprint_authorization_not_ready",
+            "severity": "blocking",
+            "schema_version": rsi_blueprint_authorization.get("schema_version"),
+            "status": rsi_blueprint_authorization.get("status"),
+            "gate_model": rsi_blueprint_authorization.get("gate_model"),
+            "self_authorized_by_rsi": rsi_blueprint_authorization.get("self_authorized_by_rsi"),
+            "authorizes_claim_publication": rsi_blueprint_authorization.get("authorizes_claim_publication"),
+            "authorizes_ao_blueprint_self_change": rsi_blueprint_authorization.get("authorizes_ao_blueprint_self_change"),
+        }
+    )
 if rsi and not rsi_improvement_ready:
     blockers.append(
         {
@@ -319,6 +349,7 @@ stable_release_evidence_ready = (
     stable_ready
     and operator_ready
     and rsi_claim_publish_denied
+    and rsi_blueprint_authorization_ready
     and rsi_improvement_ready
     and rsi_improvement_trend_ready
     and not blockers
@@ -367,6 +398,17 @@ payload = {
         "claim_publish_authority": rsi.get("claim_publish_authority"),
         "covenant_gate_schema_version": rsi.get("observed_evidence", {}).get("covenant_gate_schema_version"),
         "covenant_gate_status": rsi.get("observed_evidence", {}).get("covenant_gate_status"),
+    },
+    "rsi_blueprint_authorization": {
+        "schema_version": rsi_blueprint_authorization.get("schema_version"),
+        "status": rsi_blueprint_authorization.get("status"),
+        "blueprint_authorization_ready": rsi_blueprint_authorization.get("blueprint_authorization_ready"),
+        "gate_model": rsi_blueprint_authorization.get("gate_model"),
+        "candidate_id": rsi_blueprint_authorization.get("candidate_id"),
+        "source": rsi_blueprint_authorization.get("source"),
+        "self_authorized_by_rsi": rsi_blueprint_authorization.get("self_authorized_by_rsi"),
+        "authorizes_claim_publication": rsi_blueprint_authorization.get("authorizes_claim_publication"),
+        "authorizes_ao_blueprint_self_change": rsi_blueprint_authorization.get("authorizes_ao_blueprint_self_change"),
     },
     "rsi_improvement_evidence": {
         "schema_version": rsi_improvement.get("schema_version"),
@@ -459,6 +501,7 @@ dashboard_path.write_text(
   <p>Stable release evidence ready: {str(stable_release_evidence_ready).lower()}</p>
   <p>Archive parity: {html.escape(str(payload["public_pair_digest_audit"]["archive_parity_status"]))}</p>
   <p>RSI claim-publish boundary: {html.escape(str(payload["rsi_cross_repo_e2e"]["claim_publish_decision"]))}</p>
+  <p>RSI Blueprint authorization: {html.escape(str(payload["rsi_blueprint_authorization"]["gate_model"]))} / self-authorized by RSI {html.escape(str(payload["rsi_blueprint_authorization"]["self_authorized_by_rsi"]))}</p>
   <p>RSI improvement evidence: {html.escape(str(payload["rsi_improvement_evidence"]["measured_improvement_percent"]))}% / target {html.escape(str(payload["rsi_improvement_evidence"]["target_percent"]))}%</p>
   <p>RSI improvement trend: current {html.escape(str(payload["rsi_improvement_trend"]["current_measured_improvement_percent"]))}% / delta {html.escape(str(payload["rsi_improvement_trend"]["delta_from_previous_percent"]))}%</p>
   <h2>Source Summaries</h2>
@@ -476,6 +519,19 @@ dashboard_path.write_text(
       <td>{html.escape(str(payload["rsi_cross_repo_e2e"]["claim_publish_decision"]))}</td>
       <td>{html.escape(str(payload["rsi_cross_repo_e2e"]["claim_publish_authority"]))}</td>
       <td><code>{html.escape(str(payload["rsi_cross_repo_e2e"]["covenant_gate_schema_version"]))}</code></td>
+    </tr>
+  </table>
+  <h2>RSI Blueprint Authorization</h2>
+  <table>
+    <tr><th>Schema</th><th>Status</th><th>Gate model</th><th>Source</th><th>Self-authorized by RSI</th><th>Claim publication</th><th>Blueprint self-change</th></tr>
+    <tr>
+      <td><code>{html.escape(str(payload["rsi_blueprint_authorization"]["schema_version"]))}</code></td>
+      <td>{html.escape(str(payload["rsi_blueprint_authorization"]["status"]))}</td>
+      <td>{html.escape(str(payload["rsi_blueprint_authorization"]["gate_model"]))}</td>
+      <td>{html.escape(str(payload["rsi_blueprint_authorization"]["source"]))}</td>
+      <td>{html.escape(str(payload["rsi_blueprint_authorization"]["self_authorized_by_rsi"]))}</td>
+      <td>{html.escape(str(payload["rsi_blueprint_authorization"]["authorizes_claim_publication"]))}</td>
+      <td>{html.escape(str(payload["rsi_blueprint_authorization"]["authorizes_ao_blueprint_self_change"]))}</td>
     </tr>
   </table>
   <h2>RSI Improvement Evidence</h2>
