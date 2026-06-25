@@ -13,6 +13,8 @@ mkdir -p "$OUT_ROOT"
 python3 - "$ROOT" "$SUMMARY" "$PROPOSED_PATCH" "$ROLLBACK_PATCH" <<'PY'
 import hashlib
 import json
+import shutil
+import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -85,6 +87,42 @@ rollback_patch_path.write_text(rollback_patch, encoding="utf-8")
 proposed_sha = hashlib.sha256(proposed_patch.encode("utf-8")).hexdigest()
 rollback_sha = hashlib.sha256(rollback_patch.encode("utf-8")).hexdigest()
 
+rehearsal_rel = Path("rollback-rehearsal/worktree")
+rehearsal_root = summary_path.parent / rehearsal_rel
+rehearsal_target_path = rehearsal_root / target_file
+rehearsal_target_path.parent.mkdir(parents=True, exist_ok=True)
+shutil.copy2(target_path, rehearsal_target_path)
+
+def file_sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+def run_checked(command):
+    result = subprocess.run(
+        command,
+        cwd=rehearsal_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise SystemExit(
+            f"rollback rehearsal command failed: {' '.join(command)}\n"
+            f"stdout:\n{result.stdout}\n"
+            f"stderr:\n{result.stderr}"
+        )
+    return result
+
+run_checked(["patch", "-p1", "-i", str(proposed_patch_path)])
+target_after_proposed_sha = file_sha(rehearsal_target_path)
+run_checked(["bash", "-n", str(target_file)])
+run_checked(["patch", "-p1", "-i", str(rollback_patch_path)])
+target_after_rollback_sha = file_sha(rehearsal_target_path)
+
+if target_after_proposed_sha == target_sha:
+    raise SystemExit("rollback rehearsal did not change the temporary target")
+if target_after_rollback_sha != target_sha:
+    raise SystemExit("rollback rehearsal did not restore the temporary target")
+
 payload = {
     "schema_version": "ao2.rsi-governed-self-change-dry-run.v1",
     "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -115,6 +153,21 @@ payload = {
         },
         "same_change_class": True,
     },
+    "rollback_rehearsal": {
+        "mode": "executed_in_temporary_workspace",
+        "status": "passed",
+        "workspace": str(rehearsal_rel),
+        "target_file": str(target_file),
+        "target_before_sha256": target_sha,
+        "target_after_proposed_sha256": target_after_proposed_sha,
+        "target_after_rollback_sha256": target_after_rollback_sha,
+        "proposed_patch_applied": True,
+        "rollback_patch_applied": True,
+        "same_change_class": True,
+        "verification": [
+            f"bash -n {target_file}",
+        ],
+    },
     "full_claim_blockers": [
         "mutation_authority",
         "live_self_change_evidence",
@@ -136,4 +189,5 @@ payload = {
 summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 print(f"summary={summary_path}")
 print("self_change_dry_run=passed")
+print("rollback_rehearsal=passed")
 PY

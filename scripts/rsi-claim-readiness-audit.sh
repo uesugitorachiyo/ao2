@@ -84,6 +84,7 @@ def read_self_change_dry_run_evidence(path):
         }
 
     trust_boundary = payload.get("trust_boundary", {})
+    rollback_rehearsal = payload.get("rollback_rehearsal", {})
     expected_trust_boundary = {
         "local_only": True,
         "uses_network": False,
@@ -98,11 +99,15 @@ def read_self_change_dry_run_evidence(path):
         and payload.get("status") == "dry_run_evidence_ready"
         and payload.get("self_change", {}).get("mode") == "dry_run"
         and payload.get("rollback", {}).get("mode") == "dry_run"
+        and rollback_rehearsal.get("mode") == "executed_in_temporary_workspace"
+        and rollback_rehearsal.get("status") == "passed"
+        and rollback_rehearsal.get("same_change_class") is True
         and trust_boundary == expected_trust_boundary
     )
     return {
         "evidence_state": "present" if evidence_present else "invalid",
         "schema_version": payload.get("schema_version"),
+        "rollback_rehearsal_status": rollback_rehearsal.get("status", "missing"),
         "status": payload.get("status", "missing"),
     }
 
