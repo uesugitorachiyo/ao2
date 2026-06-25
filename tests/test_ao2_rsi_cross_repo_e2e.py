@@ -34,6 +34,9 @@ def test_rsi_cross_repo_e2e_contract():
         "ao2.rsi-cross-repo-e2e.v1",
         "AO2_CONTROL_PLANE_REPO",
         "AO_COVENANT_REPO",
+        'CP_ROOT="$(cd "$CP_ROOT" && pwd)"',
+        'COVENANT_ROOT="$(cd "$COVENANT_ROOT" && pwd)"',
+        'OUT_PARENT="$(cd "$OUT_PARENT" && pwd)"',
         "AO2_RSI_LIVE_SELF_CHANGE_REHEARSAL=1",
         "rsi:live-self-change-rehearsal",
         "verify_ao2_rsi_live_self_change_rehearsal.py",
@@ -47,3 +50,39 @@ def test_rsi_cross_repo_e2e_contract():
         assert needle in text
     assert "OPENAI_API_KEY" not in text
     assert "ANTHROPIC_API_KEY" not in text
+
+
+def test_rsi_cross_repo_e2e_ci_artifact_job_contract():
+    ci = read(".github/workflows/ci.yml")
+    verification = read("docs/VERIFICATION.md")
+
+    for needle in [
+        "rsi-cross-repo-e2e-artifacts:",
+        "name: RSI cross-repo E2E artifacts",
+        "repository: uesugitorachiyo/ao2-control-plane",
+        "repository: uesugitorachiyo/ao-covenant",
+        "go-version: '1.26.x'",
+        "cache-dependency-path: ao-covenant/go.sum",
+        "AO2_CONTROL_PLANE_REPO=ao2-control-plane",
+        "AO_COVENANT_REPO=ao-covenant",
+        "AO2_RSI_CROSS_REPO_E2E_ROOT=target/rsi-cross-repo-e2e-ci/latest",
+        "npm run rsi:cross-repo-e2e",
+        "ao2.rsi-cross-repo-e2e.v1",
+        "covenant.rsi-claim-publish-gate.v1",
+        '"claim_publish_decision"] == "deny"',
+        '"claim_publish_authority"] is False',
+        "name: ao2-rsi-cross-repo-e2e",
+        "target/rsi-cross-repo-e2e-ci",
+        "uses: actions/upload-artifact@v7.0.1",
+    ]:
+        assert needle in ci
+
+    for needle in [
+        "npm run rsi:cross-repo-e2e",
+        "ao2.rsi-cross-repo-e2e.v1",
+        "target/rsi-cross-repo-e2e/latest/summary.json",
+        "ao2-rsi-cross-repo-e2e",
+        "claim_publish_decision=deny",
+        "publish_authority=false",
+    ]:
+        assert needle in verification
