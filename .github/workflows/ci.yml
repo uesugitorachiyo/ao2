@@ -794,6 +794,12 @@ jobs:
           assert summary["rsi_cross_repo_e2e"]["claim_publish_decision"] == "deny", summary
           assert summary["rsi_cross_repo_e2e"]["claim_publish_authority"] is False, summary
           assert summary["rsi_cross_repo_e2e"]["covenant_gate_schema_version"] == "covenant.rsi-claim-publish-gate.v1", summary
+          assert summary["rsi_improvement_evidence"]["schema_version"] == "ao2.rsi-improvement-evidence-gate.v1", summary
+          assert summary["rsi_improvement_evidence"]["status"] == "passed", summary
+          assert summary["rsi_improvement_evidence"]["improvement_ready"] is True, summary
+          assert summary["rsi_improvement_evidence"]["measured_improvement_percent"] >= 5, summary
+          assert summary["rsi_improvement_evidence"]["claim_publish_decision"] == "deny", summary
+          assert summary["rsi_improvement_evidence"]["claim_publish_authority"] is False, summary
           assert summary["trust_boundary"]["mutates_releases"] is False, summary
           assert summary["trust_boundary"]["stores_credentials"] is False, summary
           assert (root / "stable-promotion-workflow" / "summary.json").is_file()

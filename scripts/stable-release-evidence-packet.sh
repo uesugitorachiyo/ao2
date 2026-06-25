@@ -68,6 +68,7 @@ from pathlib import Path
 STABLE_SCHEMA = "ao2.stable-promotion-workflow.v1"
 OPERATOR_SCHEMA = "ao2.operator-release-evidence-bundle.v1"
 RSI_SCHEMA = "ao2.rsi-cross-repo-e2e.v1"
+RSI_IMPROVEMENT_SCHEMA = "ao2.rsi-improvement-evidence-gate.v1"
 RSI_COVENANT_GATE_SCHEMA = "covenant.rsi-claim-publish-gate.v1"
 PACKET_SCHEMA = "ao2.stable-release-evidence-packet.v1"
 
@@ -167,6 +168,28 @@ rsi_claim_publish_denied = (
     and rsi.get("trust_boundary", {}).get("publishes_claims") is False
     and rsi.get("trust_boundary", {}).get("approves_rsi_claims") is False
 )
+rsi_improvement = (
+    rsi.get("improvement_evidence")
+    if isinstance(rsi.get("improvement_evidence"), dict)
+    else {}
+)
+rsi_improvement_metric_ok = (
+    isinstance(rsi_improvement.get("measured_improvement_percent"), (int, float))
+    and isinstance(rsi_improvement.get("target_percent"), (int, float))
+    and rsi_improvement.get("measured_improvement_percent")
+    >= rsi_improvement.get("target_percent")
+    and rsi_improvement.get("target_percent") >= 5
+)
+rsi_improvement_ready = (
+    rsi_schema_ok
+    and rsi_improvement.get("schema_version") == RSI_IMPROVEMENT_SCHEMA
+    and rsi_improvement.get("status") == "passed"
+    and rsi_improvement.get("improvement_ready") is True
+    and rsi_improvement.get("unit") == "enforced_rsi_evidence_checks"
+    and rsi_improvement_metric_ok
+    and rsi_improvement.get("claim_publish_decision") == "deny"
+    and rsi_improvement.get("claim_publish_authority") is False
+)
 
 if stable and not stable_schema_ok:
     blockers.append(
@@ -239,13 +262,33 @@ if rsi and not rsi_claim_publish_denied:
             "covenant_gate_status": rsi.get("observed_evidence", {}).get("covenant_gate_status"),
         }
     )
+if rsi and not rsi_improvement_ready:
+    blockers.append(
+        {
+            "code": "rsi_improvement_evidence_not_ready",
+            "severity": "blocking",
+            "schema_version": rsi_improvement.get("schema_version"),
+            "status": rsi_improvement.get("status"),
+            "improvement_ready": rsi_improvement.get("improvement_ready"),
+            "target_percent": rsi_improvement.get("target_percent"),
+            "measured_improvement_percent": rsi_improvement.get("measured_improvement_percent"),
+            "claim_publish_decision": rsi_improvement.get("claim_publish_decision"),
+            "claim_publish_authority": rsi_improvement.get("claim_publish_authority"),
+        }
+    )
 
 source_trust = [
     stable.get("trust_boundary", {}) if isinstance(stable.get("trust_boundary"), dict) else {},
     operator.get("trust_boundary", {}) if isinstance(operator.get("trust_boundary"), dict) else {},
     rsi.get("trust_boundary", {}) if isinstance(rsi.get("trust_boundary"), dict) else {},
 ]
-stable_release_evidence_ready = stable_ready and operator_ready and rsi_claim_publish_denied and not blockers
+stable_release_evidence_ready = (
+    stable_ready
+    and operator_ready
+    and rsi_claim_publish_denied
+    and rsi_improvement_ready
+    and not blockers
+)
 payload = {
     "schema_version": PACKET_SCHEMA,
     "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -290,6 +333,18 @@ payload = {
         "claim_publish_authority": rsi.get("claim_publish_authority"),
         "covenant_gate_schema_version": rsi.get("observed_evidence", {}).get("covenant_gate_schema_version"),
         "covenant_gate_status": rsi.get("observed_evidence", {}).get("covenant_gate_status"),
+    },
+    "rsi_improvement_evidence": {
+        "schema_version": rsi_improvement.get("schema_version"),
+        "status": rsi_improvement.get("status"),
+        "improvement_ready": rsi_improvement.get("improvement_ready"),
+        "unit": rsi_improvement.get("unit"),
+        "baseline_check_count": rsi_improvement.get("baseline_check_count"),
+        "observed_check_count": rsi_improvement.get("observed_check_count"),
+        "target_percent": rsi_improvement.get("target_percent"),
+        "measured_improvement_percent": rsi_improvement.get("measured_improvement_percent"),
+        "claim_publish_decision": rsi_improvement.get("claim_publish_decision"),
+        "claim_publish_authority": rsi_improvement.get("claim_publish_authority"),
     },
     "blockers": blockers,
     "trust_boundary": {
@@ -357,6 +412,7 @@ dashboard_path.write_text(
   <p>Stable release evidence ready: {str(stable_release_evidence_ready).lower()}</p>
   <p>Archive parity: {html.escape(str(payload["public_pair_digest_audit"]["archive_parity_status"]))}</p>
   <p>RSI claim-publish boundary: {html.escape(str(payload["rsi_cross_repo_e2e"]["claim_publish_decision"]))}</p>
+  <p>RSI improvement evidence: {html.escape(str(payload["rsi_improvement_evidence"]["measured_improvement_percent"]))}% / target {html.escape(str(payload["rsi_improvement_evidence"]["target_percent"]))}%</p>
   <h2>Source Summaries</h2>
   <table>
     <tr><th>Source</th><th>Path</th><th>Status</th></tr>
@@ -372,6 +428,19 @@ dashboard_path.write_text(
       <td>{html.escape(str(payload["rsi_cross_repo_e2e"]["claim_publish_decision"]))}</td>
       <td>{html.escape(str(payload["rsi_cross_repo_e2e"]["claim_publish_authority"]))}</td>
       <td><code>{html.escape(str(payload["rsi_cross_repo_e2e"]["covenant_gate_schema_version"]))}</code></td>
+    </tr>
+  </table>
+  <h2>RSI Improvement Evidence</h2>
+  <table>
+    <tr><th>Schema</th><th>Status</th><th>Unit</th><th>Observed</th><th>Baseline</th><th>Measured</th><th>Target</th></tr>
+    <tr>
+      <td><code>{html.escape(str(payload["rsi_improvement_evidence"]["schema_version"]))}</code></td>
+      <td>{html.escape(str(payload["rsi_improvement_evidence"]["status"]))}</td>
+      <td>{html.escape(str(payload["rsi_improvement_evidence"]["unit"]))}</td>
+      <td>{html.escape(str(payload["rsi_improvement_evidence"]["observed_check_count"]))}</td>
+      <td>{html.escape(str(payload["rsi_improvement_evidence"]["baseline_check_count"]))}</td>
+      <td>{html.escape(str(payload["rsi_improvement_evidence"]["measured_improvement_percent"]))}%</td>
+      <td>{html.escape(str(payload["rsi_improvement_evidence"]["target_percent"]))}%</td>
     </tr>
   </table>
   <h2>Operator Checks</h2>
