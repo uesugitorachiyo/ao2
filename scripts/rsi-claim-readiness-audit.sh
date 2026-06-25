@@ -4,11 +4,26 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_ROOT="${AO2_RSI_CLAIM_READINESS_ROOT:-$ROOT/target/rsi-claim-readiness/latest}"
 SUMMARY="$OUT_ROOT/summary.json"
+PREVIOUS_SUMMARY="${AO2_RSI_CLAIM_READINESS_PREVIOUS_SUMMARY:-}"
+TEMP_PREVIOUS_SUMMARY=""
+
+cleanup() {
+  if [[ -n "$TEMP_PREVIOUS_SUMMARY" ]]; then
+    rm -f "$TEMP_PREVIOUS_SUMMARY"
+  fi
+}
+trap cleanup EXIT
+
+if [[ -z "$PREVIOUS_SUMMARY" && -f "$SUMMARY" ]]; then
+  TEMP_PREVIOUS_SUMMARY="$(mktemp)"
+  cp "$SUMMARY" "$TEMP_PREVIOUS_SUMMARY"
+  PREVIOUS_SUMMARY="$TEMP_PREVIOUS_SUMMARY"
+fi
 
 rm -rf "$OUT_ROOT"
 mkdir -p "$OUT_ROOT"
 
-python3 - "$ROOT" "$SUMMARY" <<'PY'
+python3 - "$ROOT" "$SUMMARY" "$PREVIOUS_SUMMARY" <<'PY'
 import json
 import os
 import sys
@@ -17,6 +32,7 @@ from pathlib import Path
 
 root = Path(sys.argv[1])
 summary_path = Path(sys.argv[2])
+previous_summary_path = Path(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[3] else None
 self_change_dry_run_summary = Path(
     os.environ.get(
         "AO2_RSI_SELF_CHANGE_DRY_RUN_SUMMARY",
@@ -35,6 +51,52 @@ live_self_change_readback_index_summary = Path(
         root / "target" / "rsi-live-self-change-readback-index" / "latest" / "summary.json",
     )
 )
+
+def read_json_payload(path):
+    if not path or not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+
+def full_claim_blocker_ids(payload):
+    if not isinstance(payload, dict):
+        return []
+    full_claim = (
+        payload.get("claims", {}).get("full_autonomous_self_mutating_rsi", {})
+        if isinstance(payload.get("claims"), dict)
+        else {}
+    )
+    blockers = full_claim.get("blockers", []) if isinstance(full_claim, dict) else []
+    blocker_ids = []
+    if isinstance(blockers, list):
+        for blocker in blockers:
+            if isinstance(blocker, dict) and isinstance(blocker.get("id"), str):
+                blocker_ids.append(blocker["id"])
+    return sorted(set(blocker_ids))
+
+def blocker_delta(previous_payload, current_blockers):
+    previous_ids = full_claim_blocker_ids(previous_payload)
+    current_ids = sorted(
+        {
+            blocker["id"]
+            for blocker in current_blockers
+            if isinstance(blocker, dict) and isinstance(blocker.get("id"), str)
+        }
+    )
+    previous_set = set(previous_ids)
+    current_set = set(current_ids)
+    return {
+        "schema_version": "ao2.rsi-claim-readiness-blocker-delta.v1",
+        "scope": "full_autonomous_self_mutating_rsi",
+        "baseline": "previous_summary" if previous_payload is not None else "missing_previous_summary",
+        "previous_blocker_ids": previous_ids,
+        "current_blocker_ids": current_ids,
+        "added_blocker_ids": sorted(current_set - previous_set),
+        "removed_blocker_ids": sorted(previous_set - current_set),
+        "unchanged_blocker_ids": sorted(current_set & previous_set),
+    }
 
 bounded_required = [
     "scripts/pulse-auto-advance.sh",
@@ -238,6 +300,7 @@ bounded_allowed = not bounded_missing
 self_change_dry_run_evidence = read_self_change_dry_run_evidence(self_change_dry_run_summary)
 live_self_change_rehearsal_evidence = read_live_self_change_rehearsal_evidence(live_self_change_rehearsal_summary)
 live_self_change_readback_index_evidence = read_live_self_change_readback_index_evidence(live_self_change_readback_index_summary)
+previous_summary = read_json_payload(previous_summary_path)
 payload = {
     "schema_version": "ao2.rsi-claim-readiness-audit.v1",
     "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -272,6 +335,7 @@ payload = {
         "mutates_repositories": False,
         "publishes_claims": False,
     },
+    "blocker_delta": blocker_delta(previous_summary, full_blockers),
 }
 
 summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")

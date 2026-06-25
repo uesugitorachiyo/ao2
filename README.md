@@ -68,7 +68,11 @@ The audit emits `ao2.rsi-claim-readiness-audit.v1` under
 when the local Pulse evidence surface is present and denies the full
 self-mutating claim until AO2 has mutation authority evidence, live self-change
 evidence, rollback evidence for failed self-change, control-plane observer
-readback, and Covenant approval to publish that higher claim.
+readback, and Covenant approval to publish that higher claim. Each run also
+emits `blocker_delta` with schema
+`ao2.rsi-claim-readiness-blocker-delta.v1`, comparing the current full-claim
+blocker IDs with the previous `summary.json` in the same output directory when
+one exists.
 
 Run the governed self-change dry-run evidence generator with:
 
