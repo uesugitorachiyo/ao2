@@ -109,6 +109,20 @@ if public_pair_digest_audit.get("status") != "passed" or public_pair_digest_audi
         "packet public pair digest audit archive parity was not ready",
         public_pair_digest_audit,
     )
+rsi_cross_repo_e2e = packet.get("rsi_cross_repo_e2e", {})
+if not (
+    rsi_cross_repo_e2e.get("schema_version") == "ao2.rsi-cross-repo-e2e.v1"
+    and rsi_cross_repo_e2e.get("status") == "passed"
+    and rsi_cross_repo_e2e.get("claim_publish_decision") == "deny"
+    and rsi_cross_repo_e2e.get("claim_publish_authority") is False
+    and rsi_cross_repo_e2e.get("covenant_gate_schema_version") == "covenant.rsi-claim-publish-gate.v1"
+    and rsi_cross_repo_e2e.get("covenant_gate_status") == "denied"
+):
+    fail(
+        "packet_rsi_claim_publish_boundary_not_denied",
+        "packet RSI claim-publish boundary was not denied",
+        rsi_cross_repo_e2e,
+    )
 if packet.get("trust_boundary", {}).get("mutates_releases") is not False:
     fail("packet_mutates_releases", "stable release evidence packet trust boundary mutates releases", packet.get("trust_boundary", {}))
 if packet.get("trust_boundary", {}).get("stores_credentials") is not False:
@@ -153,6 +167,14 @@ payload = {
             "status": public_pair_digest_audit.get("status"),
             "archive_parity_status": public_pair_digest_audit.get("archive_parity_status"),
             "summary": public_pair_digest_audit.get("summary"),
+        },
+        "rsi_cross_repo_e2e": {
+            "schema_version": rsi_cross_repo_e2e.get("schema_version"),
+            "status": rsi_cross_repo_e2e.get("status"),
+            "claim_publish_decision": rsi_cross_repo_e2e.get("claim_publish_decision"),
+            "claim_publish_authority": rsi_cross_repo_e2e.get("claim_publish_authority"),
+            "covenant_gate_schema_version": rsi_cross_repo_e2e.get("covenant_gate_schema_version"),
+            "covenant_gate_status": rsi_cross_repo_e2e.get("covenant_gate_status"),
         },
     },
     "failures": failures,

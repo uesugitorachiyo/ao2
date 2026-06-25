@@ -115,6 +115,20 @@ if public_pair_digest_audit.get("status") != "passed" or public_pair_digest_audi
         "public pair digest audit archive parity was not ready",
         public_pair_digest_audit,
     )
+rsi_cross_repo_e2e = packet.get("rsi_cross_repo_e2e", {})
+if not (
+    rsi_cross_repo_e2e.get("schema_version") == "ao2.rsi-cross-repo-e2e.v1"
+    and rsi_cross_repo_e2e.get("status") == "passed"
+    and rsi_cross_repo_e2e.get("claim_publish_decision") == "deny"
+    and rsi_cross_repo_e2e.get("claim_publish_authority") is False
+    and rsi_cross_repo_e2e.get("covenant_gate_schema_version") == "covenant.rsi-claim-publish-gate.v1"
+    and rsi_cross_repo_e2e.get("covenant_gate_status") == "denied"
+):
+    fail(
+        "rsi_claim_publish_boundary_not_denied",
+        "RSI claim-publish boundary was not denied in the stable release evidence packet",
+        rsi_cross_repo_e2e,
+    )
 if trust_boundary.get("mutates_releases") is not False:
     fail("dry_run_audit_mutates_releases", "stable promotion dry-run audit trust boundary mutates releases", trust_boundary)
 if trust_boundary.get("stores_credentials") is not False:
@@ -166,6 +180,14 @@ payload = {
                 "archive_parity_status": public_pair_digest_audit.get("archive_parity_status"),
                 "summary": public_pair_digest_audit.get("summary"),
             },
+            "rsi_cross_repo_e2e": {
+                "schema_version": rsi_cross_repo_e2e.get("schema_version"),
+                "status": rsi_cross_repo_e2e.get("status"),
+                "claim_publish_decision": rsi_cross_repo_e2e.get("claim_publish_decision"),
+                "claim_publish_authority": rsi_cross_repo_e2e.get("claim_publish_authority"),
+                "covenant_gate_schema_version": rsi_cross_repo_e2e.get("covenant_gate_schema_version"),
+                "covenant_gate_status": rsi_cross_repo_e2e.get("covenant_gate_status"),
+            },
         },
     },
     "operator_decision": {
@@ -205,6 +227,7 @@ lines = [
     "- Confirm the dry-run workflow was unconfirmed and did not attempt promotion.",
     "- Confirm post-release evidence and the stable release evidence packet passed.",
     f"- Archive parity status: `{public_pair_digest_audit.get('archive_parity_status')}`.",
+    f"- RSI claim-publish decision: `{rsi_cross_repo_e2e.get('claim_publish_decision')}`.",
     "- Confirm the public GitHub Release pages show the intended AO2 and ao2-control-plane assets.",
     "- No provider API keys are required or accepted.",
     "- The control plane records evidence; it does not approve the release.",

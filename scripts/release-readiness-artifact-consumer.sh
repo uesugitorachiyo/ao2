@@ -220,6 +220,17 @@ require(
     "stable release evidence packet public pair digest audit was not ready",
     stable_release_evidence_packet,
 )
+stable_packet_rsi = stable_release_evidence_packet.get("rsi_cross_repo_e2e", {})
+require(
+    stable_packet_rsi.get("schema_version") == "ao2.rsi-cross-repo-e2e.v1"
+    and stable_packet_rsi.get("status") == "passed"
+    and stable_packet_rsi.get("claim_publish_decision") == "deny"
+    and stable_packet_rsi.get("claim_publish_authority") is False
+    and stable_packet_rsi.get("covenant_gate_schema_version") == "covenant.rsi-claim-publish-gate.v1"
+    and stable_packet_rsi.get("covenant_gate_status") == "denied",
+    "stable release evidence packet RSI claim-publish boundary was not denied",
+    stable_release_evidence_packet,
+)
 require(stable_release_evidence_packet.get("trust_boundary", {}).get("mutates_releases") is False, "stable release evidence packet mutated releases", stable_release_evidence_packet)
 require(stable_release_evidence_packet.get("trust_boundary", {}).get("stores_credentials") is False, "stable release evidence packet stored credentials", stable_release_evidence_packet)
 require((consumer_root / "ao2-stable-release-evidence-packet/packet/dashboard.html").is_file(), "missing stable release evidence packet dashboard")
@@ -293,6 +304,14 @@ consumer_summary = {
             "status": public_pair_digest_audit.get("status"),
             "archive_parity_status": public_pair_digest_audit.get("archive_parity_status"),
             "summary": public_pair_digest_audit.get("summary"),
+        },
+        "rsi_cross_repo_e2e": {
+            "schema_version": stable_packet_rsi.get("schema_version"),
+            "status": stable_packet_rsi.get("status"),
+            "claim_publish_decision": stable_packet_rsi.get("claim_publish_decision"),
+            "claim_publish_authority": stable_packet_rsi.get("claim_publish_authority"),
+            "covenant_gate_schema_version": stable_packet_rsi.get("covenant_gate_schema_version"),
+            "covenant_gate_status": stable_packet_rsi.get("covenant_gate_status"),
         },
     },
     "public_pair_digest_gate": public_pair_digest_gate,

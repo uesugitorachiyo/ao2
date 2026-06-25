@@ -352,16 +352,22 @@ stable_release_evidence_packet_artifacts = workflow_job_block("stable-release-ev
 stable_release_evidence_packet_artifacts_ok = (
     stable_release_evidence_packet_artifacts is not None
     and "name: Stable release evidence packet artifacts" in stable_release_evidence_packet_artifacts
+    and "needs: rsi-cross-repo-e2e-artifacts" in stable_release_evidence_packet_artifacts
     and "GH_TOKEN: ${{ github.token }}" in stable_release_evidence_packet_artifacts
     and "AO2_STABLE_PROMOTION_ROOT=target/stable-release-evidence-packet-ci/stable-promotion-workflow" in stable_release_evidence_packet_artifacts
     and "npm run release:stable-promotion-workflow" in stable_release_evidence_packet_artifacts
     and "AO2_OPERATOR_RELEASE_EVIDENCE_ROOT=target/stable-release-evidence-packet-ci/operator-release-evidence-bundle" in stable_release_evidence_packet_artifacts
     and "npm run release:operator-evidence-bundle" in stable_release_evidence_packet_artifacts
+    and "name: ao2-rsi-cross-repo-e2e" in stable_release_evidence_packet_artifacts
+    and "target/stable-release-evidence-packet-ci/rsi-cross-repo-e2e" in stable_release_evidence_packet_artifacts
     and "AO2_STABLE_RELEASE_EVIDENCE_PACKET_ROOT=target/stable-release-evidence-packet-ci/packet" in stable_release_evidence_packet_artifacts
     and "AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY=target/stable-release-evidence-packet-ci/stable-promotion-workflow/summary.json" in stable_release_evidence_packet_artifacts
     and "AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY=target/stable-release-evidence-packet-ci/operator-release-evidence-bundle/summary.json" in stable_release_evidence_packet_artifacts
+    and "AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY=target/stable-release-evidence-packet-ci/rsi-cross-repo-e2e/latest/summary.json" in stable_release_evidence_packet_artifacts
     and "npm run release:stable-evidence-packet" in stable_release_evidence_packet_artifacts
     and "ao2.stable-release-evidence-packet.v1" in stable_release_evidence_packet_artifacts
+    and "ao2.rsi-cross-repo-e2e.v1" in stable_release_evidence_packet_artifacts
+    and "claim_publish_decision" in stable_release_evidence_packet_artifacts
     and "stable_release_evidence_ready" in stable_release_evidence_packet_artifacts
     and "mutates_releases" in stable_release_evidence_packet_artifacts
     and "stores_credentials" in stable_release_evidence_packet_artifacts
@@ -1304,16 +1310,19 @@ artifact_closure_index = {
                 "packet/dashboard.html",
                 "stable-promotion-workflow/summary.json",
                 "operator-release-evidence-bundle/summary.json",
+                "rsi-cross-repo-e2e/latest/summary.json",
             ],
             "schema_versions": [
                 "ao2.stable-release-evidence-packet.v1",
                 "ao2.stable-promotion-workflow.v1",
                 "ao2.operator-release-evidence-bundle.v1",
+                "ao2.rsi-cross-repo-e2e.v1",
             ],
             "required_checks": ["ci_stable_release_evidence_packet_artifact_job"],
             "source_artifacts": [
                 "stable-promotion-workflow",
                 "operator-release-evidence-bundle",
+                "ao2-rsi-cross-repo-e2e",
             ],
         },
         {
