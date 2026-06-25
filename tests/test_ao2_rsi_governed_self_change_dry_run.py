@@ -53,7 +53,9 @@ def test_rsi_governed_self_change_dry_run_emits_replayable_evidence(tmp_path):
     summary_path = out_root / "summary.json"
     proposed_patch_path = out_root / "proposed-self-change.patch"
     rollback_patch_path = out_root / "rollback-self-change.patch"
+    authority_packet_path = out_root / "live-self-change-authority.packet.json"
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    authority_packet = json.loads(authority_packet_path.read_text(encoding="utf-8"))
 
     assert proposed_patch_path.read_text(encoding="utf-8").startswith("diff --git")
     assert rollback_patch_path.read_text(encoding="utf-8").startswith("diff --git")
@@ -81,6 +83,45 @@ def test_rsi_governed_self_change_dry_run_emits_replayable_evidence(tmp_path):
         "sha256": summary["rollback"]["rollback_patch"]["sha256"],
     }
     assert len(summary["rollback"]["rollback_patch"]["sha256"]) == 64
+    assert summary["mutation_authority_packet"] == {
+        "mode": "dry_run_candidate",
+        "schema_version": "covenant.live-self-change-authority.v1",
+        "path": "live-self-change-authority.packet.json",
+        "sha256": summary["mutation_authority_packet"]["sha256"],
+        "schema_valid_for_claim_publish": False,
+        "reason": "live self-change execution and observer readback are not present in dry-run evidence",
+    }
+    assert len(summary["mutation_authority_packet"]["sha256"]) == 64
+    assert authority_packet["schema_version"] == "covenant.live-self-change-authority.v1"
+    assert authority_packet["authority_id"] == "ao2-rsi-self-change-dry-run-authority"
+    assert authority_packet["claim_level"] == "full_autonomous_self_mutating_rsi"
+    assert authority_packet["repository"] == "ao2"
+    assert authority_packet["branch"] == "codex/live-self-change-rehearsal"
+    assert authority_packet["allowed_write_surface"] == ["scripts/rsi-claim-readiness-audit.sh"]
+    assert authority_packet["change_class"] == "verification_path"
+    assert authority_packet["approval_identity"] == "ao-operator"
+    assert authority_packet["approval_ticket_id"] == "ticket-ao2-rsi-dry-run-authority"
+    assert authority_packet["exact_digest"]["algorithm"] == "sha256"
+    assert authority_packet["exact_digest"]["covers"] == [
+        "proposed-self-change.patch",
+        "rollback-self-change.patch",
+        "summary.json",
+    ]
+    assert len(authority_packet["exact_digest"]["value"]) == 64
+    assert authority_packet["rollback_evidence"] == {
+        "status": "passed",
+        "evidence_paths": ["summary.json"],
+    }
+    assert authority_packet["live_self_change_evidence"] == {
+        "status": "dry_run_not_live",
+        "evidence_paths": [],
+    }
+    assert authority_packet["observer_readback"] == {
+        "status": "missing",
+        "observer": "ao2-control-plane",
+        "evidence_paths": [],
+    }
+    assert authority_packet["claim_publish_resource"] == "full-autonomous-self-mutating-rsi"
     assert summary["rollback_rehearsal"]["mode"] == "executed_in_temporary_workspace"
     assert summary["rollback_rehearsal"]["status"] == "passed"
     assert summary["rollback_rehearsal"]["workspace"] == "rollback-rehearsal/worktree"
@@ -117,6 +158,7 @@ def test_rsi_governed_self_change_dry_run_emits_replayable_evidence(tmp_path):
         "stores_credentials": False,
         "mutates_repositories": False,
         "applies_patch": False,
+        "emits_authority_packet_candidate": True,
         "publishes_claims": False,
     }
 
@@ -144,6 +186,7 @@ def test_rsi_governed_self_change_dry_run_emits_replayable_evidence(tmp_path):
     assert full_claim["partial_evidence"]["governed_self_change_dry_run"] == {
         "evidence_state": "present",
         "schema_version": "ao2.rsi-governed-self-change-dry-run.v1",
+        "mutation_authority_packet": "dry_run_candidate",
         "rollback_rehearsal_status": "passed",
         "status": "dry_run_evidence_ready",
     }
