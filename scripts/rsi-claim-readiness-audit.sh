@@ -29,6 +29,12 @@ live_self_change_rehearsal_summary = Path(
         root / "target" / "rsi-live-self-change-rehearsal" / "latest" / "summary.json",
     )
 )
+live_self_change_readback_index_summary = Path(
+    os.environ.get(
+        "AO2_RSI_LIVE_SELF_CHANGE_READBACK_INDEX_SUMMARY",
+        root / "target" / "rsi-live-self-change-readback-index" / "latest" / "summary.json",
+    )
+)
 
 bounded_required = [
     "scripts/pulse-auto-advance.sh",
@@ -173,9 +179,65 @@ def read_live_self_change_rehearsal_evidence(path):
         "observer_readback_status": observer_readback.get("status", "missing"),
     }
 
+def read_live_self_change_readback_index_evidence(path):
+    if not path.is_file():
+        return {
+            "evidence_state": "missing",
+            "schema_version": None,
+            "status": "missing",
+        }
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {
+            "evidence_state": "invalid",
+            "schema_version": None,
+            "status": "invalid_json",
+        }
+
+    retained = (
+        payload.get("retained_claim_level_evidence")
+        if isinstance(payload.get("retained_claim_level_evidence"), dict)
+        else {}
+    )
+    control_plane_readback = (
+        payload.get("sources", {}).get("control_plane_readback", {})
+        if isinstance(payload.get("sources"), dict)
+        else {}
+    )
+    trust_boundary = payload.get("trust_boundary", {}) if isinstance(payload.get("trust_boundary"), dict) else {}
+    expected_trust_boundary = {
+        "local_only": True,
+        "uses_network": False,
+        "stores_credentials": False,
+        "requires_provider_api_key": False,
+        "mutates_repositories": False,
+        "mutates_control_plane_artifacts": False,
+        "publishes_claims": False,
+        "approves_rsi_claims": False,
+    }
+    evidence_present = (
+        payload.get("schema_version") == "ao2.rsi-live-self-change-readback-evidence-index.v1"
+        and payload.get("status") == "passed"
+        and retained.get("status") == "present"
+        and retained.get("schema_version") == "ao2.cp-ao2-rsi-live-self-change-rehearsal-readback.v1"
+        and control_plane_readback.get("status") == "passed"
+        and payload.get("full_claim_boundary", {}).get("decision") == "denied"
+        and trust_boundary == expected_trust_boundary
+    )
+    return {
+        "evidence_state": "present" if evidence_present else "invalid",
+        "schema_version": payload.get("schema_version"),
+        "status": payload.get("status", "missing"),
+        "control_plane_readback_status": control_plane_readback.get("status", "missing"),
+        "retained_claim_level_evidence_status": retained.get("status", "missing"),
+        "claim_publish_approved": False,
+    }
+
 bounded_allowed = not bounded_missing
 self_change_dry_run_evidence = read_self_change_dry_run_evidence(self_change_dry_run_summary)
 live_self_change_rehearsal_evidence = read_live_self_change_rehearsal_evidence(live_self_change_rehearsal_summary)
+live_self_change_readback_index_evidence = read_live_self_change_readback_index_evidence(live_self_change_readback_index_summary)
 payload = {
     "schema_version": "ao2.rsi-claim-readiness-audit.v1",
     "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -197,6 +259,7 @@ payload = {
             "partial_evidence": {
                 "governed_self_change_dry_run": self_change_dry_run_evidence,
                 "live_self_change_rehearsal": live_self_change_rehearsal_evidence,
+                "live_self_change_readback_index": live_self_change_readback_index_evidence,
             },
             "blockers": full_blockers,
         },

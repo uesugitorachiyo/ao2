@@ -106,6 +106,21 @@ full RSI claim. The command does not publish the full RSI claim because
 control-plane observer readback, Covenant claim-publish
 approval, and retained claim-level evidence are still required.
 
+After `ao2-control-plane` reads back that rehearsal, retain the readback
+artifact in AO2's local evidence chain with:
+
+```sh
+npm run rsi:live-self-change-readback-index
+```
+
+The index consumes AO2's `ao2.rsi-live-self-change-rehearsal.v1` summary and
+the control-plane
+`ao2.cp-ao2-rsi-live-self-change-rehearsal-readback.v1` summary, then emits
+`ao2.rsi-live-self-change-readback-evidence-index.v1` under
+`target/rsi-live-self-change-readback-index/latest/summary.json`. It records
+artifact names and SHA-256 values only. It does not mutate AO2, mutate
+ao2-control-plane artifacts, publish claims, or approve RSI claims. It does not approve the full RSI claim. This retained readback evidence improves the claim audit input, but Covenant claim-publish approval and stronger claim-publish evidence remain required.
+
 ## Why AO2?
 
 Most agent systems focus on doing work. AO2 focuses on making the work
