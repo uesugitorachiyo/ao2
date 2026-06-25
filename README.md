@@ -78,8 +78,10 @@ npm run rsi:self-change-dry-run
 
 The dry-run emits `ao2.rsi-governed-self-change-dry-run.v1` under
 `target/rsi-self-change-dry-run/latest/summary.json`, plus proposed and rollback
-patch artifacts for the same change class. It does not apply the patch, mutate
-the repository, use the network, require provider keys, or publish the full RSI
+patch artifacts for the same change class. It also applies and rolls back those
+patches inside a temporary workspace to prove the rollback path restores the
+target file. It does not apply the patch to the repository, mutate the
+repository, use the network, require provider keys, or publish the full RSI
 claim. It is evidence for a governed self-change rehearsal, not proof of live
 autonomous self-mutation.
 

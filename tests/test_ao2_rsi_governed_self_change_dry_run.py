@@ -1,4 +1,5 @@
 import json
+import hashlib
 import os
 import subprocess
 from pathlib import Path
@@ -15,6 +16,10 @@ def read(path: str) -> str:
     return (REPO / path).read_text(encoding="utf-8")
 
 
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def test_rsi_governed_self_change_dry_run_emits_replayable_evidence(tmp_path):
     package = read_json("package.json")
     assert package["scripts"]["rsi:self-change-dry-run"] == (
@@ -25,8 +30,11 @@ def test_rsi_governed_self_change_dry_run_emits_replayable_evidence(tmp_path):
     assert "npm run rsi:self-change-dry-run" in readme
     assert "ao2.rsi-governed-self-change-dry-run.v1" in readme
     assert "does not apply the patch" in readme
+    assert "temporary workspace" in readme
 
     out_root = tmp_path / "rsi-self-change-dry-run"
+    claim_readiness_script = REPO / "scripts/rsi-claim-readiness-audit.sh"
+    repo_target_before = sha256(claim_readiness_script)
     result = subprocess.run(
         ["npm", "run", "rsi:self-change-dry-run"],
         cwd=REPO,
@@ -40,6 +48,7 @@ def test_rsi_governed_self_change_dry_run_emits_replayable_evidence(tmp_path):
 
     assert result.returncode == 0, result.stderr + result.stdout
     assert "self_change_dry_run=passed" in result.stdout
+    assert sha256(claim_readiness_script) == repo_target_before
 
     summary_path = out_root / "summary.json"
     proposed_patch_path = out_root / "proposed-self-change.patch"
@@ -72,6 +81,28 @@ def test_rsi_governed_self_change_dry_run_emits_replayable_evidence(tmp_path):
         "sha256": summary["rollback"]["rollback_patch"]["sha256"],
     }
     assert len(summary["rollback"]["rollback_patch"]["sha256"]) == 64
+    assert summary["rollback_rehearsal"]["mode"] == "executed_in_temporary_workspace"
+    assert summary["rollback_rehearsal"]["status"] == "passed"
+    assert summary["rollback_rehearsal"]["workspace"] == "rollback-rehearsal/worktree"
+    assert summary["rollback_rehearsal"]["target_file"] == "scripts/rsi-claim-readiness-audit.sh"
+    assert summary["rollback_rehearsal"]["proposed_patch_applied"] is True
+    assert summary["rollback_rehearsal"]["rollback_patch_applied"] is True
+    assert summary["rollback_rehearsal"]["same_change_class"] is True
+    assert summary["rollback_rehearsal"]["verification"] == [
+        "bash -n scripts/rsi-claim-readiness-audit.sh"
+    ]
+    assert (
+        summary["rollback_rehearsal"]["target_before_sha256"]
+        == summary["self_change"]["target_before_sha256"]["scripts/rsi-claim-readiness-audit.sh"]
+    )
+    assert (
+        summary["rollback_rehearsal"]["target_after_proposed_sha256"]
+        != summary["rollback_rehearsal"]["target_before_sha256"]
+    )
+    assert (
+        summary["rollback_rehearsal"]["target_after_rollback_sha256"]
+        == summary["rollback_rehearsal"]["target_before_sha256"]
+    )
     assert summary["full_claim_blockers"] == [
         "mutation_authority",
         "live_self_change_evidence",
@@ -113,5 +144,6 @@ def test_rsi_governed_self_change_dry_run_emits_replayable_evidence(tmp_path):
     assert full_claim["partial_evidence"]["governed_self_change_dry_run"] == {
         "evidence_state": "present",
         "schema_version": "ao2.rsi-governed-self-change-dry-run.v1",
+        "rollback_rehearsal_status": "passed",
         "status": "dry_run_evidence_ready",
     }
