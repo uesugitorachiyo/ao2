@@ -408,6 +408,14 @@ enum CockpitCommand {
     },
 }
 
+fn parse_bool(s: &str) -> std::result::Result<bool, String> {
+    match s.to_lowercase().trim() {
+        "true" | "1" | "yes" | "y" | "" => Ok(true),
+        "false" | "0" | "no" | "n" => Ok(false),
+        other => Err(format!("invalid boolean value: '{}'", other)),
+    }
+}
+
 #[derive(Debug, Subcommand)]
 enum PulseCommand {
     Run {
@@ -469,6 +477,72 @@ enum PulseCommand {
         apply_root: PathBuf,
         #[arg(long)]
         json: bool,
+    },
+    AutoAdvance {
+        #[arg(
+            long,
+            env = "AO2_PULSE_RESUME_JSON",
+            default_value = ".ao2-local/pulse/latest/resume.json"
+        )]
+        resume_json: PathBuf,
+        #[arg(
+            long,
+            env = "AO2_PULSE_AUTO_ADVANCE_ROOT",
+            default_value = "target/pulse-auto-advance/latest"
+        )]
+        out_dir: PathBuf,
+        #[arg(
+            long,
+            env = "AO2_PULSE_AUTO_ADVANCE_LEDGER",
+            default_value = ".ao2-local/pulse/pulse-auto-advance-ledger.jsonl"
+        )]
+        ledger: PathBuf,
+        #[arg(
+            long,
+            env = "AO2_PULSE_AUTO_ADVANCE_STOP_FILE",
+            default_value = ".ao2-local/pulse/STOP"
+        )]
+        stop_file: PathBuf,
+        #[arg(long, env = "AO2_PULSE_AUTO_ADVANCE_MAX_ITERATIONS")]
+        max_iterations: Option<u32>,
+        #[arg(long, env = "AO2_PULSE_AUTO_ADVANCE_ALLOW_DUPLICATE", action = clap::ArgAction::Set, num_args = 0..=1, default_missing_value = "true", value_parser = parse_bool, default_value = "false")]
+        allow_duplicate: bool,
+        #[arg(long)]
+        forever: bool,
+        #[arg(
+            long,
+            env = "AO2_PULSE_AUTO_ADVANCE_SLEEP_SECONDS",
+            default_value = "30"
+        )]
+        sleep_seconds: u64,
+        #[arg(
+            long,
+            env = "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT",
+            default_value = "1"
+        )]
+        generate_next: u32,
+        #[arg(long, env = "AO2_PULSE_AUTO_ADVANCE_GENERATE_NEXT_SLEEP_SECONDS")]
+        generate_next_sleep_seconds: Option<u64>,
+        #[arg(long, env = "AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE", default_value = "1")]
+        pr_ci_gate: u32,
+        #[arg(
+            long,
+            env = "AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_STATE",
+            default_value = ".ao2-local/pulse/pr-ci-gate.json"
+        )]
+        pr_ci_gate_state: PathBuf,
+        #[arg(
+            long,
+            env = "AO2_PULSE_AUTO_ADVANCE_PR_CI_GATE_UPDATE",
+            default_value = "1"
+        )]
+        pr_ci_gate_update: u32,
+        #[arg(long, env = "AO2_PULSE_AUTO_ADVANCE_LOCAL_ONLY_WHILE_PR_BLOCKED", action = clap::ArgAction::Set, num_args = 0..=1, default_missing_value = "true", value_parser = parse_bool, default_value = "false")]
+        local_only_while_pr_blocked: bool,
+        #[arg(long, env = "AO2_PULSE_AUTO_ADVANCE_DIRECT_MAIN_PUBLISH", action = clap::ArgAction::Set, num_args = 0..=1, default_missing_value = "true", value_parser = parse_bool, default_value = "false")]
+        direct_main_publish: bool,
+        #[arg(long, default_value = ".")]
+        apply_root: PathBuf,
     },
 }
 
@@ -4124,6 +4198,50 @@ fn pulse(command: PulseCommand) -> Result<()> {
             }
             if summary.status == "failed" {
                 anyhow::bail!("Pulse event-loop run failed");
+            }
+            Ok(())
+        }
+        PulseCommand::AutoAdvance {
+            resume_json,
+            out_dir,
+            ledger,
+            stop_file,
+            max_iterations,
+            allow_duplicate,
+            forever,
+            sleep_seconds,
+            generate_next,
+            generate_next_sleep_seconds,
+            pr_ci_gate,
+            pr_ci_gate_state,
+            pr_ci_gate_update,
+            local_only_while_pr_blocked,
+            direct_main_publish,
+            apply_root,
+        } => {
+            let result_str = ao2_runtime::pulse_event_loop::run_pulse_auto_advance(
+                &resume_json,
+                &out_dir,
+                &ledger,
+                &stop_file,
+                max_iterations,
+                allow_duplicate,
+                forever,
+                sleep_seconds,
+                generate_next,
+                generate_next_sleep_seconds,
+                pr_ci_gate,
+                &pr_ci_gate_state,
+                pr_ci_gate_update,
+                local_only_while_pr_blocked,
+                direct_main_publish,
+                &apply_root,
+            )?;
+            let summary_path = out_dir.join("summary.json");
+            println!("summary={}", summary_path.to_string_lossy());
+            println!("status={}", result_str);
+            if result_str != "passed" && result_str != "stopped" && result_str != "waiting" {
+                anyhow::bail!("Pulse auto-advance failed with status: {}", result_str);
             }
             Ok(())
         }
@@ -16145,7 +16263,7 @@ fn factory_run_plan_json(options: FactoryRunPlanOptions<'_>) -> Result<serde_jso
         "provider_budget_owner": if options.provider_max_budget_usd.is_some() { "ao2" } else { "not_supplied" },
         "factory_v3_drives_workflow": false
     });
-    let summary = if provider_mode {
+    let mut summary = if provider_mode {
         let provider = parse_provider(options.provider.as_deref().unwrap_or("scripted"))?;
         let prompt = read_prompt(options.provider_prompt, options.provider_prompt_file)?;
         run_risky_pr_with_provider_prompt(ProviderRunOptions {
@@ -16165,6 +16283,15 @@ fn factory_run_plan_json(options: FactoryRunPlanOptions<'_>) -> Result<serde_jso
             run_id: options.run_id,
         })?
     };
+    if provider_mode && summary.status == ao2_runtime::RunStatus::WaitingForApproval {
+        if let Some(resumed) = approve_and_resume_persisted_sandbox_patches(
+            &target_root,
+            &summary.run_id,
+            "human:factory-compat-operator",
+        )? {
+            summary = resumed;
+        }
+    }
     let replay = replay_run(ReplayOptions {
         target_repo: target_root.clone(),
         run_id: summary.run_id.clone(),
@@ -30622,7 +30749,7 @@ fn run_ao2_run_spec_governed(options: CliRunOptions, spec: &Path) -> Result<()> 
     println!("plan_id={}", loaded.plan_id);
     println!("target_repo={}", loaded.target_repo.display());
     println!("workflow={}", workflow.display());
-    let (summary, execution_mode) = if provider_backed {
+    let (mut summary, execution_mode) = if provider_backed {
         let provider = parse_provider(options.provider.as_deref().unwrap_or("scripted"))?;
         let operator_prompt =
             if options.provider_prompt.is_some() || options.provider_prompt_file.is_some() {
@@ -30657,6 +30784,15 @@ fn run_ao2_run_spec_governed(options: CliRunOptions, spec: &Path) -> Result<()> 
             Ao2RunSpecExecutionMode::ProviderFree,
         )
     };
+    if provider_backed && summary.status == ao2_runtime::RunStatus::WaitingForApproval {
+        if let Some(resumed) = approve_and_resume_persisted_sandbox_patches(
+            &loaded.target_repo,
+            &summary.run_id,
+            "human:sdd-run-operator",
+        )? {
+            summary = resumed;
+        }
+    }
     let task_graph_path = write_ao2_run_spec_task_graph_sidecar(&loaded, &summary, execution_mode)?;
     print_run_summary(&summary);
     println!("sdd_task_graph={}", task_graph_path.display());
@@ -31235,6 +31371,52 @@ fn print_run_summary(summary: &ao2_runtime::RunSummary) {
     println!("status={:?}", summary.status);
     println!("evidence_pack={}", summary.evidence_pack_path.display());
     println!("report={}", summary.report_path.display());
+}
+
+fn approve_and_resume_persisted_sandbox_patches(
+    target: &Path,
+    run_id: &str,
+    approver: &str,
+) -> Result<Option<ao2_runtime::RunSummary>> {
+    let mut latest = None;
+    loop {
+        let evidence_pack_path = run_dir(target, run_id)
+            .join("evidence-pack")
+            .join("evidence-pack.json");
+        let evidence = match fs::read_to_string(&evidence_pack_path) {
+            Ok(content) => serde_json::from_str::<serde_json::Value>(&content)
+                .with_context(|| format!("parse {}", evidence_pack_path.display()))?,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(latest),
+            Err(error) => {
+                return Err(error).with_context(|| format!("read {}", evidence_pack_path.display()))
+            }
+        };
+        let pending_ticket_id = json_array(&evidence, "approvals")
+            .iter()
+            .find(|ticket| {
+                json_string(ticket, "status") == "pending"
+                    && json_string(ticket, "requested_action") == "sandbox:apply"
+            })
+            .map(|ticket| json_string(ticket, "ticket_id"))
+            .filter(|ticket_id| !ticket_id.is_empty());
+        let Some(ticket_id) = pending_ticket_id else {
+            return Ok(latest);
+        };
+        approve_risky_pr_ticket(ApprovalOptions {
+            target_repo: target.to_path_buf(),
+            ticket_id,
+            approver: approver.to_string(),
+        })?;
+        let summary = resume_risky_pr_provider_free(ResumeOptions {
+            target_repo: target.to_path_buf(),
+            run_id: run_id.to_string(),
+        })?;
+        let still_waiting = summary.status == ao2_runtime::RunStatus::WaitingForApproval;
+        latest = Some(summary);
+        if !still_waiting {
+            return Ok(latest);
+        }
+    }
 }
 
 fn repair(command: RepairCommand) -> Result<()> {
@@ -48629,7 +48811,7 @@ fn provider_smoke_run_json(
     let smoke_repo = smoke_root.join("repo");
     write_provider_smoke_fixture(&smoke_repo)?;
     let workflow = materialize_template_workflow(&smoke_repo, "bug-fix")?;
-    let summary = run_risky_pr_with_provider_prompt(ProviderRunOptions {
+    let mut summary = run_risky_pr_with_provider_prompt(ProviderRunOptions {
         target_repo: smoke_repo.clone(),
         workflow_path: workflow,
         run_id: Some(run_id),
@@ -48639,6 +48821,15 @@ fn provider_smoke_run_json(
         max_budget_usd: None,
         repair_source: None,
     })?;
+    if summary.status == ao2_runtime::RunStatus::WaitingForApproval {
+        if let Some(resumed) = approve_and_resume_persisted_sandbox_patches(
+            &smoke_repo,
+            &summary.run_id,
+            "human:provider-smoke-operator",
+        )? {
+            summary = resumed;
+        }
+    }
     let scorecard = provider_score_json(&smoke_repo, &summary.run_id)?;
     let score = json_u64(&scorecard, "score");
     let verdict = if score >= minimum_score {
@@ -59954,6 +60145,11 @@ fn execute_workbench_job(
             break;
         }
     }
+    let _ = approve_and_resume_persisted_sandbox_patches(
+        &request.target,
+        &request.run_id,
+        "human:workbench-operator",
+    )?;
     let (html, evidence_pack) = render_report_for_run(&request.target, &request.run_id)?;
     let cockpit = run_dir(&request.target, &request.run_id)
         .join("cockpit")

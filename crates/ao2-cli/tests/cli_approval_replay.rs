@@ -47674,6 +47674,7 @@ fn sign_test_release_archive(root: &Path, archive: &Path, provenance: &Path) {
 fn ao2<const N: usize>(args: [&str; N]) -> std::process::Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_ao2"));
     command.args(args);
+    command.env("AO2_AUTO_APPROVE_SANDBOX_PATCH", "1");
     command.env_remove("OPENAI_API_KEY");
     command.env_remove("ANTHROPIC_API_KEY");
     command.output().unwrap()
@@ -48064,6 +48065,7 @@ fn ao2_with_env<const N: usize, const M: usize>(
     let mut command = Command::new(env!("CARGO_BIN_EXE_ao2"));
     command.args(args);
     command.envs(env);
+    command.env("AO2_AUTO_APPROVE_SANDBOX_PATCH", "1");
     command.env_remove("OPENAI_API_KEY");
     command.env_remove("ANTHROPIC_API_KEY");
     command.output().unwrap()

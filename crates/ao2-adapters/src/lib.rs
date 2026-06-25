@@ -1351,7 +1351,7 @@ fn create_sandbox_path(target_repo: &Path) -> PathBuf {
     base.join(format!("ao2-sandbox-{name}-{}", Uuid::new_v4()))
 }
 
-fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
+pub fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
     fs::create_dir_all(dst).with_context(|| format!("create sandbox {}", dst.display()))?;
     for entry in walkdir::WalkDir::new(src) {
         let entry = entry?;

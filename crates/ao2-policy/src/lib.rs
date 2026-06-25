@@ -18,7 +18,11 @@ pub struct ToolRequest {
 
 impl ToolRequest {
     pub fn action_digest(&self) -> String {
-        sha256_hex(serde_json::to_vec(self).unwrap_or_default())
+        if self.tool == "sandbox" && self.operation == "apply" && self.args.len() > 1 {
+            self.args[1].clone()
+        } else {
+            sha256_hex(serde_json::to_vec(self).unwrap_or_default())
+        }
     }
 }
 
