@@ -1,0 +1,192 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+CP_ROOT="${AO2_CONTROL_PLANE_REPO:-$ROOT/../ao2-control-plane}"
+COVENANT_ROOT="${AO_COVENANT_REPO:-$ROOT/../ao-covenant}"
+OUT_ROOT="${AO2_RSI_CROSS_REPO_E2E_ROOT:-$ROOT/target/rsi-cross-repo-e2e/latest}"
+SUMMARY="$OUT_ROOT/summary.json"
+LOG_DIR="$OUT_ROOT/logs"
+
+rm -rf "$OUT_ROOT"
+mkdir -p "$LOG_DIR" "$OUT_ROOT/covenant-gate"
+
+run_step() {
+  local name="$1"
+  shift
+  local log="$LOG_DIR/$name.log"
+  set +e
+  "$@" >"$log" 2>&1
+  local code=$?
+  set -e
+  printf "%s\n" "$code" >"$log.exit-code"
+}
+
+run_covenant() {
+  if [[ -n "${AO_COVENANT_BIN:-}" ]]; then
+    "$AO_COVENANT_BIN" "$@"
+  else
+    (cd "$COVENANT_ROOT" && go run ./cmd/covenant "$@")
+  fi
+}
+
+covenant_step_to_file() {
+  local name="$1"
+  local out_file="$2"
+  shift 2
+  local log="$LOG_DIR/$name.log"
+  set +e
+  run_covenant "$@" >"$out_file" 2>"$log"
+  local code=$?
+  set -e
+  printf "%s\n" "$code" >"$log.exit-code"
+}
+
+covenant_step() {
+  local name="$1"
+  shift
+  local log="$LOG_DIR/$name.log"
+  set +e
+  run_covenant "$@" >"$log" 2>&1
+  local code=$?
+  set -e
+  printf "%s\n" "$code" >"$log.exit-code"
+}
+
+test -f "$CP_ROOT/scripts/verify_ao2_rsi_live_self_change_rehearsal.py"
+if [[ -z "${AO_COVENANT_BIN:-}" ]]; then
+  test -d "$COVENANT_ROOT/cmd/covenant"
+fi
+
+run_step live_self_change_rehearsal \
+  env AO2_RSI_LIVE_SELF_CHANGE_REHEARSAL=1 \
+    AO2_RSI_LIVE_SELF_CHANGE_REHEARSAL_ROOT="$OUT_ROOT/live-self-change-rehearsal" \
+    npm run rsi:live-self-change-rehearsal
+
+run_step control_plane_readback \
+  python3 "$CP_ROOT/scripts/verify_ao2_rsi_live_self_change_rehearsal.py" \
+    --live-rehearsal-summary-json "$OUT_ROOT/live-self-change-rehearsal/summary.json" \
+    --out-json "$OUT_ROOT/control-plane-readback/summary.json"
+
+run_step readback_index \
+  env AO2_RSI_LIVE_SELF_CHANGE_REHEARSAL_SUMMARY="$OUT_ROOT/live-self-change-rehearsal/summary.json" \
+    AO2_RSI_LIVE_SELF_CHANGE_REHEARSAL_READBACK_SUMMARY="$OUT_ROOT/control-plane-readback/summary.json" \
+    AO2_RSI_LIVE_SELF_CHANGE_READBACK_INDEX_ROOT="$OUT_ROOT/readback-index" \
+    npm run rsi:live-self-change-readback-index
+
+run_step claim_readiness \
+  env AO2_RSI_LIVE_SELF_CHANGE_REHEARSAL_SUMMARY="$OUT_ROOT/live-self-change-rehearsal/summary.json" \
+    AO2_RSI_LIVE_SELF_CHANGE_READBACK_INDEX_SUMMARY="$OUT_ROOT/readback-index/summary.json" \
+    AO2_RSI_CLAIM_READINESS_ROOT="$OUT_ROOT/claim-readiness" \
+    npm run rsi:claim-readiness
+
+covenant_step_to_file covenant_claim_publish_gate "$OUT_ROOT/covenant-gate/summary.json" \
+  policy claim-publish-gate --json \
+  --claim-readiness "$OUT_ROOT/claim-readiness/summary.json" \
+  --readback-index "$OUT_ROOT/readback-index/summary.json"
+
+covenant_step covenant_gate_schema_validate \
+  schema validate \
+  --schema covenant.rsi-claim-publish-gate.v1 \
+  --file "$OUT_ROOT/covenant-gate/summary.json"
+
+python3 - "$OUT_ROOT" "$SUMMARY" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+out_root = Path(sys.argv[1]).resolve()
+summary_path = Path(sys.argv[2]).resolve()
+log_dir = out_root / "logs"
+steps = [
+    "live_self_change_rehearsal",
+    "control_plane_readback",
+    "readback_index",
+    "claim_readiness",
+    "covenant_claim_publish_gate",
+    "covenant_gate_schema_validate",
+]
+
+def read_exit_code(name: str) -> int:
+    return int((log_dir / f"{name}.log.exit-code").read_text(encoding="utf-8").strip())
+
+def read_json(path: Path) -> dict:
+    if not path.is_file():
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
+
+checks = [
+    {
+        "name": name,
+        "status": "passed" if read_exit_code(name) == 0 else "failed",
+        "exit_code": read_exit_code(name),
+        "log": str(log_dir / f"{name}.log"),
+    }
+    for name in steps
+]
+
+live = read_json(out_root / "live-self-change-rehearsal" / "summary.json")
+readback = read_json(out_root / "control-plane-readback" / "summary.json")
+index = read_json(out_root / "readback-index" / "summary.json")
+claim = read_json(out_root / "claim-readiness" / "summary.json")
+gate = read_json(out_root / "covenant-gate" / "summary.json")
+
+passed = (
+    all(item["exit_code"] == 0 for item in checks)
+    and live.get("status") == "live_rehearsal_passed"
+    and live.get("self_change", {}).get("repository_restored") is True
+    and readback.get("status") == "passed"
+    and index.get("status") == "passed"
+    and claim.get("status") == "claim_boundary_enforced"
+    and gate.get("schema_version") == "covenant.rsi-claim-publish-gate.v1"
+    and gate.get("status") == "denied"
+    and gate.get("decision") == "deny"
+    and gate.get("publish_authority") is False
+)
+
+payload = {
+    "schema_version": "ao2.rsi-cross-repo-e2e.v1",
+    "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    "status": "passed" if passed else "failed",
+    "claim_level": "full_autonomous_self_mutating_rsi",
+    "claim_publish_resource": "full-autonomous-self-mutating-rsi",
+    "claim_publish_authority": bool(gate.get("publish_authority")),
+    "claim_publish_decision": gate.get("decision", "missing"),
+    "checks": checks,
+    "component_summaries": {
+        "live_self_change_rehearsal": str(out_root / "live-self-change-rehearsal" / "summary.json"),
+        "control_plane_readback": str(out_root / "control-plane-readback" / "summary.json"),
+        "readback_index": str(out_root / "readback-index" / "summary.json"),
+        "claim_readiness": str(out_root / "claim-readiness" / "summary.json"),
+        "covenant_claim_publish_gate": str(out_root / "covenant-gate" / "summary.json"),
+    },
+    "observed_evidence": {
+        "live_self_change_rehearsal_status": live.get("status"),
+        "repository_restored": live.get("self_change", {}).get("repository_restored", False),
+        "control_plane_readback_status": readback.get("status"),
+        "readback_index_status": index.get("status"),
+        "claim_readiness_status": claim.get("status"),
+        "covenant_gate_schema_version": gate.get("schema_version"),
+        "covenant_gate_status": gate.get("status"),
+        "covenant_gate_blocker_count": gate.get("blocker_count", 0),
+    },
+    "trust_boundary": {
+        "local_only": True,
+        "uses_network": False,
+        "stores_credentials": False,
+        "requires_provider_api_key": False,
+        "mutates_repositories": True,
+        "rollback_applied": True,
+        "publishes_claims": False,
+        "approves_rsi_claims": False,
+    },
+}
+
+summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+print(f"summary={summary_path}")
+print(f"rsi_cross_repo_e2e={payload['status']}")
+print(f"claim_level=full_autonomous_self_mutating_rsi decision={payload['claim_publish_decision']} publish_authority={str(payload['claim_publish_authority']).lower()}")
+if payload["status"] != "passed":
+    raise SystemExit(1)
+PY
