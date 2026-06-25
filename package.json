@@ -76,6 +76,7 @@
     "release:artifact-size-budget-audit": "node scripts/run-sh-script.js scripts/release-artifact-size-budget-audit.sh",
     "release:readiness:regression-gate": "node scripts/run-sh-script.js scripts/release-readiness-regression-gate.sh",
     "local:canary": "node scripts/run-sh-script.js scripts/local-canary.sh",
+    "rsi:claim-readiness": "node scripts/run-sh-script.js scripts/rsi-claim-readiness-audit.sh",
     "pulse:local-mirror": "node scripts/run-sh-script.js scripts/pulse-local-mirror.sh",
     "pulse:resume": "node scripts/run-sh-script.js scripts/pulse-resume.sh",
     "pulse:execute-safety-corpus": "node scripts/run-sh-script.js scripts/pulse-execute-safety-corpus.sh",

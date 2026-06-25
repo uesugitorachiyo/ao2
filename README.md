@@ -50,6 +50,26 @@ Pull request CI also builds and smokes AO2 release archives on Ubuntu, macOS,
 and Windows through the hosted release archive smoke job. Native Windows release
 downloads remain covered by `.github/workflows/windows-release-smoke.yml`.
 
+## RSI Claim Boundary
+
+AO2 currently supports `bounded_governed_rsi`: local-first Pulse continuation,
+task generation, policy gates, replayable evidence, and operator-controlled
+publish paths. AO2 does not currently prove
+`full_autonomous_self_mutating_rsi`.
+
+Run the local claim audit with:
+
+```sh
+npm run rsi:claim-readiness
+```
+
+The audit emits `ao2.rsi-claim-readiness-audit.v1` under
+`target/rsi-claim-readiness/latest/summary.json`. It allows the bounded claim
+when the local Pulse evidence surface is present and denies the full
+self-mutating claim until AO2 has mutation authority evidence, live self-change
+evidence, rollback evidence for failed self-change, control-plane observer
+readback, and Covenant approval to publish that higher claim.
+
 ## Why AO2?
 
 Most agent systems focus on doing work. AO2 focuses on making the work
