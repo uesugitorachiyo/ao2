@@ -92,13 +92,18 @@ def read_self_change_dry_run_evidence(path):
         "stores_credentials": False,
         "mutates_repositories": False,
         "applies_patch": False,
+        "emits_authority_packet_candidate": True,
         "publishes_claims": False,
     }
+    mutation_authority_packet = payload.get("mutation_authority_packet", {})
     evidence_present = (
         payload.get("schema_version") == "ao2.rsi-governed-self-change-dry-run.v1"
         and payload.get("status") == "dry_run_evidence_ready"
         and payload.get("self_change", {}).get("mode") == "dry_run"
         and payload.get("rollback", {}).get("mode") == "dry_run"
+        and mutation_authority_packet.get("mode") == "dry_run_candidate"
+        and mutation_authority_packet.get("schema_version") == "covenant.live-self-change-authority.v1"
+        and mutation_authority_packet.get("schema_valid_for_claim_publish") is False
         and rollback_rehearsal.get("mode") == "executed_in_temporary_workspace"
         and rollback_rehearsal.get("status") == "passed"
         and rollback_rehearsal.get("same_change_class") is True
@@ -107,6 +112,7 @@ def read_self_change_dry_run_evidence(path):
     return {
         "evidence_state": "present" if evidence_present else "invalid",
         "schema_version": payload.get("schema_version"),
+        "mutation_authority_packet": mutation_authority_packet.get("mode", "missing"),
         "rollback_rehearsal_status": rollback_rehearsal.get("status", "missing"),
         "status": payload.get("status", "missing"),
     }

@@ -6,23 +6,25 @@ OUT_ROOT="${AO2_RSI_SELF_CHANGE_DRY_RUN_ROOT:-$ROOT/target/rsi-self-change-dry-r
 SUMMARY="$OUT_ROOT/summary.json"
 PROPOSED_PATCH="$OUT_ROOT/proposed-self-change.patch"
 ROLLBACK_PATCH="$OUT_ROOT/rollback-self-change.patch"
+AUTHORITY_PACKET="$OUT_ROOT/live-self-change-authority.packet.json"
 
 rm -rf "$OUT_ROOT"
 mkdir -p "$OUT_ROOT"
 
-python3 - "$ROOT" "$SUMMARY" "$PROPOSED_PATCH" "$ROLLBACK_PATCH" <<'PY'
+python3 - "$ROOT" "$SUMMARY" "$PROPOSED_PATCH" "$ROLLBACK_PATCH" "$AUTHORITY_PACKET" <<'PY'
 import hashlib
 import json
 import shutil
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 root = Path(sys.argv[1])
 summary_path = Path(sys.argv[2])
 proposed_patch_path = Path(sys.argv[3])
 rollback_patch_path = Path(sys.argv[4])
+authority_packet_path = Path(sys.argv[5])
 
 target_file = Path("scripts/rsi-claim-readiness-audit.sh")
 target_path = root / target_file
@@ -86,6 +88,9 @@ rollback_patch_path.write_text(rollback_patch, encoding="utf-8")
 
 proposed_sha = hashlib.sha256(proposed_patch.encode("utf-8")).hexdigest()
 rollback_sha = hashlib.sha256(rollback_patch.encode("utf-8")).hexdigest()
+packet_exact_digest = hashlib.sha256(
+    "\n".join([proposed_sha, rollback_sha, target_sha]).encode("utf-8")
+).hexdigest()
 
 rehearsal_rel = Path("rollback-rehearsal/worktree")
 rehearsal_root = summary_path.parent / rehearsal_rel
@@ -123,6 +128,45 @@ if target_after_proposed_sha == target_sha:
 if target_after_rollback_sha != target_sha:
     raise SystemExit("rollback rehearsal did not restore the temporary target")
 
+authority_packet = {
+    "schema_version": "covenant.live-self-change-authority.v1",
+    "authority_id": "ao2-rsi-self-change-dry-run-authority",
+    "claim_level": "full_autonomous_self_mutating_rsi",
+    "repository": "ao2",
+    "branch": "codex/live-self-change-rehearsal",
+    "allowed_write_surface": [str(target_file)],
+    "change_class": "verification_path",
+    "approval_identity": "ao-operator",
+    "approval_ticket_id": "ticket-ao2-rsi-dry-run-authority",
+    "expires_at_utc": (datetime.now(timezone.utc) + timedelta(days=7)).isoformat().replace("+00:00", "Z"),
+    "exact_digest": {
+        "algorithm": "sha256",
+        "value": packet_exact_digest,
+        "covers": [
+            proposed_patch_path.name,
+            rollback_patch_path.name,
+            summary_path.name,
+        ],
+    },
+    "rollback_evidence": {
+        "status": "passed",
+        "evidence_paths": [summary_path.name],
+    },
+    "live_self_change_evidence": {
+        "status": "dry_run_not_live",
+        "evidence_paths": [],
+    },
+    "observer_readback": {
+        "status": "missing",
+        "observer": "ao2-control-plane",
+        "evidence_paths": [],
+    },
+    "claim_publish_resource": "full-autonomous-self-mutating-rsi",
+}
+authority_packet_text = json.dumps(authority_packet, indent=2, sort_keys=True) + "\n"
+authority_packet_path.write_text(authority_packet_text, encoding="utf-8")
+authority_packet_sha = hashlib.sha256(authority_packet_text.encode("utf-8")).hexdigest()
+
 payload = {
     "schema_version": "ao2.rsi-governed-self-change-dry-run.v1",
     "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -153,6 +197,14 @@ payload = {
         },
         "same_change_class": True,
     },
+    "mutation_authority_packet": {
+        "mode": "dry_run_candidate",
+        "schema_version": "covenant.live-self-change-authority.v1",
+        "path": authority_packet_path.name,
+        "sha256": authority_packet_sha,
+        "schema_valid_for_claim_publish": False,
+        "reason": "live self-change execution and observer readback are not present in dry-run evidence",
+    },
     "rollback_rehearsal": {
         "mode": "executed_in_temporary_workspace",
         "status": "passed",
@@ -182,6 +234,7 @@ payload = {
         "stores_credentials": False,
         "mutates_repositories": False,
         "applies_patch": False,
+        "emits_authority_packet_candidate": True,
         "publishes_claims": False,
     },
 }

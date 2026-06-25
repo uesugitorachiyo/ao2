@@ -78,12 +78,16 @@ npm run rsi:self-change-dry-run
 
 The dry-run emits `ao2.rsi-governed-self-change-dry-run.v1` under
 `target/rsi-self-change-dry-run/latest/summary.json`, plus proposed and rollback
-patch artifacts for the same change class. It also applies and rolls back those
-patches inside a temporary workspace to prove the rollback path restores the
-target file. It does not apply the patch to the repository, mutate the
-repository, use the network, require provider keys, or publish the full RSI
-claim. It is evidence for a governed self-change rehearsal, not proof of live
-autonomous self-mutation.
+patch artifacts for the same change class. It also emits a
+`covenant.live-self-change-authority.v1` authority packet candidate at
+`target/rsi-self-change-dry-run/latest/live-self-change-authority.packet.json`.
+That packet is marked as a dry-run candidate and is not valid evidence for
+claim publication until live self-change execution and observer readback exist.
+The script applies and rolls back the patches inside a temporary workspace to
+prove the rollback path restores the target file. It does not apply the patch
+to the repository, mutate the repository, use the network, require provider
+keys, or publish the full RSI claim. It is evidence for a governed self-change
+rehearsal, not proof of live autonomous self-mutation.
 
 ## Why AO2?
 
