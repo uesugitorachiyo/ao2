@@ -9,6 +9,7 @@ AO2_RSI_IMPROVEMENT_LIVE_SUMMARY="${AO2_RSI_IMPROVEMENT_LIVE_SUMMARY:-$ROOT/targ
 AO2_RSI_IMPROVEMENT_READBACK_SUMMARY="${AO2_RSI_IMPROVEMENT_READBACK_SUMMARY:-$ROOT/target/rsi-cross-repo-e2e/latest/control-plane-readback/summary.json}"
 AO2_RSI_IMPROVEMENT_READBACK_INDEX_SUMMARY="${AO2_RSI_IMPROVEMENT_READBACK_INDEX_SUMMARY:-$ROOT/target/rsi-cross-repo-e2e/latest/readback-index/summary.json}"
 AO2_RSI_IMPROVEMENT_CLAIM_READINESS_SUMMARY="${AO2_RSI_IMPROVEMENT_CLAIM_READINESS_SUMMARY:-$ROOT/target/rsi-cross-repo-e2e/latest/claim-readiness/summary.json}"
+AO2_RSI_IMPROVEMENT_BLUEPRINT_AUTHORIZATION_SUMMARY="${AO2_RSI_IMPROVEMENT_BLUEPRINT_AUTHORIZATION_SUMMARY:-$ROOT/target/rsi-cross-repo-e2e/latest/blueprint-authorization/summary.json}"
 AO2_RSI_IMPROVEMENT_COVENANT_GATE_SUMMARY="${AO2_RSI_IMPROVEMENT_COVENANT_GATE_SUMMARY:-$ROOT/target/rsi-cross-repo-e2e/latest/covenant-gate/summary.json}"
 AO2_RSI_IMPROVEMENT_COVENANT_SCHEMA_EXIT_CODE="${AO2_RSI_IMPROVEMENT_COVENANT_SCHEMA_EXIT_CODE:-$ROOT/target/rsi-cross-repo-e2e/latest/logs/covenant_gate_schema_validate.log.exit-code}"
 
@@ -24,6 +25,7 @@ python3 - "$SUMMARY" \
   "$AO2_RSI_IMPROVEMENT_READBACK_SUMMARY" \
   "$AO2_RSI_IMPROVEMENT_READBACK_INDEX_SUMMARY" \
   "$AO2_RSI_IMPROVEMENT_CLAIM_READINESS_SUMMARY" \
+  "$AO2_RSI_IMPROVEMENT_BLUEPRINT_AUTHORIZATION_SUMMARY" \
   "$AO2_RSI_IMPROVEMENT_COVENANT_GATE_SUMMARY" \
   "$AO2_RSI_IMPROVEMENT_COVENANT_SCHEMA_EXIT_CODE" <<'PY'
 import json
@@ -38,8 +40,9 @@ live_path = Path(sys.argv[4]).resolve()
 readback_path = Path(sys.argv[5]).resolve()
 readback_index_path = Path(sys.argv[6]).resolve()
 claim_path = Path(sys.argv[7]).resolve()
-covenant_gate_path = Path(sys.argv[8]).resolve()
-covenant_schema_exit_path = Path(sys.argv[9]).resolve()
+blueprint_path = Path(sys.argv[8]).resolve()
+covenant_gate_path = Path(sys.argv[9]).resolve()
+covenant_schema_exit_path = Path(sys.argv[10]).resolve()
 
 
 def load_json(path: Path) -> dict:
@@ -61,6 +64,7 @@ live = load_json(live_path)
 readback = load_json(readback_path)
 readback_index = load_json(readback_index_path)
 claim = load_json(claim_path)
+blueprint = load_json(blueprint_path)
 covenant_gate = load_json(covenant_gate_path)
 covenant_schema_exit = (
     covenant_schema_exit_path.read_text(encoding="utf-8").strip()
@@ -109,6 +113,30 @@ evidence_checks = [
         {
             "schema_version": claim.get("schema_version"),
             "status": claim.get("status"),
+        },
+    ),
+    check(
+        "blueprint_authorization",
+        blueprint_path,
+        blueprint.get("schema_version") == "ao2.rsi-blueprint-authorization-gate.v1"
+        and blueprint.get("status") == "passed"
+        and blueprint.get("blueprint_authorization_ready") is True
+        and blueprint.get("authorization_scope", {}).get("domain") == "rsi"
+        and blueprint.get("authorization_scope", {}).get("gate_model") == "tiered"
+        and blueprint.get("authority_boundary", {}).get("source") == "ao-blueprint"
+        and blueprint.get("authority_boundary", {}).get("downstream_of_operator_intent") is True
+        and blueprint.get("authority_boundary", {}).get("self_authorized_by_rsi") is False
+        and blueprint.get("authority_boundary", {}).get("authorizes_implementation") is True
+        and blueprint.get("authority_boundary", {}).get("authorizes_claim_publication") is False
+        and blueprint.get("authority_boundary", {}).get("authorizes_ao_blueprint_self_change") is False,
+        {
+            "schema_version": blueprint.get("schema_version"),
+            "status": blueprint.get("status"),
+            "gate_model": blueprint.get("authorization_scope", {}).get("gate_model"),
+            "candidate_id": blueprint.get("authorization_scope", {}).get("candidate_id"),
+            "self_authorized_by_rsi": blueprint.get("authority_boundary", {}).get("self_authorized_by_rsi"),
+            "authorizes_claim_publication": blueprint.get("authority_boundary", {}).get("authorizes_claim_publication"),
+            "authorizes_ao_blueprint_self_change": blueprint.get("authority_boundary", {}).get("authorizes_ao_blueprint_self_change"),
         },
     ),
     check(
@@ -181,6 +209,19 @@ payload = {
         "observed_check_count": observed_check_count,
         "target_percent": target_percent,
         "measured_improvement_percent": round(measured_improvement_percent, 4),
+    },
+    "blueprint_authorization": {
+        "schema_version": blueprint.get("schema_version"),
+        "status": blueprint.get("status"),
+        "blueprint_authorization_ready": blueprint.get("blueprint_authorization_ready"),
+        "gate_model": blueprint.get("authorization_scope", {}).get("gate_model"),
+        "candidate_id": blueprint.get("authorization_scope", {}).get("candidate_id"),
+        "source": blueprint.get("authority_boundary", {}).get("source"),
+        "downstream_of_operator_intent": blueprint.get("authority_boundary", {}).get("downstream_of_operator_intent"),
+        "self_authorized_by_rsi": blueprint.get("authority_boundary", {}).get("self_authorized_by_rsi"),
+        "authorizes_implementation": blueprint.get("authority_boundary", {}).get("authorizes_implementation"),
+        "authorizes_claim_publication": blueprint.get("authority_boundary", {}).get("authorizes_claim_publication"),
+        "authorizes_ao_blueprint_self_change": blueprint.get("authority_boundary", {}).get("authorizes_ao_blueprint_self_change"),
     },
     "evidence_checks": evidence_checks,
     "blockers": blockers,

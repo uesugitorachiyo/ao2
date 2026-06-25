@@ -242,6 +242,19 @@ require(
     "stable release evidence packet RSI improvement evidence was not ready",
     stable_release_evidence_packet,
 )
+stable_packet_blueprint_authorization = stable_release_evidence_packet.get("rsi_blueprint_authorization", {})
+require(
+    stable_packet_blueprint_authorization.get("schema_version") == "ao2.rsi-blueprint-authorization-gate.v1"
+    and stable_packet_blueprint_authorization.get("status") == "passed"
+    and stable_packet_blueprint_authorization.get("blueprint_authorization_ready") is True
+    and stable_packet_blueprint_authorization.get("gate_model") == "tiered"
+    and stable_packet_blueprint_authorization.get("source") == "ao-blueprint"
+    and stable_packet_blueprint_authorization.get("self_authorized_by_rsi") is False
+    and stable_packet_blueprint_authorization.get("authorizes_claim_publication") is False
+    and stable_packet_blueprint_authorization.get("authorizes_ao_blueprint_self_change") is False,
+    "stable release evidence packet RSI Blueprint authorization was not ready",
+    stable_release_evidence_packet,
+)
 stable_packet_trend = stable_release_evidence_packet.get("rsi_improvement_trend", {})
 require(
     stable_packet_trend.get("schema_version") == "ao2.rsi-improvement-trend.v1"
@@ -343,6 +356,17 @@ consumer_summary = {
             "target_percent": stable_packet_improvement.get("target_percent"),
             "claim_publish_decision": stable_packet_improvement.get("claim_publish_decision"),
             "claim_publish_authority": stable_packet_improvement.get("claim_publish_authority"),
+        },
+        "rsi_blueprint_authorization": {
+            "schema_version": stable_packet_blueprint_authorization.get("schema_version"),
+            "status": stable_packet_blueprint_authorization.get("status"),
+            "blueprint_authorization_ready": stable_packet_blueprint_authorization.get("blueprint_authorization_ready"),
+            "gate_model": stable_packet_blueprint_authorization.get("gate_model"),
+            "candidate_id": stable_packet_blueprint_authorization.get("candidate_id"),
+            "source": stable_packet_blueprint_authorization.get("source"),
+            "self_authorized_by_rsi": stable_packet_blueprint_authorization.get("self_authorized_by_rsi"),
+            "authorizes_claim_publication": stable_packet_blueprint_authorization.get("authorizes_claim_publication"),
+            "authorizes_ao_blueprint_self_change": stable_packet_blueprint_authorization.get("authorizes_ao_blueprint_self_change"),
         },
         "rsi_improvement_trend": {
             "schema_version": stable_packet_trend.get("schema_version"),

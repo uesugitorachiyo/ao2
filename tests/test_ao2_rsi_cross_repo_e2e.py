@@ -17,6 +17,114 @@ def write_json(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def valid_blueprint_authorization() -> dict:
+    return {
+        "schema": "ao.blueprint.build-authorization.v0.1",
+        "project_id": "ao2-rsi-tiered-gate",
+        "status": "ready",
+        "score": 100,
+        "approved_by_user": True,
+        "blocking_assumptions": [],
+        "next_allowed_action": "ao-foundry",
+        "authorization_scope": {
+            "domain": "rsi",
+            "gate_model": "tiered",
+            "candidate_id": "ao2-rsi-evidence-hardening",
+            "requires_new_blueprint_for": [
+                "new_product_direction",
+                "new_architecture",
+                "new_repo_or_component",
+                "new_public_claim",
+                "new_policy_or_authority_surface",
+                "ao_blueprint_self_change",
+                "production_readiness_definition_change",
+                "safety_privacy_secrets_release_or_promotion_change",
+            ],
+        },
+        "authority_boundary": {
+            "source": "ao-blueprint",
+            "downstream_of_operator_intent": True,
+            "self_authorized_by_rsi": False,
+            "authorizes_implementation": True,
+            "authorizes_claim_publication": False,
+            "authorizes_ao_blueprint_self_change": False,
+        },
+    }
+
+
+def test_rsi_blueprint_authorization_gate_requires_tiered_gate_authorization(tmp_path):
+    package = json.loads(read("package.json"))
+    assert package["scripts"]["rsi:blueprint-authorization-gate"] == (
+        "node scripts/run-sh-script.js scripts/rsi-blueprint-authorization-gate.sh"
+    )
+
+    script = REPO / "scripts" / "rsi-blueprint-authorization-gate.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.rsi-blueprint-authorization-gate.v1",
+        "ao.blueprint.build-authorization.v0.1",
+        "score",
+        "approved_by_user",
+        "authorization_scope",
+        "gate_model",
+        "tiered",
+        "self_authorized_by_rsi",
+        "authorizes_ao_blueprint_self_change",
+        "authorizes_claim_publication",
+    ]:
+        assert needle in text
+
+    authorization = tmp_path / "blueprint" / "build-authorization.json"
+    write_json(authorization, valid_blueprint_authorization())
+
+    out_root = tmp_path / "gate"
+    result = subprocess.run(
+        ["npm", "run", "rsi:blueprint-authorization-gate"],
+        cwd=REPO,
+        env={
+            **os.environ,
+            "AO2_RSI_BLUEPRINT_AUTHORIZATION_GATE_ROOT": str(out_root),
+            "AO2_RSI_BLUEPRINT_AUTHORIZATION_SUMMARY": str(authorization),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.rsi-blueprint-authorization-gate.v1"
+    assert summary["status"] == "passed"
+    assert summary["blueprint_authorization_ready"] is True
+    assert summary["source_authorization"]["schema"] == "ao.blueprint.build-authorization.v0.1"
+    assert summary["source_authorization"]["score"] == 100
+    assert summary["authorization_scope"]["gate_model"] == "tiered"
+    assert summary["authority_boundary"]["source"] == "ao-blueprint"
+    assert summary["authority_boundary"]["self_authorized_by_rsi"] is False
+    assert summary["authority_boundary"]["authorizes_claim_publication"] is False
+    assert summary["authority_boundary"]["authorizes_ao_blueprint_self_change"] is False
+
+    blocked_payload = valid_blueprint_authorization()
+    blocked_payload["authority_boundary"]["self_authorized_by_rsi"] = True
+    blocked_authorization = tmp_path / "blocked" / "build-authorization.json"
+    write_json(blocked_authorization, blocked_payload)
+    blocked = subprocess.run(
+        ["npm", "run", "rsi:blueprint-authorization-gate"],
+        cwd=REPO,
+        env={
+            **os.environ,
+            "AO2_RSI_BLUEPRINT_AUTHORIZATION_GATE_ROOT": str(tmp_path / "blocked-gate"),
+            "AO2_RSI_BLUEPRINT_AUTHORIZATION_SUMMARY": str(blocked_authorization),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert blocked.returncode != 0
+    assert "blocker=blueprint_self_authorized_by_rsi" in blocked.stderr
+
+
 def test_rsi_improvement_evidence_gate_measures_five_percent_hardening(tmp_path):
     package = json.loads(read("package.json"))
     assert package["scripts"]["rsi:improvement-evidence-gate"] == (
@@ -36,10 +144,34 @@ def test_rsi_improvement_evidence_gate_measures_five_percent_hardening(tmp_path)
         "claim_publish_authority",
         "publishes_claims",
         "approves_rsi_claims",
+        "AO2_RSI_IMPROVEMENT_BLUEPRINT_AUTHORIZATION_SUMMARY",
+        "blueprint_authorization",
+        "ao2.rsi-blueprint-authorization-gate.v1",
     ]:
         assert needle in text
 
     evidence = tmp_path / "evidence"
+    write_json(
+        evidence / "blueprint-authorization" / "summary.json",
+        {
+            "schema_version": "ao2.rsi-blueprint-authorization-gate.v1",
+            "status": "passed",
+            "blueprint_authorization_ready": True,
+            "authorization_scope": {
+                "domain": "rsi",
+                "gate_model": "tiered",
+                "candidate_id": "ao2-rsi-evidence-hardening",
+            },
+            "authority_boundary": {
+                "source": "ao-blueprint",
+                "downstream_of_operator_intent": True,
+                "self_authorized_by_rsi": False,
+                "authorizes_implementation": True,
+                "authorizes_claim_publication": False,
+                "authorizes_ao_blueprint_self_change": False,
+            },
+        },
+    )
     write_json(
         evidence / "live-self-change-rehearsal" / "summary.json",
         {
@@ -101,6 +233,9 @@ def test_rsi_improvement_evidence_gate_measures_five_percent_hardening(tmp_path)
             "AO2_RSI_IMPROVEMENT_CLAIM_READINESS_SUMMARY": str(
                 evidence / "claim-readiness" / "summary.json"
             ),
+            "AO2_RSI_IMPROVEMENT_BLUEPRINT_AUTHORIZATION_SUMMARY": str(
+                evidence / "blueprint-authorization" / "summary.json"
+            ),
             "AO2_RSI_IMPROVEMENT_COVENANT_GATE_SUMMARY": str(
                 evidence / "covenant-gate" / "summary.json"
             ),
@@ -117,9 +252,14 @@ def test_rsi_improvement_evidence_gate_measures_five_percent_hardening(tmp_path)
     assert summary["improvement_ready"] is True
     assert summary["metric"]["unit"] == "enforced_rsi_evidence_checks"
     assert summary["metric"]["baseline_check_count"] == 6
-    assert summary["metric"]["observed_check_count"] == 7
+    assert summary["metric"]["observed_check_count"] == 8
     assert summary["metric"]["target_percent"] == 5.0
     assert summary["metric"]["measured_improvement_percent"] >= 5.0
+    assert summary["blueprint_authorization"]["schema_version"] == (
+        "ao2.rsi-blueprint-authorization-gate.v1"
+    )
+    assert summary["blueprint_authorization"]["gate_model"] == "tiered"
+    assert summary["blueprint_authorization"]["self_authorized_by_rsi"] is False
     assert summary["claim_publish_decision"] == "deny"
     assert summary["claim_publish_authority"] is False
     assert summary["trust_boundary"]["publishes_claims"] is False
@@ -131,7 +271,7 @@ def test_rsi_improvement_evidence_gate_measures_five_percent_hardening(tmp_path)
         env={
             **os.environ,
             "AO2_RSI_IMPROVEMENT_EVIDENCE_GATE_ROOT": str(tmp_path / "blocked"),
-            "AO2_RSI_IMPROVEMENT_BASELINE_CHECK_COUNT": "7",
+            "AO2_RSI_IMPROVEMENT_BASELINE_CHECK_COUNT": "8",
             "AO2_RSI_IMPROVEMENT_LIVE_SUMMARY": str(
                 evidence / "live-self-change-rehearsal" / "summary.json"
             ),
@@ -144,6 +284,9 @@ def test_rsi_improvement_evidence_gate_measures_five_percent_hardening(tmp_path)
             "AO2_RSI_IMPROVEMENT_CLAIM_READINESS_SUMMARY": str(
                 evidence / "claim-readiness" / "summary.json"
             ),
+            "AO2_RSI_IMPROVEMENT_BLUEPRINT_AUTHORIZATION_SUMMARY": str(
+                evidence / "blueprint-authorization" / "summary.json"
+            ),
             "AO2_RSI_IMPROVEMENT_COVENANT_GATE_SUMMARY": str(
                 evidence / "covenant-gate" / "summary.json"
             ),
@@ -155,6 +298,41 @@ def test_rsi_improvement_evidence_gate_measures_five_percent_hardening(tmp_path)
     )
     assert blocked.returncode != 0
     assert "rsi_improvement_evidence_gate=failed" in blocked.stdout
+
+    missing_blueprint = subprocess.run(
+        ["npm", "run", "rsi:improvement-evidence-gate"],
+        cwd=REPO,
+        env={
+            **os.environ,
+            "AO2_RSI_IMPROVEMENT_EVIDENCE_GATE_ROOT": str(
+                tmp_path / "missing-blueprint"
+            ),
+            "AO2_RSI_IMPROVEMENT_LIVE_SUMMARY": str(
+                evidence / "live-self-change-rehearsal" / "summary.json"
+            ),
+            "AO2_RSI_IMPROVEMENT_READBACK_SUMMARY": str(
+                evidence / "control-plane-readback" / "summary.json"
+            ),
+            "AO2_RSI_IMPROVEMENT_READBACK_INDEX_SUMMARY": str(
+                evidence / "readback-index" / "summary.json"
+            ),
+            "AO2_RSI_IMPROVEMENT_CLAIM_READINESS_SUMMARY": str(
+                evidence / "claim-readiness" / "summary.json"
+            ),
+            "AO2_RSI_IMPROVEMENT_BLUEPRINT_AUTHORIZATION_SUMMARY": str(
+                evidence / "missing-blueprint" / "summary.json"
+            ),
+            "AO2_RSI_IMPROVEMENT_COVENANT_GATE_SUMMARY": str(
+                evidence / "covenant-gate" / "summary.json"
+            ),
+            "AO2_RSI_IMPROVEMENT_COVENANT_SCHEMA_EXIT_CODE": str(schema_exit),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert missing_blueprint.returncode != 0
+    assert "blocker=evidence_check_failed" in missing_blueprint.stderr
 
 
 def test_rsi_improvement_trend_persists_history_across_runs(tmp_path):
@@ -194,9 +372,9 @@ def test_rsi_improvement_trend_persists_history_across_runs(tmp_path):
             "metric": {
                 "unit": "enforced_rsi_evidence_checks",
                 "baseline_check_count": 6,
-                "observed_check_count": 7,
+                "observed_check_count": 8,
                 "target_percent": 5.0,
-                "measured_improvement_percent": 16.6667,
+                "measured_improvement_percent": 33.3333,
             },
             "trust_boundary": {
                 "publishes_claims": False,
@@ -226,7 +404,7 @@ def test_rsi_improvement_trend_persists_history_across_runs(tmp_path):
     assert first_summary["trend_ready"] is True
     assert first_summary["run_count"] == 1
     assert first_summary["previous_measured_improvement_percent"] is None
-    assert first_summary["current_measured_improvement_percent"] == 16.6667
+    assert first_summary["current_measured_improvement_percent"] == 33.3333
     assert first_summary["delta_from_previous_percent"] is None
     assert first_summary["claim_publish_decision"] == "deny"
     assert first_summary["claim_publish_authority"] is False
@@ -235,8 +413,8 @@ def test_rsi_improvement_trend_persists_history_across_runs(tmp_path):
     assert history.read_text(encoding="utf-8").count("\n") == 1
 
     current_payload = json.loads(current.read_text(encoding="utf-8"))
-    current_payload["metric"]["observed_check_count"] = 8
-    current_payload["metric"]["measured_improvement_percent"] = 33.3333
+    current_payload["metric"]["observed_check_count"] = 9
+    current_payload["metric"]["measured_improvement_percent"] = 50.0
     write_json(current, current_payload)
 
     second_out = tmp_path / "second"
@@ -256,9 +434,9 @@ def test_rsi_improvement_trend_persists_history_across_runs(tmp_path):
     assert second.returncode == 0, second.stdout + second.stderr
     second_summary = json.loads((second_out / "summary.json").read_text(encoding="utf-8"))
     assert second_summary["run_count"] == 2
-    assert second_summary["previous_measured_improvement_percent"] == 16.6667
-    assert second_summary["current_measured_improvement_percent"] == 33.3333
-    assert second_summary["delta_from_previous_percent"] == 16.6666
+    assert second_summary["previous_measured_improvement_percent"] == 33.3333
+    assert second_summary["current_measured_improvement_percent"] == 50.0
+    assert second_summary["delta_from_previous_percent"] == 16.6667
     assert history.read_text(encoding="utf-8").count("\n") == 2
 
 
@@ -275,6 +453,8 @@ def test_rsi_cross_repo_e2e_contract():
         "target/rsi-cross-repo-e2e/latest/summary.json",
         "ao2.rsi-improvement-evidence-gate.v1",
         "ao2.rsi-improvement-trend.v1",
+        "ao2.rsi-blueprint-authorization-gate.v1",
+        "AO2_RSI_BLUEPRINT_AUTHORIZATION_SUMMARY",
         "measured_improvement_percent",
         "covenant.rsi-claim-publish-gate.v1",
         "publish_authority=false",
@@ -297,12 +477,16 @@ def test_rsi_cross_repo_e2e_contract():
         "verify_ao2_rsi_live_self_change_rehearsal.py",
         "rsi:live-self-change-readback-index",
         "rsi:claim-readiness",
+        "rsi:blueprint-authorization-gate",
         "rsi:improvement-evidence-gate",
         "rsi:improvement-trend",
         "improvement_evidence_gate",
         "improvement_trend",
         "ao2.rsi-improvement-evidence-gate.v1",
         "ao2.rsi-improvement-trend.v1",
+        "ao2.rsi-blueprint-authorization-gate.v1",
+        "blueprint_authorization",
+        "self_authorized_by_rsi",
         "measured_improvement_percent",
         "delta_from_previous_percent",
         "policy claim-publish-gate",
@@ -333,6 +517,7 @@ def test_rsi_cross_repo_e2e_ci_artifact_job_contract():
         "ao2.rsi-cross-repo-e2e.v1",
         "ao2.rsi-improvement-evidence-gate.v1",
         "ao2.rsi-improvement-trend.v1",
+        "ao2.rsi-blueprint-authorization-gate.v1",
         '"measured_improvement_percent"] >= 5.0',
         '"trend_ready"] is True',
         "covenant.rsi-claim-publish-gate.v1",
@@ -351,6 +536,7 @@ def test_rsi_cross_repo_e2e_ci_artifact_job_contract():
         "ao2-rsi-cross-repo-e2e",
         "ao2.rsi-improvement-evidence-gate.v1",
         "ao2.rsi-improvement-trend.v1",
+        "ao2.rsi-blueprint-authorization-gate.v1",
         "measured_improvement_percent",
         "claim_publish_decision=deny",
         "publish_authority=false",

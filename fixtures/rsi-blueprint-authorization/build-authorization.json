@@ -1,0 +1,32 @@
+{
+  "authorization_scope": {
+    "candidate_id": "ao2-rsi-evidence-hardening",
+    "domain": "rsi",
+    "gate_model": "tiered",
+    "requires_new_blueprint_for": [
+      "new_product_direction",
+      "new_architecture",
+      "new_repo_or_component",
+      "new_public_claim",
+      "new_policy_or_authority_surface",
+      "ao_blueprint_self_change",
+      "production_readiness_definition_change",
+      "safety_privacy_secrets_release_or_promotion_change"
+    ]
+  },
+  "authority_boundary": {
+    "authorizes_ao_blueprint_self_change": false,
+    "authorizes_claim_publication": false,
+    "authorizes_implementation": true,
+    "downstream_of_operator_intent": true,
+    "self_authorized_by_rsi": false,
+    "source": "ao-blueprint"
+  },
+  "approved_by_user": true,
+  "blocking_assumptions": [],
+  "next_allowed_action": "ao-foundry",
+  "project_id": "ao2-rsi-tiered-gate",
+  "schema": "ao.blueprint.build-authorization.v0.1",
+  "score": 100,
+  "status": "ready"
+}

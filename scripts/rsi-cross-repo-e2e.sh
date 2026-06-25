@@ -87,6 +87,11 @@ run_step claim_readiness \
     AO2_RSI_CLAIM_READINESS_ROOT="$OUT_ROOT/claim-readiness" \
     npm run rsi:claim-readiness
 
+run_step blueprint_authorization \
+  env AO2_RSI_BLUEPRINT_AUTHORIZATION_GATE_ROOT="$OUT_ROOT/blueprint-authorization" \
+    AO2_RSI_BLUEPRINT_AUTHORIZATION_SUMMARY="${AO2_RSI_BLUEPRINT_AUTHORIZATION_SUMMARY:-$ROOT/fixtures/rsi-blueprint-authorization/build-authorization.json}" \
+    npm run rsi:blueprint-authorization-gate
+
 covenant_step_to_file covenant_claim_publish_gate "$OUT_ROOT/covenant-gate/summary.json" \
   policy claim-publish-gate --json \
   --claim-readiness "$OUT_ROOT/claim-readiness/summary.json" \
@@ -103,6 +108,7 @@ run_step improvement_evidence_gate \
     AO2_RSI_IMPROVEMENT_READBACK_SUMMARY="$OUT_ROOT/control-plane-readback/summary.json" \
     AO2_RSI_IMPROVEMENT_READBACK_INDEX_SUMMARY="$OUT_ROOT/readback-index/summary.json" \
     AO2_RSI_IMPROVEMENT_CLAIM_READINESS_SUMMARY="$OUT_ROOT/claim-readiness/summary.json" \
+    AO2_RSI_IMPROVEMENT_BLUEPRINT_AUTHORIZATION_SUMMARY="$OUT_ROOT/blueprint-authorization/summary.json" \
     AO2_RSI_IMPROVEMENT_COVENANT_GATE_SUMMARY="$OUT_ROOT/covenant-gate/summary.json" \
     AO2_RSI_IMPROVEMENT_COVENANT_SCHEMA_EXIT_CODE="$LOG_DIR/covenant_gate_schema_validate.log.exit-code" \
     npm run rsi:improvement-evidence-gate
@@ -127,6 +133,7 @@ steps = [
     "control_plane_readback",
     "readback_index",
     "claim_readiness",
+    "blueprint_authorization",
     "covenant_claim_publish_gate",
     "covenant_gate_schema_validate",
     "improvement_evidence_gate",
@@ -155,6 +162,7 @@ live = read_json(out_root / "live-self-change-rehearsal" / "summary.json")
 readback = read_json(out_root / "control-plane-readback" / "summary.json")
 index = read_json(out_root / "readback-index" / "summary.json")
 claim = read_json(out_root / "claim-readiness" / "summary.json")
+blueprint = read_json(out_root / "blueprint-authorization" / "summary.json")
 gate = read_json(out_root / "covenant-gate" / "summary.json")
 improvement = read_json(out_root / "improvement-evidence-gate" / "summary.json")
 trend = read_json(out_root / "improvement-trend" / "summary.json")
@@ -166,6 +174,13 @@ passed = (
     and readback.get("status") == "passed"
     and index.get("status") == "passed"
     and claim.get("status") == "claim_boundary_enforced"
+    and blueprint.get("schema_version") == "ao2.rsi-blueprint-authorization-gate.v1"
+    and blueprint.get("status") == "passed"
+    and blueprint.get("blueprint_authorization_ready") is True
+    and blueprint.get("authorization_scope", {}).get("gate_model") == "tiered"
+    and blueprint.get("authority_boundary", {}).get("self_authorized_by_rsi") is False
+    and blueprint.get("authority_boundary", {}).get("authorizes_claim_publication") is False
+    and blueprint.get("authority_boundary", {}).get("authorizes_ao_blueprint_self_change") is False
     and gate.get("schema_version") == "covenant.rsi-claim-publish-gate.v1"
     and gate.get("status") == "denied"
     and gate.get("decision") == "deny"
@@ -198,6 +213,7 @@ payload = {
         "control_plane_readback": str(out_root / "control-plane-readback" / "summary.json"),
         "readback_index": str(out_root / "readback-index" / "summary.json"),
         "claim_readiness": str(out_root / "claim-readiness" / "summary.json"),
+        "blueprint_authorization": str(out_root / "blueprint-authorization" / "summary.json"),
         "covenant_claim_publish_gate": str(out_root / "covenant-gate" / "summary.json"),
         "improvement_evidence_gate": str(out_root / "improvement-evidence-gate" / "summary.json"),
         "improvement_trend": str(out_root / "improvement-trend" / "summary.json"),
@@ -213,6 +229,17 @@ payload = {
         "measured_improvement_percent": improvement.get("metric", {}).get("measured_improvement_percent"),
         "claim_publish_decision": improvement.get("claim_publish_decision"),
         "claim_publish_authority": improvement.get("claim_publish_authority"),
+    },
+    "blueprint_authorization": {
+        "schema_version": blueprint.get("schema_version"),
+        "status": blueprint.get("status"),
+        "blueprint_authorization_ready": blueprint.get("blueprint_authorization_ready"),
+        "gate_model": blueprint.get("authorization_scope", {}).get("gate_model"),
+        "candidate_id": blueprint.get("authorization_scope", {}).get("candidate_id"),
+        "source": blueprint.get("authority_boundary", {}).get("source"),
+        "self_authorized_by_rsi": blueprint.get("authority_boundary", {}).get("self_authorized_by_rsi"),
+        "authorizes_claim_publication": blueprint.get("authority_boundary", {}).get("authorizes_claim_publication"),
+        "authorizes_ao_blueprint_self_change": blueprint.get("authority_boundary", {}).get("authorizes_ao_blueprint_self_change"),
     },
     "improvement_trend": {
         "schema_version": trend.get("schema_version"),
@@ -233,6 +260,9 @@ payload = {
         "control_plane_readback_status": readback.get("status"),
         "readback_index_status": index.get("status"),
         "claim_readiness_status": claim.get("status"),
+        "blueprint_authorization_status": blueprint.get("status"),
+        "blueprint_authorization_gate_model": blueprint.get("authorization_scope", {}).get("gate_model"),
+        "blueprint_self_authorized_by_rsi": blueprint.get("authority_boundary", {}).get("self_authorized_by_rsi"),
         "covenant_gate_schema_version": gate.get("schema_version"),
         "covenant_gate_status": gate.get("status"),
         "covenant_gate_blocker_count": gate.get("blocker_count", 0),
