@@ -54,6 +54,25 @@ pub struct PulseEventLoopRunSummary {
     pub decisions: Vec<PulseIterationDecision>,
 }
 
+pub struct PulseAutoAdvanceOptions<'a> {
+    pub resume_json: &'a Path,
+    pub out_dir: &'a Path,
+    pub ledger: &'a Path,
+    pub stop_file: &'a Path,
+    pub max_iterations_opt: Option<u32>,
+    pub allow_duplicate: bool,
+    pub forever: bool,
+    pub sleep_seconds: u64,
+    pub generate_next: u32,
+    pub generate_next_sleep_seconds_opt: Option<u64>,
+    pub pr_ci_gate: u32,
+    pub pr_ci_gate_state: &'a Path,
+    pub pr_ci_gate_update: u32,
+    pub local_only_while_pr_blocked: bool,
+    pub direct_main_publish: bool,
+    pub apply_root: &'a Path,
+}
+
 /// A simple robust command string parser that splits arguments by whitespace
 /// while respecting single and double quotes.
 pub fn split_command(cmd: &str) -> Vec<String> {
@@ -782,7 +801,7 @@ fn run_command_str_in_dir(
     for (k, v) in envs {
         log_content.push_str(&format!("{}={}\n", k, v));
     }
-    log_content.push_str("\n");
+    log_content.push('\n');
 
     let output = cmd.output()?;
     log_content.push_str("--- stdout ---\n");
@@ -794,24 +813,25 @@ fn run_command_str_in_dir(
     Ok(output.status.code().unwrap_or(-1))
 }
 
-pub fn run_pulse_auto_advance(
-    resume_json: &Path,
-    out_dir: &Path,
-    ledger: &Path,
-    stop_file: &Path,
-    max_iterations_opt: Option<u32>,
-    allow_duplicate: bool,
-    forever: bool,
-    sleep_seconds: u64,
-    generate_next: u32,
-    generate_next_sleep_seconds_opt: Option<u64>,
-    pr_ci_gate: u32,
-    pr_ci_gate_state: &Path,
-    pr_ci_gate_update: u32,
-    local_only_while_pr_blocked: bool,
-    direct_main_publish: bool,
-    apply_root: &Path,
-) -> Result<String> {
+pub fn run_pulse_auto_advance(options: PulseAutoAdvanceOptions<'_>) -> Result<String> {
+    let PulseAutoAdvanceOptions {
+        resume_json,
+        out_dir,
+        ledger,
+        stop_file,
+        max_iterations_opt,
+        allow_duplicate,
+        forever,
+        sleep_seconds,
+        generate_next,
+        generate_next_sleep_seconds_opt,
+        pr_ci_gate,
+        pr_ci_gate_state,
+        pr_ci_gate_update,
+        local_only_while_pr_blocked,
+        direct_main_publish,
+        apply_root,
+    } = options;
     if out_dir.exists() {
         let _ = fs::remove_dir_all(out_dir);
     }
@@ -1021,8 +1041,7 @@ pub fn run_pulse_auto_advance(
                 let timestamp = Utc::now().timestamp();
                 let log_path =
                     logs_dir.join(format!("pulse_generate_next-local-only-{}.log", timestamp));
-                let mut envs = Vec::new();
-                envs.push(("AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY", "1"));
+                let envs = [("AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY", "1")];
 
                 let exit_code = run_command_str_in_dir(
                     "npm run pulse:generate-next",
