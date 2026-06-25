@@ -242,6 +242,17 @@ require(
     "stable release evidence packet RSI improvement evidence was not ready",
     stable_release_evidence_packet,
 )
+stable_packet_trend = stable_release_evidence_packet.get("rsi_improvement_trend", {})
+require(
+    stable_packet_trend.get("schema_version") == "ao2.rsi-improvement-trend.v1"
+    and stable_packet_trend.get("status") == "passed"
+    and stable_packet_trend.get("trend_ready") is True
+    and stable_packet_trend.get("current_measured_improvement_percent", 0) >= 5
+    and stable_packet_trend.get("claim_publish_decision") == "deny"
+    and stable_packet_trend.get("claim_publish_authority") is False,
+    "stable release evidence packet RSI improvement trend was not ready",
+    stable_release_evidence_packet,
+)
 require(stable_release_evidence_packet.get("trust_boundary", {}).get("mutates_releases") is False, "stable release evidence packet mutated releases", stable_release_evidence_packet)
 require(stable_release_evidence_packet.get("trust_boundary", {}).get("stores_credentials") is False, "stable release evidence packet stored credentials", stable_release_evidence_packet)
 require((consumer_root / "ao2-stable-release-evidence-packet/packet/dashboard.html").is_file(), "missing stable release evidence packet dashboard")
@@ -332,6 +343,17 @@ consumer_summary = {
             "target_percent": stable_packet_improvement.get("target_percent"),
             "claim_publish_decision": stable_packet_improvement.get("claim_publish_decision"),
             "claim_publish_authority": stable_packet_improvement.get("claim_publish_authority"),
+        },
+        "rsi_improvement_trend": {
+            "schema_version": stable_packet_trend.get("schema_version"),
+            "status": stable_packet_trend.get("status"),
+            "trend_ready": stable_packet_trend.get("trend_ready"),
+            "run_count": stable_packet_trend.get("run_count"),
+            "current_measured_improvement_percent": stable_packet_trend.get("current_measured_improvement_percent"),
+            "delta_from_previous_percent": stable_packet_trend.get("delta_from_previous_percent"),
+            "target_percent": stable_packet_trend.get("target_percent"),
+            "claim_publish_decision": stable_packet_trend.get("claim_publish_decision"),
+            "claim_publish_authority": stable_packet_trend.get("claim_publish_authority"),
         },
     },
     "public_pair_digest_gate": public_pair_digest_gate,

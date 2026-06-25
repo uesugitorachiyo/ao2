@@ -107,6 +107,12 @@ run_step improvement_evidence_gate \
     AO2_RSI_IMPROVEMENT_COVENANT_SCHEMA_EXIT_CODE="$LOG_DIR/covenant_gate_schema_validate.log.exit-code" \
     npm run rsi:improvement-evidence-gate
 
+run_step improvement_trend \
+  env AO2_RSI_IMPROVEMENT_TREND_ROOT="$OUT_ROOT/improvement-trend" \
+    AO2_RSI_IMPROVEMENT_TREND_CURRENT_SUMMARY="$OUT_ROOT/improvement-evidence-gate/summary.json" \
+    AO2_RSI_IMPROVEMENT_TREND_HISTORY="$OUT_PARENT/rsi-improvement-trend-history.jsonl" \
+    npm run rsi:improvement-trend
+
 python3 - "$OUT_ROOT" "$SUMMARY" <<'PY'
 import json
 import sys
@@ -124,6 +130,7 @@ steps = [
     "covenant_claim_publish_gate",
     "covenant_gate_schema_validate",
     "improvement_evidence_gate",
+    "improvement_trend",
 ]
 
 def read_exit_code(name: str) -> int:
@@ -150,6 +157,7 @@ index = read_json(out_root / "readback-index" / "summary.json")
 claim = read_json(out_root / "claim-readiness" / "summary.json")
 gate = read_json(out_root / "covenant-gate" / "summary.json")
 improvement = read_json(out_root / "improvement-evidence-gate" / "summary.json")
+trend = read_json(out_root / "improvement-trend" / "summary.json")
 
 passed = (
     all(item["exit_code"] == 0 for item in checks)
@@ -168,6 +176,12 @@ passed = (
     and improvement.get("metric", {}).get("measured_improvement_percent", 0) >= 5.0
     and improvement.get("claim_publish_decision") == "deny"
     and improvement.get("claim_publish_authority") is False
+    and trend.get("schema_version") == "ao2.rsi-improvement-trend.v1"
+    and trend.get("status") == "passed"
+    and trend.get("trend_ready") is True
+    and trend.get("current_measured_improvement_percent", 0) >= 5.0
+    and trend.get("claim_publish_decision") == "deny"
+    and trend.get("claim_publish_authority") is False
 )
 
 payload = {
@@ -186,6 +200,7 @@ payload = {
         "claim_readiness": str(out_root / "claim-readiness" / "summary.json"),
         "covenant_claim_publish_gate": str(out_root / "covenant-gate" / "summary.json"),
         "improvement_evidence_gate": str(out_root / "improvement-evidence-gate" / "summary.json"),
+        "improvement_trend": str(out_root / "improvement-trend" / "summary.json"),
     },
     "improvement_evidence": {
         "schema_version": improvement.get("schema_version"),
@@ -199,6 +214,19 @@ payload = {
         "claim_publish_decision": improvement.get("claim_publish_decision"),
         "claim_publish_authority": improvement.get("claim_publish_authority"),
     },
+    "improvement_trend": {
+        "schema_version": trend.get("schema_version"),
+        "status": trend.get("status"),
+        "trend_ready": trend.get("trend_ready"),
+        "history_path": trend.get("history_path"),
+        "run_count": trend.get("run_count"),
+        "previous_measured_improvement_percent": trend.get("previous_measured_improvement_percent"),
+        "current_measured_improvement_percent": trend.get("current_measured_improvement_percent"),
+        "delta_from_previous_percent": trend.get("delta_from_previous_percent"),
+        "target_percent": trend.get("target_percent"),
+        "claim_publish_decision": trend.get("claim_publish_decision"),
+        "claim_publish_authority": trend.get("claim_publish_authority"),
+    },
     "observed_evidence": {
         "live_self_change_rehearsal_status": live.get("status"),
         "repository_restored": live.get("self_change", {}).get("repository_restored", False),
@@ -211,6 +239,10 @@ payload = {
         "improvement_gate_schema_version": improvement.get("schema_version"),
         "improvement_gate_status": improvement.get("status"),
         "measured_improvement_percent": improvement.get("metric", {}).get("measured_improvement_percent"),
+        "improvement_trend_schema_version": trend.get("schema_version"),
+        "improvement_trend_status": trend.get("status"),
+        "improvement_trend_run_count": trend.get("run_count"),
+        "improvement_trend_delta_from_previous_percent": trend.get("delta_from_previous_percent"),
     },
     "trust_boundary": {
         "local_only": True,

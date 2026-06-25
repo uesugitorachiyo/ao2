@@ -255,7 +255,9 @@ rsi_cross_repo_e2e_artifacts_ok = (
     and "npm run rsi:cross-repo-e2e" in rsi_cross_repo_e2e_artifacts
     and "ao2.rsi-cross-repo-e2e.v1" in rsi_cross_repo_e2e_artifacts
     and "ao2.rsi-improvement-evidence-gate.v1" in rsi_cross_repo_e2e_artifacts
+    and "ao2.rsi-improvement-trend.v1" in rsi_cross_repo_e2e_artifacts
     and "measured_improvement_percent" in rsi_cross_repo_e2e_artifacts
+    and "delta_from_previous_percent" in rsi_cross_repo_e2e_artifacts
     and "covenant.rsi-claim-publish-gate.v1" in rsi_cross_repo_e2e_artifacts
     and 'summary["claim_publish_decision"] == "deny"' in rsi_cross_repo_e2e_artifacts
     and 'summary["claim_publish_authority"] is False' in rsi_cross_repo_e2e_artifacts
@@ -370,7 +372,9 @@ stable_release_evidence_packet_artifacts_ok = (
     and "ao2.stable-release-evidence-packet.v1" in stable_release_evidence_packet_artifacts
     and "ao2.rsi-cross-repo-e2e.v1" in stable_release_evidence_packet_artifacts
     and "ao2.rsi-improvement-evidence-gate.v1" in stable_release_evidence_packet_artifacts
+    and "ao2.rsi-improvement-trend.v1" in stable_release_evidence_packet_artifacts
     and "measured_improvement_percent" in stable_release_evidence_packet_artifacts
+    and "delta_from_previous_percent" in stable_release_evidence_packet_artifacts
     and "claim_publish_decision" in stable_release_evidence_packet_artifacts
     and "stable_release_evidence_ready" in stable_release_evidence_packet_artifacts
     and "mutates_releases" in stable_release_evidence_packet_artifacts
@@ -796,7 +800,9 @@ release_readiness_artifact_consumer_ok = (
     and "ao2.pulse-event-loop-decision-metadata.v1" in release_readiness_artifact_consumer_script
     and "ao2.rsi-cross-repo-e2e.v1" in release_readiness_artifact_consumer_script
     and "ao2.rsi-improvement-evidence-gate.v1" in release_readiness_artifact_consumer_script
+    and "ao2.rsi-improvement-trend.v1" in release_readiness_artifact_consumer_script
     and "measured_improvement_percent" in release_readiness_artifact_consumer_script
+    and "delta_from_previous_percent" in release_readiness_artifact_consumer_script
     and "covenant.rsi-claim-publish-gate.v1" in release_readiness_artifact_consumer_script
     and "ao2.dual-repo-installed-release-smoke.v1" in release_readiness_artifact_consumer_script
     and "ao2.release-publication-dry-run-closure.v1" in release_readiness_artifact_consumer_script
@@ -1238,6 +1244,7 @@ artifact_closure_index = {
                 "latest/claim-readiness/summary.json",
                 "latest/covenant-gate/summary.json",
                 "latest/improvement-evidence-gate/summary.json",
+                "latest/improvement-trend/summary.json",
             ],
             "schema_versions": [
                 "ao2.rsi-cross-repo-e2e.v1",
@@ -1247,6 +1254,7 @@ artifact_closure_index = {
                 "ao2.rsi-claim-readiness-audit.v1",
                 "covenant.rsi-claim-publish-gate.v1",
                 "ao2.rsi-improvement-evidence-gate.v1",
+                "ao2.rsi-improvement-trend.v1",
             ],
             "required_checks": ["ci_rsi_cross_repo_e2e_artifact_job"],
         },
@@ -1320,6 +1328,7 @@ artifact_closure_index = {
                 "operator-release-evidence-bundle/summary.json",
                 "rsi-cross-repo-e2e/latest/summary.json",
                 "rsi-cross-repo-e2e/latest/improvement-evidence-gate/summary.json",
+                "rsi-cross-repo-e2e/latest/improvement-trend/summary.json",
             ],
             "schema_versions": [
                 "ao2.stable-release-evidence-packet.v1",
@@ -1327,6 +1336,7 @@ artifact_closure_index = {
                 "ao2.operator-release-evidence-bundle.v1",
                 "ao2.rsi-cross-repo-e2e.v1",
                 "ao2.rsi-improvement-evidence-gate.v1",
+                "ao2.rsi-improvement-trend.v1",
             ],
             "required_checks": ["ci_stable_release_evidence_packet_artifact_job"],
             "source_artifacts": [

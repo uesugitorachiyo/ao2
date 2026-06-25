@@ -853,6 +853,7 @@ Result:
   gate; emits `ao2.rsi-cross-repo-e2e.v1` at
   `target/rsi-cross-repo-e2e/latest/summary.json`. Current expected evidence is
   `ao2.rsi-improvement-evidence-gate.v1`, `measured_improvement_percent >= 5`,
+  `ao2.rsi-improvement-trend.v1`, `delta_from_previous_percent`,
   `claim_publish_decision=deny`, and `publish_authority=false` for the full
   autonomous self-mutating RSI claim. CI uploads the evidence directory as
   `ao2-rsi-cross-repo-e2e`.
@@ -864,6 +865,14 @@ Result:
   evidence checks with seven enforced checks after this gate is added; it is a
   workflow-hardening coverage metric, not proof that the full RSI claim is
   publishable.
+- `npm run rsi:improvement-trend`: persists the local RSI improvement metric
+  to `target/rsi-improvement-trend/history.jsonl` and emits
+  `ao2.rsi-improvement-trend.v1` at
+  `target/rsi-improvement-trend/latest/summary.json`. The summary records
+  `current_measured_improvement_percent`, the previous measurement when
+  present, `delta_from_previous_percent`, and the same
+  `claim_publish_decision=deny` / `claim_publish_authority=false` boundary.
+  It writes local history only; it does not publish or approve RSI claims.
 - `npm run release:install-update-fixture`: builds a local signed fixture
   archive with `SHA256SUMS`, `provenance.json`, and a signature sidecar,
   verifies checksum/install/update behavior, references `release:download-verify`
@@ -956,7 +965,9 @@ Result:
   `ao2.rsi-cross-repo-e2e.v1` summary into one read-only operator packet at
   `target/stable-release-evidence-packet/latest`. It also preserves the nested
   `ao2.rsi-improvement-evidence-gate.v1` result and requires
-  `measured_improvement_percent >= 5` before the packet can be ready. It emits
+  `measured_improvement_percent >= 5` before the packet can be ready. It also
+  carries `ao2.rsi-improvement-trend.v1` with
+  `delta_from_previous_percent`. It emits
   `ao2.stable-release-evidence-packet.v1`, `summary.json`, and
   `dashboard.html`, and fails closed unless the stable promotion evidence gate
   reports `post_release_evidence_ready=true` with

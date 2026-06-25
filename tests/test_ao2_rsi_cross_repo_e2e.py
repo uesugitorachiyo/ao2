@@ -157,6 +157,111 @@ def test_rsi_improvement_evidence_gate_measures_five_percent_hardening(tmp_path)
     assert "rsi_improvement_evidence_gate=failed" in blocked.stdout
 
 
+def test_rsi_improvement_trend_persists_history_across_runs(tmp_path):
+    package = json.loads(read("package.json"))
+    assert package["scripts"]["rsi:improvement-trend"] == (
+        "node scripts/run-sh-script.js scripts/rsi-improvement-trend.sh"
+    )
+
+    script = REPO / "scripts" / "rsi-improvement-trend.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.rsi-improvement-trend.v1",
+        "AO2_RSI_IMPROVEMENT_TREND_HISTORY",
+        "AO2_RSI_IMPROVEMENT_TREND_CURRENT_SUMMARY",
+        "delta_from_previous_percent",
+        "claim_publish_decision",
+        "claim_publish_authority",
+        "publishes_claims",
+        "approves_rsi_claims",
+    ]:
+        assert needle in text
+
+    current = tmp_path / "current" / "summary.json"
+    history = tmp_path / "history" / "trend.jsonl"
+
+    write_json(
+        current,
+        {
+            "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
+            "status": "passed",
+            "improvement_ready": True,
+            "claim_level": "full_autonomous_self_mutating_rsi",
+            "claim_publish_decision": "deny",
+            "claim_publish_authority": False,
+            "metric": {
+                "unit": "enforced_rsi_evidence_checks",
+                "baseline_check_count": 6,
+                "observed_check_count": 7,
+                "target_percent": 5.0,
+                "measured_improvement_percent": 16.6667,
+            },
+            "trust_boundary": {
+                "publishes_claims": False,
+                "approves_rsi_claims": False,
+            },
+        },
+    )
+
+    first_out = tmp_path / "first"
+    first = subprocess.run(
+        ["npm", "run", "rsi:improvement-trend"],
+        cwd=REPO,
+        env={
+            **os.environ,
+            "AO2_RSI_IMPROVEMENT_TREND_ROOT": str(first_out),
+            "AO2_RSI_IMPROVEMENT_TREND_CURRENT_SUMMARY": str(current),
+            "AO2_RSI_IMPROVEMENT_TREND_HISTORY": str(history),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert first.returncode == 0, first.stdout + first.stderr
+    first_summary = json.loads((first_out / "summary.json").read_text(encoding="utf-8"))
+    assert first_summary["schema_version"] == "ao2.rsi-improvement-trend.v1"
+    assert first_summary["status"] == "passed"
+    assert first_summary["trend_ready"] is True
+    assert first_summary["run_count"] == 1
+    assert first_summary["previous_measured_improvement_percent"] is None
+    assert first_summary["current_measured_improvement_percent"] == 16.6667
+    assert first_summary["delta_from_previous_percent"] is None
+    assert first_summary["claim_publish_decision"] == "deny"
+    assert first_summary["claim_publish_authority"] is False
+    assert first_summary["trust_boundary"]["publishes_claims"] is False
+    assert first_summary["trust_boundary"]["approves_rsi_claims"] is False
+    assert history.read_text(encoding="utf-8").count("\n") == 1
+
+    current_payload = json.loads(current.read_text(encoding="utf-8"))
+    current_payload["metric"]["observed_check_count"] = 8
+    current_payload["metric"]["measured_improvement_percent"] = 33.3333
+    write_json(current, current_payload)
+
+    second_out = tmp_path / "second"
+    second = subprocess.run(
+        ["npm", "run", "rsi:improvement-trend"],
+        cwd=REPO,
+        env={
+            **os.environ,
+            "AO2_RSI_IMPROVEMENT_TREND_ROOT": str(second_out),
+            "AO2_RSI_IMPROVEMENT_TREND_CURRENT_SUMMARY": str(current),
+            "AO2_RSI_IMPROVEMENT_TREND_HISTORY": str(history),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert second.returncode == 0, second.stdout + second.stderr
+    second_summary = json.loads((second_out / "summary.json").read_text(encoding="utf-8"))
+    assert second_summary["run_count"] == 2
+    assert second_summary["previous_measured_improvement_percent"] == 16.6667
+    assert second_summary["current_measured_improvement_percent"] == 33.3333
+    assert second_summary["delta_from_previous_percent"] == 16.6666
+    assert history.read_text(encoding="utf-8").count("\n") == 2
+
+
 def test_rsi_cross_repo_e2e_contract():
     package = json.loads(read("package.json"))
     assert package["scripts"]["rsi:cross-repo-e2e"] == (
@@ -169,6 +274,7 @@ def test_rsi_cross_repo_e2e_contract():
         "ao2.rsi-cross-repo-e2e.v1",
         "target/rsi-cross-repo-e2e/latest/summary.json",
         "ao2.rsi-improvement-evidence-gate.v1",
+        "ao2.rsi-improvement-trend.v1",
         "measured_improvement_percent",
         "covenant.rsi-claim-publish-gate.v1",
         "publish_authority=false",
@@ -192,9 +298,13 @@ def test_rsi_cross_repo_e2e_contract():
         "rsi:live-self-change-readback-index",
         "rsi:claim-readiness",
         "rsi:improvement-evidence-gate",
+        "rsi:improvement-trend",
         "improvement_evidence_gate",
+        "improvement_trend",
         "ao2.rsi-improvement-evidence-gate.v1",
+        "ao2.rsi-improvement-trend.v1",
         "measured_improvement_percent",
+        "delta_from_previous_percent",
         "policy claim-publish-gate",
         "covenant.rsi-claim-publish-gate.v1",
         "publishes_claims",
@@ -222,7 +332,9 @@ def test_rsi_cross_repo_e2e_ci_artifact_job_contract():
         "npm run rsi:cross-repo-e2e",
         "ao2.rsi-cross-repo-e2e.v1",
         "ao2.rsi-improvement-evidence-gate.v1",
+        "ao2.rsi-improvement-trend.v1",
         '"measured_improvement_percent"] >= 5.0',
+        '"trend_ready"] is True',
         "covenant.rsi-claim-publish-gate.v1",
         '"claim_publish_decision"] == "deny"',
         '"claim_publish_authority"] is False',
@@ -238,6 +350,7 @@ def test_rsi_cross_repo_e2e_ci_artifact_job_contract():
         "target/rsi-cross-repo-e2e/latest/summary.json",
         "ao2-rsi-cross-repo-e2e",
         "ao2.rsi-improvement-evidence-gate.v1",
+        "ao2.rsi-improvement-trend.v1",
         "measured_improvement_percent",
         "claim_publish_decision=deny",
         "publish_authority=false",

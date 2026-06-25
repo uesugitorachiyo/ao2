@@ -169,7 +169,9 @@ summaries. The command composes `ao2.stable-promotion-workflow.v1`,
 `target/stable-release-evidence-packet/latest/summary.json` and
 `dashboard.html`, using schema `ao2.stable-release-evidence-packet.v1`. The
 packet also carries the nested `ao2.rsi-improvement-evidence-gate.v1` summary
-from RSI E2E and requires `measured_improvement_percent >= 5`.
+from RSI E2E and requires `measured_improvement_percent >= 5`. It also carries
+`ao2.rsi-improvement-trend.v1` so operators can inspect
+`delta_from_previous_percent` across persisted local trend records.
 
 The packet is ready only when the stable promotion evidence gate reports
 `post_release_evidence_ready=true` with `evidence_gate_status=passed` and the
@@ -178,7 +180,8 @@ the RSI E2E summary to preserve `claim_publish_decision=deny`,
 `claim_publish_authority=false`, and the nested
 `covenant.rsi-claim-publish-gate.v1` denial evidence. The improvement metric is
 release evidence for workflow hardening only, not proof that full autonomous RSI
-is publishable. It is a read-only
+is publishable. The trend record also preserves that deny/false boundary. It is
+a read-only
 operator surface: it reads local evidence summaries, records
 `mutates_releases=false` and `stores_credentials=false`, and does not approve or
 publish releases or RSI claims. Use
