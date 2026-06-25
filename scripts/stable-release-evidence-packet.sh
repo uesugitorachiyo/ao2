@@ -69,6 +69,7 @@ STABLE_SCHEMA = "ao2.stable-promotion-workflow.v1"
 OPERATOR_SCHEMA = "ao2.operator-release-evidence-bundle.v1"
 RSI_SCHEMA = "ao2.rsi-cross-repo-e2e.v1"
 RSI_IMPROVEMENT_SCHEMA = "ao2.rsi-improvement-evidence-gate.v1"
+RSI_IMPROVEMENT_TREND_SCHEMA = "ao2.rsi-improvement-trend.v1"
 RSI_COVENANT_GATE_SCHEMA = "covenant.rsi-claim-publish-gate.v1"
 PACKET_SCHEMA = "ao2.stable-release-evidence-packet.v1"
 
@@ -190,6 +191,24 @@ rsi_improvement_ready = (
     and rsi_improvement.get("claim_publish_decision") == "deny"
     and rsi_improvement.get("claim_publish_authority") is False
 )
+rsi_improvement_trend = (
+    rsi.get("improvement_trend")
+    if isinstance(rsi.get("improvement_trend"), dict)
+    else {}
+)
+rsi_improvement_trend_ready = (
+    rsi_schema_ok
+    and rsi_improvement_trend.get("schema_version") == RSI_IMPROVEMENT_TREND_SCHEMA
+    and rsi_improvement_trend.get("status") == "passed"
+    and rsi_improvement_trend.get("trend_ready") is True
+    and isinstance(rsi_improvement_trend.get("current_measured_improvement_percent"), (int, float))
+    and isinstance(rsi_improvement_trend.get("target_percent"), (int, float))
+    and rsi_improvement_trend.get("current_measured_improvement_percent")
+    >= rsi_improvement_trend.get("target_percent")
+    and rsi_improvement_trend.get("target_percent") >= 5
+    and rsi_improvement_trend.get("claim_publish_decision") == "deny"
+    and rsi_improvement_trend.get("claim_publish_authority") is False
+)
 
 if stable and not stable_schema_ok:
     blockers.append(
@@ -276,6 +295,20 @@ if rsi and not rsi_improvement_ready:
             "claim_publish_authority": rsi_improvement.get("claim_publish_authority"),
         }
     )
+if rsi and not rsi_improvement_trend_ready:
+    blockers.append(
+        {
+            "code": "rsi_improvement_trend_not_ready",
+            "severity": "blocking",
+            "schema_version": rsi_improvement_trend.get("schema_version"),
+            "status": rsi_improvement_trend.get("status"),
+            "trend_ready": rsi_improvement_trend.get("trend_ready"),
+            "target_percent": rsi_improvement_trend.get("target_percent"),
+            "current_measured_improvement_percent": rsi_improvement_trend.get("current_measured_improvement_percent"),
+            "claim_publish_decision": rsi_improvement_trend.get("claim_publish_decision"),
+            "claim_publish_authority": rsi_improvement_trend.get("claim_publish_authority"),
+        }
+    )
 
 source_trust = [
     stable.get("trust_boundary", {}) if isinstance(stable.get("trust_boundary"), dict) else {},
@@ -287,6 +320,7 @@ stable_release_evidence_ready = (
     and operator_ready
     and rsi_claim_publish_denied
     and rsi_improvement_ready
+    and rsi_improvement_trend_ready
     and not blockers
 )
 payload = {
@@ -345,6 +379,19 @@ payload = {
         "measured_improvement_percent": rsi_improvement.get("measured_improvement_percent"),
         "claim_publish_decision": rsi_improvement.get("claim_publish_decision"),
         "claim_publish_authority": rsi_improvement.get("claim_publish_authority"),
+    },
+    "rsi_improvement_trend": {
+        "schema_version": rsi_improvement_trend.get("schema_version"),
+        "status": rsi_improvement_trend.get("status"),
+        "trend_ready": rsi_improvement_trend.get("trend_ready"),
+        "history_path": rsi_improvement_trend.get("history_path"),
+        "run_count": rsi_improvement_trend.get("run_count"),
+        "previous_measured_improvement_percent": rsi_improvement_trend.get("previous_measured_improvement_percent"),
+        "current_measured_improvement_percent": rsi_improvement_trend.get("current_measured_improvement_percent"),
+        "delta_from_previous_percent": rsi_improvement_trend.get("delta_from_previous_percent"),
+        "target_percent": rsi_improvement_trend.get("target_percent"),
+        "claim_publish_decision": rsi_improvement_trend.get("claim_publish_decision"),
+        "claim_publish_authority": rsi_improvement_trend.get("claim_publish_authority"),
     },
     "blockers": blockers,
     "trust_boundary": {
@@ -413,6 +460,7 @@ dashboard_path.write_text(
   <p>Archive parity: {html.escape(str(payload["public_pair_digest_audit"]["archive_parity_status"]))}</p>
   <p>RSI claim-publish boundary: {html.escape(str(payload["rsi_cross_repo_e2e"]["claim_publish_decision"]))}</p>
   <p>RSI improvement evidence: {html.escape(str(payload["rsi_improvement_evidence"]["measured_improvement_percent"]))}% / target {html.escape(str(payload["rsi_improvement_evidence"]["target_percent"]))}%</p>
+  <p>RSI improvement trend: current {html.escape(str(payload["rsi_improvement_trend"]["current_measured_improvement_percent"]))}% / delta {html.escape(str(payload["rsi_improvement_trend"]["delta_from_previous_percent"]))}%</p>
   <h2>Source Summaries</h2>
   <table>
     <tr><th>Source</th><th>Path</th><th>Status</th></tr>
@@ -441,6 +489,19 @@ dashboard_path.write_text(
       <td>{html.escape(str(payload["rsi_improvement_evidence"]["baseline_check_count"]))}</td>
       <td>{html.escape(str(payload["rsi_improvement_evidence"]["measured_improvement_percent"]))}%</td>
       <td>{html.escape(str(payload["rsi_improvement_evidence"]["target_percent"]))}%</td>
+    </tr>
+  </table>
+  <h2>RSI Improvement Trend</h2>
+  <table>
+    <tr><th>Schema</th><th>Status</th><th>Runs</th><th>Previous</th><th>Current</th><th>Delta</th><th>Target</th></tr>
+    <tr>
+      <td><code>{html.escape(str(payload["rsi_improvement_trend"]["schema_version"]))}</code></td>
+      <td>{html.escape(str(payload["rsi_improvement_trend"]["status"]))}</td>
+      <td>{html.escape(str(payload["rsi_improvement_trend"]["run_count"]))}</td>
+      <td>{html.escape(str(payload["rsi_improvement_trend"]["previous_measured_improvement_percent"]))}%</td>
+      <td>{html.escape(str(payload["rsi_improvement_trend"]["current_measured_improvement_percent"]))}%</td>
+      <td>{html.escape(str(payload["rsi_improvement_trend"]["delta_from_previous_percent"]))}%</td>
+      <td>{html.escape(str(payload["rsi_improvement_trend"]["target_percent"]))}%</td>
     </tr>
   </table>
   <h2>Operator Checks</h2>

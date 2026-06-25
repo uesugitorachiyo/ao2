@@ -800,6 +800,13 @@ jobs:
           assert summary["rsi_improvement_evidence"]["measured_improvement_percent"] >= 5, summary
           assert summary["rsi_improvement_evidence"]["claim_publish_decision"] == "deny", summary
           assert summary["rsi_improvement_evidence"]["claim_publish_authority"] is False, summary
+          assert summary["rsi_improvement_trend"]["schema_version"] == "ao2.rsi-improvement-trend.v1", summary
+          assert summary["rsi_improvement_trend"]["status"] == "passed", summary
+          assert summary["rsi_improvement_trend"]["trend_ready"] is True, summary
+          assert summary["rsi_improvement_trend"]["current_measured_improvement_percent"] >= 5, summary
+          assert "delta_from_previous_percent" in summary["rsi_improvement_trend"], summary
+          assert summary["rsi_improvement_trend"]["claim_publish_decision"] == "deny", summary
+          assert summary["rsi_improvement_trend"]["claim_publish_authority"] is False, summary
           assert summary["trust_boundary"]["mutates_releases"] is False, summary
           assert summary["trust_boundary"]["stores_credentials"] is False, summary
           assert (root / "stable-promotion-workflow" / "summary.json").is_file()
@@ -1371,11 +1378,17 @@ jobs:
           summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
           gate = json.loads((root / "covenant-gate" / "summary.json").read_text(encoding="utf-8"))
           improvement = json.loads((root / "improvement-evidence-gate" / "summary.json").read_text(encoding="utf-8"))
+          trend = json.loads((root / "improvement-trend" / "summary.json").read_text(encoding="utf-8"))
           assert summary["schema_version"] == "ao2.rsi-cross-repo-e2e.v1", summary
           assert summary["status"] == "passed", summary
           assert improvement["schema_version"] == "ao2.rsi-improvement-evidence-gate.v1", improvement
           assert improvement["metric"]["measured_improvement_percent"] >= 5.0, improvement
           assert summary["improvement_evidence"]["measured_improvement_percent"] >= 5.0, summary
+          assert trend["schema_version"] == "ao2.rsi-improvement-trend.v1", trend
+          assert trend["trend_ready"] is True, trend
+          assert trend["current_measured_improvement_percent"] >= 5.0, trend
+          assert "delta_from_previous_percent" in trend, trend
+          assert summary["improvement_trend"]["trend_ready"] is True, summary
           assert summary["claim_publish_decision"] == "deny", summary
           assert summary["claim_publish_authority"] is False, summary
           assert gate["schema_version"] == "covenant.rsi-claim-publish-gate.v1", gate
@@ -1391,6 +1404,7 @@ jobs:
           test -f target/rsi-cross-repo-e2e-ci/latest/claim-readiness/summary.json
           test -f target/rsi-cross-repo-e2e-ci/latest/covenant-gate/summary.json
           test -f target/rsi-cross-repo-e2e-ci/latest/improvement-evidence-gate/summary.json
+          test -f target/rsi-cross-repo-e2e-ci/latest/improvement-trend/summary.json
       - name: Upload RSI cross-repo E2E evidence
         uses: actions/upload-artifact@v7.0.1
         with:

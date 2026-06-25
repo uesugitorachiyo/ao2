@@ -139,6 +139,19 @@ previous six-check RSI evidence baseline with seven enforced checks after this
 gate is added. This is evidence of stronger verification coverage, not proof
 that the full RSI claim is publishable.
 
+Persist the local improvement trend with:
+
+```sh
+npm run rsi:improvement-trend
+```
+
+The trend command reads the latest improvement gate summary, appends a local
+JSONL record to `target/rsi-improvement-trend/history.jsonl`, and emits
+`ao2.rsi-improvement-trend.v1` under
+`target/rsi-improvement-trend/latest/summary.json`. It records the current
+`measured_improvement_percent`, the previous measurement when present, and
+`delta_from_previous_percent`. It does not publish or approve RSI claims.
+
 Run the full local cross-repo RSI evidence chain with sibling
 `ao2-control-plane` and `ao-covenant` checkouts:
 
@@ -153,7 +166,9 @@ self-change rehearsal, ao2-control-plane readback,
 `policy claim-publish-gate`, then runs the improvement evidence gate. The
 expected final Covenant gate remains `publish_authority=false` with schema
 `covenant.rsi-claim-publish-gate.v1`; the E2E summary also carries
-`ao2.rsi-improvement-evidence-gate.v1` and `measured_improvement_percent`.
+`ao2.rsi-improvement-evidence-gate.v1`,
+`ao2.rsi-improvement-trend.v1`, `measured_improvement_percent`, and
+`delta_from_previous_percent`.
 The smoke proves the denial chain and 5% workflow-hardening measurement are
 wired end to end, not that the full RSI claim is publishable.
 
