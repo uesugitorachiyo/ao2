@@ -247,6 +247,24 @@ add(
     "runs Pulse through AO2's native event-loop decision-file handoff and uploads non-provider smoke evidence",
 )
 
+rsi_cross_repo_e2e_artifacts = workflow_job_block("rsi-cross-repo-e2e-artifacts")
+rsi_cross_repo_e2e_artifacts_ok = (
+    rsi_cross_repo_e2e_artifacts is not None
+    and "ao2-rsi-cross-repo-e2e" in rsi_cross_repo_e2e_artifacts
+    and "target/rsi-cross-repo-e2e-ci" in rsi_cross_repo_e2e_artifacts
+    and "npm run rsi:cross-repo-e2e" in rsi_cross_repo_e2e_artifacts
+    and "ao2.rsi-cross-repo-e2e.v1" in rsi_cross_repo_e2e_artifacts
+    and "covenant.rsi-claim-publish-gate.v1" in rsi_cross_repo_e2e_artifacts
+    and 'summary["claim_publish_decision"] == "deny"' in rsi_cross_repo_e2e_artifacts
+    and 'summary["claim_publish_authority"] is False' in rsi_cross_repo_e2e_artifacts
+    and 'summary["trust_boundary"]["publishes_claims"] is False' in rsi_cross_repo_e2e_artifacts
+)
+add(
+    "ci_rsi_cross_repo_e2e_artifact_job",
+    "passed" if rsi_cross_repo_e2e_artifacts_ok else "failed",
+    "runs AO2/control-plane/Covenant RSI E2E and uploads denied claim-publish evidence",
+)
+
 dual_repo_installed_smoke_artifacts = workflow_job_block("dual-repo-installed-release-smoke-artifacts")
 dual_repo_installed_smoke_artifacts_ok = (
     dual_repo_installed_smoke_artifacts is not None
@@ -731,7 +749,7 @@ release_readiness_artifact_consumer = workflow_job_block("release-readiness-arti
 release_readiness_artifact_consumer_script = read("scripts/release-readiness-artifact-consumer.sh")
 release_readiness_artifact_consumer_ok = (
     release_readiness_artifact_consumer is not None
-    and "needs: [release-readiness-artifacts, release-readiness-hosted-artifact-gate, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-ao2-event-loop-smoke-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index, stable-release-evidence-packet-artifacts]" in release_readiness_artifact_consumer
+    and "needs: [release-readiness-artifacts, release-readiness-hosted-artifact-gate, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-ao2-event-loop-smoke-artifacts, rsi-cross-repo-e2e-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index, stable-release-evidence-packet-artifacts]" in release_readiness_artifact_consumer
     and "actions/download-artifact@v8.0.1" in release_readiness_artifact_consumer
     and "npm run release:readiness:artifact-consumer" in release_readiness_artifact_consumer
     and scripts.get("release:readiness:artifact-consumer") == "node scripts/run-sh-script.js scripts/release-readiness-artifact-consumer.sh"
@@ -747,6 +765,8 @@ release_readiness_artifact_consumer_ok = (
     and "target/release-readiness-consumer/ao2-pulse-task-board-closure-packet" in release_readiness_artifact_consumer
     and "name: ao2-pulse-ao2-event-loop-smoke" in release_readiness_artifact_consumer
     and "target/release-readiness-consumer/ao2-pulse-ao2-event-loop-smoke" in release_readiness_artifact_consumer
+    and "name: ao2-rsi-cross-repo-e2e" in release_readiness_artifact_consumer
+    and "target/release-readiness-consumer/ao2-rsi-cross-repo-e2e" in release_readiness_artifact_consumer
     and "name: ao2-dual-repo-installed-release-smoke" in release_readiness_artifact_consumer
     and "target/release-readiness-consumer/ao2-dual-repo-installed-release-smoke" in release_readiness_artifact_consumer
     and "name: ao2-release-publication-closure" in release_readiness_artifact_consumer
@@ -764,6 +784,8 @@ release_readiness_artifact_consumer_ok = (
     and "ao2.pulse-event-loop-smoke.v1" in release_readiness_artifact_consumer_script
     and "ao2.pulse-event-loop-decision.v1" in release_readiness_artifact_consumer_script
     and "ao2.pulse-event-loop-decision-metadata.v1" in release_readiness_artifact_consumer_script
+    and "ao2.rsi-cross-repo-e2e.v1" in release_readiness_artifact_consumer_script
+    and "covenant.rsi-claim-publish-gate.v1" in release_readiness_artifact_consumer_script
     and "ao2.dual-repo-installed-release-smoke.v1" in release_readiness_artifact_consumer_script
     and "ao2.release-publication-dry-run-closure.v1" in release_readiness_artifact_consumer_script
     and "ao2.dual-repo-release-publication-closure-index.v1" in release_readiness_artifact_consumer_script
@@ -786,6 +808,7 @@ release_readiness_artifact_consumer_ok = (
     and "ci_ai_task_board_control_plane_bridge_artifact_job" in release_readiness_artifact_consumer_script
     and "ci_pulse_task_board_closure_packet_artifact_job" in release_readiness_artifact_consumer_script
     and "ci_pulse_ao2_event_loop_smoke_artifact_job" in release_readiness_artifact_consumer_script
+    and "ci_rsi_cross_repo_e2e_artifact_job" in release_readiness_artifact_consumer_script
     and "ci_dual_repo_installed_release_smoke_artifact_job" in release_readiness_artifact_consumer_script
     and "ci_release_publication_closure_artifact_job" in release_readiness_artifact_consumer_script
     and "ci_dual_repo_release_publication_closure_index_job" in release_readiness_artifact_consumer_script
@@ -1192,6 +1215,28 @@ artifact_closure_index = {
             "required_checks": ["ci_pulse_ao2_event_loop_smoke_artifact_job"],
         },
         {
+            "id": "rsi_cross_repo_e2e",
+            "artifact_name": "ao2-rsi-cross-repo-e2e",
+            "producer_job": "rsi-cross-repo-e2e-artifacts",
+            "required_files": [
+                "latest/summary.json",
+                "latest/live-self-change-rehearsal/summary.json",
+                "latest/control-plane-readback/summary.json",
+                "latest/readback-index/summary.json",
+                "latest/claim-readiness/summary.json",
+                "latest/covenant-gate/summary.json",
+            ],
+            "schema_versions": [
+                "ao2.rsi-cross-repo-e2e.v1",
+                "ao2.rsi-live-self-change-rehearsal.v1",
+                "ao2.cp-ao2-rsi-live-self-change-rehearsal-readback.v1",
+                "ao2.rsi-live-self-change-readback-evidence-index.v1",
+                "ao2.rsi-claim-readiness-audit.v1",
+                "covenant.rsi-claim-publish-gate.v1",
+            ],
+            "required_checks": ["ci_rsi_cross_repo_e2e_artifact_job"],
+        },
+        {
             "id": "dual_repo_installed_release_smoke",
             "artifact_name": "ao2-dual-repo-installed-release-smoke",
             "producer_job": "dual-repo-installed-release-smoke-artifacts",
@@ -1464,6 +1509,7 @@ artifact_closure_index = {
                 "ao2-ai-task-board-control-plane-bridge",
                 "ao2-pulse-task-board-closure-packet",
                 "ao2-pulse-ao2-event-loop-smoke",
+                "ao2-rsi-cross-repo-e2e",
                 "ao2-dual-repo-installed-release-smoke",
                 "ao2-release-publication-closure",
                 "ao2-dual-repo-release-publication-closure-index",

@@ -4384,6 +4384,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_ai_task_board_control_plane_bridge_artifact_job",
         "ci_pulse_task_board_closure_packet_artifact_job",
         "ci_pulse_ao2_event_loop_smoke_artifact_job",
+        "ci_rsi_cross_repo_e2e_artifact_job",
         "ci_dual_repo_installed_release_smoke_artifact_job",
         "ci_release_publication_closure_artifact_job",
         "ci_dual_repo_release_publication_closure_index_job",
@@ -4426,6 +4427,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "target/release-readiness-consumer/ao2-ai-task-board-control-plane-bridge",
         "target/release-readiness-consumer/ao2-pulse-task-board-closure-packet",
         "target/release-readiness-consumer/ao2-pulse-ao2-event-loop-smoke",
+        "target/release-readiness-consumer/ao2-rsi-cross-repo-e2e",
         "target/release-readiness-consumer/ao2-dual-repo-installed-release-smoke",
         "target/release-readiness-consumer/ao2-release-publication-closure",
         "target/release-readiness-consumer/ao2-dual-repo-release-publication-closure-index",
@@ -4442,6 +4444,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.pulse-event-loop-run.v1",
         "ao2.pulse-event-loop-decision.v1",
         "ao2.pulse-event-loop-decision-metadata.v1",
+        "ao2.rsi-cross-repo-e2e.v1",
+        "covenant.rsi-claim-publish-gate.v1",
         "ao2.dual-repo-installed-release-smoke.v1",
         "ao2.release-publication-dry-run-closure.v1",
         "ao2.cp-release-publication-closure.v1",
@@ -4463,6 +4467,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ai_task_board_control_plane_bridge",
         "pulse_task_board_closure_packet",
         "pulse_ao2_event_loop_smoke",
+        "rsi_cross_repo_e2e",
         "dual_repo_installed_release_smoke",
         "release_publication_closure",
         "dual_repo_release_publication_closure_index",
@@ -4539,6 +4544,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "pulse-ao2-event-loop-smoke-artifacts:",
         "name: Pulse AO2 event-loop smoke artifacts",
         "ao2-pulse-ao2-event-loop-smoke",
+        "rsi-cross-repo-e2e-artifacts:",
+        "name: RSI cross-repo E2E artifacts",
         "release-readiness-artifact-consumer:",
         "name: Release readiness artifact consumer",
         "release-readiness-hosted-artifact-gate:",
@@ -4552,7 +4559,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "AO2_RELEASE_READINESS_REGRESSION_HOSTED_ARTIFACT_FIXTURE_DIR=target/release-readiness-hosted-artifact-gate/input/ao2-release-readiness",
         "npm run release:readiness:regression-gate",
         "ao2-release-readiness-hosted-artifact-gate",
-        "needs: [release-readiness-artifacts, release-readiness-hosted-artifact-gate, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-ao2-event-loop-smoke-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index, stable-release-evidence-packet-artifacts]",
+        "needs: [release-readiness-artifacts, release-readiness-hosted-artifact-gate, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-ao2-event-loop-smoke-artifacts, rsi-cross-repo-e2e-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index, stable-release-evidence-packet-artifacts]",
         "uses: actions/checkout@v6.0.3",
         "uses: actions/download-artifact@v8.0.1",
         "name: ao2-release-readiness",
@@ -4567,6 +4574,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "path: target/release-readiness-consumer/ao2-pulse-task-board-closure-packet",
         "name: ao2-pulse-ao2-event-loop-smoke",
         "path: target/release-readiness-consumer/ao2-pulse-ao2-event-loop-smoke",
+        "name: ao2-rsi-cross-repo-e2e",
+        "path: target/release-readiness-consumer/ao2-rsi-cross-repo-e2e",
         "name: ao2-dual-repo-installed-release-smoke",
         "path: target/release-readiness-consumer/ao2-dual-repo-installed-release-smoke",
         "name: ao2-release-publication-closure",
@@ -4701,6 +4710,9 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.pulse-task-board-closure-packet.v1",
         "ao2-pulse-ao2-event-loop-smoke",
         "ao2.pulse-event-loop-smoke.v1",
+        "ao2-rsi-cross-repo-e2e",
+        "ao2.rsi-cross-repo-e2e.v1",
+        "covenant.rsi-claim-publish-gate.v1",
         "ao2-release-publication-closure",
         "ao2.release-publication-dry-run-closure.v1",
         "ao2-control-plane-release-publication-closure",
@@ -4771,6 +4783,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_ai_task_board_control_plane_bridge_artifact_job",
         "ci_pulse_task_board_closure_packet_artifact_job",
         "ci_pulse_ao2_event_loop_smoke_artifact_job",
+        "ci_rsi_cross_repo_e2e_artifact_job",
         "ci_dual_repo_installed_release_smoke_artifact_job",
         "ci_release_publication_closure_artifact_job",
         "ci_dual_repo_release_publication_closure_index_job",
@@ -4817,6 +4830,9 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "release_readiness_artifact_consumer"
     ]["consumes"]
     assert "ao2-release-readiness-hosted-artifact-gate" in artifacts[
+        "release_readiness_artifact_consumer"
+    ]["consumes"]
+    assert "ao2-rsi-cross-repo-e2e" in artifacts[
         "release_readiness_artifact_consumer"
     ]["consumes"]
     assert artifacts["release_readiness_final_closure_verifier"]["artifact_name"] == (
@@ -4886,6 +4902,31 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
     ]
     assert artifacts["pulse_ao2_event_loop_smoke"]["required_checks"] == [
         "ci_pulse_ao2_event_loop_smoke_artifact_job"
+    ]
+    assert artifacts["rsi_cross_repo_e2e"]["artifact_name"] == (
+        "ao2-rsi-cross-repo-e2e"
+    )
+    assert artifacts["rsi_cross_repo_e2e"]["producer_job"] == (
+        "rsi-cross-repo-e2e-artifacts"
+    )
+    assert artifacts["rsi_cross_repo_e2e"]["required_files"] == [
+        "latest/summary.json",
+        "latest/live-self-change-rehearsal/summary.json",
+        "latest/control-plane-readback/summary.json",
+        "latest/readback-index/summary.json",
+        "latest/claim-readiness/summary.json",
+        "latest/covenant-gate/summary.json",
+    ]
+    assert artifacts["rsi_cross_repo_e2e"]["schema_versions"] == [
+        "ao2.rsi-cross-repo-e2e.v1",
+        "ao2.rsi-live-self-change-rehearsal.v1",
+        "ao2.cp-ao2-rsi-live-self-change-rehearsal-readback.v1",
+        "ao2.rsi-live-self-change-readback-evidence-index.v1",
+        "ao2.rsi-claim-readiness-audit.v1",
+        "covenant.rsi-claim-publish-gate.v1",
+    ]
+    assert artifacts["rsi_cross_repo_e2e"]["required_checks"] == [
+        "ci_rsi_cross_repo_e2e_artifact_job"
     ]
     assert artifacts["dual_repo_installed_release_smoke"]["artifact_name"] == (
         "ao2-dual-repo-installed-release-smoke"
@@ -5143,6 +5184,7 @@ def _write_release_readiness_consumer_fixture(root: Path):
         "ci_ai_task_board_control_plane_bridge_artifact_job",
         "ci_pulse_task_board_closure_packet_artifact_job",
         "ci_pulse_ao2_event_loop_smoke_artifact_job",
+        "ci_rsi_cross_repo_e2e_artifact_job",
         "ci_dual_repo_installed_release_smoke_artifact_job",
         "ci_release_publication_closure_artifact_job",
         "ci_dual_repo_release_publication_closure_index_job",
@@ -5330,6 +5372,38 @@ def _write_release_readiness_consumer_fixture(root: Path):
     )
     _write_release_readiness_consumer_json(
         root,
+        "ao2-rsi-cross-repo-e2e/latest/summary.json",
+        {
+            "schema_version": "ao2.rsi-cross-repo-e2e.v1",
+            "status": "passed",
+            "claim_publish_decision": "deny",
+            "claim_publish_authority": False,
+            "observed_evidence": {
+                "covenant_gate_schema_version": (
+                    "covenant.rsi-claim-publish-gate.v1"
+                ),
+                "covenant_gate_status": "denied",
+            },
+            "trust_boundary": {
+                "requires_provider_api_key": False,
+                "stores_credentials": False,
+                "publishes_claims": False,
+                "approves_rsi_claims": False,
+            },
+        },
+    )
+    _write_release_readiness_consumer_json(
+        root,
+        "ao2-rsi-cross-repo-e2e/latest/covenant-gate/summary.json",
+        {
+            "schema_version": "covenant.rsi-claim-publish-gate.v1",
+            "status": "denied",
+            "decision": "deny",
+            "publish_authority": False,
+        },
+    )
+    _write_release_readiness_consumer_json(
+        root,
         "ao2-release-publication-closure/summary.json",
         {
             "schema_version": "ao2.release-publication-dry-run-closure.v1",
@@ -5437,8 +5511,14 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
         "ao2.pulse-event-loop-smoke.v1",
         "ao2.pulse-event-loop-decision.v1",
         "ao2.pulse-event-loop-decision-metadata.v1",
+        "ao2.rsi-cross-repo-e2e.v1",
+        "covenant.rsi-claim-publish-gate.v1",
         "ci_release_readiness_hosted_artifact_gate_job",
         "ci_pulse_ao2_event_loop_smoke_artifact_job",
+        "ci_rsi_cross_repo_e2e_artifact_job",
+        "ao2-rsi-cross-repo-e2e",
+        "claim_publish_decision",
+        "publishes_claims",
         "github_actions_artifact_download",
         "provider_execution",
         "ao2-control-plane-",
@@ -5469,6 +5549,8 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
         "path: target/release-readiness-consumer/ao2-release-readiness-hosted-artifact-gate"
         in consumer_ci
     )
+    assert "name: ao2-rsi-cross-repo-e2e" in consumer_ci
+    assert "path: target/release-readiness-consumer/ao2-rsi-cross-repo-e2e" in consumer_ci
 
     root = tmp_path / "release-readiness-consumer"
     _write_release_readiness_consumer_fixture(root)
@@ -5479,11 +5561,21 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
     assert summary["schema_version"] == "ao2.release-readiness-artifact-consumer.v1"
     assert summary["status"] == "passed"
     assert "ao2-pulse-ao2-event-loop-smoke" in summary["source_artifacts"]
+    assert "ao2-rsi-cross-repo-e2e" in summary["source_artifacts"]
     assert "ao2-release-readiness-hosted-artifact-gate" in summary["source_artifacts"]
     assert "ao2-stable-release-evidence-packet" in summary["source_artifacts"]
     assert "ci_release_readiness_hosted_artifact_gate_job" in summary["required_checks"]
     assert "ci_pulse_ao2_event_loop_smoke_artifact_job" in summary["required_checks"]
+    assert "ci_rsi_cross_repo_e2e_artifact_job" in summary["required_checks"]
     assert "ci_stable_release_evidence_packet_artifact_job" in summary["required_checks"]
+    assert summary["rsi_cross_repo_e2e"] == {
+        "schema_version": "ao2.rsi-cross-repo-e2e.v1",
+        "status": "passed",
+        "claim_publish_decision": "deny",
+        "claim_publish_authority": False,
+        "covenant_gate_schema_version": "covenant.rsi-claim-publish-gate.v1",
+        "covenant_gate_status": "denied",
+    }
     assert summary["hosted_release_readiness_artifact_gate"]["status"] == "passed"
     assert (
         summary["hosted_release_readiness_artifact_gate"]["public_pair_digest_gate"][
@@ -5774,6 +5866,32 @@ def test_release_readiness_artifact_consumer_rejects_bad_fixture_evidence(tmp_pa
                 },
             ),
             "stable release evidence packet public pair digest audit was not ready",
+        ),
+        (
+            "rsi_claim_publish_not_denied",
+            lambda root: _write_release_readiness_consumer_json(
+                root,
+                "ao2-rsi-cross-repo-e2e/latest/summary.json",
+                {
+                    "schema_version": "ao2.rsi-cross-repo-e2e.v1",
+                    "status": "passed",
+                    "claim_publish_decision": "allow",
+                    "claim_publish_authority": True,
+                    "observed_evidence": {
+                        "covenant_gate_schema_version": (
+                            "covenant.rsi-claim-publish-gate.v1"
+                        ),
+                        "covenant_gate_status": "allowed",
+                    },
+                    "trust_boundary": {
+                        "requires_provider_api_key": False,
+                        "stores_credentials": False,
+                        "publishes_claims": True,
+                        "approves_rsi_claims": True,
+                    },
+                },
+            ),
+            "RSI cross-repo E2E claim publish boundary was not denied",
         ),
         (
             "missing_required_check",
