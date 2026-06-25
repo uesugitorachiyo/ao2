@@ -940,16 +940,21 @@ Result:
   `summary.json` and point `AO2_CP_OPERATOR_RELEASE_EVIDENCE_SUMMARY` at it for
   read-only control-plane dashboard readback.
 - `npm run release:stable-evidence-packet`: composes the current
-  `ao2.stable-promotion-workflow.v1` summary and
-  `ao2.operator-release-evidence-bundle.v1` summary into one read-only
-  operator packet at `target/stable-release-evidence-packet/latest`. It emits
+  `ao2.stable-promotion-workflow.v1` summary,
+  `ao2.operator-release-evidence-bundle.v1` summary, and
+  `ao2.rsi-cross-repo-e2e.v1` summary into one read-only operator packet at
+  `target/stable-release-evidence-packet/latest`. It emits
   `ao2.stable-release-evidence-packet.v1`, `summary.json`, and
   `dashboard.html`, and fails closed unless the stable promotion evidence gate
   reports `post_release_evidence_ready=true` with
   `evidence_gate_status=passed` and the operator bundle reports
-  `operator_release_evidence_ready=true`. Use
+  `operator_release_evidence_ready=true`. It also requires
+  `claim_publish_decision=deny`, `claim_publish_authority=false`, and the
+  nested `covenant.rsi-claim-publish-gate.v1` denial evidence before the stable
+  packet can be ready. Use
   `AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY=<path>` and
-  `AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY=<path>` to compose from
+  `AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY=<path>` plus
+  `AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY=<path>` to compose from
   preserved local baselines. The packet reads local summaries only and records
   `mutates_releases=false` and `stores_credentials=false`.
 - `Stable Release Promotion`: manual GitHub Actions workflow that consumes the

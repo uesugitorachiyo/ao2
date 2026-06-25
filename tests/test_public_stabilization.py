@@ -1595,6 +1595,9 @@ def test_stable_promotion_dry_run_audit_validates_dispatch_artifact(tmp_path):
         "operator_release_evidence_ready",
         "public_pair_digest_audit",
         "archive_parity_status",
+        "rsi_cross_repo_e2e",
+        "claim_publish_decision",
+        "covenant.rsi-claim-publish-gate.v1",
     ]:
         assert needle in text
 
@@ -1682,6 +1685,14 @@ def test_stable_promotion_dry_run_audit_validates_dispatch_artifact(tmp_path):
                     "status": "passed",
                     "archive_parity_status": "passed",
                 },
+                "rsi_cross_repo_e2e": {
+                    "schema_version": "ao2.rsi-cross-repo-e2e.v1",
+                    "status": "passed",
+                    "claim_publish_decision": "deny",
+                    "claim_publish_authority": False,
+                    "covenant_gate_schema_version": "covenant.rsi-claim-publish-gate.v1",
+                    "covenant_gate_status": "denied",
+                },
                 "trust_boundary": {
                     "mutates_releases": False,
                     "stores_credentials": False,
@@ -1720,6 +1731,14 @@ def test_stable_promotion_dry_run_audit_validates_dispatch_artifact(tmp_path):
         ]
         == "passed"
     )
+    assert summary["stable_release_evidence_packet"]["rsi_cross_repo_e2e"] == {
+        "schema_version": "ao2.rsi-cross-repo-e2e.v1",
+        "status": "passed",
+        "claim_publish_decision": "deny",
+        "claim_publish_authority": False,
+        "covenant_gate_schema_version": "covenant.rsi-claim-publish-gate.v1",
+        "covenant_gate_status": "denied",
+    }
 
     bad = json.loads(workflow_summary.read_text(encoding="utf-8"))
     bad["dry_run"] = False
@@ -1777,6 +1796,9 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
         "operator_decision",
         "public_pair_digest_audit",
         "archive_parity_status",
+        "rsi_cross_repo_e2e",
+        "claim_publish_decision",
+        "covenant.rsi-claim-publish-gate.v1",
         "Stable Promotion Operator Checklist",
     ]:
         assert needle in text
@@ -1844,6 +1866,16 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
                         "status": "passed",
                         "archive_parity_status": "passed",
                     },
+                    "rsi_cross_repo_e2e": {
+                        "schema_version": "ao2.rsi-cross-repo-e2e.v1",
+                        "status": "passed",
+                        "claim_publish_decision": "deny",
+                        "claim_publish_authority": False,
+                        "covenant_gate_schema_version": (
+                            "covenant.rsi-claim-publish-gate.v1"
+                        ),
+                        "covenant_gate_status": "denied",
+                    },
                 },
                 "trust_boundary": {
                     "local_only": True,
@@ -1890,6 +1922,16 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
         ]["archive_parity_status"]
         == "passed"
     )
+    assert summary["dry_run_audit"]["stable_release_evidence_packet"][
+        "rsi_cross_repo_e2e"
+    ] == {
+        "schema_version": "ao2.rsi-cross-repo-e2e.v1",
+        "status": "passed",
+        "claim_publish_decision": "deny",
+        "claim_publish_authority": False,
+        "covenant_gate_schema_version": "covenant.rsi-claim-publish-gate.v1",
+        "covenant_gate_status": "denied",
+    }
     assert summary["operator_decision"]["confirmation_entered"] is False
     assert summary["trust_boundary"]["mutates_releases"] is False
     assert summary["trust_boundary"]["stores_credentials"] is False
@@ -1899,6 +1941,7 @@ def test_stable_promotion_operator_checklist_requires_ready_dry_run_audit(tmp_pa
     assert "promote-stable-v0.4.81-v0.1.14" in checklist
     assert "No provider API keys are required or accepted" in checklist
     assert "Archive parity status: `passed`" in checklist
+    assert "RSI claim-publish decision: `deny`" in checklist
     assert "Do not enter the confirmation string unless this checklist status is passed" in checklist
 
     bad = json.loads(audit_summary.read_text(encoding="utf-8"))
@@ -3668,10 +3711,15 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
         "AO2_STABLE_RELEASE_EVIDENCE_PACKET_ROOT",
         "AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY",
         "AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY",
+        "AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY",
         "ao2.stable-promotion-workflow.v1",
         "ao2.operator-release-evidence-bundle.v1",
+        "ao2.rsi-cross-repo-e2e.v1",
+        "covenant.rsi-claim-publish-gate.v1",
         "post_release_evidence_ready",
         "operator_release_evidence_ready",
+        "claim_publish_decision",
+        "claim_publish_authority",
         "stable_release_evidence_ready",
         "public_pair_digest_audit",
         "archive_parity_status",
@@ -3749,6 +3797,34 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
         + "\n",
         encoding="utf-8",
     )
+    rsi_summary = tmp_path / "rsi-cross-repo-e2e" / "summary.json"
+    rsi_summary.parent.mkdir(parents=True)
+    rsi_summary.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.rsi-cross-repo-e2e.v1",
+                "status": "passed",
+                "claim_level": "full_autonomous_self_mutating_rsi",
+                "claim_publish_decision": "deny",
+                "claim_publish_authority": False,
+                "observed_evidence": {
+                    "covenant_gate_schema_version": (
+                        "covenant.rsi-claim-publish-gate.v1"
+                    ),
+                    "covenant_gate_status": "denied",
+                },
+                "trust_boundary": {
+                    "requires_provider_api_key": False,
+                    "stores_credentials": False,
+                    "publishes_claims": False,
+                    "approves_rsi_claims": False,
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
     out_root = tmp_path / "packet"
     result = subprocess.run(
@@ -3759,6 +3835,7 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
             "AO2_STABLE_RELEASE_EVIDENCE_PACKET_ROOT": str(out_root),
             "AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY": str(stable_summary),
             "AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY": str(operator_summary),
+            "AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY": str(rsi_summary),
         },
         capture_output=True,
         text=True,
@@ -3777,6 +3854,15 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
     assert summary["operator_evidence"]["operator_release_evidence_ready"] is True
     assert summary["operator_evidence"]["check_count"] == 3
     assert summary["operator_evidence"]["passed_check_count"] == 3
+    assert summary["rsi_cross_repo_e2e"] == {
+        "schema_version": "ao2.rsi-cross-repo-e2e.v1",
+        "status": "passed",
+        "claim_level": "full_autonomous_self_mutating_rsi",
+        "claim_publish_decision": "deny",
+        "claim_publish_authority": False,
+        "covenant_gate_schema_version": "covenant.rsi-claim-publish-gate.v1",
+        "covenant_gate_status": "denied",
+    }
     assert summary["public_pair_digest_audit"]["artifact"] == "ao2-public-release-pair-digest-audit"
     assert (
         summary["public_pair_digest_audit"]["schema_version"]
@@ -3788,6 +3874,7 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
     assert summary["trust_boundary"]["stores_credentials"] is False
     assert summary["sources"]["stable_promotion_summary"] == str(stable_summary)
     assert summary["sources"]["operator_evidence_summary"] == str(operator_summary)
+    assert summary["sources"]["rsi_cross_repo_e2e_summary"] == str(rsi_summary)
     assert not summary["blockers"]
 
     dashboard = (out_root / "dashboard.html").read_text(encoding="utf-8")
@@ -3796,29 +3883,40 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
     assert "post-stable-release-smoke-Linux" in dashboard
     assert "ao2-control-plane-post-release-verification-windows" in dashboard
     assert "ao2-public-release-pair-digest-audit" in dashboard
+    assert "RSI claim-publish boundary" in dashboard
+    assert "covenant.rsi-claim-publish-gate.v1" in dashboard
     assert "Archive parity" in dashboard
 
     verification = read("docs/VERIFICATION.md")
     assert "npm run release:stable-evidence-packet" in verification
     assert "ao2.stable-release-evidence-packet.v1" in verification
+    assert "AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY" in verification
+    assert "claim_publish_decision=deny" in verification
 
     public_release_index = read("docs/release/PUBLIC-RELEASE-VERIFICATION.md")
     assert "Stable release evidence packet" in public_release_index
     assert "release:stable-evidence-packet" in public_release_index
+    assert "ao2.rsi-cross-repo-e2e.v1" in public_release_index
 
     ci = read(".github/workflows/ci.yml")
     for needle in [
         "stable-release-evidence-packet-artifacts:",
         "name: Stable release evidence packet artifacts",
+        "needs: rsi-cross-repo-e2e-artifacts",
         "AO2_STABLE_PROMOTION_ROOT=target/stable-release-evidence-packet-ci/stable-promotion-workflow",
         "npm run release:stable-promotion-workflow",
         "AO2_OPERATOR_RELEASE_EVIDENCE_ROOT=target/stable-release-evidence-packet-ci/operator-release-evidence-bundle",
         "npm run release:operator-evidence-bundle",
+        "name: ao2-rsi-cross-repo-e2e",
+        "target/stable-release-evidence-packet-ci/rsi-cross-repo-e2e",
         "AO2_STABLE_RELEASE_EVIDENCE_PACKET_ROOT=target/stable-release-evidence-packet-ci/packet",
         "AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY=target/stable-release-evidence-packet-ci/stable-promotion-workflow/summary.json",
         "AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY=target/stable-release-evidence-packet-ci/operator-release-evidence-bundle/summary.json",
+        "AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY=target/stable-release-evidence-packet-ci/rsi-cross-repo-e2e/latest/summary.json",
         "npm run release:stable-evidence-packet",
         "ao2.stable-release-evidence-packet.v1",
+        "ao2.rsi-cross-repo-e2e.v1",
+        "claim_publish_decision",
         "stable_release_evidence_ready",
         "ao2-stable-release-evidence-packet",
         "target/stable-release-evidence-packet-ci",
@@ -4968,6 +5066,30 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2-release-publication-closure",
         "ao2-control-plane-release-publication-closure",
     ]
+    assert artifacts["stable_release_evidence_packet"]["artifact_name"] == (
+        "ao2-stable-release-evidence-packet"
+    )
+    assert artifacts["stable_release_evidence_packet"]["producer_job"] == (
+        "stable-release-evidence-packet-artifacts"
+    )
+    assert artifacts["stable_release_evidence_packet"]["required_files"] == [
+        "packet/summary.json",
+        "packet/dashboard.html",
+        "stable-promotion-workflow/summary.json",
+        "operator-release-evidence-bundle/summary.json",
+        "rsi-cross-repo-e2e/latest/summary.json",
+    ]
+    assert artifacts["stable_release_evidence_packet"]["schema_versions"] == [
+        "ao2.stable-release-evidence-packet.v1",
+        "ao2.stable-promotion-workflow.v1",
+        "ao2.operator-release-evidence-bundle.v1",
+        "ao2.rsi-cross-repo-e2e.v1",
+    ]
+    assert artifacts["stable_release_evidence_packet"]["source_artifacts"] == [
+        "stable-promotion-workflow",
+        "operator-release-evidence-bundle",
+        "ao2-rsi-cross-repo-e2e",
+    ]
     assert artifacts["stable_promotion_operator_checklist"]["artifact_name"] == (
         "ao2-stable-promotion-operator-checklist"
     )
@@ -5459,6 +5581,15 @@ def _write_release_readiness_consumer_fixture(root: Path):
                 "status": "passed",
                 "archive_parity_status": "passed",
             },
+            "rsi_cross_repo_e2e": {
+                "schema_version": "ao2.rsi-cross-repo-e2e.v1",
+                "status": "passed",
+                "claim_level": "full_autonomous_self_mutating_rsi",
+                "claim_publish_decision": "deny",
+                "claim_publish_authority": False,
+                "covenant_gate_schema_version": "covenant.rsi-claim-publish-gate.v1",
+                "covenant_gate_status": "denied",
+            },
             "trust_boundary": {
                 "mutates_releases": False,
                 "stores_credentials": False,
@@ -5527,6 +5658,7 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
         "size_bytes",
         "ao2.stable-release-evidence-packet.v1",
         "stable_release_evidence_ready",
+        "rsi_cross_repo_e2e",
         "public_pair_digest_audit",
         "public_pair_digest_gate",
         "archive_parity_status",
@@ -5866,6 +5998,46 @@ def test_release_readiness_artifact_consumer_rejects_bad_fixture_evidence(tmp_pa
                 },
             ),
             "stable release evidence packet public pair digest audit was not ready",
+        ),
+        (
+            "stable_packet_rsi_claim_publish_not_denied",
+            lambda root: _write_release_readiness_consumer_json(
+                root,
+                "ao2-stable-release-evidence-packet/packet/summary.json",
+                {
+                    "schema_version": "ao2.stable-release-evidence-packet.v1",
+                    "status": "passed",
+                    "stable_release_evidence_ready": True,
+                    "stable_promotion": {
+                        "schema_version": "ao2.stable-promotion-workflow.v1"
+                    },
+                    "operator_evidence": {
+                        "schema_version": "ao2.operator-release-evidence-bundle.v1",
+                        "operator_release_evidence_ready": True,
+                    },
+                    "public_pair_digest_audit": {
+                        "artifact": "ao2-public-release-pair-digest-audit",
+                        "schema_version": "ao2.public-release-pair-digest-audit.v1",
+                        "status": "passed",
+                        "archive_parity_status": "passed",
+                    },
+                    "rsi_cross_repo_e2e": {
+                        "schema_version": "ao2.rsi-cross-repo-e2e.v1",
+                        "status": "passed",
+                        "claim_publish_decision": "allow",
+                        "claim_publish_authority": True,
+                        "covenant_gate_schema_version": (
+                            "covenant.rsi-claim-publish-gate.v1"
+                        ),
+                        "covenant_gate_status": "allowed",
+                    },
+                    "trust_boundary": {
+                        "mutates_releases": False,
+                        "stores_credentials": False,
+                    },
+                },
+            ),
+            "stable release evidence packet RSI claim-publish boundary was not denied",
         ),
         (
             "rsi_claim_publish_not_denied",
@@ -12513,6 +12685,16 @@ root.mkdir(parents=True, exist_ok=True)
                         "schema_version": "ao2.public-release-pair-digest-audit.v1",
                         "status": "passed",
                         "archive_parity_status": "passed",
+                    },
+                    "rsi_cross_repo_e2e": {
+                        "schema_version": "ao2.rsi-cross-repo-e2e.v1",
+                        "status": "passed",
+                        "claim_publish_decision": "deny",
+                        "claim_publish_authority": False,
+                        "covenant_gate_schema_version": (
+                            "covenant.rsi-claim-publish-gate.v1"
+                        ),
+                        "covenant_gate_status": "denied",
                     },
                 },
                 "trust_boundary": {

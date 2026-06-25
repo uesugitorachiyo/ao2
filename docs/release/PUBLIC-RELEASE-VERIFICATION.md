@@ -162,29 +162,34 @@ checks without approving releases or mutating AO2 artifacts.
 
 ## Stable release evidence packet
 
-Run `npm run release:stable-evidence-packet` after the stable promotion workflow
-and operator release evidence bundle have produced local summaries. The command
-composes `ao2.stable-promotion-workflow.v1` and
-`ao2.operator-release-evidence-bundle.v1` into
+Run `npm run release:stable-evidence-packet` after the stable promotion workflow,
+operator release evidence bundle, and RSI cross-repo E2E have produced local
+summaries. The command composes `ao2.stable-promotion-workflow.v1`,
+`ao2.operator-release-evidence-bundle.v1`, and `ao2.rsi-cross-repo-e2e.v1` into
 `target/stable-release-evidence-packet/latest/summary.json` and
 `dashboard.html`, using schema `ao2.stable-release-evidence-packet.v1`.
 
 The packet is ready only when the stable promotion evidence gate reports
 `post_release_evidence_ready=true` with `evidence_gate_status=passed` and the
-operator bundle reports `operator_release_evidence_ready=true`. It is a
-read-only operator surface: it reads local evidence summaries, records
+operator bundle reports `operator_release_evidence_ready=true`. It also requires
+the RSI E2E summary to preserve `claim_publish_decision=deny`,
+`claim_publish_authority=false`, and the nested
+`covenant.rsi-claim-publish-gate.v1` denial evidence. It is a read-only
+operator surface: it reads local evidence summaries, records
 `mutates_releases=false` and `stores_credentials=false`, and does not approve or
-publish releases. Use
+publish releases or RSI claims. Use
 `AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY=<path>` and
-`AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY=<path>` to compose a
-packet from preserved release-publication baselines.
+`AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY=<path>` plus
+`AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY=<path>` to compose a packet
+from preserved release-publication and RSI baselines.
 
 AO2 CI publishes the same composed packet as the
 `ao2-stable-release-evidence-packet` GitHub Actions artifact from the
 `Stable release evidence packet artifacts` job. That hosted artifact contains
 the final `packet/summary.json`, `packet/dashboard.html`, the source
 `stable-promotion-workflow/summary.json`, and the source
-`operator-release-evidence-bundle/summary.json`. The
+`operator-release-evidence-bundle/summary.json`, plus the source
+`rsi-cross-repo-e2e/latest/summary.json`. The
 `Release readiness artifact consumer` job downloads this artifact and fails
 closed unless `stable_release_evidence_ready=true`,
 `mutates_releases=false`, and `stores_credentials=false`.
