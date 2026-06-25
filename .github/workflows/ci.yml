@@ -1302,6 +1302,74 @@ jobs:
           path: target/release-train-control-plane-bridge-ci
           if-no-files-found: error
 
+  rsi-cross-repo-e2e-artifacts:
+    name: RSI cross-repo E2E artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+      - name: Checkout ao2-control-plane
+        uses: actions/checkout@v6.0.3
+        with:
+          repository: uesugitorachiyo/ao2-control-plane
+          path: ao2-control-plane
+      - name: Checkout ao-covenant
+        uses: actions/checkout@v6.0.3
+        with:
+          repository: uesugitorachiyo/ao-covenant
+          path: ao-covenant
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install Go for Covenant claim gate
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.26.x'
+          cache-dependency-path: ao-covenant/go.sum
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+      - name: Run RSI cross-repo E2E
+        shell: bash
+        run: |
+          AO2_CONTROL_PLANE_REPO=ao2-control-plane \
+            AO_COVENANT_REPO=ao-covenant \
+            AO2_RSI_CROSS_REPO_E2E_ROOT=target/rsi-cross-repo-e2e-ci/latest \
+            npm run rsi:cross-repo-e2e
+      - name: Verify RSI cross-repo E2E evidence
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("target/rsi-cross-repo-e2e-ci/latest")
+          summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
+          gate = json.loads((root / "covenant-gate" / "summary.json").read_text(encoding="utf-8"))
+          assert summary["schema_version"] == "ao2.rsi-cross-repo-e2e.v1", summary
+          assert summary["status"] == "passed", summary
+          assert summary["claim_publish_decision"] == "deny", summary
+          assert summary["claim_publish_authority"] is False, summary
+          assert gate["schema_version"] == "covenant.rsi-claim-publish-gate.v1", gate
+          assert gate["decision"] == "deny", gate
+          assert gate["publish_authority"] is False, gate
+          assert summary["trust_boundary"]["requires_provider_api_key"] is False, summary
+          assert summary["trust_boundary"]["stores_credentials"] is False, summary
+          assert summary["trust_boundary"]["publishes_claims"] is False, summary
+          PY
+          test -f target/rsi-cross-repo-e2e-ci/latest/live-self-change-rehearsal/summary.json
+          test -f target/rsi-cross-repo-e2e-ci/latest/control-plane-readback/summary.json
+          test -f target/rsi-cross-repo-e2e-ci/latest/readback-index/summary.json
+          test -f target/rsi-cross-repo-e2e-ci/latest/claim-readiness/summary.json
+          test -f target/rsi-cross-repo-e2e-ci/latest/covenant-gate/summary.json
+      - name: Upload RSI cross-repo E2E evidence
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-rsi-cross-repo-e2e
+          path: target/rsi-cross-repo-e2e-ci
+          if-no-files-found: error
+
   ai-task-board-control-plane-bridge-artifacts:
     name: AI task board control-plane bridge artifacts
     runs-on: ubuntu-latest

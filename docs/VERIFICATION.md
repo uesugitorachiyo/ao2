@@ -90,6 +90,7 @@ npm run workbench:browser-qa # no-archaeology workbench browser-review evidence
 npm run provider:adversarial-corpus # adversarial provider transcript corpus gate
 npm run release:dr-retention-snapshot # DR/retention long-run fixture snapshot
 npm run frontier:lengthy:gate # aggregate local gate for the frontier lengthy task set
+npm run rsi:cross-repo-e2e # AO2/control-plane/Covenant RSI claim publish-denial smoke
 npm run gate:full            # 3-stage ready-to-ship gate (guard + replacement + release-gate)
 scripts/smoke-release-archives.sh
 ```
@@ -838,6 +839,13 @@ Result:
   the read-only observer boundary; emits
   `ao2.cross-repo-control-plane-observer.v1` at
   `target/cross-repo-control-plane-observer/latest/summary.json`
+- `npm run rsi:cross-repo-e2e`: runs the AO2 live self-change rehearsal through
+  ao2-control-plane readback, AO2 readback indexing, AO2 claim readiness, and
+  the AO Covenant claim-publish gate; emits `ao2.rsi-cross-repo-e2e.v1` at
+  `target/rsi-cross-repo-e2e/latest/summary.json`. Current expected evidence is
+  `claim_publish_decision=deny` and `publish_authority=false` for the full
+  autonomous self-mutating RSI claim. CI uploads the evidence directory as
+  `ao2-rsi-cross-repo-e2e`.
 - `npm run release:install-update-fixture`: builds a local signed fixture
   archive with `SHA256SUMS`, `provenance.json`, and a signature sidecar,
   verifies checksum/install/update behavior, references `release:download-verify`
