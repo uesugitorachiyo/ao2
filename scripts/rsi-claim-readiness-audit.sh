@@ -23,6 +23,12 @@ self_change_dry_run_summary = Path(
         root / "target" / "rsi-self-change-dry-run" / "latest" / "summary.json",
     )
 )
+live_self_change_rehearsal_summary = Path(
+    os.environ.get(
+        "AO2_RSI_LIVE_SELF_CHANGE_REHEARSAL_SUMMARY",
+        root / "target" / "rsi-live-self-change-rehearsal" / "latest" / "summary.json",
+    )
+)
 
 bounded_required = [
     "scripts/pulse-auto-advance.sh",
@@ -117,8 +123,59 @@ def read_self_change_dry_run_evidence(path):
         "status": payload.get("status", "missing"),
     }
 
+def read_live_self_change_rehearsal_evidence(path):
+    if not path.is_file():
+        return {
+            "evidence_state": "missing",
+            "schema_version": None,
+            "status": "missing",
+        }
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {
+            "evidence_state": "invalid",
+            "schema_version": None,
+            "status": "invalid_json",
+        }
+
+    self_change = payload.get("self_change", {})
+    rollback = payload.get("rollback", {})
+    observer_readback = payload.get("observer_readback", {})
+    trust_boundary = payload.get("trust_boundary", {})
+    expected_trust_boundary = {
+        "local_only": True,
+        "uses_network": False,
+        "requires_provider_api_key": False,
+        "stores_credentials": False,
+        "mutates_repositories": True,
+        "applies_patch": True,
+        "rollback_applied": True,
+        "publishes_claims": False,
+    }
+    evidence_present = (
+        payload.get("schema_version") == "ao2.rsi-live-self-change-rehearsal.v1"
+        and payload.get("status") == "live_rehearsal_passed"
+        and self_change.get("mode") == "live_rehearsal"
+        and self_change.get("applies_patch") is True
+        and self_change.get("repository_restored") is True
+        and rollback.get("mode") == "live_rehearsal"
+        and rollback.get("status") == "passed"
+        and rollback.get("same_change_class") is True
+        and observer_readback.get("status") == "missing"
+        and trust_boundary == expected_trust_boundary
+    )
+    return {
+        "evidence_state": "present" if evidence_present else "invalid",
+        "schema_version": payload.get("schema_version"),
+        "status": payload.get("status", "missing"),
+        "repository_restored": self_change.get("repository_restored", False),
+        "observer_readback_status": observer_readback.get("status", "missing"),
+    }
+
 bounded_allowed = not bounded_missing
 self_change_dry_run_evidence = read_self_change_dry_run_evidence(self_change_dry_run_summary)
+live_self_change_rehearsal_evidence = read_live_self_change_rehearsal_evidence(live_self_change_rehearsal_summary)
 payload = {
     "schema_version": "ao2.rsi-claim-readiness-audit.v1",
     "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -139,6 +196,7 @@ payload = {
             "evidence_state": "missing_required_evidence",
             "partial_evidence": {
                 "governed_self_change_dry_run": self_change_dry_run_evidence,
+                "live_self_change_rehearsal": live_self_change_rehearsal_evidence,
             },
             "blockers": full_blockers,
         },

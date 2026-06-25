@@ -77,6 +77,7 @@
     "release:readiness:regression-gate": "node scripts/run-sh-script.js scripts/release-readiness-regression-gate.sh",
     "local:canary": "node scripts/run-sh-script.js scripts/local-canary.sh",
     "rsi:claim-readiness": "node scripts/run-sh-script.js scripts/rsi-claim-readiness-audit.sh",
+    "rsi:live-self-change-rehearsal": "node scripts/run-sh-script.js scripts/rsi-live-self-change-rehearsal.sh",
     "rsi:self-change-dry-run": "node scripts/run-sh-script.js scripts/rsi-governed-self-change-dry-run.sh",
     "pulse:local-mirror": "node scripts/run-sh-script.js scripts/pulse-local-mirror.sh",
     "pulse:resume": "node scripts/run-sh-script.js scripts/pulse-resume.sh",
