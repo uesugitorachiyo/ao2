@@ -125,6 +125,20 @@ the control-plane
 artifact names and SHA-256 values only. It does not mutate AO2, mutate
 ao2-control-plane artifacts, publish claims, or approve RSI claims. It does not approve the full RSI claim. This retained readback evidence improves the claim audit input, but Covenant claim-publish approval and stronger claim-publish evidence remain required.
 
+Run the local improvement evidence gate with:
+
+```sh
+npm run rsi:improvement-evidence-gate
+```
+
+The gate emits `ao2.rsi-improvement-evidence-gate.v1` under
+`target/rsi-improvement-evidence-gate/latest/summary.json`. It measures
+workflow-hardening coverage as `measured_improvement_percent` for enforced RSI
+evidence checks. The default target is 5%, and the current gate compares the
+previous six-check RSI evidence baseline with seven enforced checks after this
+gate is added. This is evidence of stronger verification coverage, not proof
+that the full RSI claim is publishable.
+
 Run the full local cross-repo RSI evidence chain with sibling
 `ao2-control-plane` and `ao-covenant` checkouts:
 
@@ -136,10 +150,12 @@ The E2E smoke emits `ao2.rsi-cross-repo-e2e.v1` under
 `target/rsi-cross-repo-e2e/latest/summary.json`. It runs the AO2 live
 self-change rehearsal, ao2-control-plane readback,
 `rsi:live-self-change-readback-index`, `rsi:claim-readiness`, and Covenant
-`policy claim-publish-gate`. The expected final Covenant gate remains
-`publish_authority=false` with schema `covenant.rsi-claim-publish-gate.v1`;
-the smoke proves the denial chain is wired end to end, not that the full RSI
-claim is publishable.
+`policy claim-publish-gate`, then runs the improvement evidence gate. The
+expected final Covenant gate remains `publish_authority=false` with schema
+`covenant.rsi-claim-publish-gate.v1`; the E2E summary also carries
+`ao2.rsi-improvement-evidence-gate.v1` and `measured_improvement_percent`.
+The smoke proves the denial chain and 5% workflow-hardening measurement are
+wired end to end, not that the full RSI claim is publishable.
 
 ## Why AO2?
 

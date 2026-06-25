@@ -1364,8 +1364,12 @@ jobs:
           root = Path("target/rsi-cross-repo-e2e-ci/latest")
           summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
           gate = json.loads((root / "covenant-gate" / "summary.json").read_text(encoding="utf-8"))
+          improvement = json.loads((root / "improvement-evidence-gate" / "summary.json").read_text(encoding="utf-8"))
           assert summary["schema_version"] == "ao2.rsi-cross-repo-e2e.v1", summary
           assert summary["status"] == "passed", summary
+          assert improvement["schema_version"] == "ao2.rsi-improvement-evidence-gate.v1", improvement
+          assert improvement["metric"]["measured_improvement_percent"] >= 5.0, improvement
+          assert summary["improvement_evidence"]["measured_improvement_percent"] >= 5.0, summary
           assert summary["claim_publish_decision"] == "deny", summary
           assert summary["claim_publish_authority"] is False, summary
           assert gate["schema_version"] == "covenant.rsi-claim-publish-gate.v1", gate
@@ -1380,6 +1384,7 @@ jobs:
           test -f target/rsi-cross-repo-e2e-ci/latest/readback-index/summary.json
           test -f target/rsi-cross-repo-e2e-ci/latest/claim-readiness/summary.json
           test -f target/rsi-cross-repo-e2e-ci/latest/covenant-gate/summary.json
+          test -f target/rsi-cross-repo-e2e-ci/latest/improvement-evidence-gate/summary.json
       - name: Upload RSI cross-repo E2E evidence
         uses: actions/upload-artifact@v7.0.1
         with:

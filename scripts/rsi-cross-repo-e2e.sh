@@ -97,6 +97,16 @@ covenant_step covenant_gate_schema_validate \
   --schema covenant.rsi-claim-publish-gate.v1 \
   --file "$OUT_ROOT/covenant-gate/summary.json"
 
+run_step improvement_evidence_gate \
+  env AO2_RSI_IMPROVEMENT_EVIDENCE_GATE_ROOT="$OUT_ROOT/improvement-evidence-gate" \
+    AO2_RSI_IMPROVEMENT_LIVE_SUMMARY="$OUT_ROOT/live-self-change-rehearsal/summary.json" \
+    AO2_RSI_IMPROVEMENT_READBACK_SUMMARY="$OUT_ROOT/control-plane-readback/summary.json" \
+    AO2_RSI_IMPROVEMENT_READBACK_INDEX_SUMMARY="$OUT_ROOT/readback-index/summary.json" \
+    AO2_RSI_IMPROVEMENT_CLAIM_READINESS_SUMMARY="$OUT_ROOT/claim-readiness/summary.json" \
+    AO2_RSI_IMPROVEMENT_COVENANT_GATE_SUMMARY="$OUT_ROOT/covenant-gate/summary.json" \
+    AO2_RSI_IMPROVEMENT_COVENANT_SCHEMA_EXIT_CODE="$LOG_DIR/covenant_gate_schema_validate.log.exit-code" \
+    npm run rsi:improvement-evidence-gate
+
 python3 - "$OUT_ROOT" "$SUMMARY" <<'PY'
 import json
 import sys
@@ -113,6 +123,7 @@ steps = [
     "claim_readiness",
     "covenant_claim_publish_gate",
     "covenant_gate_schema_validate",
+    "improvement_evidence_gate",
 ]
 
 def read_exit_code(name: str) -> int:
@@ -138,6 +149,7 @@ readback = read_json(out_root / "control-plane-readback" / "summary.json")
 index = read_json(out_root / "readback-index" / "summary.json")
 claim = read_json(out_root / "claim-readiness" / "summary.json")
 gate = read_json(out_root / "covenant-gate" / "summary.json")
+improvement = read_json(out_root / "improvement-evidence-gate" / "summary.json")
 
 passed = (
     all(item["exit_code"] == 0 for item in checks)
@@ -150,6 +162,12 @@ passed = (
     and gate.get("status") == "denied"
     and gate.get("decision") == "deny"
     and gate.get("publish_authority") is False
+    and improvement.get("schema_version") == "ao2.rsi-improvement-evidence-gate.v1"
+    and improvement.get("status") == "passed"
+    and improvement.get("improvement_ready") is True
+    and improvement.get("metric", {}).get("measured_improvement_percent", 0) >= 5.0
+    and improvement.get("claim_publish_decision") == "deny"
+    and improvement.get("claim_publish_authority") is False
 )
 
 payload = {
@@ -167,6 +185,19 @@ payload = {
         "readback_index": str(out_root / "readback-index" / "summary.json"),
         "claim_readiness": str(out_root / "claim-readiness" / "summary.json"),
         "covenant_claim_publish_gate": str(out_root / "covenant-gate" / "summary.json"),
+        "improvement_evidence_gate": str(out_root / "improvement-evidence-gate" / "summary.json"),
+    },
+    "improvement_evidence": {
+        "schema_version": improvement.get("schema_version"),
+        "status": improvement.get("status"),
+        "improvement_ready": improvement.get("improvement_ready"),
+        "unit": improvement.get("metric", {}).get("unit"),
+        "baseline_check_count": improvement.get("metric", {}).get("baseline_check_count"),
+        "observed_check_count": improvement.get("metric", {}).get("observed_check_count"),
+        "target_percent": improvement.get("metric", {}).get("target_percent"),
+        "measured_improvement_percent": improvement.get("metric", {}).get("measured_improvement_percent"),
+        "claim_publish_decision": improvement.get("claim_publish_decision"),
+        "claim_publish_authority": improvement.get("claim_publish_authority"),
     },
     "observed_evidence": {
         "live_self_change_rehearsal_status": live.get("status"),
@@ -177,6 +208,9 @@ payload = {
         "covenant_gate_schema_version": gate.get("schema_version"),
         "covenant_gate_status": gate.get("status"),
         "covenant_gate_blocker_count": gate.get("blocker_count", 0),
+        "improvement_gate_schema_version": improvement.get("schema_version"),
+        "improvement_gate_status": improvement.get("status"),
+        "measured_improvement_percent": improvement.get("metric", {}).get("measured_improvement_percent"),
     },
     "trust_boundary": {
         "local_only": True,
