@@ -10,12 +10,19 @@ mkdir -p "$OUT_ROOT"
 
 python3 - "$ROOT" "$SUMMARY" <<'PY'
 import json
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 root = Path(sys.argv[1])
 summary_path = Path(sys.argv[2])
+self_change_dry_run_summary = Path(
+    os.environ.get(
+        "AO2_RSI_SELF_CHANGE_DRY_RUN_SUMMARY",
+        root / "target" / "rsi-self-change-dry-run" / "latest" / "summary.json",
+    )
+)
 
 bounded_required = [
     "scripts/pulse-auto-advance.sh",
@@ -60,7 +67,47 @@ full_blockers = [
     },
 ]
 
+def read_self_change_dry_run_evidence(path):
+    if not path.is_file():
+        return {
+            "evidence_state": "missing",
+            "schema_version": None,
+            "status": "missing",
+        }
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {
+            "evidence_state": "invalid",
+            "schema_version": None,
+            "status": "invalid_json",
+        }
+
+    trust_boundary = payload.get("trust_boundary", {})
+    expected_trust_boundary = {
+        "local_only": True,
+        "uses_network": False,
+        "requires_provider_api_key": False,
+        "stores_credentials": False,
+        "mutates_repositories": False,
+        "applies_patch": False,
+        "publishes_claims": False,
+    }
+    evidence_present = (
+        payload.get("schema_version") == "ao2.rsi-governed-self-change-dry-run.v1"
+        and payload.get("status") == "dry_run_evidence_ready"
+        and payload.get("self_change", {}).get("mode") == "dry_run"
+        and payload.get("rollback", {}).get("mode") == "dry_run"
+        and trust_boundary == expected_trust_boundary
+    )
+    return {
+        "evidence_state": "present" if evidence_present else "invalid",
+        "schema_version": payload.get("schema_version"),
+        "status": payload.get("status", "missing"),
+    }
+
 bounded_allowed = not bounded_missing
+self_change_dry_run_evidence = read_self_change_dry_run_evidence(self_change_dry_run_summary)
 payload = {
     "schema_version": "ao2.rsi-claim-readiness-audit.v1",
     "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -79,6 +126,9 @@ payload = {
         "full_autonomous_self_mutating_rsi": {
             "decision": "denied",
             "evidence_state": "missing_required_evidence",
+            "partial_evidence": {
+                "governed_self_change_dry_run": self_change_dry_run_evidence,
+            },
             "blockers": full_blockers,
         },
     },
