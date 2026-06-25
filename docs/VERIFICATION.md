@@ -954,7 +954,9 @@ Result:
   `ao2.stable-promotion-workflow.v1` summary,
   `ao2.operator-release-evidence-bundle.v1` summary, and
   `ao2.rsi-cross-repo-e2e.v1` summary into one read-only operator packet at
-  `target/stable-release-evidence-packet/latest`. It emits
+  `target/stable-release-evidence-packet/latest`. It also preserves the nested
+  `ao2.rsi-improvement-evidence-gate.v1` result and requires
+  `measured_improvement_percent >= 5` before the packet can be ready. It emits
   `ao2.stable-release-evidence-packet.v1`, `summary.json`, and
   `dashboard.html`, and fails closed unless the stable promotion evidence gate
   reports `post_release_evidence_ready=true` with
@@ -962,7 +964,8 @@ Result:
   `operator_release_evidence_ready=true`. It also requires
   `claim_publish_decision=deny`, `claim_publish_authority=false`, and the
   nested `covenant.rsi-claim-publish-gate.v1` denial evidence before the stable
-  packet can be ready. Use
+  packet can be ready. The improvement metric is workflow-hardening coverage,
+  not proof that full autonomous RSI is publishable. Use
   `AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY=<path>` and
   `AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY=<path>` plus
   `AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY=<path>` to compose from

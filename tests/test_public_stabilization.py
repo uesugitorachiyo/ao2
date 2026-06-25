@@ -3715,9 +3715,12 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
         "ao2.stable-promotion-workflow.v1",
         "ao2.operator-release-evidence-bundle.v1",
         "ao2.rsi-cross-repo-e2e.v1",
+        "ao2.rsi-improvement-evidence-gate.v1",
         "covenant.rsi-claim-publish-gate.v1",
         "post_release_evidence_ready",
         "operator_release_evidence_ready",
+        "measured_improvement_percent",
+        "rsi_improvement_evidence",
         "claim_publish_decision",
         "claim_publish_authority",
         "stable_release_evidence_ready",
@@ -3812,6 +3815,24 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
                         "covenant.rsi-claim-publish-gate.v1"
                     ),
                     "covenant_gate_status": "denied",
+                    "improvement_evidence_schema_version": (
+                        "ao2.rsi-improvement-evidence-gate.v1"
+                    ),
+                    "improvement_measured_percent": 16.6667,
+                    "improvement_target_percent": 5.0,
+                    "improvement_status": "passed",
+                },
+                "improvement_evidence": {
+                    "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
+                    "status": "passed",
+                    "improvement_ready": True,
+                    "unit": "enforced_rsi_evidence_checks",
+                    "baseline_check_count": 6,
+                    "observed_check_count": 7,
+                    "target_percent": 5.0,
+                    "measured_improvement_percent": 16.6667,
+                    "claim_publish_decision": "deny",
+                    "claim_publish_authority": False,
                 },
                 "trust_boundary": {
                     "requires_provider_api_key": False,
@@ -3863,6 +3884,18 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
         "covenant_gate_schema_version": "covenant.rsi-claim-publish-gate.v1",
         "covenant_gate_status": "denied",
     }
+    assert summary["rsi_improvement_evidence"] == {
+        "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
+        "status": "passed",
+        "improvement_ready": True,
+        "unit": "enforced_rsi_evidence_checks",
+        "baseline_check_count": 6,
+        "observed_check_count": 7,
+        "target_percent": 5.0,
+        "measured_improvement_percent": 16.6667,
+        "claim_publish_decision": "deny",
+        "claim_publish_authority": False,
+    }
     assert summary["public_pair_digest_audit"]["artifact"] == "ao2-public-release-pair-digest-audit"
     assert (
         summary["public_pair_digest_audit"]["schema_version"]
@@ -3885,6 +3918,9 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
     assert "ao2-public-release-pair-digest-audit" in dashboard
     assert "RSI claim-publish boundary" in dashboard
     assert "covenant.rsi-claim-publish-gate.v1" in dashboard
+    assert "RSI improvement evidence" in dashboard
+    assert "ao2.rsi-improvement-evidence-gate.v1" in dashboard
+    assert "16.6667" in dashboard
     assert "Archive parity" in dashboard
 
     verification = read("docs/VERIFICATION.md")
@@ -3892,11 +3928,14 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
     assert "ao2.stable-release-evidence-packet.v1" in verification
     assert "AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY" in verification
     assert "claim_publish_decision=deny" in verification
+    assert "ao2.rsi-improvement-evidence-gate.v1" in verification
+    assert "measured_improvement_percent >= 5" in verification
 
     public_release_index = read("docs/release/PUBLIC-RELEASE-VERIFICATION.md")
     assert "Stable release evidence packet" in public_release_index
     assert "release:stable-evidence-packet" in public_release_index
     assert "ao2.rsi-cross-repo-e2e.v1" in public_release_index
+    assert "ao2.rsi-improvement-evidence-gate.v1" in public_release_index
 
     ci = read(".github/workflows/ci.yml")
     for needle in [
@@ -3916,6 +3955,8 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
         "npm run release:stable-evidence-packet",
         "ao2.stable-release-evidence-packet.v1",
         "ao2.rsi-cross-repo-e2e.v1",
+        "ao2.rsi-improvement-evidence-gate.v1",
+        "measured_improvement_percent",
         "claim_publish_decision",
         "stable_release_evidence_ready",
         "ao2-stable-release-evidence-packet",
@@ -5014,6 +5055,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "latest/readback-index/summary.json",
         "latest/claim-readiness/summary.json",
         "latest/covenant-gate/summary.json",
+        "latest/improvement-evidence-gate/summary.json",
     ]
     assert artifacts["rsi_cross_repo_e2e"]["schema_versions"] == [
         "ao2.rsi-cross-repo-e2e.v1",
@@ -5022,6 +5064,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2.rsi-live-self-change-readback-evidence-index.v1",
         "ao2.rsi-claim-readiness-audit.v1",
         "covenant.rsi-claim-publish-gate.v1",
+        "ao2.rsi-improvement-evidence-gate.v1",
     ]
     assert artifacts["rsi_cross_repo_e2e"]["required_checks"] == [
         "ci_rsi_cross_repo_e2e_artifact_job"
@@ -5078,12 +5121,14 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "stable-promotion-workflow/summary.json",
         "operator-release-evidence-bundle/summary.json",
         "rsi-cross-repo-e2e/latest/summary.json",
+        "rsi-cross-repo-e2e/latest/improvement-evidence-gate/summary.json",
     ]
     assert artifacts["stable_release_evidence_packet"]["schema_versions"] == [
         "ao2.stable-release-evidence-packet.v1",
         "ao2.stable-promotion-workflow.v1",
         "ao2.operator-release-evidence-bundle.v1",
         "ao2.rsi-cross-repo-e2e.v1",
+        "ao2.rsi-improvement-evidence-gate.v1",
     ]
     assert artifacts["stable_release_evidence_packet"]["source_artifacts"] == [
         "stable-promotion-workflow",
@@ -5506,6 +5551,18 @@ def _write_release_readiness_consumer_fixture(root: Path):
                 ),
                 "covenant_gate_status": "denied",
             },
+            "improvement_evidence": {
+                "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
+                "status": "passed",
+                "improvement_ready": True,
+                "unit": "enforced_rsi_evidence_checks",
+                "baseline_check_count": 6,
+                "observed_check_count": 7,
+                "target_percent": 5.0,
+                "measured_improvement_percent": 16.6667,
+                "claim_publish_decision": "deny",
+                "claim_publish_authority": False,
+            },
             "trust_boundary": {
                 "requires_provider_api_key": False,
                 "stores_credentials": False,
@@ -5589,6 +5646,15 @@ def _write_release_readiness_consumer_fixture(root: Path):
                 "claim_publish_authority": False,
                 "covenant_gate_schema_version": "covenant.rsi-claim-publish-gate.v1",
                 "covenant_gate_status": "denied",
+            },
+            "rsi_improvement_evidence": {
+                "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
+                "status": "passed",
+                "improvement_ready": True,
+                "target_percent": 5.0,
+                "measured_improvement_percent": 16.6667,
+                "claim_publish_decision": "deny",
+                "claim_publish_authority": False,
             },
             "trust_boundary": {
                 "mutates_releases": False,
@@ -12695,6 +12761,15 @@ root.mkdir(parents=True, exist_ok=True)
                             "covenant.rsi-claim-publish-gate.v1"
                         ),
                         "covenant_gate_status": "denied",
+                    },
+                    "rsi_improvement_evidence": {
+                        "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
+                        "status": "passed",
+                        "improvement_ready": True,
+                        "target_percent": 5.0,
+                        "measured_improvement_percent": 16.6667,
+                        "claim_publish_decision": "deny",
+                        "claim_publish_authority": False,
                     },
                 },
                 "trust_boundary": {
