@@ -140,6 +140,31 @@ require(dual_repo_summary.get("archives", {}).get("ao2", {}).get("manifest_schem
 require(dual_repo_summary.get("archives", {}).get("ao2_control_plane", {}).get("manifest_schema") == "ao2-control-plane.release-manifest.v1", "unexpected control-plane archive manifest schema", dual_repo_summary)
 require(dual_repo_summary.get("trust_boundary", {}).get("auth_value_stored") is False, "dual-repo installed smoke stored auth value", dual_repo_summary)
 
+rsi_cross_repo_summary_path, rsi_cross_repo_summary = load_json("ao2-rsi-cross-repo-e2e/latest/summary.json")
+require(rsi_cross_repo_summary.get("schema_version") == "ao2.rsi-cross-repo-e2e.v1", "unexpected RSI cross-repo E2E schema", rsi_cross_repo_summary)
+require(rsi_cross_repo_summary.get("status") == "passed", "RSI cross-repo E2E did not pass", rsi_cross_repo_summary)
+rsi_covenant_gate_summary_path, rsi_covenant_gate_summary = load_json("ao2-rsi-cross-repo-e2e/latest/covenant-gate/summary.json")
+require(
+    rsi_cross_repo_summary.get("claim_publish_decision") == "deny"
+    and rsi_cross_repo_summary.get("claim_publish_authority") is False
+    and rsi_cross_repo_summary.get("observed_evidence", {}).get("covenant_gate_schema_version") == "covenant.rsi-claim-publish-gate.v1"
+    and rsi_cross_repo_summary.get("observed_evidence", {}).get("covenant_gate_status") == "denied"
+    and rsi_cross_repo_summary.get("trust_boundary", {}).get("requires_provider_api_key") is False
+    and rsi_cross_repo_summary.get("trust_boundary", {}).get("stores_credentials") is False
+    and rsi_cross_repo_summary.get("trust_boundary", {}).get("publishes_claims") is False
+    and rsi_cross_repo_summary.get("trust_boundary", {}).get("approves_rsi_claims") is False,
+    "RSI cross-repo E2E claim publish boundary was not denied",
+    rsi_cross_repo_summary,
+)
+require(
+    rsi_covenant_gate_summary.get("schema_version") == "covenant.rsi-claim-publish-gate.v1"
+    and rsi_covenant_gate_summary.get("status") == "denied"
+    and rsi_covenant_gate_summary.get("decision") == "deny"
+    and rsi_covenant_gate_summary.get("publish_authority") is False,
+    "RSI Covenant claim-publish gate did not deny publish authority",
+    rsi_covenant_gate_summary,
+)
+
 publication_closure_summary_path, publication_closure_summary = load_json("ao2-release-publication-closure/summary.json")
 require(publication_closure_summary.get("schema_version") == "ao2.release-publication-dry-run-closure.v1", "unexpected release publication closure schema", publication_closure_summary)
 require(publication_closure_summary.get("status") == "passed", "release publication closure did not pass", publication_closure_summary)
@@ -209,6 +234,7 @@ required_checks = [
     "ci_ai_task_board_control_plane_bridge_artifact_job",
     "ci_pulse_task_board_closure_packet_artifact_job",
     "ci_pulse_ao2_event_loop_smoke_artifact_job",
+    "ci_rsi_cross_repo_e2e_artifact_job",
     "ci_dual_repo_installed_release_smoke_artifact_job",
     "ci_release_publication_closure_artifact_job",
     "ci_dual_repo_release_publication_closure_index_job",
@@ -233,6 +259,7 @@ consumer_summary = {
         "ao2-ai-task-board-control-plane-bridge",
         "ao2-pulse-task-board-closure-packet",
         "ao2-pulse-ao2-event-loop-smoke",
+        "ao2-rsi-cross-repo-e2e",
         "ao2-dual-repo-installed-release-smoke",
         "ao2-release-publication-closure",
         "ao2-dual-repo-release-publication-closure-index",
@@ -250,6 +277,8 @@ consumer_summary = {
         str(pulse_generate_next_summary_path),
         str(ao2_decision_path),
         str(dual_repo_summary_path),
+        str(rsi_cross_repo_summary_path),
+        str(rsi_covenant_gate_summary_path),
         str(publication_closure_summary_path),
         str(dual_repo_publication_closure_summary_path),
         str(stable_release_evidence_packet_path),
@@ -274,6 +303,14 @@ consumer_summary = {
         "readiness_schema_version": hosted_gate_detail.get("readiness_schema_version"),
         "artifact_closure_schema_version": hosted_gate_detail.get("artifact_closure_schema_version"),
         "public_pair_digest_gate": hosted_public_pair_digest_gate,
+    },
+    "rsi_cross_repo_e2e": {
+        "schema_version": rsi_cross_repo_summary.get("schema_version"),
+        "status": rsi_cross_repo_summary.get("status"),
+        "claim_publish_decision": rsi_cross_repo_summary.get("claim_publish_decision"),
+        "claim_publish_authority": rsi_cross_repo_summary.get("claim_publish_authority"),
+        "covenant_gate_schema_version": rsi_cross_repo_summary.get("observed_evidence", {}).get("covenant_gate_schema_version"),
+        "covenant_gate_status": rsi_cross_repo_summary.get("observed_evidence", {}).get("covenant_gate_status"),
     },
     "required_checks": required_checks,
     "trust_boundary": {

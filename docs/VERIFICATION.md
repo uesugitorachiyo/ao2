@@ -562,6 +562,7 @@ Result:
   `ao2-ai-task-board-control-plane-bridge`,
   `ao2-pulse-task-board-closure-packet`,
   `ao2-pulse-ao2-event-loop-smoke`,
+  `ao2-rsi-cross-repo-e2e`,
   `ao2-dual-repo-installed-release-smoke`,
   `ao2-release-publication-closure`,
   `ao2-dual-repo-release-publication-closure-index`,
@@ -576,14 +577,15 @@ Result:
 - `Release readiness artifact consumer`: CI job that depends on
   `Release readiness artifacts` and `Release train control-plane bridge
   artifacts`, the AI task-board bridge, Pulse task-board closure packet,
-  dual-repo installed release smoke, and `Release publication closure
-  artifacts`, plus the dual-repo publication closure index and stable release
-  evidence packet; downloads
+  Pulse AO2 event-loop smoke, RSI cross-repo E2E, dual-repo installed release
+  smoke, and `Release publication closure artifacts`, plus the dual-repo
+  publication closure index and stable release evidence packet; downloads
   `ao2-release-readiness`,
   `ao2-release-train-control-plane-bridge`,
   `ao2-ai-task-board-control-plane-bridge`,
   `ao2-pulse-task-board-closure-packet`,
   `ao2-pulse-ao2-event-loop-smoke`,
+  `ao2-rsi-cross-repo-e2e`,
   `ao2-dual-repo-installed-release-smoke`, and
   `ao2-release-publication-closure`; validates the
   `ao2.release-readiness-local.v1` summary/status/core cross-OS checks, the
@@ -594,7 +596,12 @@ Result:
   `decision_source=file`, the nested ready
   `ao2.pulse-generate-next.v1` summary, the
   `ao2.pulse-event-loop-decision.v1` decision file, the embedded
-  `ao2.pulse-event-loop-decision-metadata.v1` metadata, and the
+  `ao2.pulse-event-loop-decision-metadata.v1` metadata, the
+  `ao2.rsi-cross-repo-e2e.v1` summary, the nested
+  `covenant.rsi-claim-publish-gate.v1` summary, the required
+  `claim_publish_decision=deny` and `claim_publish_authority=false` evidence,
+  and the RSI trust-boundary fields proving no provider API key, credential
+  storage, claim publication, or RSI approval authority, and the
   `ao2.release-publication-dry-run-closure.v1` publication/stable readiness
   fields. The companion `Dual-repo release publication closure index` job
   downloads AO2's `ao2-release-publication-closure` and the latest successful
