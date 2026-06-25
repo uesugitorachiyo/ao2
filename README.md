@@ -89,6 +89,23 @@ to the repository, mutate the repository, use the network, require provider
 keys, or publish the full RSI claim. It is evidence for a governed self-change
 rehearsal, not proof of live autonomous self-mutation.
 
+Run the explicit live self-change rehearsal with:
+
+```sh
+AO2_RSI_LIVE_SELF_CHANGE_REHEARSAL=1 npm run rsi:live-self-change-rehearsal
+```
+
+The rehearsal emits `ao2.rsi-live-self-change-rehearsal.v1` under
+`target/rsi-live-self-change-rehearsal/latest/summary.json`, plus proposed and
+rollback patch artifacts. The command is refused unless
+`AO2_RSI_LIVE_SELF_CHANGE_REHEARSAL=1` is set. When enabled, it briefly mutates
+`scripts/rsi-claim-readiness-audit.sh`, verifies the changed script, and
+rolls the file back to its exact pre-run SHA-256. This is operator-gated live
+self-change evidence with local rollback proof; it still does not publish the
+full RSI claim. The command does not publish the full RSI claim because
+control-plane observer readback, Covenant claim-publish
+approval, and retained claim-level evidence are still required.
+
 ## Why AO2?
 
 Most agent systems focus on doing work. AO2 focuses on making the work
