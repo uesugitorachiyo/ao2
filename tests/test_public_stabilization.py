@@ -14847,6 +14847,50 @@ def test_script_surface_audit_preserves_local_rsi_scripts_before_promotion():
     assert "target/script-surface-audit/latest/summary.json" in verification
 
 
+def test_operator_skill_pack_parity_is_part_of_public_hardening():
+    package_json = json.loads(read("package.json"))
+    verification = read("docs/VERIFICATION.md")
+    public_hardening = read("scripts/public-hardening-subset.sh")
+    assert (
+        package_json["scripts"]["skills:operator-pack-parity"]
+        == "node scripts/run-sh-script.js scripts/operator-skill-pack-parity.sh"
+    )
+
+    script_path = REPO_ROOT / "scripts" / "operator-skill-pack-parity.sh"
+    assert script_path.is_file()
+    assert script_path.stat().st_mode & stat.S_IXUSR
+    text = script_path.read_text(encoding="utf-8")
+
+    for needle in [
+        "ao2.operator-skill-pack-parity.v1",
+        'root / "skills"',
+        'root / ".claude" / "skills"',
+        "missing_package_commands",
+        "skill_files_byte_for_byte_identical",
+        "mutates_repository",
+    ]:
+        assert needle in text
+
+    for forbidden in [
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+        "/Users/torachiyouesugi/Documents/private",
+        "target/long-lived-control-plane/api-token",
+        "gh release create",
+        "git push origin",
+        "npm publish",
+    ]:
+        assert forbidden not in text
+
+    assert "operator_skill_pack_parity" in public_hardening
+    assert "npm run skills:operator-pack-parity" in public_hardening
+    assert "ao2.operator-skill-pack-parity.v1" in public_hardening
+    assert '"operator_skill_pack_parity"' in public_hardening
+    assert "npm run skills:operator-pack-parity" in verification
+    assert "public:hardening" in verification
+    assert "target/operator-skill-pack-parity/latest/summary.json" in verification
+
+
 def test_shared_gate_library_migration_is_promoted_as_public_safe_gate():
     package_json = json.loads(read("package.json"))
     verification = read("docs/VERIFICATION.md")

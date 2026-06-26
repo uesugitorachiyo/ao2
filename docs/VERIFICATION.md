@@ -363,6 +363,10 @@ command references against `package.json`. The gate emits
 `target/operator-skill-pack-parity/latest/summary.json`, plus an operator
 report. It is local-only, stores no credentials, performs no repository
 mutation, and does not publish.
+`npm run public:hardening` also runs this gate with its evidence rooted under
+`target/public-hardening-subset/latest/operator-skill-pack-parity/`, so the
+public hardening workflow catches AO2 operator skill drift automatically on pull
+requests.
 
 `npm run scripts:tracking-decision-cleanup` promotes the local script tracking
 decision cleanup wrapper into a tracked, public-safe evidence gate. It runs the
@@ -1768,8 +1772,10 @@ The public hardening workflow at `.github/workflows/ao2-public-hardening.yml`
 runs on pull request and manual dispatch only. It uses read-only repository
 permissions, seeds a local Pulse packet with `pulse:generate-next`, mirrors that
 packet with `pulse:local-mirror`, then runs the public stabilization tests,
-`public:hardening`, and `pulse:resume -- --dry-run`. The local parity commands
-above emit `ao2.public-hardening-ci-workflow.v1`,
+`public:hardening`, and `pulse:resume -- --dry-run`. The `public:hardening`
+step includes `skills:operator-pack-parity`, which emits
+`ao2.operator-skill-pack-parity.v1` and fails the workflow on AO2 operator skill
+drift. The local parity commands above emit `ao2.public-hardening-ci-workflow.v1`,
 `ao2.public-hardening-workflow-file-dry-run.v1`,
 `ao2.public-hardening-workflow-tracked-proposal.v1`, and
 `ao2.public-hardening-ci-local-runner-parity.v1` under `target/`.
