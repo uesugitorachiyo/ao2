@@ -882,6 +882,14 @@ Result:
   `claim_publish_decision=deny`, and `publish_authority=false` for the full
   autonomous self-mutating RSI claim. CI uploads the evidence directory as
   `ao2-rsi-cross-repo-e2e`.
+- `npm run rsi:operator-closure-packet`: reads the latest AO2 cross-repo E2E
+  summary and ao2-control-plane chain-binding readback, then emits
+  `ao2.rsi-operator-closure-packet.v1` at
+  `target/rsi-operator-closure-packet/latest/summary.json`, plus `closure.md`.
+  The packet is the compact operator closure/readback surface for the current
+  AO stack RSI boundary: bounded governed RSI is supported; full autonomous RSI publication remains denied; and control-plane remains observer-only. It fails
+  closed if the AO2 denial boundary, Foundry control-surface packet, Covenant
+  decision, or control-plane observer boundary is missing or changed.
 - `npm run rsi:blueprint-authorization-gate`: validates an AO Blueprint
   `ao.blueprint.build-authorization.v0.1` packet as the RSI Tiered Gate intake
   boundary and emits `ao2.rsi-blueprint-authorization-gate.v1` at

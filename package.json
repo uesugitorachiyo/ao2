@@ -86,6 +86,7 @@
     "rsi:baseline-packet": "node scripts/run-sh-script.js scripts/rsi-baseline-packet.sh",
     "rsi:eligibility-packet": "node scripts/run-sh-script.js scripts/rsi-eligibility-packet.sh",
     "rsi:cross-repo-e2e": "node scripts/run-sh-script.js scripts/rsi-cross-repo-e2e.sh",
+    "rsi:operator-closure-packet": "node scripts/run-sh-script.js scripts/rsi-operator-closure-packet.sh",
     "rsi:self-change-dry-run": "node scripts/run-sh-script.js scripts/rsi-governed-self-change-dry-run.sh",
     "pulse:local-mirror": "node scripts/run-sh-script.js scripts/pulse-local-mirror.sh",
     "pulse:resume": "node scripts/run-sh-script.js scripts/pulse-resume.sh",
