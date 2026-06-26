@@ -194,6 +194,21 @@ denied with `publish_authority=false`. The packet reads local evidence only; it
 does not mutate repositories, publish claims, approve RSI claims, or authorize
 AO Blueprint self-change.
 
+After two baseline packets exist, compose the repeated-run RSI eligibility
+packet with:
+
+```sh
+npm run rsi:eligibility-packet
+```
+
+The packet emits `ao2.rsi-eligibility-packet.v1` under
+`target/rsi-eligibility-packet/latest/summary.json`, plus `dashboard.html`. It
+fails closed unless both baseline packets are ready, both preserve
+`claim_publish_decision=deny` and `claim_publish_authority=false`, and both are
+backed by tiered AO Blueprint authorization that is not self-authorized by RSI.
+This is eligibility/readback evidence only; it does not publish claims, approve
+RSI claims, mutate repositories, or authorize AO Blueprint self-change.
+
 ## Why AO2?
 
 Most agent systems focus on doing work. AO2 focuses on making the work
