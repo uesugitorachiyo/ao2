@@ -20,3 +20,6 @@ This directory is not a marketplace. Do not import broad skills only to match an
 - Include exit criteria.
 - Do not add plugin wiring unless AO2 has a deliberate plugin integration path.
 - Do not import Hermes parity packs, broad marketplace skills, or out-of-scope swarm machinery.
+- After changing AO2 skills, run `npm run skills:operator-pack-parity` to prove
+  `skills/ao2-*` and `.claude/skills/ao2-*` stayed synchronized and command
+  references still exist.

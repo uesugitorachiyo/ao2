@@ -66,6 +66,7 @@ npm run scripts:tracking-review-to-commit-plan # script promotion minimal commit
 npm run scripts:tracking-commit-ready-diff # script promotion commit-ready diff evidence
 npm run scripts:tracking-ready-review-pack # script promotion ready review packet evidence
 npm run scripts:surface-audit # preserve and classify local RSI/Pulse scripts before promotion
+npm run skills:operator-pack-parity # AO2 operator skill parity and command-reference evidence
 npm run pulse:next-task-quality-filter # next task quality filter
 npm run pulse:quality-filter-negative-corpus # Pulse quality filter negative fixtures
 npm run pulse:quality-filter-required-gate # required Pulse quality gate boundary evidence
@@ -353,6 +354,15 @@ missing package command references without running those wrappers. The gate emit
 `snapshot-manifest.json` and `classification-report.md`. This is preservation
 and decision support only: it does not auto-promote, delete, push, publish, or
 store credentials.
+
+`npm run skills:operator-pack-parity` verifies repo-native `skills/ao2-*` and
+Claude-compatible `.claude/skills/ao2-*` skill copies stay byte-for-byte
+identical. It also validates frontmatter, ASCII-only content, and `npm run`
+command references against `package.json`. The gate emits
+`ao2.operator-skill-pack-parity.v1` at
+`target/operator-skill-pack-parity/latest/summary.json`, plus an operator
+report. It is local-only, stores no credentials, performs no repository
+mutation, and does not publish.
 
 `npm run scripts:tracking-decision-cleanup` promotes the local script tracking
 decision cleanup wrapper into a tracked, public-safe evidence gate. It runs the
