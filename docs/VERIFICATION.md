@@ -874,6 +874,9 @@ Result:
   `ao2.rsi-blueprint-authorization-gate.v1`,
   `ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1` with
   `dashboard_artifact=ao2-release-readiness-consumer/dashboard.html`,
+  `control_plane_foundry_packet_readback` with
+  `ao.foundry.rsi-control-surface-packet.v0.1` and
+  `ao2.cp-ao-stack-rsi-chain-binding-readback.v1`,
   `ao2.rsi-improvement-evidence-gate.v1`, `measured_improvement_percent >= 5`,
   `ao2.rsi-improvement-trend.v1`, `delta_from_previous_percent`,
   `claim_publish_decision=deny`, and `publish_authority=false` for the full

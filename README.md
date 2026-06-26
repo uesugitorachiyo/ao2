@@ -185,8 +185,14 @@ expected final Covenant gate remains `publish_authority=false` with schema
 `ao2.rsi-blueprint-authorization-gate.v1`,
 `ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1`,
 `release_readiness_dashboard_readback`, `dashboard_artifact`,
+`control_plane_foundry_packet_readback`,
+`ao.foundry.rsi-control-surface-packet.v0.1`,
+`ao2.cp-ao-stack-rsi-chain-binding-readback.v1`,
 `measured_improvement_percent`, and
 `delta_from_previous_percent`.
+`control_plane_foundry_packet_readback` records that ao2-control-plane can
+consume Foundry's RSI control-surface packet as observer-only readback; it does
+not approve RSI claims, publish claims, or expand AO2 authority.
 The smoke proves the denial chain and 5% workflow-hardening measurement are
 wired end to end, not that the full RSI claim is publishable.
 
