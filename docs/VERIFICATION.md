@@ -92,6 +92,7 @@ npm run release:dr-retention-snapshot # DR/retention long-run fixture snapshot
 npm run frontier:lengthy:gate # aggregate local gate for the frontier lengthy task set
 npm run rsi:improvement-evidence-gate # local RSI evidence hardening improvement gate
 npm run rsi:cross-repo-e2e # AO2/control-plane/Covenant RSI claim publish-denial smoke
+npm run rsi:baseline-packet # operator-readable RSI trend/readback baseline packet
 npm run gate:full            # 3-stage ready-to-ship gate (guard + replacement + release-gate)
 scripts/smoke-release-archives.sh
 ```
@@ -882,6 +883,15 @@ Result:
   present, `delta_from_previous_percent`, and the same
   `claim_publish_decision=deny` / `claim_publish_authority=false` boundary.
   It writes local history only; it does not publish or approve RSI claims.
+- `npm run rsi:baseline-packet`: reads an existing RSI cross-repo E2E summary
+  and emits `ao2.rsi-baseline-packet.v1` at
+  `target/rsi-baseline-packet/latest/summary.json`, plus `dashboard.html`.
+  The packet fails closed unless the 5% workflow-hardening metric is met, AO
+  Blueprint authorization remains tiered and not self-authorized by RSI, and
+  the full autonomous RSI claim remains denied with `publish_authority=false`.
+  It is an operator-readable baseline/readback packet only; it does not mutate
+  repositories, publish claims, approve RSI claims, or authorize AO Blueprint
+  self-change. CI uploads it as `ao2-rsi-baseline-packet`.
 - `npm run release:install-update-fixture`: builds a local signed fixture
   archive with `SHA256SUMS`, `provenance.json`, and a signature sidecar,
   verifies checksum/install/update behavior, references `release:download-verify`

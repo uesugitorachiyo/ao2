@@ -178,6 +178,22 @@ expected final Covenant gate remains `publish_authority=false` with schema
 The smoke proves the denial chain and 5% workflow-hardening measurement are
 wired end to end, not that the full RSI claim is publishable.
 
+Compose the operator-readable RSI baseline packet from an existing cross-repo
+E2E summary with:
+
+```sh
+npm run rsi:baseline-packet
+```
+
+The packet emits `ao2.rsi-baseline-packet.v1` under
+`target/rsi-baseline-packet/latest/summary.json`, plus `dashboard.html`. It
+surfaces the RSI trend, Blueprint authorization, Covenant denial, and
+control-plane readback inputs in one compact packet. It fails closed unless the
+5% workflow-hardening metric is met and the full autonomous RSI claim remains
+denied with `publish_authority=false`. The packet reads local evidence only; it
+does not mutate repositories, publish claims, approve RSI claims, or authorize
+AO Blueprint self-change.
+
 ## Why AO2?
 
 Most agent systems focus on doing work. AO2 focuses on making the work
