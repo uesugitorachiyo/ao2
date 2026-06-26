@@ -151,6 +151,10 @@ def test_rsi_improvement_evidence_gate_measures_five_percent_hardening(tmp_path)
         "release_readiness_dashboard_readback",
         "ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1",
         "dashboard_link_ready",
+        "control_surface_readback",
+        "bounded_governed_rsi",
+        "target_exceeded",
+        "workflow_hardening_coverage_not_publication_authority",
     ]:
         assert needle in text
 
@@ -294,8 +298,31 @@ def test_rsi_improvement_evidence_gate_measures_five_percent_hardening(tmp_path)
     assert summary["blueprint_authorization"]["self_authorized_by_rsi"] is False
     assert summary["claim_publish_decision"] == "deny"
     assert summary["claim_publish_authority"] is False
+    assert summary["control_surface_readback"] == {
+        "loop_goal": "bounded_governed_rsi_control_surface_readback",
+        "bounded_governed_rsi": {
+            "status": "supported",
+            "evidence_state": "passing",
+            "improvement_state": "target_exceeded",
+        },
+        "full_autonomous_self_mutating_rsi": {
+            "status": "denied",
+            "decision": "deny",
+            "publish_authority": False,
+            "boundary_state": "enforced_by_design",
+        },
+        "improvement_score": {
+            "target_exceeded": True,
+            "interpretation": "workflow_hardening_coverage_not_publication_authority",
+        },
+    }
     assert summary["trust_boundary"]["publishes_claims"] is False
     assert summary["trust_boundary"]["approves_rsi_claims"] is False
+    assert "bounded_governed_rsi=supported evidence_state=passing" in result.stdout
+    assert (
+        "improvement_score=target_exceeded interpretation="
+        "workflow_hardening_coverage_not_publication_authority"
+    ) in result.stdout
 
     blocked = subprocess.run(
         ["npm", "run", "rsi:improvement-evidence-gate"],
@@ -392,6 +419,10 @@ def test_rsi_improvement_trend_persists_history_across_runs(tmp_path):
         "claim_publish_authority",
         "publishes_claims",
         "approves_rsi_claims",
+        "control_surface_readback",
+        "bounded_governed_rsi",
+        "target_exceeded",
+        "workflow_hardening_coverage_not_publication_authority",
     ]:
         assert needle in text
 
@@ -407,6 +438,26 @@ def test_rsi_improvement_trend_persists_history_across_runs(tmp_path):
             "claim_level": "full_autonomous_self_mutating_rsi",
             "claim_publish_decision": "deny",
             "claim_publish_authority": False,
+            "control_surface_readback": {
+                "loop_goal": "bounded_governed_rsi_control_surface_readback",
+                "bounded_governed_rsi": {
+                    "status": "supported",
+                    "evidence_state": "passing",
+                    "improvement_state": "target_exceeded",
+                },
+                "full_autonomous_self_mutating_rsi": {
+                    "status": "denied",
+                    "decision": "deny",
+                    "publish_authority": False,
+                    "boundary_state": "enforced_by_design",
+                },
+                "improvement_score": {
+                    "target_exceeded": True,
+                    "interpretation": (
+                        "workflow_hardening_coverage_not_publication_authority"
+                    ),
+                },
+            },
             "metric": {
                 "unit": "enforced_rsi_evidence_checks",
                 "baseline_check_count": 6,
@@ -446,8 +497,31 @@ def test_rsi_improvement_trend_persists_history_across_runs(tmp_path):
     assert first_summary["delta_from_previous_percent"] is None
     assert first_summary["claim_publish_decision"] == "deny"
     assert first_summary["claim_publish_authority"] is False
+    assert first_summary["control_surface_readback"] == {
+        "loop_goal": "bounded_governed_rsi_control_surface_readback",
+        "bounded_governed_rsi": {
+            "status": "supported",
+            "evidence_state": "passing",
+            "improvement_state": "target_exceeded",
+        },
+        "full_autonomous_self_mutating_rsi": {
+            "status": "denied",
+            "decision": "deny",
+            "publish_authority": False,
+            "boundary_state": "enforced_by_design",
+        },
+        "improvement_score": {
+            "target_exceeded": True,
+            "interpretation": "workflow_hardening_coverage_not_publication_authority",
+        },
+    }
     assert first_summary["trust_boundary"]["publishes_claims"] is False
     assert first_summary["trust_boundary"]["approves_rsi_claims"] is False
+    assert "bounded_governed_rsi=supported evidence_state=passing" in first.stdout
+    assert (
+        "full_autonomous_self_mutating_rsi=denied boundary_state=enforced_by_design"
+        in first.stdout
+    )
     assert history.read_text(encoding="utf-8").count("\n") == 1
 
     current_payload = json.loads(current.read_text(encoding="utf-8"))
@@ -501,6 +575,10 @@ def test_rsi_cross_repo_e2e_contract():
         "dashboard_artifact",
         "AO2_RSI_BLUEPRINT_AUTHORIZATION_SUMMARY",
         "measured_improvement_percent",
+        "control_surface_readback",
+        "bounded_governed_rsi",
+        "target_exceeded",
+        "workflow-hardening coverage",
         "covenant.rsi-claim-publish-gate.v1",
         "publish_authority=false",
     ]:
