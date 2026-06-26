@@ -196,6 +196,20 @@ not approve RSI claims, publish claims, or expand AO2 authority.
 The smoke proves the denial chain and 5% workflow-hardening measurement are
 wired end to end, not that the full RSI claim is publishable.
 
+Compose the operator closure packet for the current AO stack RSI boundary with:
+
+```sh
+npm run rsi:operator-closure-packet
+```
+
+The packet emits `ao2.rsi-operator-closure-packet.v1` under
+`target/rsi-operator-closure-packet/latest/summary.json`, plus `closure.md`.
+It reads the AO2 cross-repo E2E summary and the ao2-control-plane chain-binding
+readback, then states the stable operator boundary in one place:
+bounded governed RSI is supported; full autonomous RSI publication remains denied; and control-plane remains observer-only. It is local readback only; it
+does not mutate repositories, approve RSI claims, publish claims, execute AO
+work, or authorize AO Blueprint self-change.
+
 Compose the operator-readable RSI baseline packet from an existing cross-repo
 E2E summary with:
 

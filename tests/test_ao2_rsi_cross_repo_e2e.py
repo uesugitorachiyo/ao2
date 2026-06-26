@@ -635,6 +635,197 @@ def test_rsi_cross_repo_e2e_contract():
     assert "ANTHROPIC_API_KEY" not in text
 
 
+def test_rsi_operator_closure_packet_summarizes_stack_boundary(tmp_path):
+    package = json.loads(read("package.json"))
+    assert package["scripts"]["rsi:operator-closure-packet"] == (
+        "node scripts/run-sh-script.js scripts/rsi-operator-closure-packet.sh"
+    )
+
+    readme = read("README.md")
+    verification = read("docs/VERIFICATION.md")
+    for needle in [
+        "npm run rsi:operator-closure-packet",
+        "ao2.rsi-operator-closure-packet.v1",
+        "target/rsi-operator-closure-packet/latest/summary.json",
+        "closure.md",
+        "bounded governed RSI is supported",
+        "full autonomous RSI publication remains denied",
+        "control-plane remains observer-only",
+    ]:
+        assert needle in readme
+        assert needle in verification
+
+    script = REPO / "scripts" / "rsi-operator-closure-packet.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.rsi-operator-closure-packet.v1",
+        "AO2_RSI_OPERATOR_CLOSURE_RSI_SUMMARY",
+        "AO2_RSI_OPERATOR_CLOSURE_CONTROL_PLANE_READBACK",
+        "ao2.rsi-cross-repo-e2e.v1",
+        "ao2.cp-ao-stack-rsi-chain-binding-readback.v1",
+        "ao.foundry.rsi-control-surface-packet.v0.1",
+        "bounded_governed_rsi",
+        "full_autonomous_self_mutating_rsi",
+        "claim_publish_decision",
+        "publish_authority",
+        "control_plane_observer_only",
+        "publishes_claims",
+        "approves_rsi_claims",
+    ]:
+        assert needle in text
+    assert "OPENAI_API_KEY" not in text
+    assert "ANTHROPIC_API_KEY" not in text
+
+    rsi_summary = tmp_path / "ao2" / "summary.json"
+    write_json(
+        rsi_summary,
+        {
+            "schema_version": "ao2.rsi-cross-repo-e2e.v1",
+            "status": "passed",
+            "claim_level": "full_autonomous_self_mutating_rsi",
+            "claim_publish_decision": "deny",
+            "claim_publish_authority": False,
+            "control_plane_foundry_packet_readback": {
+                "schema_version": "ao2.cp-ao-stack-rsi-chain-binding-readback.v1",
+                "status": "observer_supported",
+                "foundry_packet_schema_version": "ao.foundry.rsi-control-surface-packet.v0.1",
+                "foundry_control_surface_packet_consumed_by_control_plane": True,
+                "control_plane_observer_only": True,
+                "claim_publish_decision": "deny",
+                "claim_publish_authority": False,
+                "approves_rsi_claims": False,
+                "publishes_claims": False,
+            },
+            "improvement_evidence": {
+                "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
+                "status": "passed",
+                "measured_improvement_percent": 50.0,
+                "target_percent": 5.0,
+                "claim_publish_decision": "deny",
+                "claim_publish_authority": False,
+            },
+            "trust_boundary": {
+                "publishes_claims": False,
+                "approves_rsi_claims": False,
+                "requires_provider_api_key": False,
+                "stores_credentials": False,
+            },
+        },
+    )
+    control_plane_summary = tmp_path / "control-plane" / "summary.json"
+    write_json(
+        control_plane_summary,
+        {
+            "schema_version": "ao2.cp-ao-stack-rsi-chain-binding-readback.v1",
+            "status": "passed",
+            "chain_binding": [
+                {
+                    "stage": "foundry_control_surface_packet",
+                    "schema_version": "ao.foundry.rsi-control-surface-packet.v0.1",
+                    "bounded_governed_rsi": "supported",
+                    "full_autonomous_self_mutating_rsi": "denied",
+                    "control_plane_observer_only": True,
+                    "publishes_full_autonomous_rsi_claim": False,
+                },
+                {
+                    "stage": "covenant_claim_decision",
+                    "schema_version": "covenant.rsi-claim-publish-gate.v1",
+                    "decision": "deny",
+                    "publish_authority": False,
+                },
+                {
+                    "stage": "ao2_execution_evidence",
+                    "schema_version": "ao2.rsi-cross-repo-e2e.v1",
+                    "status": "passed",
+                },
+                {
+                    "stage": "control_plane_readback",
+                    "schema_version": "ao2.cp-ao2-rsi-control-surface-readback.v1",
+                    "status": "passed",
+                    "control_plane_approves_rsi_claims": False,
+                    "publishes_claims": False,
+                },
+            ],
+            "trust_boundary": {
+                "control_plane_mutates_repositories": False,
+                "control_plane_publishes_claims": False,
+                "control_plane_approves_rsi_claims": False,
+                "control_plane_executes_ao_work": False,
+                "provider_api_keys_allowed": False,
+            },
+        },
+    )
+
+    out_root = tmp_path / "closure"
+    result = subprocess.run(
+        ["npm", "run", "rsi:operator-closure-packet"],
+        cwd=REPO,
+        env={
+            **os.environ,
+            "AO2_RSI_OPERATOR_CLOSURE_ROOT": str(out_root),
+            "AO2_RSI_OPERATOR_CLOSURE_RSI_SUMMARY": str(rsi_summary),
+            "AO2_RSI_OPERATOR_CLOSURE_CONTROL_PLANE_READBACK": str(
+                control_plane_summary
+            ),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    closure = (out_root / "closure.md").read_text(encoding="utf-8")
+    assert summary["schema_version"] == "ao2.rsi-operator-closure-packet.v1"
+    assert summary["status"] == "passed"
+    assert summary["operator_closure_ready"] is True
+    assert summary["stable_boundary"] == {
+        "bounded_governed_rsi": "supported",
+        "full_autonomous_self_mutating_rsi": "denied",
+        "claim_publish_decision": "deny",
+        "claim_publish_authority": False,
+        "control_plane_observer_only": True,
+    }
+    assert summary["source_readbacks"]["ao2_cross_repo_e2e"]["status"] == "passed"
+    assert summary["source_readbacks"]["foundry_control_surface_packet"] == {
+        "schema_version": "ao.foundry.rsi-control-surface-packet.v0.1",
+        "bounded_governed_rsi": "supported",
+        "full_autonomous_self_mutating_rsi": "denied",
+        "control_plane_observer_only": True,
+    }
+    assert summary["source_readbacks"]["control_plane_chain_binding"]["status"] == "passed"
+    assert summary["trust_boundary"]["mutates_repositories"] is False
+    assert summary["trust_boundary"]["publishes_claims"] is False
+    assert summary["trust_boundary"]["approves_rsi_claims"] is False
+    assert "bounded governed RSI is supported" in closure
+    assert "full autonomous RSI publication remains denied" in closure
+    assert "control-plane remains observer-only" in closure
+    assert "rsi_operator_closure_packet=passed" in result.stdout
+
+    blocked_payload = json.loads(rsi_summary.read_text(encoding="utf-8"))
+    blocked_payload["claim_publish_decision"] = "allow"
+    blocked_rsi_summary = tmp_path / "blocked" / "summary.json"
+    write_json(blocked_rsi_summary, blocked_payload)
+    blocked = subprocess.run(
+        ["npm", "run", "rsi:operator-closure-packet"],
+        cwd=REPO,
+        env={
+            **os.environ,
+            "AO2_RSI_OPERATOR_CLOSURE_ROOT": str(tmp_path / "blocked-out"),
+            "AO2_RSI_OPERATOR_CLOSURE_RSI_SUMMARY": str(blocked_rsi_summary),
+            "AO2_RSI_OPERATOR_CLOSURE_CONTROL_PLANE_READBACK": str(
+                control_plane_summary
+            ),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert blocked.returncode != 0
+    assert "blocker=ao2_claim_publish_boundary_not_denied" in blocked.stderr
+
+
 def test_rsi_control_plane_release_readiness_dashboard_smoke_contract():
     script = REPO / "scripts" / "rsi-control-plane-release-readiness-dashboard-smoke.sh"
     assert script.is_file()
