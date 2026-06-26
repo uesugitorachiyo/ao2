@@ -207,7 +207,8 @@ fails closed unless both baseline packets are ready, both preserve
 `claim_publish_decision=deny` and `claim_publish_authority=false`, and both are
 backed by tiered AO Blueprint authorization that is not self-authorized by RSI.
 This is eligibility/readback evidence only; it does not publish claims, approve
-RSI claims, mutate repositories, or authorize AO Blueprint self-change.
+RSI claims, mutate repositories, or authorize AO Blueprint self-change. CI
+uploads it as `ao2-rsi-eligibility-packet`.
 
 ## Why AO2?
 

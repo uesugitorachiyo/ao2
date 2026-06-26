@@ -4331,6 +4331,25 @@ def test_rsi_eligibility_packet_runs_against_two_baselines(tmp_path):
     assert "npm run rsi:eligibility-packet" in verification
     assert "ao2.rsi-eligibility-packet.v1" in verification
 
+    ci = read(".github/workflows/ci.yml")
+    for needle in [
+        "Compose RSI eligibility packet",
+        "AO2_RSI_ELIGIBILITY_PACKET_ROOT=target/rsi-eligibility-packet-ci/packet",
+        "AO2_RSI_ELIGIBILITY_PACKET_CURRENT_BASELINE=target/rsi-baseline-packet-ci/current/summary.json",
+        "AO2_RSI_ELIGIBILITY_PACKET_PREVIOUS_BASELINE=target/rsi-baseline-packet-ci/previous/summary.json",
+        "npm run rsi:eligibility-packet",
+        "Verify RSI eligibility packet",
+        'summary["schema_version"] == "ao2.rsi-eligibility-packet.v1"',
+        'summary["rsi_eligibility_ready"] is True',
+        "Upload RSI eligibility packet",
+        "name: ao2-rsi-eligibility-packet",
+        "path: target/rsi-eligibility-packet-ci",
+    ]:
+        assert needle in ci
+
+    assert "ao2-rsi-eligibility-packet" in readme
+    assert "ao2-rsi-eligibility-packet" in verification
+
 
 def test_rsi_eligibility_packet_rejects_publish_authority(tmp_path):
     current = tmp_path / "current" / "summary.json"

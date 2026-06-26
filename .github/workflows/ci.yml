@@ -1476,6 +1476,44 @@ jobs:
           assert summary["trust_boundary"]["publishes_claims"] is False, summary
           assert (root / "packet" / "dashboard.html").is_file()
           PY
+      - name: Compose RSI eligibility packet
+        shell: bash
+        run: |
+          mkdir -p target/rsi-baseline-packet-ci/current target/rsi-baseline-packet-ci/previous
+          cp target/rsi-baseline-packet-ci/packet/summary.json target/rsi-baseline-packet-ci/current/summary.json
+          cp target/rsi-baseline-packet-ci/packet/summary.json target/rsi-baseline-packet-ci/previous/summary.json
+          AO2_RSI_ELIGIBILITY_PACKET_ROOT=target/rsi-eligibility-packet-ci/packet \
+          AO2_RSI_ELIGIBILITY_PACKET_CURRENT_BASELINE=target/rsi-baseline-packet-ci/current/summary.json \
+          AO2_RSI_ELIGIBILITY_PACKET_PREVIOUS_BASELINE=target/rsi-baseline-packet-ci/previous/summary.json \
+            npm run rsi:eligibility-packet
+      - name: Verify RSI eligibility packet
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("target/rsi-eligibility-packet-ci")
+          summary = json.loads((root / "packet" / "summary.json").read_text(encoding="utf-8"))
+          assert summary["schema_version"] == "ao2.rsi-eligibility-packet.v1", summary
+          assert summary["status"] == "passed", summary
+          assert summary["rsi_eligibility_ready"] is True, summary
+          assert summary["baseline_count"] == 2, summary
+          assert summary["minimum_baseline_count"] == 2, summary
+          assert summary["claim_publish_decision"] == "deny", summary
+          assert summary["claim_publish_authority"] is False, summary
+          assert summary["blueprint_authorization"]["source"] == "ao-blueprint", summary
+          assert summary["blueprint_authorization"]["self_authorized_by_rsi"] is False, summary
+          assert summary["blueprint_authorization"]["authorizes_claim_publication"] is False, summary
+          assert summary["blueprint_authorization"]["authorizes_ao_blueprint_self_change"] is False, summary
+          assert summary["improvement_evidence"]["minimum_measured_improvement_percent"] >= 5, summary
+          assert summary["trust_boundary"]["local_only"] is True, summary
+          assert summary["trust_boundary"]["publishes_claims"] is False, summary
+          assert summary["trust_boundary"]["approves_rsi_claims"] is False, summary
+          assert summary["trust_boundary"]["mutates_repositories"] is False, summary
+          assert summary["trust_boundary"]["requires_provider_api_key"] is False, summary
+          assert (root / "packet" / "dashboard.html").is_file()
+          PY
       - name: Upload RSI cross-repo E2E evidence
         uses: actions/upload-artifact@v7.0.1
         with:
@@ -1487,6 +1525,12 @@ jobs:
         with:
           name: ao2-rsi-baseline-packet
           path: target/rsi-baseline-packet-ci
+          if-no-files-found: error
+      - name: Upload RSI eligibility packet
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-rsi-eligibility-packet
+          path: target/rsi-eligibility-packet-ci
           if-no-files-found: error
 
   ai-task-board-control-plane-bridge-artifacts:

@@ -900,7 +900,8 @@ Result:
   measured RSI improvement remains at least 5%, and both packets are backed by
   tiered AO Blueprint authorization that is not self-authorized by RSI. It is
   repeated-run eligibility evidence only; it does not publish claims, approve
-  RSI claims, mutate repositories, or authorize AO Blueprint self-change.
+  RSI claims, mutate repositories, or authorize AO Blueprint self-change. CI
+  uploads it as `ao2-rsi-eligibility-packet`.
 - `npm run release:install-update-fixture`: builds a local signed fixture
   archive with `SHA256SUMS`, `provenance.json`, and a signature sidecar,
   verifies checksum/install/update behavior, references `release:download-verify`
