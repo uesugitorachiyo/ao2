@@ -210,6 +210,13 @@ bounded governed RSI is supported; full autonomous RSI publication remains denie
 does not mutate repositories, approve RSI claims, publish claims, execute AO
 work, or authorize AO Blueprint self-change.
 
+Pulse next-task generation consumes this packet by default as bounded-governed
+RSI readback. `npm run pulse:generate-next` writes
+`rsi_operator_closure_readback` and `rsi_claim_boundary` into the eval loop,
+task manifest, AI task board, generated task packet, and next-action readback;
+those fields explicitly keep `full_autonomous_self_mutating_rsi=denied` and
+`operator_closure_is_publication_authority=false`.
+
 Compose the operator-readable RSI baseline packet from an existing cross-repo
 E2E summary with:
 
