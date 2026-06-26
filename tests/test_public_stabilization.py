@@ -10381,6 +10381,115 @@ def test_pulse_generate_next_writes_ai_task_board_artifact(tmp_path):
     assert any(item["path"] == "task-board.json" for item in summary["files"])
 
 
+def test_pulse_generate_next_uses_rsi_operator_closure_as_bounded_readback(tmp_path):
+    out_root = tmp_path / "generate-next"
+    packet_root = tmp_path / "packet"
+    task_board_root = tmp_path / "task-board"
+    next_actions_root = tmp_path / "next-actions"
+    cursor = tmp_path / "cursor.json"
+    operator_closure = tmp_path / "rsi-operator-closure" / "summary.json"
+    operator_closure.parent.mkdir(parents=True)
+    operator_closure.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.rsi-operator-closure-packet.v1",
+                "status": "passed",
+                "operator_closure_ready": True,
+                "stable_boundary": {
+                    "bounded_governed_rsi": "supported",
+                    "full_autonomous_self_mutating_rsi": "denied",
+                    "claim_publish_decision": "deny",
+                    "claim_publish_authority": False,
+                    "control_plane_observer_only": True,
+                },
+                "trust_boundary": {
+                    "mutates_repositories": False,
+                    "publishes_claims": False,
+                    "approves_rsi_claims": False,
+                    "executes_ao_work": False,
+                    "control_plane_observer_only": True,
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:generate-next"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_GENERATE_NEXT_REGISTER": "0",
+            "AO2_PULSE_GENERATE_NEXT_LOCAL_ONLY": "0",
+            "AO2_PULSE_GENERATE_NEXT_ROOT": str(out_root),
+            "AO2_PULSE_GENERATE_NEXT_PACKET_ROOT": str(packet_root),
+            "AO2_PULSE_TASK_BOARD_ROOT": str(task_board_root),
+            "AO2_PULSE_GENERATE_NEXT_CURSOR": str(cursor),
+            "AO2_PULSE_RSI_OPERATOR_CLOSURE_PACKET": str(operator_closure),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    eval_loop = json.loads((packet_root / "pulse-eval-loop.json").read_text(encoding="utf-8"))
+    manifest = json.loads((packet_root / "pulse-task-manifest.json").read_text(encoding="utf-8"))
+    board = json.loads((task_board_root / "summary.json").read_text(encoding="utf-8"))
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+
+    expected_boundary = {
+        "schema_version": "ao2.rsi-operator-closure-packet.v1",
+        "status": "passed",
+        "operator_closure_ready": True,
+        "bounded_governed_rsi": "supported",
+        "full_autonomous_self_mutating_rsi": "denied",
+        "claim_publish_decision": "deny",
+        "claim_publish_authority": False,
+        "control_plane_observer_only": True,
+        "source": str(operator_closure.resolve()),
+        "interpretation": "bounded_governed_rsi_readback_not_full_autonomous_publication_authority",
+    }
+    assert eval_loop["rsi_operator_closure_readback"] == expected_boundary
+    assert manifest["rsi_operator_closure_readback"] == expected_boundary
+    assert board["rsi_operator_closure_readback"] == expected_boundary
+    assert summary["rsi_operator_closure_readback"] == expected_boundary
+
+    for task in eval_loop["recommended_tasks"]:
+        assert task["rsi_operator_closure_readback"] == expected_boundary
+        assert task["rsi_claim_boundary"]["bounded_governed_rsi"] == "supported"
+        assert task["rsi_claim_boundary"]["full_autonomous_self_mutating_rsi"] == "denied"
+        assert task["rsi_claim_boundary"]["claim_publish_decision"] == "deny"
+        assert task["rsi_claim_boundary"]["claim_publish_authority"] is False
+        assert task["rsi_claim_boundary"]["operator_closure_is_publication_authority"] is False
+    for task in board["tasks"]:
+        assert task["rsi_operator_closure_readback"] == expected_boundary
+        assert task["rsi_claim_boundary"]["operator_closure_is_publication_authority"] is False
+
+    actions = subprocess.run(
+        ["npm", "run", "pulse:next-actions"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_NEXT_ACTIONS_ROOT": str(next_actions_root),
+            "AO2_PULSE_NEXT_ACTIONS_BOARD": str(task_board_root / "summary.json"),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert actions.returncode == 0, actions.stderr + actions.stdout
+    actions_summary = json.loads((next_actions_root / "summary.json").read_text(encoding="utf-8"))
+    markdown = (next_actions_root / "next-actions.md").read_text(encoding="utf-8")
+    assert actions_summary["rsi_operator_closure_readback"] == expected_boundary
+    assert actions_summary["rsi_claim_boundary"]["claim_publish_decision"] == "deny"
+    assert actions_summary["rsi_claim_boundary"]["operator_closure_is_publication_authority"] is False
+    assert "full_autonomous_self_mutating_rsi: `denied`" in markdown
+    assert "operator_closure_is_publication_authority: `false`" in markdown
+
+
 def test_pulse_generate_next_records_task_board_history_and_diff(tmp_path):
     history_root = tmp_path / "history"
     cursor = tmp_path / "cursor.json"

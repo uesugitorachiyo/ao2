@@ -70,6 +70,11 @@ needles = [
     "cursor",
     "recommended_tasks",
     "stores_credentials",
+    "AO2_PULSE_RSI_OPERATOR_CLOSURE_PACKET",
+    "rsi_operator_closure_readback",
+    "rsi_claim_boundary",
+    "operator_closure_is_publication_authority",
+    "bounded_governed_rsi_readback_not_full_autonomous_publication_authority",
 ]
 checks = [{"name": needle, "status": "passed" if needle in text else "failed"} for needle in needles]
 checks.append({"name": "bash_syntax", "status": "passed", "log": str(log_dir / "bash-n.log")})

@@ -17,11 +17,12 @@ STATUS_EVIDENCE="${AO2_PULSE_TASK_BOARD_STATUS_EVIDENCE:-$DEFAULT_STATUS_EVIDENC
 DEFAULT_AUTO_ADVANCE_PROMPT="After each task batch, re-evaluate AO2 and ao2-control-plane at project level. Choose next tasks by highest long-term value, not similarity to last tasks. Prefer the Risky PR Run MVP product loop, local run record, static report/export, evaluator closure evidence, public reliability, Ubuntu/macOS/Windows correctness, CI confidence, evidence quality, security/safety boundaries, control-plane integration, release readiness, and developer/operator usability. Do not create new shell wrappers unless they directly unlock a product-slice or release-readiness bottleneck. Avoid narrow recursion or low-value daemon work unless it is the bottleneck. Generate next lengthy tasks with rationale, required evidence, and stop conditions only when the readiness exit gate is not satisfied; emit stop when AO2 and ao2-control-plane readiness gates are green."
 AUTO_ADVANCE_PROMPT="${AO2_PULSE_AUTO_ADVANCE_PROMPT:-$DEFAULT_AUTO_ADVANCE_PROMPT}"
 EXIT_GATE_FILE="${AO2_PULSE_EXIT_GATE_FILE:-}"
+RSI_OPERATOR_CLOSURE_PACKET="${AO2_PULSE_RSI_OPERATOR_CLOSURE_PACKET:-$ROOT/target/rsi-operator-closure-packet/latest/summary.json}"
 
 rm -rf "$OUT_ROOT" "$PACKET_ROOT" "$TASK_BOARD_ROOT"
 mkdir -p "$OUT_ROOT" "$LOG_DIR" "$PACKET_ROOT" "$TASK_BOARD_ROOT" "$TASK_BOARD_HISTORY_ROOT" "$(dirname "$CURSOR_FILE")"
 
-python3 - "$ROOT" "$OUT_ROOT" "$PACKET_ROOT" "$TASK_BOARD_ROOT" "$TASK_BOARD_HISTORY_ROOT" "$SUMMARY" "$CURSOR_FILE" "$STATUS_EVIDENCE" "$LOCAL_ONLY" "$EXIT_GATE_FILE" <<'PY'
+python3 - "$ROOT" "$OUT_ROOT" "$PACKET_ROOT" "$TASK_BOARD_ROOT" "$TASK_BOARD_HISTORY_ROOT" "$SUMMARY" "$CURSOR_FILE" "$STATUS_EVIDENCE" "$LOCAL_ONLY" "$EXIT_GATE_FILE" "$RSI_OPERATOR_CLOSURE_PACKET" <<'PY'
 import html
 import hashlib
 import json
@@ -41,6 +42,7 @@ status_evidence_path = Path(status_evidence_arg).resolve() if status_evidence_ar
 local_only_while_pr_blocked = sys.argv[9] == "1"
 generation_mode = "local_only_while_pr_blocked" if local_only_while_pr_blocked else "normal"
 exit_gate_arg = sys.argv[10] if len(sys.argv) > 10 else ""
+rsi_operator_closure_arg = sys.argv[11] if len(sys.argv) > 11 else ""
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -151,6 +153,61 @@ def load_exit_gate(path_arg: str) -> dict:
         "source_status": payload.get("status"),
         "blocking_next_actions": all_blockers,
         "repos": repos,
+    }
+
+RSI_CLOSURE_INTERPRETATION = (
+    "bounded_governed_rsi_readback_not_full_autonomous_publication_authority"
+)
+
+def load_rsi_operator_closure(path_arg: str) -> dict:
+    path = Path(path_arg).expanduser().resolve() if path_arg else None
+    fallback = {
+        "schema_version": "ao2.rsi-operator-closure-packet.v1",
+        "status": "missing",
+        "operator_closure_ready": False,
+        "bounded_governed_rsi": "unknown",
+        "full_autonomous_self_mutating_rsi": "denied",
+        "claim_publish_decision": "deny",
+        "claim_publish_authority": False,
+        "control_plane_observer_only": False,
+        "source": str(path) if path else None,
+        "interpretation": RSI_CLOSURE_INTERPRETATION,
+    }
+    if not path or not path.is_file():
+        return fallback
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        fallback["status"] = "invalid_json"
+        return fallback
+    stable_boundary = payload.get("stable_boundary") if isinstance(payload.get("stable_boundary"), dict) else {}
+    return {
+        "schema_version": payload.get("schema_version", "ao2.rsi-operator-closure-packet.v1"),
+        "status": payload.get("status", "unknown"),
+        "operator_closure_ready": payload.get("operator_closure_ready") is True,
+        "bounded_governed_rsi": stable_boundary.get("bounded_governed_rsi", "unknown"),
+        "full_autonomous_self_mutating_rsi": stable_boundary.get(
+            "full_autonomous_self_mutating_rsi",
+            "denied",
+        ),
+        "claim_publish_decision": stable_boundary.get("claim_publish_decision", "deny"),
+        "claim_publish_authority": stable_boundary.get("claim_publish_authority") is True,
+        "control_plane_observer_only": stable_boundary.get("control_plane_observer_only") is True,
+        "source": str(path),
+        "interpretation": RSI_CLOSURE_INTERPRETATION,
+    }
+
+def rsi_claim_boundary_from(readback: dict) -> dict:
+    return {
+        "bounded_governed_rsi": readback.get("bounded_governed_rsi", "unknown"),
+        "full_autonomous_self_mutating_rsi": readback.get(
+            "full_autonomous_self_mutating_rsi",
+            "denied",
+        ),
+        "claim_publish_decision": readback.get("claim_publish_decision", "deny"),
+        "claim_publish_authority": readback.get("claim_publish_authority") is True,
+        "operator_closure_is_publication_authority": False,
+        "interpretation": readback.get("interpretation", RSI_CLOSURE_INTERPRETATION),
     }
 
 dimensions = [
@@ -614,6 +671,12 @@ for task_id, title, command, expected_evidence, why in selection["tasks"]:
 if local_only_while_pr_blocked:
     tasks = [task for task in tasks if task.get("kind") == "evidence_gate"]
 
+rsi_operator_closure_readback = load_rsi_operator_closure(rsi_operator_closure_arg)
+rsi_claim_boundary = rsi_claim_boundary_from(rsi_operator_closure_readback)
+for task in tasks:
+    task["rsi_operator_closure_readback"] = rsi_operator_closure_readback
+    task["rsi_claim_boundary"] = rsi_claim_boundary
+
 packet_md = (
     f"# AO2 Pulse Generated Packet {generation}\n\n"
     f"Generation mode: `{generation_mode}`\n\n"
@@ -647,6 +710,8 @@ executor = {
     "selection": selection["id"],
     "generation_mode": generation_mode,
     "local_only_while_pr_blocked": local_only_while_pr_blocked,
+    "rsi_operator_closure_readback": rsi_operator_closure_readback,
+    "rsi_claim_boundary": rsi_claim_boundary,
     "project_level_reassessment": project_level_reassessment,
     "strategic_score": selected_score,
     "strategic_scores": strategic_scores,
@@ -666,6 +731,8 @@ eval_loop = {
     "mode": "local_script_backed_recommendation",
     "generation_mode": generation_mode,
     "local_only_while_pr_blocked": local_only_while_pr_blocked,
+    "rsi_operator_closure_readback": rsi_operator_closure_readback,
+    "rsi_claim_boundary": rsi_claim_boundary,
     "generated_at_utc": utc_now(),
     "cursor": next_cursor,
     "selection": selection["id"],
@@ -686,6 +753,8 @@ task_manifest = {
     "selection": selection["id"],
     "generation_mode": generation_mode,
     "local_only_while_pr_blocked": local_only_while_pr_blocked,
+    "rsi_operator_closure_readback": rsi_operator_closure_readback,
+    "rsi_claim_boundary": rsi_claim_boundary,
     "cursor": next_cursor,
     "product_code_execution": {
         "enabled": not local_only_while_pr_blocked,
@@ -726,6 +795,8 @@ codex_cron_event_loop_decision = {
         "selection": selection["id"],
         "generation_mode": generation_mode,
         "local_only_while_pr_blocked": local_only_while_pr_blocked,
+        "rsi_operator_closure_readback": rsi_operator_closure_readback,
+        "rsi_claim_boundary": rsi_claim_boundary,
         "task_count": len(tasks),
         "exit_gate": exit_gate,
         "task_board_summary": str(task_board_root / "summary.json"),
@@ -749,6 +820,8 @@ ao2_event_loop_decision = {
         "selection": selection["id"],
         "generation_mode": generation_mode,
         "local_only_while_pr_blocked": local_only_while_pr_blocked,
+        "rsi_operator_closure_readback": rsi_operator_closure_readback,
+        "rsi_claim_boundary": rsi_claim_boundary,
         "task_count": len(tasks),
         "exit_gate": exit_gate,
         "task_board_summary": str(task_board_root / "summary.json"),
@@ -881,6 +954,8 @@ for task in tasks:
         "stop_conditions": task.get("stop_conditions") or selection["stop_conditions"],
         "source_recommendation": source_recommendation,
         "release_train": release_train,
+        "rsi_operator_closure_readback": task.get("rsi_operator_closure_readback"),
+        "rsi_claim_boundary": task.get("rsi_claim_boundary"),
     }
     status_update, matched_by = task_status_update_for(item)
     if status_update:
@@ -912,6 +987,8 @@ task_board = {
     "release_train": release_train,
     "release_objective": release_objective,
     "source_recommendation": source_recommendation,
+    "rsi_operator_closure_readback": rsi_operator_closure_readback,
+    "rsi_claim_boundary": rsi_claim_boundary,
     "status_transition_source": status_transition_source,
     "tasks": task_board_tasks,
     "control_plane_readback": {
@@ -1157,6 +1234,8 @@ packet_summary = {
     "selection": selection["id"],
     "generation_mode": generation_mode,
     "local_only_while_pr_blocked": local_only_while_pr_blocked,
+    "rsi_operator_closure_readback": rsi_operator_closure_readback,
+    "rsi_claim_boundary": rsi_claim_boundary,
     "exit_gate": exit_gate,
     "task_board_summary": str(task_board_root / "summary.json"),
     "codex_cron_event_loop_decision": str(packet_root / "codex-cron-event-loop-decision.json"),
@@ -1186,6 +1265,8 @@ summary = {
     "selection": selection["id"],
     "generation_mode": generation_mode,
     "local_only_while_pr_blocked": local_only_while_pr_blocked,
+    "rsi_operator_closure_readback": rsi_operator_closure_readback,
+    "rsi_claim_boundary": rsi_claim_boundary,
     "exit_gate": exit_gate,
     "task_board_summary": str(task_board_root / "summary.json"),
     "codex_cron_event_loop_decision": str(packet_root / "codex-cron-event-loop-decision.json"),

@@ -54,6 +54,12 @@ else:
     elif board:
         actions = []
         status_filter = set(payload["status_filter"])
+        rsi_operator_closure_readback = board.get("rsi_operator_closure_readback")
+        if not isinstance(rsi_operator_closure_readback, dict):
+            rsi_operator_closure_readback = {}
+        rsi_claim_boundary = board.get("rsi_claim_boundary")
+        if not isinstance(rsi_claim_boundary, dict):
+            rsi_claim_boundary = {}
         for item in board.get("tasks", []):
             if not isinstance(item, dict):
                 continue
@@ -69,18 +75,34 @@ else:
                 "rationale": item.get("rationale"),
                 "required_evidence": item.get("required_evidence") if isinstance(item.get("required_evidence"), list) else [],
                 "stop_conditions": item.get("stop_conditions") if isinstance(item.get("stop_conditions"), list) else [],
+                "rsi_operator_closure_readback": item.get("rsi_operator_closure_readback") if isinstance(item.get("rsi_operator_closure_readback"), dict) else rsi_operator_closure_readback,
+                "rsi_claim_boundary": item.get("rsi_claim_boundary") if isinstance(item.get("rsi_claim_boundary"), dict) else rsi_claim_boundary,
             })
         payload.update({
             "status": "passed",
             "reason": "next_actions_read",
             "task_count": len(actions),
             "next_actions": actions,
+            "rsi_operator_closure_readback": rsi_operator_closure_readback,
+            "rsi_claim_boundary": rsi_claim_boundary,
         })
 
 lines = ["# Next Actions", ""]
 if payload["status"] != "passed":
     lines.append(f"Reason: {payload.get('reason')}")
     lines.append("")
+elif payload.get("rsi_claim_boundary"):
+    boundary = payload["rsi_claim_boundary"]
+    lines.extend([
+        "## RSI Claim Boundary",
+        "",
+        f"- bounded_governed_rsi: `{boundary.get('bounded_governed_rsi')}`",
+        f"- full_autonomous_self_mutating_rsi: `{boundary.get('full_autonomous_self_mutating_rsi')}`",
+        f"- claim_publish_decision: `{boundary.get('claim_publish_decision')}`",
+        f"- claim_publish_authority: `{str(boundary.get('claim_publish_authority')).lower()}`",
+        f"- operator_closure_is_publication_authority: `{str(boundary.get('operator_closure_is_publication_authority')).lower()}`",
+        "",
+    ])
 for item in payload["next_actions"]:
     lines.append(
         f"- `{item.get('task_id')}` [{item.get('status')}]: "

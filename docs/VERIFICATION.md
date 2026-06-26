@@ -179,6 +179,15 @@ no tracked or untracked source changes, it exits successfully with
 operator-readable `ao2.ai-task-board.v1` control-surface artifact at
 `target/pulse-task-board/latest/summary.json`, plus companion
 `board.md` and `board.html` exports grouped into status and work-type lanes.
+By default it reads
+`target/rsi-operator-closure-packet/latest/summary.json` as the bounded
+governed RSI operator-closure readback, or
+`AO2_PULSE_RSI_OPERATOR_CLOSURE_PACKET` when set. The generated eval loop,
+task manifest, task board, packet summary, and next-action readback include
+`rsi_operator_closure_readback` plus `rsi_claim_boundary`; the latter keeps
+`full_autonomous_self_mutating_rsi=denied` and
+`operator_closure_is_publication_authority=false` so Pulse follow-up work cannot
+reinterpret operator closure as full RSI publication authority.
 Tasks include generation-specific `task_id` values plus stable `stable_task_id`
 values so status evidence can carry across board generations without binding
 operators to a stale generated identifier. It also writes
