@@ -187,6 +187,7 @@
     "scripts:tracking-commit-ready-diff": "node scripts/run-sh-script.js scripts/script-tracking-commit-ready-diff.sh",
     "scripts:tracking-ready-review-pack": "node scripts/run-sh-script.js scripts/script-tracking-ready-review-pack.sh",
     "scripts:surface-audit": "node scripts/run-sh-script.js scripts/script-surface-audit.sh",
+    "skills:operator-pack-parity": "node scripts/run-sh-script.js scripts/operator-skill-pack-parity.sh",
     "release:artifact-publish-simulation": "node scripts/run-sh-script.js scripts/release-artifact-publish-simulation.sh",
     "release:asset-publication-readiness": "node scripts/run-sh-script.js scripts/release-asset-publication-readiness.sh",
     "release:candidate-binary-diff-audit": "node scripts/run-sh-script.js scripts/release-candidate-binary-diff-audit.sh",
