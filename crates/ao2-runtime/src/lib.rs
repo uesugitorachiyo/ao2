@@ -6,7 +6,7 @@ use std::process::Command;
 
 use anyhow::{anyhow, Context, Result};
 use ao2_adapters::{
-    apply_sandbox_patch, posix_shell_command, preview_sandbox_patch,
+    apply_sandbox_patch, copy_dir_recursive, posix_shell_command, preview_sandbox_patch,
     run_provider_prompt_in_sandbox, scripted_prompt_prefers_posix_shell, AdapterRunResult,
     ProviderKind, ProviderPromptRequest, SandboxPatchApplyRequest,
     DEFAULT_PROVIDER_TIMEOUT_SECONDS,
@@ -35,7 +35,7 @@ pub struct RunOptions {
     pub run_id: Option<String>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderRunOptions {
     pub target_repo: PathBuf,
     pub workflow_path: PathBuf,
@@ -202,8 +202,8 @@ pub fn run_risky_pr_with_provider_prompt(options: ProviderRunOptions) -> Result<
     let target_repo = options.target_repo.clone();
     let waiting = start_risky_pr_provider_free(RunOptions {
         target_repo: target_repo.clone(),
-        workflow_path: options.workflow_path,
-        run_id: options.run_id,
+        workflow_path: options.workflow_path.clone(),
+        run_id: options.run_id.clone(),
     })?;
     approve_risky_pr_ticket(ApprovalOptions {
         target_repo: target_repo.clone(),
@@ -230,6 +230,9 @@ pub fn run_risky_pr_with_provider_prompt(options: ProviderRunOptions) -> Result<
         ));
     }
 
+    let provider_opts_path = ctx.run_dir.join("provider-options.json");
+    fs::write(&provider_opts_path, serde_json::to_string_pretty(&options)?)?;
+
     let provider_prompt = if let Some(repair_source) = options.repair_source.as_ref() {
         record_repair_source_context(&mut ctx, repair_source)?;
         build_provider_prompt_with_repair_source(options.provider, &options.prompt, repair_source)?
@@ -237,7 +240,12 @@ pub fn run_risky_pr_with_provider_prompt(options: ProviderRunOptions) -> Result<
         options.prompt.clone()
     };
 
-    let status = if ctx.is_real_project_template() {
+    let consumed_path = ctx.run_dir.join("consumed-tickets.json");
+    if consumed_path.exists() {
+        let _ = fs::remove_file(&consumed_path);
+    }
+
+    let mut status = if ctx.is_real_project_template() {
         run_real_project_provider_workflow(
             &mut ctx,
             options.provider,
@@ -246,27 +254,63 @@ pub fn run_risky_pr_with_provider_prompt(options: ProviderRunOptions) -> Result<
             options.max_budget_usd,
         )?
     } else {
-        apply_provider_prompt_patch(
+        let status = apply_provider_prompt_patch(
             &mut ctx,
             options.provider,
             &provider_prompt,
             options.max_budget_usd,
         )?;
-        let review = reviewer_concern(&mut ctx)?;
-        reject_for_missing_tests(&mut ctx, &review)?;
-        if options.max_repair_attempts == 0 {
-            record_repair_budget_exhausted(&mut ctx, "review_missing_tests", &review)?;
-            RunStatus::Rejected
+        if status == RunStatus::WaitingForApproval {
+            status
         } else {
-            match run_repair_loop_after_rejection(&mut ctx, options.max_repair_attempts, &review)? {
-                Some(test_log) => {
-                    accept_final(&mut ctx, &test_log)?;
-                    RunStatus::Accepted
+            let review = reviewer_concern(&mut ctx)?;
+            reject_for_missing_tests(&mut ctx, &review)?;
+            if options.max_repair_attempts == 0 {
+                record_repair_budget_exhausted(&mut ctx, "review_missing_tests", &review)?;
+                RunStatus::Rejected
+            } else {
+                match run_repair_loop_after_rejection(
+                    &mut ctx,
+                    options.max_repair_attempts,
+                    &review,
+                )? {
+                    Some(test_log) => {
+                        accept_final(&mut ctx, &test_log)?;
+                        RunStatus::Accepted
+                    }
+                    None => RunStatus::Rejected,
                 }
-                None => RunStatus::Rejected,
             }
         }
     };
+
+    if status == RunStatus::WaitingForApproval
+        && std::env::var("AO2_AUTO_APPROVE_SANDBOX_PATCH").is_ok()
+    {
+        while status == RunStatus::WaitingForApproval {
+            let pending = ctx
+                .approvals
+                .iter()
+                .find(|t| t.status == "pending" && t.requested_action == "sandbox:apply")
+                .cloned();
+            if let Some(ticket) = pending {
+                approve_risky_pr_ticket(ApprovalOptions {
+                    target_repo: target_repo.clone(),
+                    ticket_id: ticket.ticket_id,
+                    approver: "human:local-user-auto-approve".to_string(),
+                })?;
+                let resumed = resume_risky_pr_provider_free(ResumeOptions {
+                    target_repo: target_repo.clone(),
+                    run_id: ctx.run_id.clone(),
+                })?;
+                status = resumed.status;
+                let (new_ctx, _) = load_run_context(&target_repo, &ctx.run_id)?;
+                ctx = new_ctx;
+            } else {
+                break;
+            }
+        }
+    }
 
     let evidence_pack_path = export_evidence_pack(&ctx)?;
     let report_path = render_static_report(&ctx, &evidence_pack_path)?;
@@ -490,15 +534,99 @@ pub fn resume_risky_pr_provider_free(options: ResumeOptions) -> Result<RunSummar
             status
         ));
     }
-    if !ctx
+    if ctx
         .approvals
         .iter()
-        .any(|ticket| ticket.status == "approved")
+        .any(|ticket| ticket.status == "pending")
     {
         return Err(anyhow!(
             "run {} is waiting for approval before resume",
             options.run_id
         ));
+    }
+
+    let provider_opts_path = ctx.run_dir.join("provider-options.json");
+    if provider_opts_path.exists() {
+        let opts_str = fs::read_to_string(&provider_opts_path)?;
+        let run_opts: ProviderRunOptions = serde_json::from_str(&opts_str)?;
+
+        let provider_prompt = if let Some(repair_source) = run_opts.repair_source.as_ref() {
+            record_repair_source_context(&mut ctx, repair_source)?;
+            build_provider_prompt_with_repair_source(
+                run_opts.provider,
+                &run_opts.prompt,
+                repair_source,
+            )?
+        } else {
+            run_opts.prompt.clone()
+        };
+
+        let consumed_path = ctx.run_dir.join("consumed-tickets.json");
+        if consumed_path.exists() {
+            let _ = fs::remove_file(&consumed_path);
+        }
+
+        let status = if ctx.is_real_project_template() {
+            run_real_project_provider_workflow(
+                &mut ctx,
+                run_opts.provider,
+                &provider_prompt,
+                run_opts.max_repair_attempts,
+                run_opts.max_budget_usd,
+            )?
+        } else {
+            let status = apply_provider_prompt_patch(
+                &mut ctx,
+                run_opts.provider,
+                &provider_prompt,
+                run_opts.max_budget_usd,
+            )?;
+            if status == RunStatus::WaitingForApproval {
+                status
+            } else {
+                let review = reviewer_concern(&mut ctx)?;
+                reject_for_missing_tests(&mut ctx, &review)?;
+                if run_opts.max_repair_attempts == 0 {
+                    record_repair_budget_exhausted(&mut ctx, "review_missing_tests", &review)?;
+                    RunStatus::Rejected
+                } else {
+                    match run_repair_loop_after_rejection(
+                        &mut ctx,
+                        run_opts.max_repair_attempts,
+                        &review,
+                    )? {
+                        Some(test_log) => {
+                            accept_final(&mut ctx, &test_log)?;
+                            RunStatus::Accepted
+                        }
+                        None => RunStatus::Rejected,
+                    }
+                }
+            }
+        };
+
+        let evidence_pack_path = export_evidence_pack(&ctx)?;
+        let report_path = render_static_report(&ctx, &evidence_pack_path)?;
+        write_run_record(&ctx, status, &evidence_pack_path, &report_path)?;
+        let denied_actions = denied_actions(&ctx.policy_decisions);
+        let approvals = ctx.approvals.clone();
+        let rejection_count = ctx
+            .closure_reports
+            .iter()
+            .filter(|report| report.verdict == "rejected")
+            .count();
+
+        return Ok(RunSummary {
+            run_id: options.run_id,
+            status,
+            run_dir: ctx.run_dir.clone(),
+            evidence_pack_path,
+            report_path,
+            run_record_path: ctx.run_dir.join("run-record.json"),
+            denied_actions,
+            approvals,
+            rejection_count,
+        });
     }
 
     if ctx.is_real_project_template() {
@@ -1176,7 +1304,7 @@ fn apply_provider_prompt_patch(
     provider: ProviderKind,
     prompt: &str,
     max_budget_usd: Option<f64>,
-) -> Result<()> {
+) -> Result<RunStatus> {
     apply_provider_prompt_patch_for_role(
         ctx,
         provider,
@@ -1196,7 +1324,21 @@ fn apply_provider_prompt_patch_for_role(
     role_id: &str,
     action_id: &str,
     task_id: Option<&str>,
-) -> Result<()> {
+) -> Result<RunStatus> {
+    let summary_filename = format!("provider-transcript-summary-{}.json", action_id);
+    let summary_exists = ctx.artifacts.iter().any(|art| {
+        art.producer == role_id
+            && art.artifact_type == "provider_transcript_summary"
+            && art.uri.contains(&summary_filename)
+    });
+    let sandbox_dir = ctx
+        .run_dir
+        .join(format!("sandbox-{}-{}", role_id, action_id));
+    let sandbox_exists = sandbox_dir.exists();
+    if summary_exists && !sandbox_exists {
+        return Ok(RunStatus::Accepted);
+    }
+
     emit(
         ctx,
         "role.started",
@@ -1206,127 +1348,398 @@ fn apply_provider_prompt_patch_for_role(
         json!({"status": "started", "provider": provider}),
     )?;
 
-    let sandbox = run_provider_prompt_in_sandbox(ProviderPromptRequest {
-        provider,
-        target_repo: ctx.target_repo.clone(),
-        prompt: prompt.to_string(),
-        role_id: role_id.to_string(),
-        keep_sandbox: true,
-        timeout_ms: Some(DEFAULT_PROVIDER_TIMEOUT_SECONDS * 1_000),
-        max_budget_usd,
-    })?;
-    let transcript = ctx.artifact_store.put_text(
-        "provider_prompt_transcript",
-        role_id,
-        "provider-prompt-transcript.json",
-        "application/json",
-        &serde_json::to_string_pretty(&sandbox.adapter)?,
-        vec![],
-    )?;
-    artifact_created(ctx, &transcript)?;
-    let mut transcript_summary_value = serde_json::to_value(&sandbox.transcript_summary)?;
-    if let Some(task_id) = task_id {
-        if let Some(object) = transcript_summary_value.as_object_mut() {
-            object.insert("task_id".to_string(), json!(task_id));
-            object.insert("workflow_role".to_string(), json!(role_id));
+    let preview = if sandbox_exists {
+        // 2. If sandbox exists, we suspended and are now resuming.
+        // We recompute the preview from the persisted sandbox directory.
+        preview_sandbox_patch(&ctx.target_repo, &sandbox_dir)?
+    } else {
+        // 3. Otherwise, run the provider prompt in sandbox.
+        let sandbox = run_provider_prompt_in_sandbox(ProviderPromptRequest {
+            provider,
+            target_repo: ctx.target_repo.clone(),
+            prompt: prompt.to_string(),
+            role_id: role_id.to_string(),
+            keep_sandbox: true,
+            timeout_ms: Some(DEFAULT_PROVIDER_TIMEOUT_SECONDS * 1_000),
+            max_budget_usd,
+        })?;
+        let transcript = ctx.artifact_store.put_text(
+            "provider_prompt_transcript",
+            role_id,
+            &format!("provider-prompt-transcript-{}.json", action_id),
+            "application/json",
+            &serde_json::to_string_pretty(&sandbox.adapter)?,
+            vec![],
+        )?;
+        artifact_created(ctx, &transcript)?;
+        let mut transcript_summary_value = serde_json::to_value(&sandbox.transcript_summary)?;
+        if let Some(task_id) = task_id {
+            if let Some(object) = transcript_summary_value.as_object_mut() {
+                object.insert("task_id".to_string(), json!(task_id));
+                object.insert("workflow_role".to_string(), json!(role_id));
+            }
+        }
+        let transcript_summary = ctx.artifact_store.put_text(
+            "provider_transcript_summary",
+            role_id,
+            &summary_filename,
+            "application/json",
+            &serde_json::to_string_pretty(&transcript_summary_value)?,
+            vec![transcript.artifact_id.clone()],
+        )?;
+        artifact_created(ctx, &transcript_summary)?;
+        emit(
+            ctx,
+            "adapter.transcript.parsed",
+            Some(role_id),
+            Some(action_id),
+            Actor::role(role_id),
+            transcript_summary_value,
+        )?;
+        emit(
+            ctx,
+            "adapter.completed",
+            Some(role_id),
+            Some(action_id),
+            Actor::role(role_id),
+            serde_json::to_value(&sandbox.adapter)?,
+        )?;
+        if sandbox.adapter.blocker.is_some() {
+            let _ = fs::remove_dir_all(&sandbox.sandbox_path);
+            return Err(anyhow!(
+                "provider adapter failed; see provider_prompt_transcript artifact"
+            ));
+        }
+
+        let preview = preview_sandbox_patch(&ctx.target_repo, &sandbox.sandbox_path)?;
+        let preview_artifact = ctx.artifact_store.put_text(
+            "sandbox_patch_preview",
+            role_id,
+            &format!("sandbox-patch-preview-{}.json", action_id),
+            "application/json",
+            &serde_json::to_string_pretty(&preview)?,
+            vec![transcript.artifact_id.clone()],
+        )?;
+        artifact_created(ctx, &preview_artifact)?;
+        emit(
+            ctx,
+            "sandbox.patch.previewed",
+            Some(role_id),
+            Some(action_id),
+            Actor::system(),
+            serde_json::to_value(&preview)?,
+        )?;
+
+        // Move sandbox folder to persisted run location
+        copy_dir_recursive(&sandbox.sandbox_path, &sandbox_dir)?;
+        let _ = fs::remove_dir_all(&sandbox.sandbox_path);
+
+        preview
+    };
+
+    // 4. Locate or create approval ticket for the sandbox apply
+    let tool_request = ToolRequest {
+        principal: format!("role:{}", role_id),
+        tool: "sandbox".to_string(),
+        operation: "apply".to_string(),
+        resource: "sandbox_patch".to_string(),
+        args: vec!["apply".to_string(), preview.action_digest.clone()],
+        expected_side_effects: vec!["repo_write".to_string()],
+    };
+
+    let approved_ticket = ctx
+        .approvals
+        .iter()
+        .find(|t| {
+            t.requested_action == "sandbox:apply"
+                && t.action_digest == preview.action_digest
+                && t.status == "approved"
+                && t.requester == tool_request.principal
+        })
+        .cloned();
+
+    match approved_ticket {
+        None => {
+            // Check if there is already a pending ticket for this digest
+            let pending_ticket = ctx
+                .approvals
+                .iter()
+                .find(|t| {
+                    t.requested_action == "sandbox:apply"
+                        && t.action_digest == preview.action_digest
+                        && t.status == "pending"
+                        && t.requester == tool_request.principal
+                })
+                .cloned();
+
+            let _ticket = match pending_ticket {
+                Some(t) => t,
+                None => {
+                    let t = create_approval_ticket(&ctx.run_id, &tool_request);
+                    replace_ticket(&mut ctx.approvals, t.clone());
+                    write_stored_approval(ctx, &t, &tool_request)?;
+
+                    // Create requested ticket artifact for durable evidence linkage
+                    let preview_art_id = ctx
+                        .artifacts
+                        .iter()
+                        .find(|art| {
+                            art.producer == role_id
+                                && art.artifact_type == "sandbox_patch_preview"
+                                && art
+                                    .uri
+                                    .contains(&format!("sandbox-patch-preview-{}.json", action_id))
+                        })
+                        .map(|art| art.artifact_id.clone())
+                        .unwrap_or_default();
+                    let ticket_artifact = ctx.artifact_store.put_text(
+                        "approval_ticket_requested",
+                        role_id,
+                        &format!(
+                            "sandbox-patch-approval-requested-{}-{}.json",
+                            action_id, t.ticket_id
+                        ),
+                        "application/json",
+                        &serde_json::to_string_pretty(&t)?,
+                        if preview_art_id.is_empty() {
+                            vec![]
+                        } else {
+                            vec![preview_art_id]
+                        },
+                    )?;
+                    artifact_created(ctx, &ticket_artifact)?;
+
+                    emit(
+                        ctx,
+                        "approval.requested",
+                        Some(role_id),
+                        Some(action_id),
+                        Actor::system(),
+                        serde_json::to_value(&t)?,
+                    )?;
+                    t
+                }
+            };
+
+            // Write run record as WaitingForApproval
+            let evidence_pack_path = ctx.run_dir.join("evidence-pack").join("evidence-pack.json");
+            let report_path = ctx.run_dir.join("report").join("index.html");
+            write_run_record(
+                ctx,
+                RunStatus::WaitingForApproval,
+                &evidence_pack_path,
+                &report_path,
+            )?;
+
+            Ok(RunStatus::WaitingForApproval)
+        }
+        Some(ticket) => {
+            // Verify the approved ticket matches all constraints:
+            if ticket.run_id != ctx.run_id {
+                emit(
+                    ctx,
+                    "approval.denied",
+                    Some(role_id),
+                    Some(action_id),
+                    Actor::system(),
+                    json!({"reason": "run_id mismatch"}),
+                )?;
+                anyhow::bail!("approval verification failed: run_id mismatch");
+            }
+            if ticket.action_digest != preview.action_digest {
+                emit(
+                    ctx,
+                    "approval.denied",
+                    Some(role_id),
+                    Some(action_id),
+                    Actor::system(),
+                    json!({"reason": "digest mismatch"}),
+                )?;
+                anyhow::bail!("approval verification failed: digest mismatch");
+            }
+            if ticket.requested_action != "sandbox:apply" || ticket.scope != "sandbox_patch" {
+                emit(
+                    ctx,
+                    "approval.denied",
+                    Some(role_id),
+                    Some(action_id),
+                    Actor::system(),
+                    json!({"reason": "operation/resource mismatch"}),
+                )?;
+                anyhow::bail!("approval verification failed: operation/resource mismatch");
+            }
+            if ticket.approver.is_none() || ticket.approver.as_ref().unwrap().trim().is_empty() {
+                emit(
+                    ctx,
+                    "approval.denied",
+                    Some(role_id),
+                    Some(action_id),
+                    Actor::system(),
+                    json!({"reason": "missing approver identity"}),
+                )?;
+                anyhow::bail!("approval verification failed: missing approver identity");
+            }
+            if ticket.expires_at < Utc::now() {
+                emit(
+                    ctx,
+                    "approval.denied",
+                    Some(role_id),
+                    Some(action_id),
+                    Actor::system(),
+                    json!({"reason": "expired ticket"}),
+                )?;
+                anyhow::bail!("approval verification failed: ticket has expired");
+            }
+            if ticket.status != "approved" {
+                emit(
+                    ctx,
+                    "approval.denied",
+                    Some(role_id),
+                    Some(action_id),
+                    Actor::system(),
+                    json!({"reason": "ticket status is not approved"}),
+                )?;
+                anyhow::bail!("approval verification failed: ticket is not approved");
+            }
+            let consumed_path = ctx.run_dir.join("consumed-tickets.json");
+            let mut consumed: Vec<String> = if consumed_path.exists() {
+                let content = fs::read_to_string(&consumed_path)?;
+                serde_json::from_str(&content).unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            if consumed.contains(&ticket.ticket_id) {
+                emit(
+                    ctx,
+                    "approval.denied",
+                    Some(role_id),
+                    Some(action_id),
+                    Actor::system(),
+                    json!({"reason": "ticket already consumed"}),
+                )?;
+                anyhow::bail!("approval verification failed: ticket has already been consumed (ticket_id: {}, consumed: {:?}, run_dir: {})", ticket.ticket_id, consumed, ctx.run_dir.display());
+            }
+
+            emit(
+                ctx,
+                "approval.accepted",
+                Some(role_id),
+                Some(action_id),
+                Actor::system(),
+                serde_json::to_value(&ticket)?,
+            )?;
+
+            // Recompute preview digest immediately before applying.
+            let recomputed = preview_sandbox_patch(&ctx.target_repo, &sandbox_dir)?;
+            if recomputed.action_digest != preview.action_digest {
+                emit(
+                    ctx,
+                    "approval.denied",
+                    Some(role_id),
+                    Some(action_id),
+                    Actor::system(),
+                    json!({"reason": "sandbox changed after approval"}),
+                )?;
+                anyhow::bail!("approval verification failed: sandbox changed after approval");
+            }
+
+            // Write approval granted artifact for durable evidence linkage
+            let req_ticket_art_id = ctx
+                .artifacts
+                .iter()
+                .find(|art| {
+                    art.producer == role_id
+                        && art.artifact_type == "approval_ticket_requested"
+                        && art
+                            .uri
+                            .contains(&format!("sandbox-patch-approval-requested-{}", action_id))
+                })
+                .map(|art| art.artifact_id.clone())
+                .unwrap_or_default();
+            let granted_artifact = ctx.artifact_store.put_text(
+                "approval_ticket_granted",
+                role_id,
+                &format!(
+                    "sandbox-patch-approval-granted-{}-{}.json",
+                    action_id, ticket.ticket_id
+                ),
+                "application/json",
+                &serde_json::to_string_pretty(&ticket)?,
+                if req_ticket_art_id.is_empty() {
+                    vec![]
+                } else {
+                    vec![req_ticket_art_id]
+                },
+            )?;
+            artifact_created(ctx, &granted_artifact)?;
+
+            let applied = apply_sandbox_patch(SandboxPatchApplyRequest {
+                target_repo: ctx.target_repo.clone(),
+                sandbox_path: sandbox_dir.clone(),
+                expected_digest: preview.action_digest.clone(),
+                approver: ticket
+                    .approver
+                    .clone()
+                    .unwrap_or_else(|| "human:local-user".to_string()),
+            })?;
+
+            let apply_artifact = ctx.artifact_store.put_text(
+                "sandbox_patch_apply",
+                role_id,
+                &format!("sandbox-patch-apply-{}.json", action_id),
+                "application/json",
+                &serde_json::to_string_pretty(&applied)?,
+                vec![granted_artifact.artifact_id.clone()],
+            )?;
+            artifact_created(ctx, &apply_artifact)?;
+
+            emit(
+                ctx,
+                "sandbox.patch.applied",
+                Some(role_id),
+                Some(action_id),
+                Actor::human_local(),
+                serde_json::to_value(&applied)?,
+            )?;
+
+            let _ = fs::remove_dir_all(&sandbox_dir);
+
+            consumed.push(ticket.ticket_id.clone());
+            atomic_write(&consumed_path, serde_json::to_string_pretty(&consumed)?)?;
+
+            let transcript_summary_id = ctx
+                .artifacts
+                .iter()
+                .find(|art| {
+                    art.producer == role_id
+                        && art.artifact_type == "provider_transcript_summary"
+                        && art.uri.contains(&summary_filename)
+                })
+                .map(|art| art.artifact_id.clone())
+                .unwrap_or_default();
+
+            let patch = ctx.artifact_store.put_text(
+                "patch_summary",
+                role_id,
+                &format!("provider-patch-{}.md", action_id),
+                "text/markdown",
+                "Applied provider prompt sandbox patch through exact-digest patch gate.",
+                vec![apply_artifact.artifact_id.clone(), transcript_summary_id],
+            )?;
+            artifact_created(ctx, &patch)?;
+
+            emit(
+                ctx,
+                "role.completed",
+                Some(role_id),
+                Some(action_id),
+                Actor::role(role_id),
+                json!({"status": "completed", "concerns": [], "blockers": []}),
+            )?;
+
+            Ok(RunStatus::Accepted)
         }
     }
-    let transcript_summary = ctx.artifact_store.put_text(
-        "provider_transcript_summary",
-        role_id,
-        "provider-transcript-summary.json",
-        "application/json",
-        &serde_json::to_string_pretty(&transcript_summary_value)?,
-        vec![transcript.artifact_id.clone()],
-    )?;
-    artifact_created(ctx, &transcript_summary)?;
-    emit(
-        ctx,
-        "adapter.transcript.parsed",
-        Some(role_id),
-        Some(action_id),
-        Actor::role(role_id),
-        transcript_summary_value,
-    )?;
-    emit(
-        ctx,
-        "adapter.completed",
-        Some(role_id),
-        Some(action_id),
-        Actor::role(role_id),
-        serde_json::to_value(&sandbox.adapter)?,
-    )?;
-    if sandbox.adapter.blocker.is_some() {
-        return Err(anyhow!(
-            "provider adapter failed; see provider_prompt_transcript artifact"
-        ));
-    }
-
-    let preview = preview_sandbox_patch(&ctx.target_repo, &sandbox.sandbox_path)?;
-    let preview_artifact = ctx.artifact_store.put_text(
-        "sandbox_patch_preview",
-        role_id,
-        "sandbox-patch-preview.json",
-        "application/json",
-        &serde_json::to_string_pretty(&preview)?,
-        vec![transcript.artifact_id.clone()],
-    )?;
-    artifact_created(ctx, &preview_artifact)?;
-    emit(
-        ctx,
-        "sandbox.patch.previewed",
-        Some(role_id),
-        Some(action_id),
-        Actor::system(),
-        serde_json::to_value(&preview)?,
-    )?;
-
-    let applied = apply_sandbox_patch(SandboxPatchApplyRequest {
-        target_repo: ctx.target_repo.clone(),
-        sandbox_path: sandbox.sandbox_path.clone(),
-        expected_digest: preview.action_digest,
-        approver: "human:local-user".to_string(),
-    })?;
-    let apply_artifact = ctx.artifact_store.put_text(
-        "sandbox_patch_apply",
-        role_id,
-        "sandbox-patch-apply.json",
-        "application/json",
-        &serde_json::to_string_pretty(&applied)?,
-        vec![preview_artifact.artifact_id.clone()],
-    )?;
-    artifact_created(ctx, &apply_artifact)?;
-    emit(
-        ctx,
-        "sandbox.patch.applied",
-        Some(role_id),
-        Some(action_id),
-        Actor::human_local(),
-        serde_json::to_value(&applied)?,
-    )?;
-    let _ = fs::remove_dir_all(&sandbox.sandbox_path);
-
-    let patch = ctx.artifact_store.put_text(
-        "patch_summary",
-        role_id,
-        "provider-patch.md",
-        "text/markdown",
-        "Applied provider prompt sandbox patch through exact-digest patch gate.",
-        vec![
-            apply_artifact.artifact_id.clone(),
-            transcript_summary.artifact_id.clone(),
-        ],
-    )?;
-    artifact_created(ctx, &patch)?;
-    emit(
-        ctx,
-        "role.completed",
-        Some(role_id),
-        Some(action_id),
-        Actor::role(role_id),
-        json!({"status": "completed", "concerns": [], "blockers": []}),
-    )?;
-    Ok(())
 }
 
 fn record_repair_source_context(
@@ -1449,10 +1862,13 @@ fn run_real_project_provider_workflow(
     max_repair_attempts: usize,
     max_budget_usd: Option<f64>,
 ) -> Result<RunStatus> {
-    if sdd_workflow_task_order(ctx)?.is_some() {
-        run_sdd_provider_task_graph(ctx, provider, prompt, max_budget_usd)?;
+    let status = if sdd_workflow_task_order(ctx)?.is_some() {
+        run_sdd_provider_task_graph(ctx, provider, prompt, max_budget_usd)?
     } else {
-        apply_provider_prompt_patch(ctx, provider, prompt, max_budget_usd)?;
+        apply_provider_prompt_patch(ctx, provider, prompt, max_budget_usd)?
+    };
+    if status == RunStatus::WaitingForApproval {
+        return Ok(RunStatus::WaitingForApproval);
     }
     let verifier = run_verifier(ctx)?;
     if verifier.success {
@@ -1483,6 +1899,9 @@ fn run_real_project_provider_workflow(
             Ok(RunStatus::Accepted)
         }
         None => {
+            if ctx.approvals.iter().any(|t| t.status == "pending") {
+                return Ok(RunStatus::WaitingForApproval);
+            }
             reject_real_project_verifier_failure(ctx, &review, &verifier.artifact)?;
             Ok(RunStatus::Rejected)
         }
@@ -1494,7 +1913,7 @@ fn run_sdd_provider_task_graph(
     provider: ProviderKind,
     prompt: &str,
     max_budget_usd: Option<f64>,
-) -> Result<()> {
+) -> Result<RunStatus> {
     let tasks = sdd_workflow_task_order(ctx)?.unwrap_or_default();
     let total = tasks.len();
     for (index, task) in tasks.iter().enumerate() {
@@ -1503,7 +1922,7 @@ fn run_sdd_provider_task_graph(
             .and_then(serde_json::Value::as_str)
             .context("SDD workflow task id is required")?;
         let task_prompt = provider_prompt_for_sdd_task(provider, prompt, task, index + 1, total)?;
-        apply_provider_prompt_patch_for_role(
+        let status = apply_provider_prompt_patch_for_role(
             ctx,
             provider,
             &task_prompt,
@@ -1512,8 +1931,11 @@ fn run_sdd_provider_task_graph(
             "sdd_provider_task",
             Some(task_id),
         )?;
+        if status == RunStatus::WaitingForApproval {
+            return Ok(RunStatus::WaitingForApproval);
+        }
     }
-    Ok(())
+    Ok(RunStatus::Accepted)
 }
 
 fn sdd_workflow_task_order(ctx: &RunContext) -> Result<Option<Vec<serde_json::Value>>> {
@@ -1979,7 +2401,18 @@ fn run_real_project_repair_loop(
             &last_verifier,
             review,
         )?;
-        apply_provider_prompt_patch(ctx, provider, &repair_prompt.content, max_budget_usd)?;
+        let status = apply_provider_prompt_patch_for_role(
+            ctx,
+            provider,
+            &repair_prompt.content,
+            max_budget_usd,
+            "implementer",
+            &format!("repair_attempt_{}", attempt),
+            None,
+        )?;
+        if status == RunStatus::WaitingForApproval {
+            return Ok(None);
+        }
         let verifier = run_verifier(ctx)?;
         if verifier.success {
             let attempt_record = RepairAttempt {

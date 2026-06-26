@@ -2009,3 +2009,26 @@ Result:
   score is below threshold.
 - Linux/aarch64 Docker package: generated and checksum verified.
 - Windows/x86_64 Docker package: generated and checksum verified.
+
+## Hardened Governance: Exact-Digest Sandbox Approval & Rust-Native Pulse Auto-Advance
+
+Last verified: 2026-06-25
+
+### Part 1: Persisted Approval For Provider Patch Apply
+- Sandbox patch promotion requires persisted exact-digest approval tickets matching `run_id`, `action_digest`, `requester`, `operation/resource`, and non-expired, non-consumed status.
+- Sandbox folder persists under unique directory names (`sandbox-<role_id>-<action_id>`) to avoid cross-action collisions during concurrent loops/resumes.
+- Sandbox patch previews, requested approval tickets, granted approval tickets, applied patches, and event logs are written to the artifact store and linked durably via causation/evidence tracking.
+- Test suites cover rejection of mismatched digests, wrong runs, wrong targets/resources, expired approvals, already-consumed approvals, and altered sandboxes.
+- CLI/workbench/pilot paths enforce the persisted approval flow for managed provider promotions.
+
+### Part 2: Move Pulse Logic Into Typed Rust Runtime
+- Pulse auto-advance configuration, heartbeat, ledger entries, and PR/CI gate states are fully modeled in typed Rust structs.
+- Moved core auto-advance event-loop decisions into the Rust runtime:
+  - Resume JSON reading and verification.
+  - Heartbeat evidence emission while waiting.
+  - STOP file monitoring.
+  - Deduping ledger checks to refuse duplicate loop digests.
+  - PR/CI gate state tracking to skip code advancement while blocked.
+  - Bounded iteration and duration runtime termination.
+- NPM script entrypoints (`npm run pulse:auto-advance`, etc.) are thin bash compatibility wrappers calling `ao2 pulse auto-advance`.
+- Verified on Windows, Linux, and macOS.

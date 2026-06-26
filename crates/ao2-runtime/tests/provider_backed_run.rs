@@ -3,9 +3,38 @@ use std::path::Path;
 use std::sync::Mutex;
 
 use ao2_adapters::ProviderKind;
-use ao2_runtime::{run_risky_pr_with_provider_prompt, ProviderRunOptions, RunStatus};
+use ao2_runtime::{
+    approve_risky_pr_ticket, resume_risky_pr_provider_free, run_risky_pr_with_provider_prompt,
+    ApprovalOptions, ProviderRunOptions, ResumeOptions, RunStatus, RunSummary,
+};
 
 static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+fn run_provider_backed_end_to_end(options: ProviderRunOptions) -> anyhow::Result<RunSummary> {
+    let repo = options.target_repo.clone();
+    let mut summary = run_risky_pr_with_provider_prompt(options)?;
+    while summary.status == RunStatus::WaitingForApproval {
+        let pending = summary
+            .approvals
+            .iter()
+            .find(|t| t.status == "pending" && t.requested_action == "sandbox:apply")
+            .cloned();
+        if let Some(ticket) = pending {
+            approve_risky_pr_ticket(ApprovalOptions {
+                target_repo: repo.clone(),
+                ticket_id: ticket.ticket_id,
+                approver: "human:test-operator".to_string(),
+            })?;
+            summary = resume_risky_pr_provider_free(ResumeOptions {
+                target_repo: repo.clone(),
+                run_id: summary.run_id.clone(),
+            })?;
+        } else {
+            break;
+        }
+    }
+    Ok(summary)
+}
 
 fn copy_fixture(src: &Path, dst: &Path) {
     fs::create_dir_all(dst).unwrap();
@@ -45,7 +74,7 @@ printf 'Output tokens: 20\n'
 printf 'Cost: $0.001\n'
 "#;
 
-    let summary = run_risky_pr_with_provider_prompt(ProviderRunOptions {
+    let summary = run_provider_backed_end_to_end(ProviderRunOptions {
         target_repo: repo.clone(),
         workflow_path: Path::new("../../examples/risky-pr-run/risky-pr.yaml").to_path_buf(),
         run_id: Some("provider-run".to_string()),
@@ -143,7 +172,7 @@ printf 'Summary: added validation without tests\n'
 printf 'Changed files: discount_service/discounts.py\n'
 "#;
 
-    let summary = run_risky_pr_with_provider_prompt(ProviderRunOptions {
+    let summary = run_provider_backed_end_to_end(ProviderRunOptions {
         target_repo: repo.clone(),
         workflow_path: Path::new("../../examples/risky-pr-run/risky-pr.yaml").to_path_buf(),
         run_id: Some("provider-budget-zero".to_string()),
@@ -221,7 +250,7 @@ printf 'Summary: added validation before retrying verifier\n'
 printf 'Changed files: discount_service/discounts.py\n'
 "#;
 
-    let summary = run_risky_pr_with_provider_prompt(ProviderRunOptions {
+    let summary = run_provider_backed_end_to_end(ProviderRunOptions {
         target_repo: repo.clone(),
         workflow_path: workflow,
         run_id: Some("provider-retry-verifier".to_string()),
@@ -286,7 +315,7 @@ printf 'Summary: added deterministic real-project pilot artifact\n'
 printf 'Changed files: docs/ao2-pilot-smoke.txt\n'
 "#;
 
-    let summary = run_risky_pr_with_provider_prompt(ProviderRunOptions {
+    let summary = run_provider_backed_end_to_end(ProviderRunOptions {
         target_repo: repo.clone(),
         workflow_path: workflow,
         run_id: Some("real-project-template".to_string()),
@@ -364,7 +393,7 @@ printf 'Summary: attempted real-project repairable change\n'
 printf 'Changed files: docs/first-attempt.txt, docs/fixed.txt\n'
 "#;
 
-    let summary = run_risky_pr_with_provider_prompt(ProviderRunOptions {
+    let summary = run_provider_backed_end_to_end(ProviderRunOptions {
         target_repo: repo.clone(),
         workflow_path: workflow,
         run_id: Some("real-project-repair".to_string()),
@@ -384,6 +413,7 @@ printf 'Changed files: docs/first-attempt.txt, docs/fixed.txt\n'
     );
 
     let evidence = fs::read_to_string(&summary.evidence_pack_path).unwrap();
+    println!("EVIDENCE CONTENT FOR DEBUGGING:\n{}", evidence);
     let evidence_json: serde_json::Value = serde_json::from_str(&evidence).unwrap();
     assert!(evidence.contains("\"attempt\": 1"));
     assert!(evidence.contains("\"status\": \"accepted\""));
@@ -453,7 +483,7 @@ JS
 printf 'Summary: added npm test coverage for Node math module\n'
 printf 'Changed files: src/math.mjs, test/math.test.mjs\n'
 "#;
-    let npm_test_summary = run_risky_pr_with_provider_prompt(ProviderRunOptions {
+    let npm_test_summary = run_provider_backed_end_to_end(ProviderRunOptions {
         target_repo: npm_test_repo.clone(),
         workflow_path: npm_test_workflow,
         run_id: Some("node-npm-test".to_string()),
@@ -497,7 +527,7 @@ JS
 printf 'Summary: added dependency-free Node typecheck script\n'
 printf 'Changed files: src/math.mjs, scripts/typecheck.mjs\n'
 "#;
-    let typecheck_summary = run_risky_pr_with_provider_prompt(ProviderRunOptions {
+    let typecheck_summary = run_provider_backed_end_to_end(ProviderRunOptions {
         target_repo: typecheck_repo.clone(),
         workflow_path: typecheck_workflow,
         run_id: Some("node-typecheck".to_string()),
@@ -540,7 +570,7 @@ JS
 printf 'Summary: added workspace test coverage for Node package\n'
 printf 'Changed files: packages/app/src/value.mjs, packages/app/test/value.test.mjs\n'
 "#;
-    let workspace_summary = run_risky_pr_with_provider_prompt(ProviderRunOptions {
+    let workspace_summary = run_provider_backed_end_to_end(ProviderRunOptions {
         target_repo: workspace_repo.clone(),
         workflow_path: workspace_workflow,
         run_id: Some("node-workspace".to_string()),
@@ -600,7 +630,7 @@ printf 'Summary: repaired Node value when verifier context was available\n'
 printf 'Changed files: src/value.mjs, test/value.test.mjs\n'
 "#;
 
-    let summary = run_risky_pr_with_provider_prompt(ProviderRunOptions {
+    let summary = run_provider_backed_end_to_end(ProviderRunOptions {
         target_repo: repo.clone(),
         workflow_path: workflow,
         run_id: Some("node-repair-context".to_string()),
@@ -628,6 +658,7 @@ printf 'Changed files: src/value.mjs, test/value.test.mjs\n'
 
     let events =
         fs::read_to_string(repo.join(".ao2/runs/node-repair-context/events.jsonl")).unwrap();
+    println!("EVENTS LOG FOR DEBUGGING:\n{}", events);
     assert!(events.contains("\"event_type\":\"repair.prompt.created\""));
     assert!(events.contains("\"event_type\":\"repair.attempt.completed\""));
 
@@ -669,7 +700,7 @@ printf 'Summary: repaired Python value when verifier context was available\n'
 printf 'Changed files: src/value.txt\n'
 "#;
 
-    let summary = run_risky_pr_with_provider_prompt(ProviderRunOptions {
+    let summary = run_provider_backed_end_to_end(ProviderRunOptions {
         target_repo: repo.clone(),
         workflow_path: workflow,
         run_id: Some("python-repair-context".to_string()),
