@@ -706,9 +706,12 @@ Result:
   control-plane evidence to `../ao2-control-plane/target/ci-artifacts/latest`,
   and emits `ao2.ci-artifact-download-contract.v1` at
   `target/ci-artifacts/latest/summary.json`. Use `--fixture-dir <path>` for
-  deterministic local tests. `AO2_CI_ARTIFACT_CONTRACT_STEP_TIMEOUT_SECONDS`
-  bounds the nested consumer command so npm/node/bash process wrappers fail
-  closed instead of waiting indefinitely after a child process stalls.
+  deterministic local tests. When required artifact fragments are supplied, the
+  consumer downloads matching artifact patterns instead of the whole CI artifact
+  set; full-run artifact download remains the default when no required artifact
+  filter is supplied. `AO2_CI_ARTIFACT_CONTRACT_STEP_TIMEOUT_SECONDS` bounds
+  the nested consumer command so npm/node/bash process wrappers fail closed
+  instead of waiting indefinitely after a child process stalls.
 - `npm run artifacts:index`: scans AO2 and ao2-control-plane local/CI evidence
   roots, writes `ao2.artifact-index-report.v1`, renders a local `report.md`,
   and writes the `ao2.artifact-evidence-dashboard.v1` HTML dashboard at

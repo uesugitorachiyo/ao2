@@ -12845,6 +12845,15 @@ def test_ci_artifact_download_contract_and_health_gate_wiring():
     assert "OPENAI_API_KEY" not in text
     assert "ANTHROPIC_API_KEY" not in text
 
+    consumer = read("scripts/release-artifact-consumer-smoke.sh")
+    for needle in [
+        "download_required_artifacts",
+        "--pattern",
+        "gh run download",
+        "REQUIRED_ARTIFACTS",
+    ]:
+        assert needle in consumer
+
     local_canary = read("scripts/local-canary.sh")
     regression_gate = read("scripts/release-readiness-regression-gate.sh")
     for runner in [local_canary, regression_gate]:
