@@ -165,6 +165,74 @@ require(
     rsi_covenant_gate_summary,
 )
 
+rsi_baseline_packet_path, rsi_baseline_packet = load_json("ao2-rsi-baseline-packet/packet/summary.json")
+require(
+    rsi_baseline_packet.get("schema_version") == "ao2.rsi-baseline-packet.v1",
+    "unexpected RSI baseline packet schema",
+    rsi_baseline_packet,
+)
+require(
+    rsi_baseline_packet.get("status") == "passed"
+    and rsi_baseline_packet.get("rsi_baseline_ready") is True,
+    "RSI baseline packet was not ready",
+    rsi_baseline_packet,
+)
+baseline_packet_rsi = rsi_baseline_packet.get("rsi_cross_repo_e2e", {})
+require(
+    baseline_packet_rsi.get("schema_version") == "ao2.rsi-cross-repo-e2e.v1"
+    and baseline_packet_rsi.get("status") == "passed"
+    and baseline_packet_rsi.get("claim_publish_decision") == "deny"
+    and baseline_packet_rsi.get("claim_publish_authority") is False
+    and baseline_packet_rsi.get("covenant_gate_schema_version") == "covenant.rsi-claim-publish-gate.v1"
+    and baseline_packet_rsi.get("covenant_gate_status") == "denied",
+    "RSI baseline packet claim-publish boundary was not denied",
+    rsi_baseline_packet,
+)
+baseline_packet_blueprint = rsi_baseline_packet.get("rsi_blueprint_authorization", {})
+require(
+    baseline_packet_blueprint.get("schema_version") == "ao2.rsi-blueprint-authorization-gate.v1"
+    and baseline_packet_blueprint.get("status") == "passed"
+    and baseline_packet_blueprint.get("blueprint_authorization_ready") is True
+    and baseline_packet_blueprint.get("gate_model") == "tiered"
+    and baseline_packet_blueprint.get("source") == "ao-blueprint"
+    and baseline_packet_blueprint.get("self_authorized_by_rsi") is False
+    and baseline_packet_blueprint.get("authorizes_claim_publication") is False
+    and baseline_packet_blueprint.get("authorizes_ao_blueprint_self_change") is False,
+    "RSI baseline packet Blueprint authorization was not ready",
+    rsi_baseline_packet,
+)
+baseline_packet_improvement = rsi_baseline_packet.get("rsi_improvement_evidence", {})
+require(
+    baseline_packet_improvement.get("schema_version") == "ao2.rsi-improvement-evidence-gate.v1"
+    and baseline_packet_improvement.get("status") == "passed"
+    and baseline_packet_improvement.get("improvement_ready") is True
+    and baseline_packet_improvement.get("measured_improvement_percent", 0) >= 5
+    and baseline_packet_improvement.get("claim_publish_decision") == "deny"
+    and baseline_packet_improvement.get("claim_publish_authority") is False,
+    "RSI baseline packet improvement evidence was not ready",
+    rsi_baseline_packet,
+)
+baseline_packet_trend = rsi_baseline_packet.get("rsi_improvement_trend", {})
+require(
+    baseline_packet_trend.get("schema_version") == "ao2.rsi-improvement-trend.v1"
+    and baseline_packet_trend.get("status") == "passed"
+    and baseline_packet_trend.get("trend_ready") is True
+    and baseline_packet_trend.get("current_measured_improvement_percent", 0) >= 5
+    and "delta_from_previous_percent" in baseline_packet_trend
+    and baseline_packet_trend.get("claim_publish_decision") == "deny"
+    and baseline_packet_trend.get("claim_publish_authority") is False,
+    "RSI baseline packet improvement trend was not ready",
+    rsi_baseline_packet,
+)
+require(
+    rsi_baseline_packet.get("trust_boundary", {}).get("mutates_repositories") is False
+    and rsi_baseline_packet.get("trust_boundary", {}).get("publishes_claims") is False
+    and rsi_baseline_packet.get("trust_boundary", {}).get("stores_credentials") is False,
+    "RSI baseline packet trust boundary was not ready",
+    rsi_baseline_packet,
+)
+require((consumer_root / "ao2-rsi-baseline-packet/packet/dashboard.html").is_file(), "missing RSI baseline packet dashboard")
+
 publication_closure_summary_path, publication_closure_summary = load_json("ao2-release-publication-closure/summary.json")
 require(publication_closure_summary.get("schema_version") == "ao2.release-publication-dry-run-closure.v1", "unexpected release publication closure schema", publication_closure_summary)
 require(publication_closure_summary.get("status") == "passed", "release publication closure did not pass", publication_closure_summary)
@@ -306,6 +374,7 @@ consumer_summary = {
         "ao2-pulse-task-board-closure-packet",
         "ao2-pulse-ao2-event-loop-smoke",
         "ao2-rsi-cross-repo-e2e",
+        "ao2-rsi-baseline-packet",
         "ao2-dual-repo-installed-release-smoke",
         "ao2-release-publication-closure",
         "ao2-dual-repo-release-publication-closure-index",
@@ -325,10 +394,20 @@ consumer_summary = {
         str(dual_repo_summary_path),
         str(rsi_cross_repo_summary_path),
         str(rsi_covenant_gate_summary_path),
+        str(rsi_baseline_packet_path),
         str(publication_closure_summary_path),
         str(dual_repo_publication_closure_summary_path),
         str(stable_release_evidence_packet_path),
     ],
+    "rsi_baseline_packet": {
+        "schema_version": rsi_baseline_packet.get("schema_version"),
+        "status": rsi_baseline_packet.get("status"),
+        "rsi_baseline_ready": rsi_baseline_packet.get("rsi_baseline_ready"),
+        "rsi_cross_repo_e2e": baseline_packet_rsi,
+        "rsi_blueprint_authorization": baseline_packet_blueprint,
+        "rsi_improvement_evidence": baseline_packet_improvement,
+        "rsi_improvement_trend": baseline_packet_trend,
+    },
     "stable_release_evidence_packet": {
         "schema_version": stable_release_evidence_packet.get("schema_version"),
         "status": stable_release_evidence_packet.get("status"),

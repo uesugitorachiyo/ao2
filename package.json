@@ -82,6 +82,7 @@
     "rsi:blueprint-authorization-gate": "node scripts/run-sh-script.js scripts/rsi-blueprint-authorization-gate.sh",
     "rsi:improvement-evidence-gate": "node scripts/run-sh-script.js scripts/rsi-improvement-evidence-gate.sh",
     "rsi:improvement-trend": "node scripts/run-sh-script.js scripts/rsi-improvement-trend.sh",
+    "rsi:baseline-packet": "node scripts/run-sh-script.js scripts/rsi-baseline-packet.sh",
     "rsi:cross-repo-e2e": "node scripts/run-sh-script.js scripts/rsi-cross-repo-e2e.sh",
     "rsi:self-change-dry-run": "node scripts/run-sh-script.js scripts/rsi-governed-self-change-dry-run.sh",
     "pulse:local-mirror": "node scripts/run-sh-script.js scripts/pulse-local-mirror.sh",

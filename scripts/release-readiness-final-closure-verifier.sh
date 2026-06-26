@@ -39,6 +39,7 @@ required_source_artifacts = [
     "ao2-ai-task-board-control-plane-bridge",
     "ao2-pulse-task-board-closure-packet",
     "ao2-pulse-ao2-event-loop-smoke",
+    "ao2-rsi-baseline-packet",
     "ao2-dual-repo-installed-release-smoke",
     "ao2-release-publication-closure",
     "ao2-dual-repo-release-publication-closure-index",
@@ -102,6 +103,21 @@ require(
     consumer,
 )
 
+rsi_baseline_packet = consumer.get("rsi_baseline_packet", {})
+rsi_baseline_trend = rsi_baseline_packet.get("rsi_improvement_trend", {})
+require(
+    rsi_baseline_packet.get("schema_version") == "ao2.rsi-baseline-packet.v1"
+    and rsi_baseline_packet.get("status") == "passed"
+    and rsi_baseline_packet.get("rsi_baseline_ready") is True
+    and rsi_baseline_packet.get("rsi_cross_repo_e2e", {}).get("claim_publish_decision") == "deny"
+    and rsi_baseline_packet.get("rsi_cross_repo_e2e", {}).get("claim_publish_authority") is False
+    and rsi_baseline_packet.get("rsi_blueprint_authorization", {}).get("self_authorized_by_rsi") is False
+    and rsi_baseline_packet.get("rsi_blueprint_authorization", {}).get("authorizes_claim_publication") is False
+    and rsi_baseline_trend.get("current_measured_improvement_percent", 0) >= 5,
+    "release-readiness RSI baseline packet was not ready",
+    consumer,
+)
+
 require(
     consumer.get("trust_boundary", {}).get("stores_credentials") is False
     and consumer.get("trust_boundary", {}).get("source") == "github_actions_artifact_download",
@@ -121,6 +137,7 @@ payload = {
     },
     "public_pair_digest_gate": public_pair_digest_gate,
     "hosted_release_readiness_artifact_gate": hosted_gate,
+    "rsi_baseline_packet": rsi_baseline_packet,
     "stable_release_evidence_packet": stable_release_evidence_packet,
     "required_checks": ["ci_release_readiness_artifact_consumer_job"],
     "trust_boundary": {

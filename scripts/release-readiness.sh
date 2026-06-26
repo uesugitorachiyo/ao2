@@ -252,8 +252,14 @@ rsi_cross_repo_e2e_artifacts_ok = (
     rsi_cross_repo_e2e_artifacts is not None
     and "ao2-rsi-cross-repo-e2e" in rsi_cross_repo_e2e_artifacts
     and "target/rsi-cross-repo-e2e-ci" in rsi_cross_repo_e2e_artifacts
+    and "ao2-rsi-baseline-packet" in rsi_cross_repo_e2e_artifacts
+    and "target/rsi-baseline-packet-ci" in rsi_cross_repo_e2e_artifacts
     and "npm run rsi:cross-repo-e2e" in rsi_cross_repo_e2e_artifacts
+    and "npm run rsi:baseline-packet" in rsi_cross_repo_e2e_artifacts
+    and scripts.get("rsi:baseline-packet") == "node scripts/run-sh-script.js scripts/rsi-baseline-packet.sh"
     and "ao2.rsi-cross-repo-e2e.v1" in rsi_cross_repo_e2e_artifacts
+    and "ao2.rsi-baseline-packet.v1" in rsi_cross_repo_e2e_artifacts
+    and "rsi_baseline_ready" in rsi_cross_repo_e2e_artifacts
     and "ao2.rsi-blueprint-authorization-gate.v1" in rsi_cross_repo_e2e_artifacts
     and "ao2.rsi-improvement-evidence-gate.v1" in rsi_cross_repo_e2e_artifacts
     and "ao2.rsi-improvement-trend.v1" in rsi_cross_repo_e2e_artifacts
@@ -804,6 +810,9 @@ release_readiness_artifact_consumer_ok = (
     and "ao2.pulse-event-loop-decision.v1" in release_readiness_artifact_consumer_script
     and "ao2.pulse-event-loop-decision-metadata.v1" in release_readiness_artifact_consumer_script
     and "ao2.rsi-cross-repo-e2e.v1" in release_readiness_artifact_consumer_script
+    and "ao2.rsi-baseline-packet.v1" in release_readiness_artifact_consumer_script
+    and "rsi_baseline_packet" in release_readiness_artifact_consumer_script
+    and "rsi_baseline_ready" in release_readiness_artifact_consumer_script
     and "ao2.rsi-blueprint-authorization-gate.v1" in release_readiness_artifact_consumer_script
     and "rsi_blueprint_authorization" in release_readiness_artifact_consumer_script
     and "ao2.rsi-improvement-evidence-gate.v1" in release_readiness_artifact_consumer_script
@@ -834,6 +843,7 @@ release_readiness_artifact_consumer_ok = (
     and "ci_pulse_task_board_closure_packet_artifact_job" in release_readiness_artifact_consumer_script
     and "ci_pulse_ao2_event_loop_smoke_artifact_job" in release_readiness_artifact_consumer_script
     and "ci_rsi_cross_repo_e2e_artifact_job" in release_readiness_artifact_consumer_script
+    and "ao2-rsi-baseline-packet" in release_readiness_artifact_consumer_script
     and "ci_dual_repo_installed_release_smoke_artifact_job" in release_readiness_artifact_consumer_script
     and "ci_release_publication_closure_artifact_job" in release_readiness_artifact_consumer_script
     and "ci_dual_repo_release_publication_closure_index_job" in release_readiness_artifact_consumer_script
@@ -859,6 +869,9 @@ release_readiness_final_closure_verifier_ok = (
     and "target/release-readiness-final-closure-verifier" in release_readiness_final_closure_verifier
     and "ao2.release-readiness-final-closure-verifier.v1" in release_readiness_final_closure_verifier_script
     and "ao2.release-readiness-artifact-consumer.v1" in release_readiness_final_closure_verifier_script
+    and "ao2.rsi-baseline-packet.v1" in release_readiness_final_closure_verifier_script
+    and "ao2-rsi-baseline-packet" in release_readiness_final_closure_verifier_script
+    and "rsi_baseline_ready" in release_readiness_final_closure_verifier_script
     and "ao2-release-readiness-consumer" in release_readiness_final_closure_verifier_script
     and "ci_release_readiness_artifact_consumer_job" in release_readiness_final_closure_verifier_script
     and "ci_release_readiness_hosted_artifact_gate_job" in release_readiness_final_closure_verifier_script
@@ -1268,6 +1281,25 @@ artifact_closure_index = {
             "required_checks": ["ci_rsi_cross_repo_e2e_artifact_job"],
         },
         {
+            "id": "rsi_baseline_packet",
+            "artifact_name": "ao2-rsi-baseline-packet",
+            "producer_job": "rsi-cross-repo-e2e-artifacts",
+            "required_files": [
+                "packet/summary.json",
+                "packet/dashboard.html",
+            ],
+            "schema_versions": [
+                "ao2.rsi-baseline-packet.v1",
+                "ao2.rsi-cross-repo-e2e.v1",
+                "ao2.rsi-blueprint-authorization-gate.v1",
+                "ao2.rsi-improvement-evidence-gate.v1",
+                "ao2.rsi-improvement-trend.v1",
+                "covenant.rsi-claim-publish-gate.v1",
+            ],
+            "required_checks": ["ci_rsi_cross_repo_e2e_artifact_job"],
+            "source_artifacts": ["ao2-rsi-cross-repo-e2e"],
+        },
+        {
             "id": "dual_repo_installed_release_smoke",
             "artifact_name": "ao2-dual-repo-installed-release-smoke",
             "producer_job": "dual-repo-installed-release-smoke-artifacts",
@@ -1550,6 +1582,7 @@ artifact_closure_index = {
                 "ao2-pulse-task-board-closure-packet",
                 "ao2-pulse-ao2-event-loop-smoke",
                 "ao2-rsi-cross-repo-e2e",
+                "ao2-rsi-baseline-packet",
                 "ao2-dual-repo-installed-release-smoke",
                 "ao2-release-publication-closure",
                 "ao2-dual-repo-release-publication-closure-index",

@@ -5818,6 +5818,66 @@ def _write_release_readiness_consumer_fixture(root: Path):
     )
     _write_release_readiness_consumer_json(
         root,
+        "ao2-rsi-baseline-packet/packet/summary.json",
+        {
+            "schema_version": "ao2.rsi-baseline-packet.v1",
+            "status": "passed",
+            "rsi_baseline_ready": True,
+            "rsi_cross_repo_e2e": {
+                "schema_version": "ao2.rsi-cross-repo-e2e.v1",
+                "status": "passed",
+                "claim_level": "full_autonomous_self_mutating_rsi",
+                "claim_publish_decision": "deny",
+                "claim_publish_authority": False,
+                "covenant_gate_schema_version": "covenant.rsi-claim-publish-gate.v1",
+                "covenant_gate_status": "denied",
+            },
+            "rsi_blueprint_authorization": {
+                "schema_version": "ao2.rsi-blueprint-authorization-gate.v1",
+                "status": "passed",
+                "blueprint_authorization_ready": True,
+                "gate_model": "tiered",
+                "candidate_id": "ao2-rsi-evidence-hardening",
+                "source": "ao-blueprint",
+                "self_authorized_by_rsi": False,
+                "authorizes_claim_publication": False,
+                "authorizes_ao_blueprint_self_change": False,
+            },
+            "rsi_improvement_evidence": {
+                "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
+                "status": "passed",
+                "improvement_ready": True,
+                "target_percent": 5.0,
+                "measured_improvement_percent": 33.3333,
+                "claim_publish_decision": "deny",
+                "claim_publish_authority": False,
+            },
+            "rsi_improvement_trend": {
+                "schema_version": "ao2.rsi-improvement-trend.v1",
+                "status": "passed",
+                "trend_ready": True,
+                "run_count": 2,
+                "current_measured_improvement_percent": 33.3333,
+                "delta_from_previous_percent": 0.0,
+                "target_percent": 5.0,
+                "claim_publish_decision": "deny",
+                "claim_publish_authority": False,
+            },
+            "trust_boundary": {
+                "mutates_repositories": False,
+                "publishes_claims": False,
+                "stores_credentials": False,
+            },
+        },
+    )
+    baseline_dashboard = root / "ao2-rsi-baseline-packet/packet/dashboard.html"
+    baseline_dashboard.parent.mkdir(parents=True, exist_ok=True)
+    baseline_dashboard.write_text(
+        "<!doctype html><title>RSI Baseline Packet</title>\n",
+        encoding="utf-8",
+    )
+    _write_release_readiness_consumer_json(
+        root,
         "ao2-rsi-cross-repo-e2e/latest/blueprint-authorization/summary.json",
         {
             "schema_version": "ao2.rsi-blueprint-authorization-gate.v1",
@@ -5990,11 +6050,15 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
         "ao2.pulse-event-loop-decision.v1",
         "ao2.pulse-event-loop-decision-metadata.v1",
         "ao2.rsi-cross-repo-e2e.v1",
+        "ao2.rsi-baseline-packet.v1",
+        "rsi_baseline_packet",
+        "rsi_baseline_ready",
         "covenant.rsi-claim-publish-gate.v1",
         "ci_release_readiness_hosted_artifact_gate_job",
         "ci_pulse_ao2_event_loop_smoke_artifact_job",
         "ci_rsi_cross_repo_e2e_artifact_job",
         "ao2-rsi-cross-repo-e2e",
+        "ao2-rsi-baseline-packet",
         "claim_publish_decision",
         "publishes_claims",
         "github_actions_artifact_download",
@@ -6030,6 +6094,8 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
     )
     assert "name: ao2-rsi-cross-repo-e2e" in consumer_ci
     assert "path: target/release-readiness-consumer/ao2-rsi-cross-repo-e2e" in consumer_ci
+    assert "name: ao2-rsi-baseline-packet" in consumer_ci
+    assert "path: target/release-readiness-consumer/ao2-rsi-baseline-packet" in consumer_ci
 
     root = tmp_path / "release-readiness-consumer"
     _write_release_readiness_consumer_fixture(root)
@@ -6041,6 +6107,7 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
     assert summary["status"] == "passed"
     assert "ao2-pulse-ao2-event-loop-smoke" in summary["source_artifacts"]
     assert "ao2-rsi-cross-repo-e2e" in summary["source_artifacts"]
+    assert "ao2-rsi-baseline-packet" in summary["source_artifacts"]
     assert "ao2-release-readiness-hosted-artifact-gate" in summary["source_artifacts"]
     assert "ao2-stable-release-evidence-packet" in summary["source_artifacts"]
     assert "ci_release_readiness_hosted_artifact_gate_job" in summary["required_checks"]
@@ -6055,6 +6122,13 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
         "covenant_gate_schema_version": "covenant.rsi-claim-publish-gate.v1",
         "covenant_gate_status": "denied",
     }
+    assert summary["rsi_baseline_packet"]["rsi_baseline_ready"] is True
+    assert (
+        summary["rsi_baseline_packet"]["rsi_cross_repo_e2e"][
+            "claim_publish_decision"
+        ]
+        == "deny"
+    )
     assert summary["hosted_release_readiness_artifact_gate"]["status"] == "passed"
     assert (
         summary["hosted_release_readiness_artifact_gate"]["public_pair_digest_gate"][
@@ -6457,6 +6531,8 @@ def test_release_readiness_final_closure_verifier_runs_against_consumer_fixture(
         "ci_release_readiness_hosted_artifact_gate_job",
         "ao2-release-readiness-hosted-artifact-gate",
         "stable_release_evidence_packet",
+        "rsi_baseline_packet",
+        "ao2.rsi-baseline-packet.v1",
         "public_pair_digest_gate",
         "archive_parity_status",
         "github_actions_artifact_download",
@@ -6507,6 +6583,7 @@ def test_release_readiness_final_closure_verifier_runs_against_consumer_fixture(
         == "passed"
     )
     assert summary["stable_release_evidence_packet"]["stable_release_evidence_ready"] is True
+    assert summary["rsi_baseline_packet"]["rsi_baseline_ready"] is True
     assert summary["trust_boundary"]["stores_credentials"] is False
 
 
@@ -6589,6 +6666,7 @@ def test_release_readiness_final_closure_verifier_rejects_bad_consumer_artifact(
                         "ao2-ai-task-board-control-plane-bridge",
                         "ao2-pulse-task-board-closure-packet",
                         "ao2-pulse-ao2-event-loop-smoke",
+                        "ao2-rsi-baseline-packet",
                         "ao2-dual-repo-installed-release-smoke",
                         "ao2-release-publication-closure",
                         "ao2-dual-repo-release-publication-closure-index",

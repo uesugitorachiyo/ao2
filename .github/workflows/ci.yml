@@ -1127,6 +1127,11 @@ jobs:
         with:
           name: ao2-rsi-cross-repo-e2e
           path: target/release-readiness-consumer/ao2-rsi-cross-repo-e2e
+      - name: Download RSI baseline packet artifact
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: ao2-rsi-baseline-packet
+          path: target/release-readiness-consumer/ao2-rsi-baseline-packet
       - name: Download release publication closure artifact
         uses: actions/download-artifact@v8.0.1
         with:
@@ -1424,11 +1429,64 @@ jobs:
           test -f target/rsi-cross-repo-e2e-ci/latest/covenant-gate/summary.json
           test -f target/rsi-cross-repo-e2e-ci/latest/improvement-evidence-gate/summary.json
           test -f target/rsi-cross-repo-e2e-ci/latest/improvement-trend/summary.json
+      - name: Compose RSI baseline packet
+        shell: bash
+        run: |
+          AO2_RSI_BASELINE_PACKET_ROOT=target/rsi-baseline-packet-ci/packet \
+          AO2_RSI_BASELINE_PACKET_RSI_SUMMARY=target/rsi-cross-repo-e2e-ci/latest/summary.json \
+            npm run rsi:baseline-packet
+      - name: Verify RSI baseline packet
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path("target/rsi-baseline-packet-ci")
+          summary = json.loads((root / "packet" / "summary.json").read_text(encoding="utf-8"))
+          assert summary["schema_version"] == "ao2.rsi-baseline-packet.v1", summary
+          assert summary["status"] == "passed", summary
+          assert summary["rsi_baseline_ready"] is True, summary
+          assert summary["rsi_cross_repo_e2e"]["schema_version"] == "ao2.rsi-cross-repo-e2e.v1", summary
+          assert summary["rsi_cross_repo_e2e"]["claim_publish_decision"] == "deny", summary
+          assert summary["rsi_cross_repo_e2e"]["claim_publish_authority"] is False, summary
+          assert summary["rsi_cross_repo_e2e"]["covenant_gate_schema_version"] == "covenant.rsi-claim-publish-gate.v1", summary
+          assert summary["rsi_blueprint_authorization"]["schema_version"] == "ao2.rsi-blueprint-authorization-gate.v1", summary
+          assert summary["rsi_blueprint_authorization"]["status"] == "passed", summary
+          assert summary["rsi_blueprint_authorization"]["blueprint_authorization_ready"] is True, summary
+          assert summary["rsi_blueprint_authorization"]["gate_model"] == "tiered", summary
+          assert summary["rsi_blueprint_authorization"]["source"] == "ao-blueprint", summary
+          assert summary["rsi_blueprint_authorization"]["self_authorized_by_rsi"] is False, summary
+          assert summary["rsi_blueprint_authorization"]["authorizes_claim_publication"] is False, summary
+          assert summary["rsi_blueprint_authorization"]["authorizes_ao_blueprint_self_change"] is False, summary
+          assert summary["rsi_improvement_evidence"]["schema_version"] == "ao2.rsi-improvement-evidence-gate.v1", summary
+          assert summary["rsi_improvement_evidence"]["status"] == "passed", summary
+          assert summary["rsi_improvement_evidence"]["improvement_ready"] is True, summary
+          assert summary["rsi_improvement_evidence"]["measured_improvement_percent"] >= 5, summary
+          assert summary["rsi_improvement_evidence"]["claim_publish_decision"] == "deny", summary
+          assert summary["rsi_improvement_evidence"]["claim_publish_authority"] is False, summary
+          assert summary["rsi_improvement_trend"]["schema_version"] == "ao2.rsi-improvement-trend.v1", summary
+          assert summary["rsi_improvement_trend"]["status"] == "passed", summary
+          assert summary["rsi_improvement_trend"]["trend_ready"] is True, summary
+          assert summary["rsi_improvement_trend"]["current_measured_improvement_percent"] >= 5, summary
+          assert "delta_from_previous_percent" in summary["rsi_improvement_trend"], summary
+          assert summary["rsi_improvement_trend"]["claim_publish_decision"] == "deny", summary
+          assert summary["rsi_improvement_trend"]["claim_publish_authority"] is False, summary
+          assert summary["trust_boundary"]["mutates_repositories"] is False, summary
+          assert summary["trust_boundary"]["publishes_claims"] is False, summary
+          assert (root / "packet" / "dashboard.html").is_file()
+          PY
       - name: Upload RSI cross-repo E2E evidence
         uses: actions/upload-artifact@v7.0.1
         with:
           name: ao2-rsi-cross-repo-e2e
           path: target/rsi-cross-repo-e2e-ci
+          if-no-files-found: error
+      - name: Upload RSI baseline packet
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-rsi-baseline-packet
+          path: target/rsi-baseline-packet-ci
           if-no-files-found: error
 
   ai-task-board-control-plane-bridge-artifacts:
