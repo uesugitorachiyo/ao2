@@ -4188,6 +4188,183 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
         assert needle in ci
 
 
+def _write_rsi_baseline_packet(path: Path, *, publish_authority: bool = False) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    claim_decision = "allow" if publish_authority else "deny"
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.rsi-baseline-packet.v1",
+                "status": "passed",
+                "rsi_baseline_ready": True,
+                "rsi_cross_repo_e2e": {
+                    "schema_version": "ao2.rsi-cross-repo-e2e.v1",
+                    "status": "passed",
+                    "claim_level": "full_autonomous_self_mutating_rsi",
+                    "claim_publish_decision": claim_decision,
+                    "claim_publish_authority": publish_authority,
+                    "covenant_gate_schema_version": "covenant.rsi-claim-publish-gate.v1",
+                    "covenant_gate_status": "denied",
+                },
+                "rsi_blueprint_authorization": {
+                    "schema_version": "ao2.rsi-blueprint-authorization-gate.v1",
+                    "status": "passed",
+                    "blueprint_authorization_ready": True,
+                    "gate_model": "tiered",
+                    "candidate_id": "ao2-rsi-evidence-hardening",
+                    "source": "ao-blueprint",
+                    "self_authorized_by_rsi": False,
+                    "authorizes_claim_publication": False,
+                    "authorizes_ao_blueprint_self_change": False,
+                },
+                "rsi_improvement_evidence": {
+                    "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
+                    "status": "passed",
+                    "improvement_ready": True,
+                    "target_percent": 5.0,
+                    "measured_improvement_percent": 33.3333,
+                    "claim_publish_decision": claim_decision,
+                    "claim_publish_authority": publish_authority,
+                },
+                "rsi_improvement_trend": {
+                    "schema_version": "ao2.rsi-improvement-trend.v1",
+                    "status": "passed",
+                    "trend_ready": True,
+                    "run_count": 2,
+                    "current_measured_improvement_percent": 33.3333,
+                    "delta_from_previous_percent": 0.0,
+                    "target_percent": 5.0,
+                    "claim_publish_decision": claim_decision,
+                    "claim_publish_authority": publish_authority,
+                },
+                "trust_boundary": {
+                    "mutates_repositories": False,
+                    "publishes_claims": False,
+                    "approves_rsi_claims": False,
+                    "stores_credentials": False,
+                    "requires_provider_api_key": False,
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def test_rsi_eligibility_packet_runs_against_two_baselines(tmp_path):
+    package_json = json.loads(read("package.json"))
+    assert package_json["scripts"]["rsi:eligibility-packet"] == (
+        "node scripts/run-sh-script.js scripts/rsi-eligibility-packet.sh"
+    )
+
+    script_path = REPO_ROOT / "scripts" / "rsi-eligibility-packet.sh"
+    assert script_path.is_file()
+    assert script_path.stat().st_mode & stat.S_IXUSR
+    script = script_path.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.rsi-eligibility-packet.v1",
+        "AO2_RSI_ELIGIBILITY_PACKET_ROOT",
+        "AO2_RSI_ELIGIBILITY_PACKET_CURRENT_BASELINE",
+        "AO2_RSI_ELIGIBILITY_PACKET_PREVIOUS_BASELINE",
+        "claim_publish_boundary_not_denied",
+        "blueprint_authorization_self_authorized_by_rsi",
+        "authorizes_ao_blueprint_self_change",
+    ]:
+        assert needle in script
+
+    current = tmp_path / "current" / "summary.json"
+    previous = tmp_path / "previous" / "summary.json"
+    _write_rsi_baseline_packet(current)
+    _write_rsi_baseline_packet(previous)
+
+    out_root = tmp_path / "eligibility"
+    result = subprocess.run(
+        ["npm", "run", "rsi:eligibility-packet"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_RSI_ELIGIBILITY_PACKET_ROOT": str(out_root),
+            "AO2_RSI_ELIGIBILITY_PACKET_CURRENT_BASELINE": str(current),
+            "AO2_RSI_ELIGIBILITY_PACKET_PREVIOUS_BASELINE": str(previous),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.rsi-eligibility-packet.v1"
+    assert summary["status"] == "passed"
+    assert summary["rsi_eligibility_ready"] is True
+    assert summary["baseline_count"] == 2
+    assert summary["minimum_baseline_count"] == 2
+    assert summary["claim_publish_decision"] == "deny"
+    assert summary["claim_publish_authority"] is False
+    assert summary["blueprint_authorization"]["source"] == "ao-blueprint"
+    assert summary["blueprint_authorization"]["self_authorized_by_rsi"] is False
+    assert summary["blueprint_authorization"]["authorizes_claim_publication"] is False
+    assert (
+        summary["blueprint_authorization"]["authorizes_ao_blueprint_self_change"]
+        is False
+    )
+    assert summary["improvement_evidence"]["minimum_measured_improvement_percent"] >= 5
+    assert summary["trust_boundary"]["local_only"] is True
+    assert summary["trust_boundary"]["publishes_claims"] is False
+    assert summary["trust_boundary"]["approves_rsi_claims"] is False
+    assert summary["trust_boundary"]["mutates_repositories"] is False
+    assert summary["trust_boundary"]["requires_provider_api_key"] is False
+    assert not summary["blockers"]
+
+    dashboard = (out_root / "dashboard.html").read_text(encoding="utf-8")
+    assert "RSI Eligibility Packet" in dashboard
+    assert "ao2.rsi-eligibility-packet.v1" in dashboard
+    assert "claim-publish boundary" in dashboard
+    assert "ao-blueprint" in dashboard
+    assert "self-authorized by RSI False" in dashboard
+
+    readme = read("README.md")
+    verification = read("docs/VERIFICATION.md")
+    assert "npm run rsi:eligibility-packet" in readme
+    assert "ao2.rsi-eligibility-packet.v1" in readme
+    assert "npm run rsi:eligibility-packet" in verification
+    assert "ao2.rsi-eligibility-packet.v1" in verification
+
+
+def test_rsi_eligibility_packet_rejects_publish_authority(tmp_path):
+    current = tmp_path / "current" / "summary.json"
+    previous = tmp_path / "previous" / "summary.json"
+    _write_rsi_baseline_packet(current, publish_authority=True)
+    _write_rsi_baseline_packet(previous)
+
+    out_root = tmp_path / "eligibility"
+    result = subprocess.run(
+        ["npm", "run", "rsi:eligibility-packet"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_RSI_ELIGIBILITY_PACKET_ROOT": str(out_root),
+            "AO2_RSI_ELIGIBILITY_PACKET_CURRENT_BASELINE": str(current),
+            "AO2_RSI_ELIGIBILITY_PACKET_PREVIOUS_BASELINE": str(previous),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["schema_version"] == "ao2.rsi-eligibility-packet.v1"
+    assert summary["status"] == "failed"
+    assert summary["rsi_eligibility_ready"] is False
+    assert any(
+        blocker["code"] == "claim_publish_boundary_not_denied"
+        and blocker["source"] == "current"
+        for blocker in summary["blockers"]
+    )
+
+
 def test_evidence_control_plane_smoke_script_is_token_safe_and_exposed_by_npm():
     package_json = json.loads(read("package.json"))
     assert (

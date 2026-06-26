@@ -892,6 +892,15 @@ Result:
   It is an operator-readable baseline/readback packet only; it does not mutate
   repositories, publish claims, approve RSI claims, or authorize AO Blueprint
   self-change. CI uploads it as `ao2-rsi-baseline-packet`.
+- `npm run rsi:eligibility-packet`: reads two existing RSI baseline packet
+  summaries and emits `ao2.rsi-eligibility-packet.v1` at
+  `target/rsi-eligibility-packet/latest/summary.json`, plus `dashboard.html`.
+  The packet fails closed unless both baseline packets are ready, both preserve
+  `claim_publish_decision=deny` and `claim_publish_authority=false`, the
+  measured RSI improvement remains at least 5%, and both packets are backed by
+  tiered AO Blueprint authorization that is not self-authorized by RSI. It is
+  repeated-run eligibility evidence only; it does not publish claims, approve
+  RSI claims, mutate repositories, or authorize AO Blueprint self-change.
 - `npm run release:install-update-fixture`: builds a local signed fixture
   archive with `SHA256SUMS`, `provenance.json`, and a signature sidecar,
   verifies checksum/install/update behavior, references `release:download-verify`
