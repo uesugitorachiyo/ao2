@@ -109,6 +109,39 @@ with path.open("a", encoding="utf-8") as handle:
 PY
 }
 
+download_required_artifacts() {
+  local run_id="$1"
+  local repo="$2"
+  local repo_dir="$3"
+  local download_log="$4"
+  local downloaded=0
+  : >"$download_log"
+  if [ -z "$REQUIRED_ARTIFACTS" ]; then
+    run_with_timeout "$DOWNLOAD_TIMEOUT_SECONDS" \
+      gh run download "$run_id" --repo "$repo" --dir "$repo_dir" \
+      >"$download_log" 2>&1
+    return "$?"
+  fi
+  for artifact in $REQUIRED_ARTIFACTS; do
+    set +e
+    run_with_timeout "$DOWNLOAD_TIMEOUT_SECONDS" \
+      gh run download "$run_id" --repo "$repo" --pattern "$artifact*" --dir "$repo_dir" \
+      >>"$download_log" 2>&1
+    local artifact_code=$?
+    set -e
+    if [ "$artifact_code" -eq 0 ]; then
+      downloaded=1
+    else
+      printf "focused artifact pattern not present in %s: %s* exit_code=%s\n" \
+        "$repo" "$artifact" "$artifact_code" >>"$download_log"
+    fi
+  done
+  if [ "$downloaded" = "1" ]; then
+    return 0
+  fi
+  return 0
+}
+
 if [ -n "$FIXTURE_DIR" ]; then
   if [ ! -d "$FIXTURE_DIR" ]; then
     echo "fixture dir not found: $FIXTURE_DIR" >&2
@@ -135,7 +168,7 @@ elif [ "$DRY_RUN" = "0" ]; then
     fi
     download_log="$DOWNLOAD_LOG_DIR/$(printf "%s" "$repo" | tr '/' '-')-run-download.log"
     set +e
-    run_with_timeout "$DOWNLOAD_TIMEOUT_SECONDS" gh run download "$run_id" --repo "$repo" --dir "$repo_dir" >"$download_log" 2>&1
+    download_required_artifacts "$run_id" "$repo" "$repo_dir" "$download_log"
     download_code=$?
     set -e
     if [ "$download_code" -ne 0 ]; then
