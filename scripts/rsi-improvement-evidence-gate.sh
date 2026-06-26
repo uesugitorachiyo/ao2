@@ -11,6 +11,7 @@ AO2_RSI_IMPROVEMENT_READBACK_INDEX_SUMMARY="${AO2_RSI_IMPROVEMENT_READBACK_INDEX
 AO2_RSI_IMPROVEMENT_CLAIM_READINESS_SUMMARY="${AO2_RSI_IMPROVEMENT_CLAIM_READINESS_SUMMARY:-$ROOT/target/rsi-cross-repo-e2e/latest/claim-readiness/summary.json}"
 AO2_RSI_IMPROVEMENT_BLUEPRINT_AUTHORIZATION_SUMMARY="${AO2_RSI_IMPROVEMENT_BLUEPRINT_AUTHORIZATION_SUMMARY:-$ROOT/target/rsi-cross-repo-e2e/latest/blueprint-authorization/summary.json}"
 AO2_RSI_IMPROVEMENT_COVENANT_GATE_SUMMARY="${AO2_RSI_IMPROVEMENT_COVENANT_GATE_SUMMARY:-$ROOT/target/rsi-cross-repo-e2e/latest/covenant-gate/summary.json}"
+AO2_RSI_IMPROVEMENT_RELEASE_READINESS_DASHBOARD_READBACK_SUMMARY="${AO2_RSI_IMPROVEMENT_RELEASE_READINESS_DASHBOARD_READBACK_SUMMARY:-$ROOT/target/rsi-cross-repo-e2e/latest/release-readiness-dashboard-readback/summary.json}"
 AO2_RSI_IMPROVEMENT_COVENANT_SCHEMA_EXIT_CODE="${AO2_RSI_IMPROVEMENT_COVENANT_SCHEMA_EXIT_CODE:-$ROOT/target/rsi-cross-repo-e2e/latest/logs/covenant_gate_schema_validate.log.exit-code}"
 
 SUMMARY="$AO2_RSI_IMPROVEMENT_EVIDENCE_GATE_ROOT/summary.json"
@@ -27,6 +28,7 @@ python3 - "$SUMMARY" \
   "$AO2_RSI_IMPROVEMENT_CLAIM_READINESS_SUMMARY" \
   "$AO2_RSI_IMPROVEMENT_BLUEPRINT_AUTHORIZATION_SUMMARY" \
   "$AO2_RSI_IMPROVEMENT_COVENANT_GATE_SUMMARY" \
+  "$AO2_RSI_IMPROVEMENT_RELEASE_READINESS_DASHBOARD_READBACK_SUMMARY" \
   "$AO2_RSI_IMPROVEMENT_COVENANT_SCHEMA_EXIT_CODE" <<'PY'
 import json
 import sys
@@ -42,7 +44,8 @@ readback_index_path = Path(sys.argv[6]).resolve()
 claim_path = Path(sys.argv[7]).resolve()
 blueprint_path = Path(sys.argv[8]).resolve()
 covenant_gate_path = Path(sys.argv[9]).resolve()
-covenant_schema_exit_path = Path(sys.argv[10]).resolve()
+dashboard_readback_path = Path(sys.argv[10]).resolve()
+covenant_schema_exit_path = Path(sys.argv[11]).resolve()
 
 
 def load_json(path: Path) -> dict:
@@ -66,6 +69,7 @@ readback_index = load_json(readback_index_path)
 claim = load_json(claim_path)
 blueprint = load_json(blueprint_path)
 covenant_gate = load_json(covenant_gate_path)
+dashboard_readback = load_json(dashboard_readback_path)
 covenant_schema_exit = (
     covenant_schema_exit_path.read_text(encoding="utf-8").strip()
     if covenant_schema_exit_path.is_file()
@@ -154,6 +158,33 @@ evidence_checks = [
         },
     ),
     check(
+        "release_readiness_dashboard_readback",
+        dashboard_readback_path,
+        dashboard_readback.get("schema_version")
+        == "ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1"
+        and dashboard_readback.get("status") == "passed"
+        and dashboard_readback.get("dashboard_link_ready") is True
+        and dashboard_readback.get("dashboard_artifact")
+        == "ao2-release-readiness-consumer/dashboard.html"
+        and dashboard_readback.get("dashboard_schema_version")
+        == "ao2.release-readiness-artifact-consumer.v1"
+        and dashboard_readback.get("claim_publish_decision") == "deny"
+        and dashboard_readback.get("claim_publish_authority") is False
+        and dashboard_readback.get("control_plane_approves_release") is False
+        and dashboard_readback.get("mutates_ao_artifacts") is False,
+        {
+            "schema_version": dashboard_readback.get("schema_version"),
+            "status": dashboard_readback.get("status"),
+            "dashboard_link_ready": dashboard_readback.get("dashboard_link_ready"),
+            "dashboard_artifact": dashboard_readback.get("dashboard_artifact"),
+            "dashboard_schema_version": dashboard_readback.get("dashboard_schema_version"),
+            "claim_publish_decision": dashboard_readback.get("claim_publish_decision"),
+            "claim_publish_authority": dashboard_readback.get("claim_publish_authority"),
+            "control_plane_approves_release": dashboard_readback.get("control_plane_approves_release"),
+            "mutates_ao_artifacts": dashboard_readback.get("mutates_ao_artifacts"),
+        },
+    ),
+    check(
         "covenant_gate_schema_validate",
         covenant_schema_exit_path,
         covenant_schema_exit == "0",
@@ -222,6 +253,17 @@ payload = {
         "authorizes_implementation": blueprint.get("authority_boundary", {}).get("authorizes_implementation"),
         "authorizes_claim_publication": blueprint.get("authority_boundary", {}).get("authorizes_claim_publication"),
         "authorizes_ao_blueprint_self_change": blueprint.get("authority_boundary", {}).get("authorizes_ao_blueprint_self_change"),
+    },
+    "release_readiness_dashboard_readback": {
+        "schema_version": dashboard_readback.get("schema_version"),
+        "status": dashboard_readback.get("status"),
+        "dashboard_link_ready": dashboard_readback.get("dashboard_link_ready"),
+        "dashboard_artifact": dashboard_readback.get("dashboard_artifact"),
+        "dashboard_schema_version": dashboard_readback.get("dashboard_schema_version"),
+        "claim_publish_decision": dashboard_readback.get("claim_publish_decision"),
+        "claim_publish_authority": dashboard_readback.get("claim_publish_authority"),
+        "control_plane_approves_release": dashboard_readback.get("control_plane_approves_release"),
+        "mutates_ao_artifacts": dashboard_readback.get("mutates_ao_artifacts"),
     },
     "evidence_checks": evidence_checks,
     "blockers": blockers,
