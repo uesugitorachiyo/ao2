@@ -990,6 +990,15 @@ Result:
   with `ao2-python-guard` / `ao2.python-guard-ci-artifacts.v1` so publication
   readiness stays local-first instead of depending on live GitHub artifact
   downloads
+- `npm run readiness:convergence`: consumes the latest Risky PR product
+  readiness, release evidence closure, release-readiness, publication dry-run,
+  Pulse resume/daemon, and Pulse integration summaries. When all required
+  local-only evidence is green it emits `ao2.readiness-convergence-gate.v1` at
+  `target/readiness-convergence/latest/summary.json` with
+  `recommended_next_action=operator_release_decision_required`,
+  `continue_pulse_loop=false`, and
+  `full_autonomous_self_mutating_rsi=denied`. A passing result is a stop-loop
+  operator decision signal, not release mutation authority.
 - `npm run release:stable-readiness`: consumes the release asset completeness
   report, records prerelease-only, alpha-labeled stable release title, and
   signed-provenance blockers, and emits `ao2.stable-release-readiness.v1` plus
