@@ -226,6 +226,25 @@ if claim_publish_decision != "deny" or claim_publish_authority is not False:
     )
 
 ready = not blockers
+target_exceeded = measured_improvement_percent >= target_percent
+control_surface_readback = {
+    "loop_goal": "bounded_governed_rsi_control_surface_readback",
+    "bounded_governed_rsi": {
+        "status": "supported",
+        "evidence_state": "passing" if ready else "blocked",
+        "improvement_state": "target_exceeded" if target_exceeded else "below_target",
+    },
+    "full_autonomous_self_mutating_rsi": {
+        "status": "denied",
+        "decision": claim_publish_decision,
+        "publish_authority": claim_publish_authority,
+        "boundary_state": "enforced_by_design",
+    },
+    "improvement_score": {
+        "target_exceeded": target_exceeded,
+        "interpretation": "workflow_hardening_coverage_not_publication_authority",
+    },
+}
 payload = {
     "schema_version": "ao2.rsi-improvement-evidence-gate.v1",
     "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -234,6 +253,7 @@ payload = {
     "claim_level": "full_autonomous_self_mutating_rsi",
     "claim_publish_decision": claim_publish_decision,
     "claim_publish_authority": claim_publish_authority,
+    "control_surface_readback": control_surface_readback,
     "metric": {
         "unit": "enforced_rsi_evidence_checks",
         "baseline_check_count": baseline_check_count,
@@ -290,6 +310,24 @@ print(
     "claim_level=full_autonomous_self_mutating_rsi "
     f"decision={claim_publish_decision} "
     f"publish_authority={str(claim_publish_authority).lower()}"
+)
+print(
+    "bounded_governed_rsi="
+    f"{control_surface_readback['bounded_governed_rsi']['status']} "
+    "evidence_state="
+    f"{control_surface_readback['bounded_governed_rsi']['evidence_state']}"
+)
+print(
+    "full_autonomous_self_mutating_rsi="
+    f"{control_surface_readback['full_autonomous_self_mutating_rsi']['status']} "
+    "boundary_state="
+    f"{control_surface_readback['full_autonomous_self_mutating_rsi']['boundary_state']}"
+)
+print(
+    "improvement_score="
+    f"{control_surface_readback['bounded_governed_rsi']['improvement_state']} "
+    "interpretation="
+    f"{control_surface_readback['improvement_score']['interpretation']}"
 )
 if not ready:
     for blocker in blockers:

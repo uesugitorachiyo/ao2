@@ -137,8 +137,13 @@ workflow-hardening coverage as `measured_improvement_percent` for enforced RSI
 evidence checks. The default target is 5%, and the current gate compares the
 previous six-check RSI evidence baseline with nine enforced checks after the
 AO Blueprint authorization prerequisite, the release-readiness dashboard
-readback, and improvement gate are added. This is evidence of stronger verification coverage, not proof
-that the full RSI claim is publishable.
+readback, and improvement gate are added. The summary also includes
+`control_surface_readback` so operators can read the result without inferring
+authority from the score: `bounded_governed_rsi` is supported when evidence is
+passing, the improvement score can be `target_exceeded`, and
+`full_autonomous_self_mutating_rsi` remains denied by design. This is
+workflow-hardening coverage and evidence of stronger verification coverage, not
+proof that the full RSI claim is publishable.
 
 Persist the local improvement trend with:
 
@@ -151,7 +156,10 @@ JSONL record to `target/rsi-improvement-trend/history.jsonl`, and emits
 `ao2.rsi-improvement-trend.v1` under
 `target/rsi-improvement-trend/latest/summary.json`. It records the current
 `measured_improvement_percent`, the previous measurement when present, and
-`delta_from_previous_percent`. It does not publish or approve RSI claims.
+`delta_from_previous_percent`. The trend summary carries the same
+`control_surface_readback` boundary as the evidence gate: bounded governed RSI
+can improve while full autonomous RSI publication remains denied. It does not
+publish or approve RSI claims.
 
 Run the full local cross-repo RSI evidence chain with sibling
 `ao2-control-plane` and `ao-covenant` checkouts:

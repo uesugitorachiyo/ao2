@@ -903,7 +903,11 @@ Result:
   `current_measured_improvement_percent`, the previous measurement when
   present, `delta_from_previous_percent`, and the same
   `claim_publish_decision=deny` / `claim_publish_authority=false` boundary.
-  It writes local history only; it does not publish or approve RSI claims.
+  It also carries `control_surface_readback`, which states that
+  `bounded_governed_rsi` is supported when evidence is passing, the improvement
+  score is workflow-hardening coverage rather than publication authority, and
+  `full_autonomous_self_mutating_rsi` remains denied by design. It writes local
+  history only; it does not publish or approve RSI claims.
 - `npm run rsi:baseline-packet`: reads an existing RSI cross-repo E2E summary
   and emits `ao2.rsi-baseline-packet.v1` at
   `target/rsi-baseline-packet/latest/summary.json`, plus `dashboard.html`.
