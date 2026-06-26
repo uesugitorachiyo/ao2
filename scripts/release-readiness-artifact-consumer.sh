@@ -233,6 +233,50 @@ require(
 )
 require((consumer_root / "ao2-rsi-baseline-packet/packet/dashboard.html").is_file(), "missing RSI baseline packet dashboard")
 
+rsi_eligibility_packet_path, rsi_eligibility_packet = load_json("ao2-rsi-eligibility-packet/packet/summary.json")
+require(
+    rsi_eligibility_packet.get("schema_version") == "ao2.rsi-eligibility-packet.v1",
+    "unexpected RSI eligibility packet schema",
+    rsi_eligibility_packet,
+)
+eligibility_blueprint = rsi_eligibility_packet.get("blueprint_authorization", {})
+eligibility_improvement = rsi_eligibility_packet.get("improvement_evidence", {})
+eligibility_trust = rsi_eligibility_packet.get("trust_boundary", {})
+require(
+    rsi_eligibility_packet.get("status") == "passed"
+    and rsi_eligibility_packet.get("rsi_eligibility_ready") is True
+    and rsi_eligibility_packet.get("baseline_count", 0) >= rsi_eligibility_packet.get("minimum_baseline_count", 2)
+    and rsi_eligibility_packet.get("minimum_baseline_count", 0) >= 2
+    and rsi_eligibility_packet.get("claim_publish_decision") == "deny"
+    and rsi_eligibility_packet.get("claim_publish_authority") is False,
+    "RSI eligibility packet was not ready",
+    rsi_eligibility_packet,
+)
+require(
+    eligibility_blueprint.get("source") == "ao-blueprint"
+    and eligibility_blueprint.get("self_authorized_by_rsi") is False
+    and eligibility_blueprint.get("authorizes_claim_publication") is False
+    and eligibility_blueprint.get("authorizes_ao_blueprint_self_change") is False,
+    "RSI eligibility packet Blueprint boundary was not ready",
+    rsi_eligibility_packet,
+)
+require(
+    eligibility_improvement.get("minimum_target_percent", 0) >= 5
+    and eligibility_improvement.get("minimum_measured_improvement_percent", 0)
+    >= eligibility_improvement.get("minimum_target_percent", 5),
+    "RSI eligibility packet improvement evidence was not ready",
+    rsi_eligibility_packet,
+)
+require(
+    eligibility_trust.get("publishes_claims") is False
+    and eligibility_trust.get("approves_rsi_claims") is False
+    and eligibility_trust.get("mutates_repositories") is False
+    and eligibility_trust.get("requires_provider_api_key") is False,
+    "RSI eligibility packet trust boundary was not ready",
+    rsi_eligibility_packet,
+)
+require((consumer_root / "ao2-rsi-eligibility-packet/packet/dashboard.html").is_file(), "missing RSI eligibility packet dashboard")
+
 publication_closure_summary_path, publication_closure_summary = load_json("ao2-release-publication-closure/summary.json")
 require(publication_closure_summary.get("schema_version") == "ao2.release-publication-dry-run-closure.v1", "unexpected release publication closure schema", publication_closure_summary)
 require(publication_closure_summary.get("status") == "passed", "release publication closure did not pass", publication_closure_summary)
@@ -334,6 +378,17 @@ require(
     "stable release evidence packet RSI improvement trend was not ready",
     stable_release_evidence_packet,
 )
+stable_packet_eligibility = stable_release_evidence_packet.get("rsi_eligibility_packet", {})
+require(
+    stable_packet_eligibility.get("schema_version") == "ao2.rsi-eligibility-packet.v1"
+    and stable_packet_eligibility.get("status") == "passed"
+    and stable_packet_eligibility.get("rsi_eligibility_ready") is True
+    and stable_packet_eligibility.get("baseline_count", 0) >= stable_packet_eligibility.get("minimum_baseline_count", 2)
+    and stable_packet_eligibility.get("claim_publish_decision") == "deny"
+    and stable_packet_eligibility.get("claim_publish_authority") is False,
+    "stable release evidence packet RSI eligibility packet was not ready",
+    stable_release_evidence_packet,
+)
 require(stable_release_evidence_packet.get("trust_boundary", {}).get("mutates_releases") is False, "stable release evidence packet mutated releases", stable_release_evidence_packet)
 require(stable_release_evidence_packet.get("trust_boundary", {}).get("stores_credentials") is False, "stable release evidence packet stored credentials", stable_release_evidence_packet)
 require((consumer_root / "ao2-stable-release-evidence-packet/packet/dashboard.html").is_file(), "missing stable release evidence packet dashboard")
@@ -375,6 +430,7 @@ consumer_summary = {
         "ao2-pulse-ao2-event-loop-smoke",
         "ao2-rsi-cross-repo-e2e",
         "ao2-rsi-baseline-packet",
+        "ao2-rsi-eligibility-packet",
         "ao2-dual-repo-installed-release-smoke",
         "ao2-release-publication-closure",
         "ao2-dual-repo-release-publication-closure-index",
@@ -395,6 +451,7 @@ consumer_summary = {
         str(rsi_cross_repo_summary_path),
         str(rsi_covenant_gate_summary_path),
         str(rsi_baseline_packet_path),
+        str(rsi_eligibility_packet_path),
         str(publication_closure_summary_path),
         str(dual_repo_publication_closure_summary_path),
         str(stable_release_evidence_packet_path),
@@ -407,6 +464,25 @@ consumer_summary = {
         "rsi_blueprint_authorization": baseline_packet_blueprint,
         "rsi_improvement_evidence": baseline_packet_improvement,
         "rsi_improvement_trend": baseline_packet_trend,
+    },
+    "rsi_eligibility_packet": {
+        "schema_version": rsi_eligibility_packet.get("schema_version"),
+        "status": rsi_eligibility_packet.get("status"),
+        "rsi_eligibility_ready": rsi_eligibility_packet.get("rsi_eligibility_ready"),
+        "baseline_count": rsi_eligibility_packet.get("baseline_count"),
+        "minimum_baseline_count": rsi_eligibility_packet.get("minimum_baseline_count"),
+        "claim_publish_decision": rsi_eligibility_packet.get("claim_publish_decision"),
+        "claim_publish_authority": rsi_eligibility_packet.get("claim_publish_authority"),
+        "blueprint_authorization": {
+            "source": eligibility_blueprint.get("source"),
+            "self_authorized_by_rsi": eligibility_blueprint.get("self_authorized_by_rsi"),
+            "authorizes_claim_publication": eligibility_blueprint.get("authorizes_claim_publication"),
+            "authorizes_ao_blueprint_self_change": eligibility_blueprint.get("authorizes_ao_blueprint_self_change"),
+        },
+        "improvement_evidence": {
+            "minimum_target_percent": eligibility_improvement.get("minimum_target_percent"),
+            "minimum_measured_improvement_percent": eligibility_improvement.get("minimum_measured_improvement_percent"),
+        },
     },
     "stable_release_evidence_packet": {
         "schema_version": stable_release_evidence_packet.get("schema_version"),
@@ -457,6 +533,15 @@ consumer_summary = {
             "target_percent": stable_packet_trend.get("target_percent"),
             "claim_publish_decision": stable_packet_trend.get("claim_publish_decision"),
             "claim_publish_authority": stable_packet_trend.get("claim_publish_authority"),
+        },
+        "rsi_eligibility_packet": {
+            "schema_version": stable_packet_eligibility.get("schema_version"),
+            "status": stable_packet_eligibility.get("status"),
+            "rsi_eligibility_ready": stable_packet_eligibility.get("rsi_eligibility_ready"),
+            "baseline_count": stable_packet_eligibility.get("baseline_count"),
+            "minimum_baseline_count": stable_packet_eligibility.get("minimum_baseline_count"),
+            "claim_publish_decision": stable_packet_eligibility.get("claim_publish_decision"),
+            "claim_publish_authority": stable_packet_eligibility.get("claim_publish_authority"),
         },
     },
     "public_pair_digest_gate": public_pair_digest_gate,

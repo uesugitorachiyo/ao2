@@ -163,17 +163,21 @@ checks without approving releases or mutating AO2 artifacts.
 ## Stable release evidence packet
 
 Run `npm run release:stable-evidence-packet` after the stable promotion workflow,
-operator release evidence bundle, and RSI cross-repo E2E have produced local
-summaries. The command composes `ao2.stable-promotion-workflow.v1`,
-`ao2.operator-release-evidence-bundle.v1`, and `ao2.rsi-cross-repo-e2e.v1` into
+operator release evidence bundle, RSI cross-repo E2E, and RSI eligibility packet
+have produced local summaries. The command composes
+`ao2.stable-promotion-workflow.v1`, `ao2.operator-release-evidence-bundle.v1`,
+`ao2.rsi-cross-repo-e2e.v1`, and `ao2.rsi-eligibility-packet.v1` into
 `target/stable-release-evidence-packet/latest/summary.json` and
 `dashboard.html`, using schema `ao2.stable-release-evidence-packet.v1`. The
 packet also carries the nested `ao2.rsi-improvement-evidence-gate.v1` summary
 from RSI E2E and requires `measured_improvement_percent >= 5`. It also carries
 `ao2.rsi-improvement-trend.v1` so operators can inspect
-`delta_from_previous_percent` across persisted local trend records. The packet
-also carries `ao2.rsi-blueprint-authorization-gate.v1`, requiring the RSI slice
-to be authorized by AO Blueprint's tiered gate with
+`delta_from_previous_percent` across persisted local trend records. It also
+carries `ao2.rsi-eligibility-packet.v1`, requiring
+`rsi_eligibility_ready=true` across repeated baseline packets while preserving
+`claim_publish_authority=false`. The packet also carries
+`ao2.rsi-blueprint-authorization-gate.v1`, requiring the RSI slice to be
+authorized by AO Blueprint's tiered gate with
 `self_authorized_by_rsi=false`, no claim-publication authority, and no AO
 Blueprint self-change authority.
 
@@ -192,8 +196,9 @@ operator surface: it reads local evidence summaries, records
 publish releases or RSI claims. Use
 `AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY=<path>` and
 `AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY=<path>` plus
-`AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY=<path>` to compose a packet
-from preserved release-publication and RSI baselines.
+`AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY=<path>` and
+`AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_ELIGIBILITY_SUMMARY=<path>` to compose
+a packet from preserved release-publication and RSI baselines.
 
 AO2 CI publishes the same composed packet as the
 `ao2-stable-release-evidence-packet` GitHub Actions artifact from the
@@ -201,7 +206,8 @@ AO2 CI publishes the same composed packet as the
 the final `packet/summary.json`, `packet/dashboard.html`, the source
 `stable-promotion-workflow/summary.json`, and the source
 `operator-release-evidence-bundle/summary.json`, plus the source
-`rsi-cross-repo-e2e/latest/summary.json`. The
+`rsi-cross-repo-e2e/latest/summary.json` and
+`rsi-eligibility-packet/packet/summary.json`. The
 `Release readiness artifact consumer` job downloads this artifact and fails
 closed unless `stable_release_evidence_ready=true`,
 `mutates_releases=false`, and `stores_credentials=false`.

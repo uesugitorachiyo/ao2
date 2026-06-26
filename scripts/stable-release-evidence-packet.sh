@@ -6,6 +6,7 @@ AO2_STABLE_RELEASE_EVIDENCE_PACKET_ROOT="${AO2_STABLE_RELEASE_EVIDENCE_PACKET_RO
 AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY="${AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY:-$ROOT/target/stable-promotion-workflow/latest/summary.json}"
 AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY="${AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY:-$ROOT/target/operator-release-evidence-bundle/latest/summary.json}"
 AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY="${AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY:-$ROOT/target/rsi-cross-repo-e2e/latest/summary.json}"
+AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_ELIGIBILITY_SUMMARY="${AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_ELIGIBILITY_SUMMARY:-$ROOT/target/rsi-eligibility-packet/latest/summary.json}"
 SUMMARY="$AO2_STABLE_RELEASE_EVIDENCE_PACKET_ROOT/summary.json"
 DASHBOARD="$AO2_STABLE_RELEASE_EVIDENCE_PACKET_ROOT/dashboard.html"
 
@@ -45,8 +46,16 @@ while [ "$#" -gt 0 ]; do
       fi
       shift 2
       ;;
+    --rsi-eligibility-summary)
+      AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_ELIGIBILITY_SUMMARY="${2:-}"
+      if [ -z "$AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_ELIGIBILITY_SUMMARY" ]; then
+        echo "--rsi-eligibility-summary requires a path" >&2
+        exit 2
+      fi
+      shift 2
+      ;;
     *)
-      echo "usage: $0 [--out-root <path>] [--stable-summary <path>] [--operator-summary <path>] [--rsi-summary <path>]" >&2
+      echo "usage: $0 [--out-root <path>] [--stable-summary <path>] [--operator-summary <path>] [--rsi-summary <path>] [--rsi-eligibility-summary <path>]" >&2
       exit 2
       ;;
   esac
@@ -58,6 +67,7 @@ mkdir -p "$AO2_STABLE_RELEASE_EVIDENCE_PACKET_ROOT"
 python3 - "$AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY" \
   "$AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY" \
   "$AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY" \
+  "$AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_ELIGIBILITY_SUMMARY" \
   "$SUMMARY" "$DASHBOARD" <<'PY'
 import html
 import json
@@ -71,14 +81,16 @@ RSI_SCHEMA = "ao2.rsi-cross-repo-e2e.v1"
 RSI_BLUEPRINT_AUTHORIZATION_SCHEMA = "ao2.rsi-blueprint-authorization-gate.v1"
 RSI_IMPROVEMENT_SCHEMA = "ao2.rsi-improvement-evidence-gate.v1"
 RSI_IMPROVEMENT_TREND_SCHEMA = "ao2.rsi-improvement-trend.v1"
+RSI_ELIGIBILITY_SCHEMA = "ao2.rsi-eligibility-packet.v1"
 RSI_COVENANT_GATE_SCHEMA = "covenant.rsi-claim-publish-gate.v1"
 PACKET_SCHEMA = "ao2.stable-release-evidence-packet.v1"
 
 stable_summary_path = Path(sys.argv[1]).resolve()
 operator_summary_path = Path(sys.argv[2]).resolve()
 rsi_summary_path = Path(sys.argv[3]).resolve()
-summary_path = Path(sys.argv[4]).resolve()
-dashboard_path = Path(sys.argv[5]).resolve()
+rsi_eligibility_summary_path = Path(sys.argv[4]).resolve()
+summary_path = Path(sys.argv[5]).resolve()
+dashboard_path = Path(sys.argv[6]).resolve()
 
 
 def load_json(path: Path) -> dict:
@@ -89,6 +101,7 @@ blockers = []
 stable = {}
 operator = {}
 rsi = {}
+rsi_eligibility = {}
 
 if not stable_summary_path.is_file():
     blockers.append(
@@ -122,6 +135,17 @@ if not rsi_summary_path.is_file():
     )
 else:
     rsi = load_json(rsi_summary_path)
+
+if not rsi_eligibility_summary_path.is_file():
+    blockers.append(
+        {
+            "code": "rsi_eligibility_summary_missing",
+            "severity": "blocking",
+            "path": str(rsi_eligibility_summary_path),
+        }
+    )
+else:
+    rsi_eligibility = load_json(rsi_eligibility_summary_path)
 
 stable_schema_ok = stable.get("schema_version") == STABLE_SCHEMA
 stable_status = stable.get("status")
@@ -225,6 +249,45 @@ rsi_improvement_trend_ready = (
     and rsi_improvement_trend.get("target_percent") >= 5
     and rsi_improvement_trend.get("claim_publish_decision") == "deny"
     and rsi_improvement_trend.get("claim_publish_authority") is False
+)
+rsi_eligibility_blueprint = (
+    rsi_eligibility.get("blueprint_authorization")
+    if isinstance(rsi_eligibility.get("blueprint_authorization"), dict)
+    else {}
+)
+rsi_eligibility_improvement = (
+    rsi_eligibility.get("improvement_evidence")
+    if isinstance(rsi_eligibility.get("improvement_evidence"), dict)
+    else {}
+)
+rsi_eligibility_trust = (
+    rsi_eligibility.get("trust_boundary")
+    if isinstance(rsi_eligibility.get("trust_boundary"), dict)
+    else {}
+)
+rsi_eligibility_ready = (
+    rsi_eligibility.get("schema_version") == RSI_ELIGIBILITY_SCHEMA
+    and rsi_eligibility.get("status") == "passed"
+    and rsi_eligibility.get("rsi_eligibility_ready") is True
+    and isinstance(rsi_eligibility.get("baseline_count"), int)
+    and isinstance(rsi_eligibility.get("minimum_baseline_count"), int)
+    and rsi_eligibility.get("baseline_count") >= rsi_eligibility.get("minimum_baseline_count")
+    and rsi_eligibility.get("minimum_baseline_count") >= 2
+    and rsi_eligibility.get("claim_publish_decision") == "deny"
+    and rsi_eligibility.get("claim_publish_authority") is False
+    and rsi_eligibility_blueprint.get("source") == "ao-blueprint"
+    and rsi_eligibility_blueprint.get("self_authorized_by_rsi") is False
+    and rsi_eligibility_blueprint.get("authorizes_claim_publication") is False
+    and rsi_eligibility_blueprint.get("authorizes_ao_blueprint_self_change") is False
+    and isinstance(rsi_eligibility_improvement.get("minimum_target_percent"), (int, float))
+    and isinstance(rsi_eligibility_improvement.get("minimum_measured_improvement_percent"), (int, float))
+    and rsi_eligibility_improvement.get("minimum_target_percent") >= 5
+    and rsi_eligibility_improvement.get("minimum_measured_improvement_percent")
+    >= rsi_eligibility_improvement.get("minimum_target_percent")
+    and rsi_eligibility_trust.get("publishes_claims") is False
+    and rsi_eligibility_trust.get("approves_rsi_claims") is False
+    and rsi_eligibility_trust.get("mutates_repositories") is False
+    and rsi_eligibility_trust.get("requires_provider_api_key") is False
 )
 
 if stable and not stable_schema_ok:
@@ -339,11 +402,26 @@ if rsi and not rsi_improvement_trend_ready:
             "claim_publish_authority": rsi_improvement_trend.get("claim_publish_authority"),
         }
     )
+if rsi_eligibility and not rsi_eligibility_ready:
+    blockers.append(
+        {
+            "code": "rsi_eligibility_packet_not_ready",
+            "severity": "blocking",
+            "schema_version": rsi_eligibility.get("schema_version"),
+            "status": rsi_eligibility.get("status"),
+            "rsi_eligibility_ready": rsi_eligibility.get("rsi_eligibility_ready"),
+            "baseline_count": rsi_eligibility.get("baseline_count"),
+            "minimum_baseline_count": rsi_eligibility.get("minimum_baseline_count"),
+            "claim_publish_decision": rsi_eligibility.get("claim_publish_decision"),
+            "claim_publish_authority": rsi_eligibility.get("claim_publish_authority"),
+        }
+    )
 
 source_trust = [
     stable.get("trust_boundary", {}) if isinstance(stable.get("trust_boundary"), dict) else {},
     operator.get("trust_boundary", {}) if isinstance(operator.get("trust_boundary"), dict) else {},
     rsi.get("trust_boundary", {}) if isinstance(rsi.get("trust_boundary"), dict) else {},
+    rsi_eligibility.get("trust_boundary", {}) if isinstance(rsi_eligibility.get("trust_boundary"), dict) else {},
 ]
 stable_release_evidence_ready = (
     stable_ready
@@ -352,6 +430,7 @@ stable_release_evidence_ready = (
     and rsi_blueprint_authorization_ready
     and rsi_improvement_ready
     and rsi_improvement_trend_ready
+    and rsi_eligibility_ready
     and not blockers
 )
 payload = {
@@ -363,6 +442,7 @@ payload = {
         "stable_promotion_summary": str(stable_summary_path),
         "operator_evidence_summary": str(operator_summary_path),
         "rsi_cross_repo_e2e_summary": str(rsi_summary_path),
+        "rsi_eligibility_summary": str(rsi_eligibility_summary_path),
     },
     "stable_promotion": {
         "schema_version": stable.get("schema_version"),
@@ -435,6 +515,25 @@ payload = {
         "claim_publish_decision": rsi_improvement_trend.get("claim_publish_decision"),
         "claim_publish_authority": rsi_improvement_trend.get("claim_publish_authority"),
     },
+    "rsi_eligibility_packet": {
+        "schema_version": rsi_eligibility.get("schema_version"),
+        "status": rsi_eligibility.get("status"),
+        "rsi_eligibility_ready": rsi_eligibility.get("rsi_eligibility_ready"),
+        "baseline_count": rsi_eligibility.get("baseline_count"),
+        "minimum_baseline_count": rsi_eligibility.get("minimum_baseline_count"),
+        "claim_publish_decision": rsi_eligibility.get("claim_publish_decision"),
+        "claim_publish_authority": rsi_eligibility.get("claim_publish_authority"),
+        "blueprint_authorization": {
+            "source": rsi_eligibility_blueprint.get("source"),
+            "self_authorized_by_rsi": rsi_eligibility_blueprint.get("self_authorized_by_rsi"),
+            "authorizes_claim_publication": rsi_eligibility_blueprint.get("authorizes_claim_publication"),
+            "authorizes_ao_blueprint_self_change": rsi_eligibility_blueprint.get("authorizes_ao_blueprint_self_change"),
+        },
+        "improvement_evidence": {
+            "minimum_target_percent": rsi_eligibility_improvement.get("minimum_target_percent"),
+            "minimum_measured_improvement_percent": rsi_eligibility_improvement.get("minimum_measured_improvement_percent"),
+        },
+    },
     "blockers": blockers,
     "trust_boundary": {
         "mutates_releases": False,
@@ -504,12 +603,14 @@ dashboard_path.write_text(
   <p>RSI Blueprint authorization: {html.escape(str(payload["rsi_blueprint_authorization"]["gate_model"]))} / self-authorized by RSI {html.escape(str(payload["rsi_blueprint_authorization"]["self_authorized_by_rsi"]))}</p>
   <p>RSI improvement evidence: {html.escape(str(payload["rsi_improvement_evidence"]["measured_improvement_percent"]))}% / target {html.escape(str(payload["rsi_improvement_evidence"]["target_percent"]))}%</p>
   <p>RSI improvement trend: current {html.escape(str(payload["rsi_improvement_trend"]["current_measured_improvement_percent"]))}% / delta {html.escape(str(payload["rsi_improvement_trend"]["delta_from_previous_percent"]))}%</p>
+  <p>RSI eligibility packet: {html.escape(str(payload["rsi_eligibility_packet"]["rsi_eligibility_ready"]))} / publish authority {html.escape(str(payload["rsi_eligibility_packet"]["claim_publish_authority"]))}</p>
   <h2>Source Summaries</h2>
   <table>
     <tr><th>Source</th><th>Path</th><th>Status</th></tr>
     <tr><td>Stable promotion</td><td><code>{html.escape(str(stable_summary_path))}</code></td><td>{html.escape(str(stable_status))}</td></tr>
     <tr><td>Operator evidence</td><td><code>{html.escape(str(operator_summary_path))}</code></td><td>{html.escape(str(operator.get("status")))}</td></tr>
     <tr><td>RSI cross-repo E2E</td><td><code>{html.escape(str(rsi_summary_path))}</code></td><td>{html.escape(str(rsi.get("status")))}</td></tr>
+    <tr><td>RSI eligibility packet</td><td><code>{html.escape(str(rsi_eligibility_summary_path))}</code></td><td>{html.escape(str(rsi_eligibility.get("status")))}</td></tr>
   </table>
   <h2>RSI Claim-Publish Boundary</h2>
   <table>
@@ -558,6 +659,19 @@ dashboard_path.write_text(
       <td>{html.escape(str(payload["rsi_improvement_trend"]["current_measured_improvement_percent"]))}%</td>
       <td>{html.escape(str(payload["rsi_improvement_trend"]["delta_from_previous_percent"]))}%</td>
       <td>{html.escape(str(payload["rsi_improvement_trend"]["target_percent"]))}%</td>
+    </tr>
+  </table>
+  <h2>RSI Eligibility Packet</h2>
+  <table>
+    <tr><th>Schema</th><th>Status</th><th>Ready</th><th>Baselines</th><th>Decision</th><th>Publish authority</th><th>Minimum improvement</th></tr>
+    <tr>
+      <td><code>{html.escape(str(payload["rsi_eligibility_packet"]["schema_version"]))}</code></td>
+      <td>{html.escape(str(payload["rsi_eligibility_packet"]["status"]))}</td>
+      <td>{html.escape(str(payload["rsi_eligibility_packet"]["rsi_eligibility_ready"]))}</td>
+      <td>{html.escape(str(payload["rsi_eligibility_packet"]["baseline_count"]))} / {html.escape(str(payload["rsi_eligibility_packet"]["minimum_baseline_count"]))}</td>
+      <td>{html.escape(str(payload["rsi_eligibility_packet"]["claim_publish_decision"]))}</td>
+      <td>{html.escape(str(payload["rsi_eligibility_packet"]["claim_publish_authority"]))}</td>
+      <td>{html.escape(str(payload["rsi_eligibility_packet"]["improvement_evidence"]["minimum_measured_improvement_percent"]))}%</td>
     </tr>
   </table>
   <h2>Operator Checks</h2>
