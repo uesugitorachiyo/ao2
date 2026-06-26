@@ -147,6 +147,10 @@ def test_rsi_improvement_evidence_gate_measures_five_percent_hardening(tmp_path)
         "AO2_RSI_IMPROVEMENT_BLUEPRINT_AUTHORIZATION_SUMMARY",
         "blueprint_authorization",
         "ao2.rsi-blueprint-authorization-gate.v1",
+        "AO2_RSI_IMPROVEMENT_RELEASE_READINESS_DASHBOARD_READBACK_SUMMARY",
+        "release_readiness_dashboard_readback",
+        "ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1",
+        "dashboard_link_ready",
     ]:
         assert needle in text
 
@@ -210,6 +214,20 @@ def test_rsi_improvement_evidence_gate_measures_five_percent_hardening(tmp_path)
             "publish_authority": False,
         },
     )
+    write_json(
+        evidence / "release-readiness-dashboard-readback" / "summary.json",
+        {
+            "schema_version": "ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1",
+            "status": "passed",
+            "dashboard_link_ready": True,
+            "dashboard_artifact": "ao2-release-readiness-consumer/dashboard.html",
+            "dashboard_schema_version": "ao2.release-readiness-artifact-consumer.v1",
+            "claim_publish_decision": "deny",
+            "claim_publish_authority": False,
+            "control_plane_approves_release": False,
+            "mutates_ao_artifacts": False,
+        },
+    )
     schema_exit = evidence / "logs" / "covenant_gate_schema_validate.log.exit-code"
     schema_exit.parent.mkdir(parents=True)
     schema_exit.write_text("0\n", encoding="utf-8")
@@ -239,6 +257,9 @@ def test_rsi_improvement_evidence_gate_measures_five_percent_hardening(tmp_path)
             "AO2_RSI_IMPROVEMENT_COVENANT_GATE_SUMMARY": str(
                 evidence / "covenant-gate" / "summary.json"
             ),
+            "AO2_RSI_IMPROVEMENT_RELEASE_READINESS_DASHBOARD_READBACK_SUMMARY": str(
+                evidence / "release-readiness-dashboard-readback" / "summary.json"
+            ),
             "AO2_RSI_IMPROVEMENT_COVENANT_SCHEMA_EXIT_CODE": str(schema_exit),
         },
         capture_output=True,
@@ -252,9 +273,20 @@ def test_rsi_improvement_evidence_gate_measures_five_percent_hardening(tmp_path)
     assert summary["improvement_ready"] is True
     assert summary["metric"]["unit"] == "enforced_rsi_evidence_checks"
     assert summary["metric"]["baseline_check_count"] == 6
-    assert summary["metric"]["observed_check_count"] == 8
+    assert summary["metric"]["observed_check_count"] == 9
     assert summary["metric"]["target_percent"] == 5.0
     assert summary["metric"]["measured_improvement_percent"] >= 5.0
+    assert summary["release_readiness_dashboard_readback"] == {
+        "schema_version": "ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1",
+        "status": "passed",
+        "dashboard_link_ready": True,
+        "dashboard_artifact": "ao2-release-readiness-consumer/dashboard.html",
+        "dashboard_schema_version": "ao2.release-readiness-artifact-consumer.v1",
+        "claim_publish_decision": "deny",
+        "claim_publish_authority": False,
+        "control_plane_approves_release": False,
+        "mutates_ao_artifacts": False,
+    }
     assert summary["blueprint_authorization"]["schema_version"] == (
         "ao2.rsi-blueprint-authorization-gate.v1"
     )
@@ -271,7 +303,7 @@ def test_rsi_improvement_evidence_gate_measures_five_percent_hardening(tmp_path)
         env={
             **os.environ,
             "AO2_RSI_IMPROVEMENT_EVIDENCE_GATE_ROOT": str(tmp_path / "blocked"),
-            "AO2_RSI_IMPROVEMENT_BASELINE_CHECK_COUNT": "8",
+            "AO2_RSI_IMPROVEMENT_BASELINE_CHECK_COUNT": "9",
             "AO2_RSI_IMPROVEMENT_LIVE_SUMMARY": str(
                 evidence / "live-self-change-rehearsal" / "summary.json"
             ),
@@ -289,6 +321,9 @@ def test_rsi_improvement_evidence_gate_measures_five_percent_hardening(tmp_path)
             ),
             "AO2_RSI_IMPROVEMENT_COVENANT_GATE_SUMMARY": str(
                 evidence / "covenant-gate" / "summary.json"
+            ),
+            "AO2_RSI_IMPROVEMENT_RELEASE_READINESS_DASHBOARD_READBACK_SUMMARY": str(
+                evidence / "release-readiness-dashboard-readback" / "summary.json"
             ),
             "AO2_RSI_IMPROVEMENT_COVENANT_SCHEMA_EXIT_CODE": str(schema_exit),
         },
@@ -324,6 +359,9 @@ def test_rsi_improvement_evidence_gate_measures_five_percent_hardening(tmp_path)
             ),
             "AO2_RSI_IMPROVEMENT_COVENANT_GATE_SUMMARY": str(
                 evidence / "covenant-gate" / "summary.json"
+            ),
+            "AO2_RSI_IMPROVEMENT_RELEASE_READINESS_DASHBOARD_READBACK_SUMMARY": str(
+                evidence / "release-readiness-dashboard-readback" / "summary.json"
             ),
             "AO2_RSI_IMPROVEMENT_COVENANT_SCHEMA_EXIT_CODE": str(schema_exit),
         },
@@ -445,6 +483,10 @@ def test_rsi_cross_repo_e2e_contract():
     assert package["scripts"]["rsi:cross-repo-e2e"] == (
         "node scripts/run-sh-script.js scripts/rsi-cross-repo-e2e.sh"
     )
+    assert package["scripts"]["rsi:control-plane-release-readiness-dashboard-smoke"] == (
+        "node scripts/run-sh-script.js "
+        "scripts/rsi-control-plane-release-readiness-dashboard-smoke.sh"
+    )
 
     readme = read("README.md")
     for needle in [
@@ -454,6 +496,9 @@ def test_rsi_cross_repo_e2e_contract():
         "ao2.rsi-improvement-evidence-gate.v1",
         "ao2.rsi-improvement-trend.v1",
         "ao2.rsi-blueprint-authorization-gate.v1",
+        "ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1",
+        "release_readiness_dashboard_readback",
+        "dashboard_artifact",
         "AO2_RSI_BLUEPRINT_AUTHORIZATION_SUMMARY",
         "measured_improvement_percent",
         "covenant.rsi-claim-publish-gate.v1",
@@ -476,15 +521,20 @@ def test_rsi_cross_repo_e2e_contract():
         "rsi:live-self-change-rehearsal",
         "verify_ao2_rsi_live_self_change_rehearsal.py",
         "rsi:live-self-change-readback-index",
+        "rsi:control-plane-release-readiness-dashboard-smoke",
         "rsi:claim-readiness",
         "rsi:blueprint-authorization-gate",
         "rsi:improvement-evidence-gate",
         "rsi:improvement-trend",
+        "release_readiness_dashboard_readback",
         "improvement_evidence_gate",
         "improvement_trend",
         "ao2.rsi-improvement-evidence-gate.v1",
         "ao2.rsi-improvement-trend.v1",
         "ao2.rsi-blueprint-authorization-gate.v1",
+        "ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1",
+        "dashboard_link_ready",
+        "dashboard_artifact",
         "blueprint_authorization",
         "self_authorized_by_rsi",
         "measured_improvement_percent",
@@ -497,6 +547,29 @@ def test_rsi_cross_repo_e2e_contract():
         assert needle in text
     assert "OPENAI_API_KEY" not in text
     assert "ANTHROPIC_API_KEY" not in text
+
+
+def test_rsi_control_plane_release_readiness_dashboard_smoke_contract():
+    script = REPO / "scripts" / "rsi-control-plane-release-readiness-dashboard-smoke.sh"
+    assert script.is_file()
+    assert script.stat().st_mode & stat.S_IXUSR
+    text = script.read_text(encoding="utf-8")
+    for needle in [
+        "ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1",
+        "release:train-control-plane-bridge",
+        "ao2.release-readiness-artifact-consumer.v1",
+        "ao2-release-readiness-consumer/dashboard.html",
+        "AO2 Release Train Readback",
+        "AO2 release-readiness consumer dashboard",
+        "dashboard_link_ready",
+        "claim_publish_decision",
+        "claim_publish_authority",
+        "control_plane_approves_release",
+        "mutates_ao_artifacts",
+        "OPENAI_API_KEY",
+        "ANTHROPIC_API_KEY",
+    ]:
+        assert needle in text
 
 
 def test_rsi_cross_repo_e2e_ci_artifact_job_contract():
@@ -518,6 +591,9 @@ def test_rsi_cross_repo_e2e_ci_artifact_job_contract():
         "ao2.rsi-improvement-evidence-gate.v1",
         "ao2.rsi-improvement-trend.v1",
         "ao2.rsi-blueprint-authorization-gate.v1",
+        "ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1",
+        "release-readiness-dashboard-readback/summary.json",
+        '"release_readiness_dashboard_readback"]["dashboard_link_ready"] is True',
         '"measured_improvement_percent"] >= 5.0',
         '"trend_ready"] is True',
         "covenant.rsi-claim-publish-gate.v1",
@@ -537,6 +613,8 @@ def test_rsi_cross_repo_e2e_ci_artifact_job_contract():
         "ao2.rsi-improvement-evidence-gate.v1",
         "ao2.rsi-improvement-trend.v1",
         "ao2.rsi-blueprint-authorization-gate.v1",
+        "ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1",
+        "release-readiness dashboard readback",
         "measured_improvement_percent",
         "claim_publish_decision=deny",
         "publish_authority=false",

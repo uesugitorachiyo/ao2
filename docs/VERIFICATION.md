@@ -853,10 +853,13 @@ Result:
   `target/cross-repo-control-plane-observer/latest/summary.json`
 - `npm run rsi:cross-repo-e2e`: runs the AO2 live self-change rehearsal through
   ao2-control-plane readback, AO2 readback indexing, AO2 claim readiness,
-  AO Blueprint authorization, and the AO Covenant claim-publish gate, then runs
-  the RSI improvement evidence gate; emits `ao2.rsi-cross-repo-e2e.v1` at
+  the control-plane release-readiness dashboard readback smoke, AO Blueprint
+  authorization, and the AO Covenant claim-publish gate, then runs the RSI
+  improvement evidence gate; emits `ao2.rsi-cross-repo-e2e.v1` at
   `target/rsi-cross-repo-e2e/latest/summary.json`. Current expected evidence is
   `ao2.rsi-blueprint-authorization-gate.v1`,
+  `ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1` with
+  `dashboard_artifact=ao2-release-readiness-consumer/dashboard.html`,
   `ao2.rsi-improvement-evidence-gate.v1`, `measured_improvement_percent >= 5`,
   `ao2.rsi-improvement-trend.v1`, `delta_from_previous_percent`,
   `claim_publish_decision=deny`, and `publish_authority=false` for the full
@@ -875,9 +878,10 @@ Result:
   `ao2.rsi-improvement-evidence-gate.v1` at
   `target/rsi-improvement-evidence-gate/latest/summary.json`. The default
   `measured_improvement_percent` metric compares the previous six enforced RSI
-  evidence checks with eight enforced checks after AO Blueprint authorization
-  and this gate are added; it is a workflow-hardening coverage metric, not proof
-  that the full RSI claim is publishable.
+  evidence checks with nine enforced checks after AO Blueprint authorization,
+  the release-readiness dashboard readback, and this gate are added; it is a
+  workflow-hardening coverage metric, not proof that the full RSI claim is
+  publishable.
 - `npm run rsi:improvement-trend`: persists the local RSI improvement metric
   to `target/rsi-improvement-trend/history.jsonl` and emits
   `ao2.rsi-improvement-trend.v1` at
@@ -892,6 +896,8 @@ Result:
   The packet fails closed unless the 5% workflow-hardening metric is met, AO
   Blueprint authorization remains tiered and not self-authorized by RSI, and
   the full autonomous RSI claim remains denied with `publish_authority=false`.
+  It also requires the control-plane release-readiness dashboard readback for
+  `ao2-release-readiness-consumer/dashboard.html`.
   It is an operator-readable baseline/readback packet only; it does not mutate
   repositories, publish claims, approve RSI claims, or authorize AO Blueprint
   self-change. CI uploads it as `ao2-rsi-baseline-packet`.
@@ -901,7 +907,9 @@ Result:
   The packet fails closed unless both baseline packets are ready, both preserve
   `claim_publish_decision=deny` and `claim_publish_authority=false`, the
   measured RSI improvement remains at least 5%, and both packets are backed by
-  tiered AO Blueprint authorization that is not self-authorized by RSI. It is
+  tiered AO Blueprint authorization that is not self-authorized by RSI. Both
+  baseline packets must also carry `dashboard_link_ready=true` for the
+  release-readiness consumer dashboard readback. It is
   repeated-run eligibility evidence only; it does not publish claims, approve
   RSI claims, mutate repositories, or authorize AO Blueprint self-change. CI
   uploads it as `ao2-rsi-eligibility-packet`.

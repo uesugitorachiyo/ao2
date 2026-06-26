@@ -48,6 +48,7 @@ RSI_SCHEMA = "ao2.rsi-cross-repo-e2e.v1"
 RSI_BLUEPRINT_AUTHORIZATION_SCHEMA = "ao2.rsi-blueprint-authorization-gate.v1"
 RSI_IMPROVEMENT_SCHEMA = "ao2.rsi-improvement-evidence-gate.v1"
 RSI_IMPROVEMENT_TREND_SCHEMA = "ao2.rsi-improvement-trend.v1"
+RSI_DASHBOARD_READBACK_SCHEMA = "ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1"
 RSI_COVENANT_GATE_SCHEMA = "covenant.rsi-claim-publish-gate.v1"
 PACKET_SCHEMA = "ao2.rsi-baseline-packet.v1"
 
@@ -103,6 +104,11 @@ rsi_trend = (
     if isinstance(rsi.get("improvement_trend"), dict)
     else {}
 )
+dashboard_readback = (
+    rsi.get("observed_evidence")
+    if isinstance(rsi.get("observed_evidence"), dict)
+    else {}
+)
 rsi_blueprint_authorization_ready = (
     rsi_schema_ok
     and rsi_blueprint_authorization.get("schema_version") == RSI_BLUEPRINT_AUTHORIZATION_SCHEMA
@@ -141,6 +147,18 @@ rsi_trend_ready = (
     and "delta_from_previous_percent" in rsi_trend
     and rsi_trend.get("claim_publish_decision") == "deny"
     and rsi_trend.get("claim_publish_authority") is False
+)
+dashboard_readback_ready = (
+    rsi_schema_ok
+    and dashboard_readback.get("release_readiness_dashboard_readback_schema_version")
+    == RSI_DASHBOARD_READBACK_SCHEMA
+    and dashboard_readback.get("release_readiness_dashboard_readback_status") == "passed"
+    and dashboard_readback.get("release_readiness_dashboard_link_ready") is True
+    and dashboard_readback.get("release_readiness_dashboard_artifact")
+    == "ao2-release-readiness-consumer/dashboard.html"
+    and dashboard_readback.get("release_readiness_dashboard_schema_version")
+    == "ao2.release-readiness-artifact-consumer.v1"
+    and rsi.get("component_summaries", {}).get("release_readiness_dashboard_readback")
 )
 
 if rsi and not rsi_schema_ok:
@@ -206,12 +224,26 @@ if rsi and not rsi_trend_ready:
             "claim_publish_authority": rsi_trend.get("claim_publish_authority"),
         }
     )
+if rsi and not dashboard_readback_ready:
+    blockers.append(
+        {
+            "code": "control_plane_release_readiness_dashboard_not_ready",
+            "severity": "blocking",
+            "schema_version": dashboard_readback.get("release_readiness_dashboard_readback_schema_version"),
+            "status": dashboard_readback.get("release_readiness_dashboard_readback_status"),
+            "dashboard_link_ready": dashboard_readback.get("release_readiness_dashboard_link_ready"),
+            "dashboard_artifact": dashboard_readback.get("release_readiness_dashboard_artifact"),
+            "dashboard_schema_version": dashboard_readback.get("release_readiness_dashboard_schema_version"),
+            "component_summary": rsi.get("component_summaries", {}).get("release_readiness_dashboard_readback"),
+        }
+    )
 
 ready = (
     rsi_claim_publish_denied
     and rsi_blueprint_authorization_ready
     and rsi_improvement_ready
     and rsi_trend_ready
+    and dashboard_readback_ready
     and not blockers
 )
 payload = {
@@ -230,6 +262,17 @@ payload = {
         "claim_publish_authority": rsi.get("claim_publish_authority"),
         "covenant_gate_schema_version": rsi.get("observed_evidence", {}).get("covenant_gate_schema_version"),
         "covenant_gate_status": rsi.get("observed_evidence", {}).get("covenant_gate_status"),
+    },
+    "control_plane_release_readiness_dashboard_readback": {
+        "schema_version": dashboard_readback.get("release_readiness_dashboard_readback_schema_version"),
+        "status": dashboard_readback.get("release_readiness_dashboard_readback_status"),
+        "dashboard_link_ready": dashboard_readback.get("release_readiness_dashboard_link_ready"),
+        "dashboard_artifact": dashboard_readback.get("release_readiness_dashboard_artifact"),
+        "dashboard_schema_version": dashboard_readback.get("release_readiness_dashboard_schema_version"),
+        "claim_publish_decision": rsi.get("claim_publish_decision"),
+        "claim_publish_authority": rsi.get("claim_publish_authority"),
+        "control_plane_approves_release": False,
+        "mutates_ao_artifacts": False,
     },
     "rsi_blueprint_authorization": {
         "schema_version": rsi_blueprint_authorization.get("schema_version"),
@@ -331,6 +374,7 @@ dashboard_path.write_text(
   <p>Baseline ready: {str(ready).lower()}</p>
   <p>RSI claim-publish boundary: {html.escape(str(payload["rsi_cross_repo_e2e"]["claim_publish_decision"]))}</p>
   <p>Publish authority: {html.escape(str(payload["rsi_cross_repo_e2e"]["claim_publish_authority"]))}</p>
+  <p>release-readiness dashboard readback: {html.escape(str(payload["control_plane_release_readiness_dashboard_readback"]["dashboard_artifact"]))}</p>
   <p>Blueprint gate: {html.escape(str(payload["rsi_blueprint_authorization"]["gate_model"]))} / self-authorized by RSI {html.escape(str(payload["rsi_blueprint_authorization"]["self_authorized_by_rsi"]))}</p>
   <p>Improvement evidence: {html.escape(str(payload["rsi_improvement_evidence"]["measured_improvement_percent"]))}% / target {html.escape(str(payload["rsi_improvement_evidence"]["target_percent"]))}%</p>
   <p>Improvement trend: run count {html.escape(str(payload["rsi_improvement_trend"]["run_count"]))}, current {html.escape(str(payload["rsi_improvement_trend"]["current_measured_improvement_percent"]))}%, delta {html.escape(str(payload["rsi_improvement_trend"]["delta_from_previous_percent"]))}%</p>
@@ -348,6 +392,18 @@ dashboard_path.write_text(
       <td>{html.escape(str(payload["rsi_cross_repo_e2e"]["claim_publish_authority"]))}</td>
       <td><code>{html.escape(str(payload["rsi_cross_repo_e2e"]["covenant_gate_schema_version"]))}</code></td>
       <td>{html.escape(str(payload["rsi_cross_repo_e2e"]["covenant_gate_status"]))}</td>
+    </tr>
+  </table>
+  <h2>Release-Readiness Dashboard Readback</h2>
+  <table>
+    <tr><th>Schema</th><th>Status</th><th>Ready</th><th>Artifact</th><th>Dashboard schema</th><th>Publish authority</th></tr>
+    <tr>
+      <td><code>{html.escape(str(payload["control_plane_release_readiness_dashboard_readback"]["schema_version"]))}</code></td>
+      <td>{html.escape(str(payload["control_plane_release_readiness_dashboard_readback"]["status"]))}</td>
+      <td>{html.escape(str(payload["control_plane_release_readiness_dashboard_readback"]["dashboard_link_ready"]))}</td>
+      <td><code>{html.escape(str(payload["control_plane_release_readiness_dashboard_readback"]["dashboard_artifact"]))}</code></td>
+      <td><code>{html.escape(str(payload["control_plane_release_readiness_dashboard_readback"]["dashboard_schema_version"]))}</code></td>
+      <td>{html.escape(str(payload["control_plane_release_readiness_dashboard_readback"]["claim_publish_authority"]))}</td>
     </tr>
   </table>
   <h2>Blueprint Authorization</h2>

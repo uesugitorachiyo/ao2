@@ -4275,6 +4275,17 @@ def _write_rsi_baseline_packet(path: Path, *, publish_authority: bool = False) -
                     "covenant_gate_schema_version": "covenant.rsi-claim-publish-gate.v1",
                     "covenant_gate_status": "denied",
                 },
+                "control_plane_release_readiness_dashboard_readback": {
+                    "schema_version": "ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1",
+                    "status": "passed",
+                    "dashboard_link_ready": True,
+                    "dashboard_artifact": "ao2-release-readiness-consumer/dashboard.html",
+                    "dashboard_schema_version": "ao2.release-readiness-artifact-consumer.v1",
+                    "claim_publish_decision": claim_decision,
+                    "claim_publish_authority": publish_authority,
+                    "control_plane_approves_release": False,
+                    "mutates_ao_artifacts": False,
+                },
                 "rsi_blueprint_authorization": {
                     "schema_version": "ao2.rsi-blueprint-authorization-gate.v1",
                     "status": "passed",
@@ -4337,6 +4348,10 @@ def test_rsi_eligibility_packet_runs_against_two_baselines(tmp_path):
         "AO2_RSI_ELIGIBILITY_PACKET_CURRENT_BASELINE",
         "AO2_RSI_ELIGIBILITY_PACKET_PREVIOUS_BASELINE",
         "claim_publish_boundary_not_denied",
+        "control_plane_release_readiness_dashboard_not_ready",
+        "ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1",
+        "dashboard_link_ready",
+        "dashboard_artifact",
         "blueprint_authorization_self_authorized_by_rsi",
         "authorizes_ao_blueprint_self_change",
     ]:
@@ -4371,6 +4386,20 @@ def test_rsi_eligibility_packet_runs_against_two_baselines(tmp_path):
     assert summary["minimum_baseline_count"] == 2
     assert summary["claim_publish_decision"] == "deny"
     assert summary["claim_publish_authority"] is False
+    assert summary["control_plane_release_readiness_dashboard_readback"] == {
+        "schema_version": "ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1",
+        "status": "passed",
+        "dashboard_link_ready": True,
+        "dashboard_artifact": "ao2-release-readiness-consumer/dashboard.html",
+        "dashboard_schema_version": "ao2.release-readiness-artifact-consumer.v1",
+        "claim_publish_decision": "deny",
+        "claim_publish_authority": False,
+        "control_plane_approves_release": False,
+        "mutates_ao_artifacts": False,
+    }
+    for item in summary["baseline_summaries"]:
+        assert item["dashboard_link_ready"] is True
+        assert item["dashboard_artifact"] == "ao2-release-readiness-consumer/dashboard.html"
     assert summary["blueprint_authorization"]["source"] == "ao-blueprint"
     assert summary["blueprint_authorization"]["self_authorized_by_rsi"] is False
     assert summary["blueprint_authorization"]["authorizes_claim_publication"] is False
@@ -4390,6 +4419,8 @@ def test_rsi_eligibility_packet_runs_against_two_baselines(tmp_path):
     assert "RSI Eligibility Packet" in dashboard
     assert "ao2.rsi-eligibility-packet.v1" in dashboard
     assert "claim-publish boundary" in dashboard
+    assert "release-readiness dashboard readback" in dashboard
+    assert "ao2-release-readiness-consumer/dashboard.html" in dashboard
     assert "ao-blueprint" in dashboard
     assert "self-authorized by RSI False" in dashboard
 
@@ -6049,6 +6080,34 @@ def _write_release_readiness_consumer_fixture(root: Path):
                 "blueprint_authorization_status": "passed",
                 "blueprint_authorization_gate_model": "tiered",
                 "blueprint_authorization_self_authorized_by_rsi": False,
+                "release_readiness_dashboard_readback_schema_version": (
+                    "ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1"
+                ),
+                "release_readiness_dashboard_readback_status": "passed",
+                "release_readiness_dashboard_link_ready": True,
+                "release_readiness_dashboard_artifact": (
+                    "ao2-release-readiness-consumer/dashboard.html"
+                ),
+                "release_readiness_dashboard_schema_version": (
+                    "ao2.release-readiness-artifact-consumer.v1"
+                ),
+            },
+            "component_summaries": {
+                "release_readiness_dashboard_readback": (
+                    "target/rsi-cross-repo-e2e/latest/"
+                    "release-readiness-dashboard-readback/summary.json"
+                ),
+            },
+            "release_readiness_dashboard_readback": {
+                "schema_version": "ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1",
+                "status": "passed",
+                "dashboard_link_ready": True,
+                "dashboard_artifact": "ao2-release-readiness-consumer/dashboard.html",
+                "dashboard_schema_version": "ao2.release-readiness-artifact-consumer.v1",
+                "claim_publish_decision": "deny",
+                "claim_publish_authority": False,
+                "control_plane_approves_release": False,
+                "mutates_ao_artifacts": False,
             },
             "blueprint_authorization": {
                 "schema_version": "ao2.rsi-blueprint-authorization-gate.v1",
@@ -6096,6 +6155,17 @@ def _write_release_readiness_consumer_fixture(root: Path):
                 "claim_publish_authority": False,
                 "covenant_gate_schema_version": "covenant.rsi-claim-publish-gate.v1",
                 "covenant_gate_status": "denied",
+            },
+            "control_plane_release_readiness_dashboard_readback": {
+                "schema_version": "ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1",
+                "status": "passed",
+                "dashboard_link_ready": True,
+                "dashboard_artifact": "ao2-release-readiness-consumer/dashboard.html",
+                "dashboard_schema_version": "ao2.release-readiness-artifact-consumer.v1",
+                "claim_publish_decision": "deny",
+                "claim_publish_authority": False,
+                "control_plane_approves_release": False,
+                "mutates_ao_artifacts": False,
             },
             "rsi_blueprint_authorization": {
                 "schema_version": "ao2.rsi-blueprint-authorization-gate.v1",
@@ -6157,6 +6227,17 @@ def _write_release_readiness_consumer_fixture(root: Path):
                 "self_authorized_by_rsi": False,
                 "authorizes_claim_publication": False,
                 "authorizes_ao_blueprint_self_change": False,
+            },
+            "control_plane_release_readiness_dashboard_readback": {
+                "schema_version": "ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1",
+                "status": "passed",
+                "dashboard_link_ready": True,
+                "dashboard_artifact": "ao2-release-readiness-consumer/dashboard.html",
+                "dashboard_schema_version": "ao2.release-readiness-artifact-consumer.v1",
+                "claim_publish_decision": "deny",
+                "claim_publish_authority": False,
+                "control_plane_approves_release": False,
+                "mutates_ao_artifacts": False,
             },
             "improvement_evidence": {
                 "minimum_target_percent": 5.0,

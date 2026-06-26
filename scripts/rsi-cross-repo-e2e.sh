@@ -81,6 +81,11 @@ run_step readback_index \
     AO2_RSI_LIVE_SELF_CHANGE_READBACK_INDEX_ROOT="$OUT_ROOT/readback-index" \
     npm run rsi:live-self-change-readback-index
 
+run_step release_readiness_dashboard_readback \
+  env AO2_RSI_CP_RELEASE_READINESS_DASHBOARD_SMOKE_ROOT="$OUT_ROOT/release-readiness-dashboard-readback" \
+    AO2_CONTROL_PLANE_REPO="$CP_ROOT" \
+    npm run rsi:control-plane-release-readiness-dashboard-smoke
+
 run_step claim_readiness \
   env AO2_RSI_LIVE_SELF_CHANGE_REHEARSAL_SUMMARY="$OUT_ROOT/live-self-change-rehearsal/summary.json" \
     AO2_RSI_LIVE_SELF_CHANGE_READBACK_INDEX_SUMMARY="$OUT_ROOT/readback-index/summary.json" \
@@ -110,6 +115,7 @@ run_step improvement_evidence_gate \
     AO2_RSI_IMPROVEMENT_CLAIM_READINESS_SUMMARY="$OUT_ROOT/claim-readiness/summary.json" \
     AO2_RSI_IMPROVEMENT_BLUEPRINT_AUTHORIZATION_SUMMARY="$OUT_ROOT/blueprint-authorization/summary.json" \
     AO2_RSI_IMPROVEMENT_COVENANT_GATE_SUMMARY="$OUT_ROOT/covenant-gate/summary.json" \
+    AO2_RSI_IMPROVEMENT_RELEASE_READINESS_DASHBOARD_READBACK_SUMMARY="$OUT_ROOT/release-readiness-dashboard-readback/summary.json" \
     AO2_RSI_IMPROVEMENT_COVENANT_SCHEMA_EXIT_CODE="$LOG_DIR/covenant_gate_schema_validate.log.exit-code" \
     npm run rsi:improvement-evidence-gate
 
@@ -132,6 +138,7 @@ steps = [
     "live_self_change_rehearsal",
     "control_plane_readback",
     "readback_index",
+    "release_readiness_dashboard_readback",
     "claim_readiness",
     "blueprint_authorization",
     "covenant_claim_publish_gate",
@@ -161,6 +168,7 @@ checks = [
 live = read_json(out_root / "live-self-change-rehearsal" / "summary.json")
 readback = read_json(out_root / "control-plane-readback" / "summary.json")
 index = read_json(out_root / "readback-index" / "summary.json")
+dashboard_readback = read_json(out_root / "release-readiness-dashboard-readback" / "summary.json")
 claim = read_json(out_root / "claim-readiness" / "summary.json")
 blueprint = read_json(out_root / "blueprint-authorization" / "summary.json")
 gate = read_json(out_root / "covenant-gate" / "summary.json")
@@ -173,6 +181,16 @@ passed = (
     and live.get("self_change", {}).get("repository_restored") is True
     and readback.get("status") == "passed"
     and index.get("status") == "passed"
+    and dashboard_readback.get("schema_version")
+    == "ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1"
+    and dashboard_readback.get("status") == "passed"
+    and dashboard_readback.get("dashboard_link_ready") is True
+    and dashboard_readback.get("dashboard_artifact")
+    == "ao2-release-readiness-consumer/dashboard.html"
+    and dashboard_readback.get("dashboard_schema_version")
+    == "ao2.release-readiness-artifact-consumer.v1"
+    and dashboard_readback.get("claim_publish_decision") == "deny"
+    and dashboard_readback.get("claim_publish_authority") is False
     and claim.get("status") == "claim_boundary_enforced"
     and blueprint.get("schema_version") == "ao2.rsi-blueprint-authorization-gate.v1"
     and blueprint.get("status") == "passed"
@@ -212,6 +230,7 @@ payload = {
         "live_self_change_rehearsal": str(out_root / "live-self-change-rehearsal" / "summary.json"),
         "control_plane_readback": str(out_root / "control-plane-readback" / "summary.json"),
         "readback_index": str(out_root / "readback-index" / "summary.json"),
+        "release_readiness_dashboard_readback": str(out_root / "release-readiness-dashboard-readback" / "summary.json"),
         "claim_readiness": str(out_root / "claim-readiness" / "summary.json"),
         "blueprint_authorization": str(out_root / "blueprint-authorization" / "summary.json"),
         "covenant_claim_publish_gate": str(out_root / "covenant-gate" / "summary.json"),
@@ -241,6 +260,17 @@ payload = {
         "authorizes_claim_publication": blueprint.get("authority_boundary", {}).get("authorizes_claim_publication"),
         "authorizes_ao_blueprint_self_change": blueprint.get("authority_boundary", {}).get("authorizes_ao_blueprint_self_change"),
     },
+    "release_readiness_dashboard_readback": {
+        "schema_version": dashboard_readback.get("schema_version"),
+        "status": dashboard_readback.get("status"),
+        "dashboard_link_ready": dashboard_readback.get("dashboard_link_ready"),
+        "dashboard_artifact": dashboard_readback.get("dashboard_artifact"),
+        "dashboard_schema_version": dashboard_readback.get("dashboard_schema_version"),
+        "claim_publish_decision": dashboard_readback.get("claim_publish_decision"),
+        "claim_publish_authority": dashboard_readback.get("claim_publish_authority"),
+        "control_plane_approves_release": dashboard_readback.get("control_plane_approves_release"),
+        "mutates_ao_artifacts": dashboard_readback.get("mutates_ao_artifacts"),
+    },
     "improvement_trend": {
         "schema_version": trend.get("schema_version"),
         "status": trend.get("status"),
@@ -259,6 +289,11 @@ payload = {
         "repository_restored": live.get("self_change", {}).get("repository_restored", False),
         "control_plane_readback_status": readback.get("status"),
         "readback_index_status": index.get("status"),
+        "release_readiness_dashboard_readback_schema_version": dashboard_readback.get("schema_version"),
+        "release_readiness_dashboard_readback_status": dashboard_readback.get("status"),
+        "release_readiness_dashboard_link_ready": dashboard_readback.get("dashboard_link_ready"),
+        "release_readiness_dashboard_artifact": dashboard_readback.get("dashboard_artifact"),
+        "release_readiness_dashboard_schema_version": dashboard_readback.get("dashboard_schema_version"),
         "claim_readiness_status": claim.get("status"),
         "blueprint_authorization_status": blueprint.get("status"),
         "blueprint_authorization_gate_model": blueprint.get("authorization_scope", {}).get("gate_model"),

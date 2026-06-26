@@ -61,6 +61,7 @@ BLUEPRINT_SCHEMA = "ao2.rsi-blueprint-authorization-gate.v1"
 IMPROVEMENT_SCHEMA = "ao2.rsi-improvement-evidence-gate.v1"
 TREND_SCHEMA = "ao2.rsi-improvement-trend.v1"
 COVENANT_SCHEMA = "covenant.rsi-claim-publish-gate.v1"
+DASHBOARD_READBACK_SCHEMA = "ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1"
 
 current_path = Path(sys.argv[1]).resolve()
 previous_path = Path(sys.argv[2]).resolve()
@@ -117,6 +118,11 @@ def validate_baseline(source: str, path: Path, packet: dict, blockers: list[dict
         if isinstance(packet.get("rsi_improvement_trend"), dict)
         else {}
     )
+    dashboard = (
+        packet.get("control_plane_release_readiness_dashboard_readback")
+        if isinstance(packet.get("control_plane_release_readiness_dashboard_readback"), dict)
+        else {}
+    )
     trust = packet.get("trust_boundary") if isinstance(packet.get("trust_boundary"), dict) else {}
 
     if packet.get("schema_version") != BASELINE_SCHEMA:
@@ -153,6 +159,31 @@ def validate_baseline(source: str, path: Path, packet: dict, blockers: list[dict
             claim_publish_authority=rsi.get("claim_publish_authority"),
             covenant_gate_schema_version=rsi.get("covenant_gate_schema_version"),
             covenant_gate_status=rsi.get("covenant_gate_status"),
+        )
+    if (
+        dashboard.get("schema_version") != DASHBOARD_READBACK_SCHEMA
+        or dashboard.get("status") != "passed"
+        or dashboard.get("dashboard_link_ready") is not True
+        or dashboard.get("dashboard_artifact") != "ao2-release-readiness-consumer/dashboard.html"
+        or dashboard.get("dashboard_schema_version") != "ao2.release-readiness-artifact-consumer.v1"
+        or dashboard.get("claim_publish_decision") != "deny"
+        or dashboard.get("claim_publish_authority") is not False
+        or dashboard.get("control_plane_approves_release") is not False
+        or dashboard.get("mutates_ao_artifacts") is not False
+    ):
+        add_blocker(
+            blockers,
+            source,
+            "control_plane_release_readiness_dashboard_not_ready",
+            schema_version=dashboard.get("schema_version"),
+            status=dashboard.get("status"),
+            dashboard_link_ready=dashboard.get("dashboard_link_ready"),
+            dashboard_artifact=dashboard.get("dashboard_artifact"),
+            dashboard_schema_version=dashboard.get("dashboard_schema_version"),
+            claim_publish_decision=dashboard.get("claim_publish_decision"),
+            claim_publish_authority=dashboard.get("claim_publish_authority"),
+            control_plane_approves_release=dashboard.get("control_plane_approves_release"),
+            mutates_ao_artifacts=dashboard.get("mutates_ao_artifacts"),
         )
     if (
         blueprint.get("schema_version") != BLUEPRINT_SCHEMA
@@ -276,6 +307,9 @@ def validate_baseline(source: str, path: Path, packet: dict, blockers: list[dict
         "target_percent": target,
         "trend_current_measured_improvement_percent": trend_current,
         "trend_delta_from_previous_percent": trend.get("delta_from_previous_percent"),
+        "dashboard_link_ready": dashboard.get("dashboard_link_ready"),
+        "dashboard_artifact": dashboard.get("dashboard_artifact"),
+        "dashboard_schema_version": dashboard.get("dashboard_schema_version"),
     }
 
 
@@ -297,6 +331,11 @@ target_values = [
     item.get("target_percent")
     for item in baseline_summaries
     if isinstance(item.get("target_percent"), (int, float))
+]
+dashboard_artifacts = [
+    item.get("dashboard_artifact")
+    for item in baseline_summaries
+    if item.get("dashboard_link_ready") is True
 ]
 
 payload = {
@@ -320,6 +359,17 @@ payload = {
         "self_authorized_by_rsi": False,
         "authorizes_claim_publication": False,
         "authorizes_ao_blueprint_self_change": False,
+    },
+    "control_plane_release_readiness_dashboard_readback": {
+        "schema_version": DASHBOARD_READBACK_SCHEMA,
+        "status": "passed" if ready else "blocked",
+        "dashboard_link_ready": ready and len(dashboard_artifacts) == 2,
+        "dashboard_artifact": "ao2-release-readiness-consumer/dashboard.html",
+        "dashboard_schema_version": "ao2.release-readiness-artifact-consumer.v1",
+        "claim_publish_decision": "deny" if ready else "blocked",
+        "claim_publish_authority": False,
+        "control_plane_approves_release": False,
+        "mutates_ao_artifacts": False,
     },
     "improvement_evidence": {
         "schema_version": IMPROVEMENT_SCHEMA,
@@ -369,6 +419,7 @@ for item in baseline_summaries:
         f"<td>{html.escape(str(item.get('blueprint_source')))}</td>"
         f"<td>{html.escape(str(item.get('blueprint_self_authorized_by_rsi')))}</td>"
         f"<td>{html.escape(str(item.get('measured_improvement_percent')))}</td>"
+        f"<td>{html.escape(str(item.get('dashboard_link_ready')))}</td>"
         "</tr>"
     )
 
@@ -395,10 +446,11 @@ dashboard_path.write_text(
   <p>Eligibility ready: {str(ready).lower()}</p>
   <p>claim-publish boundary: {html.escape(str(payload["claim_publish_decision"]))}</p>
   <p>Publish authority: {html.escape(str(payload["claim_publish_authority"]))}</p>
+  <p>release-readiness dashboard readback: {html.escape(str(payload["control_plane_release_readiness_dashboard_readback"]["dashboard_artifact"]))}</p>
   <p>Blueprint source: ao-blueprint; self-authorized by RSI False</p>
   <h2>Baseline Packets</h2>
   <table>
-    <tr><th>Source</th><th>Path</th><th>Status</th><th>Decision</th><th>Authority</th><th>Blueprint</th><th>Self-authorized</th><th>Measured %</th></tr>
+    <tr><th>Source</th><th>Path</th><th>Status</th><th>Decision</th><th>Authority</th><th>Blueprint</th><th>Self-authorized</th><th>Measured %</th><th>Dashboard</th></tr>
     {''.join(baseline_rows)}
   </table>
   <h2>Blockers</h2>

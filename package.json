@@ -82,6 +82,7 @@
     "rsi:blueprint-authorization-gate": "node scripts/run-sh-script.js scripts/rsi-blueprint-authorization-gate.sh",
     "rsi:improvement-evidence-gate": "node scripts/run-sh-script.js scripts/rsi-improvement-evidence-gate.sh",
     "rsi:improvement-trend": "node scripts/run-sh-script.js scripts/rsi-improvement-trend.sh",
+    "rsi:control-plane-release-readiness-dashboard-smoke": "node scripts/run-sh-script.js scripts/rsi-control-plane-release-readiness-dashboard-smoke.sh",
     "rsi:baseline-packet": "node scripts/run-sh-script.js scripts/rsi-baseline-packet.sh",
     "rsi:eligibility-packet": "node scripts/run-sh-script.js scripts/rsi-eligibility-packet.sh",
     "rsi:cross-repo-e2e": "node scripts/run-sh-script.js scripts/rsi-cross-repo-e2e.sh",

@@ -135,9 +135,9 @@ The gate emits `ao2.rsi-improvement-evidence-gate.v1` under
 `target/rsi-improvement-evidence-gate/latest/summary.json`. It measures
 workflow-hardening coverage as `measured_improvement_percent` for enforced RSI
 evidence checks. The default target is 5%, and the current gate compares the
-previous six-check RSI evidence baseline with eight enforced checks after the
-AO Blueprint authorization prerequisite and improvement gate are added. This is
-evidence of stronger verification coverage, not proof
+previous six-check RSI evidence baseline with nine enforced checks after the
+AO Blueprint authorization prerequisite, the release-readiness dashboard
+readback, and improvement gate are added. This is evidence of stronger verification coverage, not proof
 that the full RSI claim is publishable.
 
 Persist the local improvement trend with:
@@ -163,7 +163,8 @@ npm run rsi:cross-repo-e2e
 The E2E smoke emits `ao2.rsi-cross-repo-e2e.v1` under
 `target/rsi-cross-repo-e2e/latest/summary.json`. It runs the AO2 live
 self-change rehearsal, ao2-control-plane readback,
-`rsi:live-self-change-readback-index`, `rsi:claim-readiness`,
+`rsi:live-self-change-readback-index`, the release-readiness dashboard
+readback smoke, `rsi:claim-readiness`,
 `rsi:blueprint-authorization-gate`, and Covenant `policy claim-publish-gate`,
 then runs the improvement evidence gate. Set
 `AO2_RSI_BLUEPRINT_AUTHORIZATION_SUMMARY` to a real AO Blueprint
@@ -173,7 +174,10 @@ expected final Covenant gate remains `publish_authority=false` with schema
 `covenant.rsi-claim-publish-gate.v1`; the E2E summary also carries
 `ao2.rsi-improvement-evidence-gate.v1`,
 `ao2.rsi-improvement-trend.v1`,
-`ao2.rsi-blueprint-authorization-gate.v1`, `measured_improvement_percent`, and
+`ao2.rsi-blueprint-authorization-gate.v1`,
+`ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1`,
+`release_readiness_dashboard_readback`, `dashboard_artifact`,
+`measured_improvement_percent`, and
 `delta_from_previous_percent`.
 The smoke proves the denial chain and 5% workflow-hardening measurement are
 wired end to end, not that the full RSI claim is publishable.
@@ -188,8 +192,10 @@ npm run rsi:baseline-packet
 The packet emits `ao2.rsi-baseline-packet.v1` under
 `target/rsi-baseline-packet/latest/summary.json`, plus `dashboard.html`. It
 surfaces the RSI trend, Blueprint authorization, Covenant denial, and
-control-plane readback inputs in one compact packet. It fails closed unless the
-5% workflow-hardening metric is met and the full autonomous RSI claim remains
+control-plane readback inputs in one compact packet, including the
+release-readiness dashboard readback for
+`ao2-release-readiness-consumer/dashboard.html`. It fails closed unless the 5%
+workflow-hardening metric is met and the full autonomous RSI claim remains
 denied with `publish_authority=false`. The packet reads local evidence only; it
 does not mutate repositories, publish claims, approve RSI claims, or authorize
 AO Blueprint self-change.
@@ -206,6 +212,8 @@ The packet emits `ao2.rsi-eligibility-packet.v1` under
 fails closed unless both baseline packets are ready, both preserve
 `claim_publish_decision=deny` and `claim_publish_authority=false`, and both are
 backed by tiered AO Blueprint authorization that is not self-authorized by RSI.
+Both baselines must also carry the control-plane release-readiness dashboard
+readback with `dashboard_link_ready=true`.
 This is eligibility/readback evidence only; it does not publish claims, approve
 RSI claims, mutate repositories, or authorize AO Blueprint self-change. CI
 uploads it as `ao2-rsi-eligibility-packet`.
