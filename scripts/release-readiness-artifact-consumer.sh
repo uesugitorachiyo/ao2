@@ -4,14 +4,17 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONSUMER_ROOT="${AO2_RELEASE_READINESS_CONSUMER_ROOT:-$ROOT/target/release-readiness-consumer}"
 SUMMARY="$CONSUMER_ROOT/summary.json"
+DASHBOARD="$CONSUMER_ROOT/dashboard.html"
 
-python3 - "$CONSUMER_ROOT" "$SUMMARY" <<'PY'
+python3 - "$CONSUMER_ROOT" "$SUMMARY" "$DASHBOARD" <<'PY'
+import html
 import json
 import sys
 from pathlib import Path
 
 consumer_root = Path(sys.argv[1])
 summary_path = Path(sys.argv[2])
+dashboard_path = Path(sys.argv[3])
 
 def load_json(relative_path: str):
     path = consumer_root / relative_path
@@ -421,6 +424,7 @@ if missing:
 consumer_summary = {
     "schema_version": "ao2.release-readiness-artifact-consumer.v1",
     "status": "passed",
+    "dashboard": str(dashboard_path),
     "source_artifacts": [
         "ao2-release-readiness",
         "ao2-release-readiness-hosted-artifact-gate",
@@ -568,6 +572,102 @@ consumer_summary = {
         "source": "github_actions_artifact_download",
     },
 }
+
+def render_value(value):
+    if isinstance(value, bool):
+        return "True" if value else "False"
+    return str(value)
+
+def render_rows(rows):
+    return "\n".join(
+        "<tr><th scope=\"row\">{}</th><td>{}</td></tr>".format(
+            html.escape(label),
+            html.escape(render_value(value)),
+        )
+        for label, value in rows
+    )
+
+rsi_eligibility_rows = [
+    ("schema_version", rsi_eligibility_packet.get("schema_version")),
+    ("status", rsi_eligibility_packet.get("status")),
+    ("rsi_eligibility_ready", rsi_eligibility_packet.get("rsi_eligibility_ready")),
+    ("baseline_count", rsi_eligibility_packet.get("baseline_count")),
+    ("minimum_baseline_count", rsi_eligibility_packet.get("minimum_baseline_count")),
+    ("claim_publish_decision", rsi_eligibility_packet.get("claim_publish_decision")),
+    ("claim_publish_authority", rsi_eligibility_packet.get("claim_publish_authority")),
+    ("source", eligibility_blueprint.get("source")),
+    ("self_authorized_by_rsi", eligibility_blueprint.get("self_authorized_by_rsi")),
+    ("authorizes_claim_publication", eligibility_blueprint.get("authorizes_claim_publication")),
+    ("authorizes_ao_blueprint_self_change", eligibility_blueprint.get("authorizes_ao_blueprint_self_change")),
+    ("minimum_target_percent", eligibility_improvement.get("minimum_target_percent")),
+    (
+        "minimum_measured_improvement_percent",
+        eligibility_improvement.get("minimum_measured_improvement_percent"),
+    ),
+    ("publishes_claims", eligibility_trust.get("publishes_claims")),
+    ("approves_rsi_claims", eligibility_trust.get("approves_rsi_claims")),
+    ("mutates_repositories", eligibility_trust.get("mutates_repositories")),
+    ("requires_provider_api_key", eligibility_trust.get("requires_provider_api_key")),
+]
+
+release_rows = [
+    ("schema_version", consumer_summary.get("schema_version")),
+    ("status", consumer_summary.get("status")),
+    ("release_readiness", summary.get("status")),
+    ("hosted_artifact_gate", hosted_gate_detail.get("status")),
+    ("stable_release_evidence_ready", stable_release_evidence_packet.get("stable_release_evidence_ready")),
+    ("public_pair_digest_archive_parity", public_pair_digest_gate.get("archive_parity_status")),
+    ("trust_boundary.source", consumer_summary["trust_boundary"]["source"]),
+    ("trust_boundary.stores_credentials", consumer_summary["trust_boundary"]["stores_credentials"]),
+]
+
+dashboard_html = """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Release Readiness Artifact Consumer</title>
+  <style>
+    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 2rem; color: #1f2933; background: #f8fafc; }}
+    main {{ max-width: 960px; margin: 0 auto; }}
+    h1, h2 {{ color: #102a43; }}
+    table {{ width: 100%; border-collapse: collapse; margin: 1rem 0 2rem; background: #fff; }}
+    th, td {{ border: 1px solid #d9e2ec; padding: 0.625rem 0.75rem; text-align: left; vertical-align: top; }}
+    th {{ width: 34%; background: #edf2f7; font-weight: 600; }}
+    code {{ background: #edf2f7; padding: 0.1rem 0.25rem; border-radius: 3px; }}
+  </style>
+</head>
+<body>
+<main>
+  <h1>Release Readiness Artifact Consumer</h1>
+  <p>Schema: <code>{consumer_schema}</code></p>
+  <section>
+    <h2>Release Readiness Readback</h2>
+    <table>
+      <tbody>
+{release_rows}
+      </tbody>
+    </table>
+  </section>
+  <section>
+    <h2>RSI Eligibility Readback</h2>
+    <p>This readback preserves the denial boundary: repeated 5 percent evidence is visible, but autonomous RSI claim publication authority remains denied.</p>
+    <table>
+      <tbody>
+{rsi_eligibility_rows}
+      </tbody>
+    </table>
+  </section>
+</main>
+</body>
+</html>
+""".format(
+    consumer_schema=html.escape(consumer_summary["schema_version"]),
+    release_rows=render_rows(release_rows),
+    rsi_eligibility_rows=render_rows(rsi_eligibility_rows),
+)
+
+dashboard_path.write_text(dashboard_html, encoding="utf-8")
 summary_path.write_text(json.dumps(consumer_summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 print(f"summary={summary_path}")
+print(f"dashboard={dashboard_path}")
 PY

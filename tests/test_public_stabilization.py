@@ -6377,6 +6377,8 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
         "rsi_baseline_ready",
         "rsi_eligibility_packet",
         "rsi_eligibility_ready",
+        "dashboard.html",
+        "RSI Eligibility Readback",
         "covenant.rsi-claim-publish-gate.v1",
         "ci_release_readiness_hosted_artifact_gate_job",
         "ci_pulse_ao2_event_loop_smoke_artifact_job",
@@ -6435,6 +6437,7 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
     summary = json.loads((root / "summary.json").read_text(encoding="utf-8"))
     assert summary["schema_version"] == "ao2.release-readiness-artifact-consumer.v1"
     assert summary["status"] == "passed"
+    assert summary["dashboard"] == str(root / "dashboard.html")
     assert "ao2-pulse-ao2-event-loop-smoke" in summary["source_artifacts"]
     assert "ao2-rsi-cross-repo-e2e" in summary["source_artifacts"]
     assert "ao2-rsi-baseline-packet" in summary["source_artifacts"]
@@ -6508,6 +6511,25 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
         "required_artifact": "ao2-public-release-pair-digest-audit",
     }
     assert summary["trust_boundary"]["stores_credentials"] is False
+    dashboard = (root / "dashboard.html").read_text(encoding="utf-8")
+    for needle in [
+        "Release Readiness Artifact Consumer",
+        "RSI Eligibility Readback",
+        "ao2.rsi-eligibility-packet.v1",
+        "claim_publish_decision",
+        "deny",
+        "claim_publish_authority",
+        "False",
+        "ao-blueprint",
+        "self_authorized_by_rsi",
+        "authorizes_claim_publication",
+        "authorizes_ao_blueprint_self_change",
+        "minimum_measured_improvement_percent",
+        "33.3333",
+        "mutates_repositories",
+        "requires_provider_api_key",
+    ]:
+        assert needle in dashboard
 
 
 def test_release_readiness_artifact_consumer_rejects_bad_fixture_evidence(tmp_path):

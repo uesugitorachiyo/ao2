@@ -619,7 +619,10 @@ Result:
   operator evidence bundle schemas, and preserve `mutates_releases=false` plus
   `stores_credentials=false`. The consumer then uploads
   `ao2-release-readiness-consumer` with
-  `ao2.release-readiness-artifact-consumer.v1` evidence.
+  `ao2.release-readiness-artifact-consumer.v1` evidence and a
+  `dashboard.html` readback that surfaces RSI eligibility status, repeated-run
+  improvement evidence, and the denied autonomous RSI claim-publication
+  boundary for operator review.
   The same validation is available locally as
   `npm run release:readiness:artifact-consumer`, using
   `AO2_RELEASE_READINESS_CONSUMER_ROOT` when validating downloaded or fixture
