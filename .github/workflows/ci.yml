@@ -770,6 +770,11 @@ jobs:
         with:
           name: ao2-rsi-cross-repo-e2e
           path: target/stable-release-evidence-packet-ci/rsi-cross-repo-e2e
+      - name: Download RSI eligibility packet artifact
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: ao2-rsi-eligibility-packet
+          path: target/stable-release-evidence-packet-ci/rsi-eligibility-packet
       - name: Compose stable release evidence packet
         shell: bash
         run: |
@@ -777,6 +782,7 @@ jobs:
           AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY=target/stable-release-evidence-packet-ci/stable-promotion-workflow/summary.json \
           AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY=target/stable-release-evidence-packet-ci/operator-release-evidence-bundle/summary.json \
           AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY=target/stable-release-evidence-packet-ci/rsi-cross-repo-e2e/latest/summary.json \
+          AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_ELIGIBILITY_SUMMARY=target/stable-release-evidence-packet-ci/rsi-eligibility-packet/packet/summary.json \
             npm run release:stable-evidence-packet
       - name: Verify stable release evidence packet
         shell: bash
@@ -815,11 +821,17 @@ jobs:
           assert "delta_from_previous_percent" in summary["rsi_improvement_trend"], summary
           assert summary["rsi_improvement_trend"]["claim_publish_decision"] == "deny", summary
           assert summary["rsi_improvement_trend"]["claim_publish_authority"] is False, summary
+          assert summary["rsi_eligibility_packet"]["schema_version"] == "ao2.rsi-eligibility-packet.v1", summary
+          assert summary["rsi_eligibility_packet"]["status"] == "passed", summary
+          assert summary["rsi_eligibility_packet"]["rsi_eligibility_ready"] is True, summary
+          assert summary["rsi_eligibility_packet"]["claim_publish_decision"] == "deny", summary
+          assert summary["rsi_eligibility_packet"]["claim_publish_authority"] is False, summary
           assert summary["trust_boundary"]["mutates_releases"] is False, summary
           assert summary["trust_boundary"]["stores_credentials"] is False, summary
           assert (root / "stable-promotion-workflow" / "summary.json").is_file()
           assert (root / "operator-release-evidence-bundle" / "summary.json").is_file()
           assert (root / "rsi-cross-repo-e2e" / "latest" / "summary.json").is_file()
+          assert (root / "rsi-eligibility-packet" / "packet" / "summary.json").is_file()
           assert (root / "packet" / "dashboard.html").is_file()
           PY
       - name: Upload stable release evidence packet
@@ -1132,6 +1144,11 @@ jobs:
         with:
           name: ao2-rsi-baseline-packet
           path: target/release-readiness-consumer/ao2-rsi-baseline-packet
+      - name: Download RSI eligibility packet artifact
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: ao2-rsi-eligibility-packet
+          path: target/release-readiness-consumer/ao2-rsi-eligibility-packet
       - name: Download release publication closure artifact
         uses: actions/download-artifact@v8.0.1
         with:

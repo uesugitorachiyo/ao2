@@ -991,12 +991,14 @@ Result:
 - `npm run release:stable-evidence-packet`: composes the current
   `ao2.stable-promotion-workflow.v1` summary,
   `ao2.operator-release-evidence-bundle.v1` summary, and
-  `ao2.rsi-cross-repo-e2e.v1` summary into one read-only operator packet at
-  `target/stable-release-evidence-packet/latest`. It also preserves the nested
+  `ao2.rsi-cross-repo-e2e.v1` summary plus the repeated-run
+  `ao2.rsi-eligibility-packet.v1` summary into one read-only operator packet at
+  `target/stable-release-evidence-packet/latest`. It preserves the nested
   `ao2.rsi-improvement-evidence-gate.v1` result and requires
   `measured_improvement_percent >= 5` before the packet can be ready. It also
   carries `ao2.rsi-improvement-trend.v1` with
-  `delta_from_previous_percent`. It emits
+  `delta_from_previous_percent`, and `ao2.rsi-eligibility-packet.v1` with
+  `rsi_eligibility_ready=true`. It emits
   `ao2.stable-release-evidence-packet.v1`, `summary.json`, and
   `dashboard.html`, and fails closed unless the stable promotion evidence gate
   reports `post_release_evidence_ready=true` with
@@ -1008,9 +1010,10 @@ Result:
   not proof that full autonomous RSI is publishable. Use
   `AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY=<path>` and
   `AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY=<path>` plus
-  `AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY=<path>` to compose from
-  preserved local baselines. The packet reads local summaries only and records
-  `mutates_releases=false` and `stores_credentials=false`.
+  `AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY=<path>` and
+  `AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_ELIGIBILITY_SUMMARY=<path>` to
+  compose from preserved local baselines. The packet reads local summaries only
+  and records `mutates_releases=false` and `stores_credentials=false`.
 - `Stable Release Promotion`: manual GitHub Actions workflow that consumes the
   hosted `ao2-stable-release-evidence-packet` artifact before running
   `npm run release:stable-promotion-workflow`. Leave

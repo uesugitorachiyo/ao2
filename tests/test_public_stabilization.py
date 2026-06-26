@@ -4029,6 +4029,42 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
         + "\n",
         encoding="utf-8",
     )
+    rsi_eligibility_summary = tmp_path / "rsi-eligibility-packet" / "summary.json"
+    rsi_eligibility_summary.parent.mkdir(parents=True)
+    rsi_eligibility_summary.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.rsi-eligibility-packet.v1",
+                "status": "passed",
+                "rsi_eligibility_ready": True,
+                "baseline_count": 2,
+                "minimum_baseline_count": 2,
+                "claim_publish_decision": "deny",
+                "claim_publish_authority": False,
+                "blueprint_authorization": {
+                    "source": "ao-blueprint",
+                    "self_authorized_by_rsi": False,
+                    "authorizes_claim_publication": False,
+                    "authorizes_ao_blueprint_self_change": False,
+                },
+                "improvement_evidence": {
+                    "minimum_target_percent": 5.0,
+                    "minimum_measured_improvement_percent": 33.3333,
+                },
+                "trust_boundary": {
+                    "local_only": True,
+                    "publishes_claims": False,
+                    "approves_rsi_claims": False,
+                    "mutates_repositories": False,
+                    "requires_provider_api_key": False,
+                },
+                "blockers": [],
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
     out_root = tmp_path / "packet"
     result = subprocess.run(
@@ -4040,6 +4076,9 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
             "AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY": str(stable_summary),
             "AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY": str(operator_summary),
             "AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY": str(rsi_summary),
+            "AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_ELIGIBILITY_SUMMARY": str(
+                rsi_eligibility_summary
+            ),
         },
         capture_output=True,
         text=True,
@@ -4115,6 +4154,26 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
     assert summary["sources"]["stable_promotion_summary"] == str(stable_summary)
     assert summary["sources"]["operator_evidence_summary"] == str(operator_summary)
     assert summary["sources"]["rsi_cross_repo_e2e_summary"] == str(rsi_summary)
+    assert summary["sources"]["rsi_eligibility_summary"] == str(rsi_eligibility_summary)
+    assert summary["rsi_eligibility_packet"] == {
+        "schema_version": "ao2.rsi-eligibility-packet.v1",
+        "status": "passed",
+        "rsi_eligibility_ready": True,
+        "baseline_count": 2,
+        "minimum_baseline_count": 2,
+        "claim_publish_decision": "deny",
+        "claim_publish_authority": False,
+        "blueprint_authorization": {
+            "source": "ao-blueprint",
+            "self_authorized_by_rsi": False,
+            "authorizes_claim_publication": False,
+            "authorizes_ao_blueprint_self_change": False,
+        },
+        "improvement_evidence": {
+            "minimum_target_percent": 5.0,
+            "minimum_measured_improvement_percent": 33.3333,
+        },
+    }
     assert not summary["blockers"]
 
     dashboard = (out_root / "dashboard.html").read_text(encoding="utf-8")
@@ -4133,6 +4192,8 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
     assert "ao2.rsi-improvement-evidence-gate.v1" in dashboard
     assert "RSI improvement trend" in dashboard
     assert "ao2.rsi-improvement-trend.v1" in dashboard
+    assert "RSI eligibility packet" in dashboard
+    assert "ao2.rsi-eligibility-packet.v1" in dashboard
     assert "33.3333" in dashboard
     assert "Archive parity" in dashboard
 
@@ -4140,10 +4201,12 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
     assert "npm run release:stable-evidence-packet" in verification
     assert "ao2.stable-release-evidence-packet.v1" in verification
     assert "AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY" in verification
+    assert "AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_ELIGIBILITY_SUMMARY" in verification
     assert "claim_publish_decision=deny" in verification
     assert "ao2.rsi-blueprint-authorization-gate.v1" in verification
     assert "ao2.rsi-improvement-evidence-gate.v1" in verification
     assert "ao2.rsi-improvement-trend.v1" in verification
+    assert "ao2.rsi-eligibility-packet.v1" in verification
     assert "measured_improvement_percent >= 5" in verification
 
     public_release_index = read("docs/release/PUBLIC-RELEASE-VERIFICATION.md")
@@ -4153,6 +4216,7 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
     assert "ao2.rsi-blueprint-authorization-gate.v1" in public_release_index
     assert "ao2.rsi-improvement-evidence-gate.v1" in public_release_index
     assert "ao2.rsi-improvement-trend.v1" in public_release_index
+    assert "ao2.rsi-eligibility-packet.v1" in public_release_index
 
     ci = read(".github/workflows/ci.yml")
     for needle in [
@@ -4165,10 +4229,13 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
         "npm run release:operator-evidence-bundle",
         "name: ao2-rsi-cross-repo-e2e",
         "target/stable-release-evidence-packet-ci/rsi-cross-repo-e2e",
+        "name: ao2-rsi-eligibility-packet",
+        "target/stable-release-evidence-packet-ci/rsi-eligibility-packet",
         "AO2_STABLE_RELEASE_EVIDENCE_PACKET_ROOT=target/stable-release-evidence-packet-ci/packet",
         "AO2_STABLE_RELEASE_EVIDENCE_PACKET_STABLE_SUMMARY=target/stable-release-evidence-packet-ci/stable-promotion-workflow/summary.json",
         "AO2_STABLE_RELEASE_EVIDENCE_PACKET_OPERATOR_SUMMARY=target/stable-release-evidence-packet-ci/operator-release-evidence-bundle/summary.json",
         "AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_SUMMARY=target/stable-release-evidence-packet-ci/rsi-cross-repo-e2e/latest/summary.json",
+        "AO2_STABLE_RELEASE_EVIDENCE_PACKET_RSI_ELIGIBILITY_SUMMARY=target/stable-release-evidence-packet-ci/rsi-eligibility-packet/packet/summary.json",
         "npm run release:stable-evidence-packet",
         "ao2.stable-release-evidence-packet.v1",
         "ao2.rsi-cross-repo-e2e.v1",
@@ -4178,9 +4245,11 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
         "authorizes_ao_blueprint_self_change",
         "ao2.rsi-improvement-evidence-gate.v1",
         "ao2.rsi-improvement-trend.v1",
+        "ao2.rsi-eligibility-packet.v1",
         "measured_improvement_percent",
         "delta_from_previous_percent",
         "claim_publish_decision",
+        "rsi_eligibility_packet",
         "stable_release_evidence_ready",
         "ao2-stable-release-evidence-packet",
         "target/stable-release-evidence-packet-ci",
@@ -6074,6 +6143,43 @@ def _write_release_readiness_consumer_fixture(root: Path):
     )
     _write_release_readiness_consumer_json(
         root,
+        "ao2-rsi-eligibility-packet/packet/summary.json",
+        {
+            "schema_version": "ao2.rsi-eligibility-packet.v1",
+            "status": "passed",
+            "rsi_eligibility_ready": True,
+            "baseline_count": 2,
+            "minimum_baseline_count": 2,
+            "claim_publish_decision": "deny",
+            "claim_publish_authority": False,
+            "blueprint_authorization": {
+                "source": "ao-blueprint",
+                "self_authorized_by_rsi": False,
+                "authorizes_claim_publication": False,
+                "authorizes_ao_blueprint_self_change": False,
+            },
+            "improvement_evidence": {
+                "minimum_target_percent": 5.0,
+                "minimum_measured_improvement_percent": 33.3333,
+            },
+            "trust_boundary": {
+                "local_only": True,
+                "publishes_claims": False,
+                "approves_rsi_claims": False,
+                "mutates_repositories": False,
+                "requires_provider_api_key": False,
+            },
+            "blockers": [],
+        },
+    )
+    eligibility_dashboard = root / "ao2-rsi-eligibility-packet/packet/dashboard.html"
+    eligibility_dashboard.parent.mkdir(parents=True, exist_ok=True)
+    eligibility_dashboard.write_text(
+        "<!doctype html><title>RSI Eligibility Packet</title>\n",
+        encoding="utf-8",
+    )
+    _write_release_readiness_consumer_json(
+        root,
         "ao2-rsi-cross-repo-e2e/latest/blueprint-authorization/summary.json",
         {
             "schema_version": "ao2.rsi-blueprint-authorization-gate.v1",
@@ -6193,6 +6299,25 @@ def _write_release_readiness_consumer_fixture(root: Path):
                 "claim_publish_decision": "deny",
                 "claim_publish_authority": False,
             },
+            "rsi_eligibility_packet": {
+                "schema_version": "ao2.rsi-eligibility-packet.v1",
+                "status": "passed",
+                "rsi_eligibility_ready": True,
+                "baseline_count": 2,
+                "minimum_baseline_count": 2,
+                "claim_publish_decision": "deny",
+                "claim_publish_authority": False,
+                "blueprint_authorization": {
+                    "source": "ao-blueprint",
+                    "self_authorized_by_rsi": False,
+                    "authorizes_claim_publication": False,
+                    "authorizes_ao_blueprint_self_change": False,
+                },
+                "improvement_evidence": {
+                    "minimum_target_percent": 5.0,
+                    "minimum_measured_improvement_percent": 33.3333,
+                },
+            },
             "trust_boundary": {
                 "mutates_releases": False,
                 "stores_credentials": False,
@@ -6247,14 +6372,18 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
         "ao2.pulse-event-loop-decision-metadata.v1",
         "ao2.rsi-cross-repo-e2e.v1",
         "ao2.rsi-baseline-packet.v1",
+        "ao2.rsi-eligibility-packet.v1",
         "rsi_baseline_packet",
         "rsi_baseline_ready",
+        "rsi_eligibility_packet",
+        "rsi_eligibility_ready",
         "covenant.rsi-claim-publish-gate.v1",
         "ci_release_readiness_hosted_artifact_gate_job",
         "ci_pulse_ao2_event_loop_smoke_artifact_job",
         "ci_rsi_cross_repo_e2e_artifact_job",
         "ao2-rsi-cross-repo-e2e",
         "ao2-rsi-baseline-packet",
+        "ao2-rsi-eligibility-packet",
         "claim_publish_decision",
         "publishes_claims",
         "github_actions_artifact_download",
@@ -6292,6 +6421,11 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
     assert "path: target/release-readiness-consumer/ao2-rsi-cross-repo-e2e" in consumer_ci
     assert "name: ao2-rsi-baseline-packet" in consumer_ci
     assert "path: target/release-readiness-consumer/ao2-rsi-baseline-packet" in consumer_ci
+    assert "name: ao2-rsi-eligibility-packet" in consumer_ci
+    assert (
+        "path: target/release-readiness-consumer/ao2-rsi-eligibility-packet"
+        in consumer_ci
+    )
 
     root = tmp_path / "release-readiness-consumer"
     _write_release_readiness_consumer_fixture(root)
@@ -6304,6 +6438,7 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
     assert "ao2-pulse-ao2-event-loop-smoke" in summary["source_artifacts"]
     assert "ao2-rsi-cross-repo-e2e" in summary["source_artifacts"]
     assert "ao2-rsi-baseline-packet" in summary["source_artifacts"]
+    assert "ao2-rsi-eligibility-packet" in summary["source_artifacts"]
     assert "ao2-release-readiness-hosted-artifact-gate" in summary["source_artifacts"]
     assert "ao2-stable-release-evidence-packet" in summary["source_artifacts"]
     assert "ci_release_readiness_hosted_artifact_gate_job" in summary["required_checks"]
@@ -6324,6 +6459,31 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
             "claim_publish_decision"
         ]
         == "deny"
+    )
+    assert summary["rsi_eligibility_packet"] == {
+        "schema_version": "ao2.rsi-eligibility-packet.v1",
+        "status": "passed",
+        "rsi_eligibility_ready": True,
+        "baseline_count": 2,
+        "minimum_baseline_count": 2,
+        "claim_publish_decision": "deny",
+        "claim_publish_authority": False,
+        "blueprint_authorization": {
+            "source": "ao-blueprint",
+            "self_authorized_by_rsi": False,
+            "authorizes_claim_publication": False,
+            "authorizes_ao_blueprint_self_change": False,
+        },
+        "improvement_evidence": {
+            "minimum_target_percent": 5.0,
+            "minimum_measured_improvement_percent": 33.3333,
+        },
+    }
+    assert (
+        summary["stable_release_evidence_packet"]["rsi_eligibility_packet"][
+            "claim_publish_authority"
+        ]
+        is False
     )
     assert summary["hosted_release_readiness_artifact_gate"]["status"] == "passed"
     assert (
@@ -6351,6 +6511,15 @@ def test_release_readiness_artifact_consumer_script_runs_against_fixture(tmp_pat
 
 
 def test_release_readiness_artifact_consumer_rejects_bad_fixture_evidence(tmp_path):
+    def mutate_fixture_json(root: Path, relative_path: str, mutate):
+        path = root / relative_path
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        mutate(payload)
+        path.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
     cases = [
         (
             "missing_public_pair_digest_gate",
@@ -6448,6 +6617,20 @@ def test_release_readiness_artifact_consumer_rejects_bad_fixture_evidence(tmp_pa
                 / "ao2-pulse-ao2-event-loop-smoke/latest/pulse-next-recommended-tasks/ao2-event-loop-decision.json"
             ).unlink(),
             "missing Pulse AO2 smoke file",
+        ),
+        (
+            "rsi_eligibility_claim_publish_authority",
+            lambda root: mutate_fixture_json(
+                root,
+                "ao2-rsi-eligibility-packet/packet/summary.json",
+                lambda payload: payload.update(
+                    {
+                        "claim_publish_decision": "allow",
+                        "claim_publish_authority": True,
+                    }
+                ),
+            ),
+            "RSI eligibility packet was not ready",
         ),
         (
             "wrong_pulse_generate_next_schema",
