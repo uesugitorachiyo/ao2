@@ -92,7 +92,7 @@ dry_run = sync_payload.get("dry_run") is True
 upload_status = sync_payload.get("upload_status")
 publication_ready = (
     asset_payload.get("status") == "passed"
-    and sync_payload.get("status") in {"already_synced", "ready_to_upload"}
+    and sync_payload.get("status") in {"already_synced", "ready_to_upload", "release_missing"}
     and dry_run
     and upload_status == "not_attempted"
     and sync_trust_boundary.get("mutates_releases") is False
@@ -129,6 +129,7 @@ payload = {
         "upload_status": upload_status,
         "release_publish": "not executed",
         "tag_push_publish_deploy": "not executed",
+        "release_not_found_gap": sync_payload.get("release_not_found_gap"),
     },
     "blockers": blockers,
     "trust_boundary": {

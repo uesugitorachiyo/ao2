@@ -860,19 +860,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p target/release-publication-provenance
-          gh release download "v$(scripts/current-version.sh)" \
-            --repo uesugitorachiyo/ao2 \
-            --pattern ao2-release-provenance.json \
-            --pattern ao2-release-provenance.json.sig \
-            --pattern ao2-release-signing-public.pem \
-            --dir target/release-publication-provenance \
-            --clobber
+          release_tag="v$(scripts/current-version.sh)"
+          if gh release view "$release_tag" --repo uesugitorachiyo/ao2 >/dev/null 2>&1; then
+            gh release download "$release_tag" \
+              --repo uesugitorachiyo/ao2 \
+              --pattern ao2-release-provenance.json \
+              --pattern ao2-release-provenance.json.sig \
+              --pattern ao2-release-signing-public.pem \
+              --dir target/release-publication-provenance \
+              --clobber
+          else
+            echo "release $release_tag not found; CI-safe dry-run closure will record the candidate release gap"
+          fi
       - name: Run release publication dry-run closure
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           AO2_RELEASE_ASSET_PUBLICATION_READINESS_CI_SAFE=1 \
+          AO2_RELEASE_SYNC_ALLOW_MISSING_RELEASE=1 \
           AO2_RELEASE_PROVENANCE_DIR=target/release-publication-provenance \
           AO2_RELEASE_PUBLICATION_DRY_RUN_CLOSURE_ROOT=target/release-publication-closure-ci \
             npm run release:publication-dry-run-closure

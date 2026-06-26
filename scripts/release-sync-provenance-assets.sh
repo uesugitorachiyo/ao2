@@ -8,6 +8,7 @@ AO2_RELEASE_REPO="${AO2_RELEASE_REPO:-uesugitorachiyo/ao2}"
 AO2_RELEASE_PROVENANCE_DIR="${AO2_RELEASE_PROVENANCE_DIR:-$ROOT/dist-provenance}"
 AO2_RELEASE_SYNC_ROOT="${AO2_RELEASE_SYNC_ROOT:-$ROOT/target/release-sync-provenance-assets/latest}"
 AO2_RELEASE_SYNC_CONFIRM="${AO2_RELEASE_SYNC_CONFIRM:-}"
+AO2_RELEASE_SYNC_ALLOW_MISSING_RELEASE="${AO2_RELEASE_SYNC_ALLOW_MISSING_RELEASE:-0}"
 SUMMARY="$AO2_RELEASE_SYNC_ROOT/summary.json"
 RELEASE_JSON="$AO2_RELEASE_SYNC_ROOT/release.json"
 PLAN_JSON="$AO2_RELEASE_SYNC_ROOT/plan.json"
@@ -17,10 +18,69 @@ UPLOAD_LOG="$AO2_RELEASE_SYNC_ROOT/upload.log"
 rm -rf "$AO2_RELEASE_SYNC_ROOT"
 mkdir -p "$AO2_RELEASE_SYNC_ROOT"
 
-gh release view "$AO2_RELEASE_TAG" \
+if ! gh release view "$AO2_RELEASE_TAG" \
   --repo "$AO2_RELEASE_REPO" \
   --json tagName,name,isPrerelease,publishedAt,assets,url \
-  > "$RELEASE_JSON"
+  > "$RELEASE_JSON"; then
+  if [ "$AO2_RELEASE_SYNC_ALLOW_MISSING_RELEASE" != "1" ]; then
+    exit 1
+  fi
+  python3 - "$SUMMARY" "$AO2_RELEASE_TAG" "$AO2_RELEASE_REPO" "$AO2_RELEASE_PROVENANCE_DIR" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+summary_path = Path(sys.argv[1])
+release_tag = sys.argv[2]
+release_repo = sys.argv[3]
+provenance_dir = sys.argv[4]
+payload = {
+    "schema_version": "ao2.release-sync-provenance-assets.v1",
+    "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    "status": "release_missing",
+    "dry_run": True,
+    "confirmed": False,
+    "required_confirm": f"sync-{release_tag}",
+    "release_tag": release_tag,
+    "release_repo": release_repo,
+    "release_url": None,
+    "is_prerelease": None,
+    "provenance_dir": provenance_dir,
+    "required_assets": [
+        "ao2-release-provenance.json",
+        "ao2-release-provenance.json.sig",
+        "ao2-release-signing-public.pem",
+    ],
+    "optional_assets": [],
+    "observed_assets": [],
+    "already_published_assets": [],
+    "missing_remote_assets": [],
+    "missing_local_assets": [],
+    "upload_assets": [],
+    "upload_list": "",
+    "blockers": [],
+    "release_not_found_gap": {
+        "status": "tracked",
+        "release_tag": release_tag,
+        "next_action": "create release assets only after explicit human approval",
+    },
+    "trust_boundary": {
+        "queries_public_releases": True,
+        "mutates_releases": False,
+        "stores_credentials": False,
+    },
+    "upload_status": "not_attempted",
+    "upload_log": "",
+  }
+summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+print(f"summary={summary_path}")
+print("status=release_missing")
+print("dry_run=true")
+print("upload_status=not_attempted")
+PY
+  exit 0
+fi
 
 python3 - "$ROOT" "$AO2_RELEASE_SYNC_ROOT" "$AO2_RELEASE_TAG" "$AO2_RELEASE_REPO" \
   "$AO2_RELEASE_PROVENANCE_DIR" "$RELEASE_JSON" "$PLAN_JSON" "$UPLOAD_LIST" \

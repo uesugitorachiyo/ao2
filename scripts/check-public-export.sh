@@ -68,8 +68,8 @@ if grep -aEn 'ao2-0\.3\.1|v0\.3\.1|ao2-0\.1\.0-windows' $(cat "$scan_files"); th
   fail "stale public release version reference found"
 fi
 
-if ! grep -q '"version": "0.4.80"' package.json; then
-  fail "package.json does not advertise ao2 version 0.4.80"
+if ! grep -q '"version": "0.4.81"' package.json; then
+  fail "package.json does not advertise ao2 version 0.4.81"
 fi
 
 rm -f "$scan_files"
