@@ -9468,6 +9468,121 @@ def test_pulse_generate_next_stops_when_readiness_exit_gate_is_satisfied(tmp_pat
     assert summary["exit_gate"]["status"] == "ready"
 
 
+def test_pulse_generate_next_auto_discovers_readiness_convergence_exit_gate(tmp_path):
+    out_root = tmp_path / "generate-next"
+    packet_root = tmp_path / "packet"
+    task_board_root = tmp_path / "task-board"
+    cursor = tmp_path / "cursor.json"
+    convergence = tmp_path / "readiness-convergence" / "latest" / "summary.json"
+    convergence.parent.mkdir(parents=True)
+    convergence.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.readiness-convergence-gate.v1",
+                "status": "passed",
+                "readiness_converged": True,
+                "continue_pulse_loop": False,
+                "recommended_next_action": "operator_release_decision_required",
+                "rsi_claim_boundary": {
+                    "bounded_governed_rsi": "supported",
+                    "full_autonomous_self_mutating_rsi": "denied",
+                    "claim_publish_authority": False,
+                },
+                "blocking_next_actions": [],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:generate-next"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_GENERATE_NEXT_REGISTER": "0",
+            "AO2_PULSE_GENERATE_NEXT_ROOT": str(out_root),
+            "AO2_PULSE_GENERATE_NEXT_PACKET_ROOT": str(packet_root),
+            "AO2_PULSE_TASK_BOARD_ROOT": str(task_board_root),
+            "AO2_PULSE_GENERATE_NEXT_CURSOR": str(cursor),
+            "AO2_PULSE_DEFAULT_EXIT_GATE_FILE": str(convergence),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    decision = json.loads(
+        (packet_root / "codex-cron-event-loop-decision.json").read_text(encoding="utf-8")
+    )
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert decision["event_loop"]["action"] == "stop"
+    assert decision["event_loop"]["next_task_id"] is None
+    assert decision["ao2"]["exit_gate"]["path"] == str(convergence)
+    assert decision["ao2"]["exit_gate"]["status"] == "ready"
+    assert decision["ao2"]["exit_gate"]["source_schema_version"] == "ao2.readiness-convergence-gate.v1"
+    assert summary["exit_gate"]["source_status"] == "passed"
+
+
+def test_pulse_generate_next_skips_auto_advance_registration_when_converged(tmp_path):
+    out_root = tmp_path / "generate-next"
+    packet_root = tmp_path / "packet"
+    task_board_root = tmp_path / "task-board"
+    register_root = tmp_path / "registration"
+    cursor = tmp_path / "cursor.json"
+    convergence = tmp_path / "readiness-convergence" / "latest" / "summary.json"
+    convergence.parent.mkdir(parents=True)
+    convergence.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.readiness-convergence-gate.v1",
+                "status": "passed",
+                "readiness_converged": True,
+                "continue_pulse_loop": False,
+                "recommended_next_action": "operator_release_decision_required",
+                "rsi_claim_boundary": {
+                    "bounded_governed_rsi": "supported",
+                    "full_autonomous_self_mutating_rsi": "denied",
+                    "claim_publish_authority": False,
+                },
+                "blocking_next_actions": [],
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:generate-next"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_GENERATE_NEXT_ROOT": str(out_root),
+            "AO2_PULSE_GENERATE_NEXT_PACKET_ROOT": str(packet_root),
+            "AO2_PULSE_TASK_BOARD_ROOT": str(task_board_root),
+            "AO2_PULSE_GENERATE_NEXT_CURSOR": str(cursor),
+            "AO2_PULSE_DEFAULT_EXIT_GATE_FILE": str(convergence),
+            "AO2_PULSE_AUTO_ADVANCE_REGISTRATION_ROOT": str(register_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    decision = json.loads(
+        (packet_root / "codex-cron-event-loop-decision.json").read_text(encoding="utf-8")
+    )
+    assert decision["event_loop"]["action"] == "stop"
+    assert not (register_root / "summary.json").exists()
+    assert "pulse_register_auto_advance=skipped_exit_gate_ready" in result.stdout
+
+
 def test_pulse_generate_next_emits_ai_task_board_control_surface(tmp_path):
     out_root = tmp_path / "generate-next"
     packet_root = tmp_path / "packet"

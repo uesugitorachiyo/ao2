@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+GENERATE_NEXT_ROOT_CONFIGURED="${AO2_PULSE_GENERATE_NEXT_ROOT+x}"
 OUT_ROOT="${AO2_PULSE_GENERATE_NEXT_ROOT:-$ROOT/target/pulse-generate-next/latest}"
 PACKET_ROOT="${AO2_PULSE_GENERATE_NEXT_PACKET_ROOT:-$ROOT/target/pulse-next-recommended-tasks}"
 TASK_BOARD_ROOT="${AO2_PULSE_TASK_BOARD_ROOT:-$ROOT/target/pulse-task-board/latest}"
@@ -16,7 +17,16 @@ DEFAULT_STATUS_EVIDENCE="$TASK_EXECUTOR_ROOT/task-board-status-evidence.json"
 STATUS_EVIDENCE="${AO2_PULSE_TASK_BOARD_STATUS_EVIDENCE:-$DEFAULT_STATUS_EVIDENCE}"
 DEFAULT_AUTO_ADVANCE_PROMPT="After each task batch, re-evaluate AO2 and ao2-control-plane at project level. Choose next tasks by highest long-term value, not similarity to last tasks. Prefer the Risky PR Run MVP product loop, local run record, static report/export, evaluator closure evidence, public reliability, Ubuntu/macOS/Windows correctness, CI confidence, evidence quality, security/safety boundaries, control-plane integration, release readiness, and developer/operator usability. Do not create new shell wrappers unless they directly unlock a product-slice or release-readiness bottleneck. Avoid narrow recursion or low-value daemon work unless it is the bottleneck. Generate next lengthy tasks with rationale, required evidence, and stop conditions only when the readiness exit gate is not satisfied; emit stop when AO2 and ao2-control-plane readiness gates are green."
 AUTO_ADVANCE_PROMPT="${AO2_PULSE_AUTO_ADVANCE_PROMPT:-$DEFAULT_AUTO_ADVANCE_PROMPT}"
-EXIT_GATE_FILE="${AO2_PULSE_EXIT_GATE_FILE:-}"
+DEFAULT_EXIT_GATE_FILE="${AO2_PULSE_DEFAULT_EXIT_GATE_FILE:-$ROOT/target/readiness-convergence/latest/summary.json}"
+if [ -n "${AO2_PULSE_EXIT_GATE_FILE:-}" ]; then
+  EXIT_GATE_FILE="$AO2_PULSE_EXIT_GATE_FILE"
+elif [ -n "${AO2_PULSE_DEFAULT_EXIT_GATE_FILE:-}" ] && [ -f "$DEFAULT_EXIT_GATE_FILE" ]; then
+  EXIT_GATE_FILE="$DEFAULT_EXIT_GATE_FILE"
+elif [ -z "$GENERATE_NEXT_ROOT_CONFIGURED" ] && [ -f "$DEFAULT_EXIT_GATE_FILE" ]; then
+  EXIT_GATE_FILE="$DEFAULT_EXIT_GATE_FILE"
+else
+  EXIT_GATE_FILE=""
+fi
 RSI_OPERATOR_CLOSURE_PACKET="${AO2_PULSE_RSI_OPERATOR_CLOSURE_PACKET:-$ROOT/target/rsi-operator-closure-packet/latest/summary.json}"
 
 rm -rf "$OUT_ROOT" "$PACKET_ROOT" "$TASK_BOARD_ROOT"
@@ -1289,7 +1299,19 @@ print("status=ready")
 PY
 
 if [ "$REGISTER" = "1" ]; then
-  AO2_PULSE_LOCAL_MIRROR_SOURCE="$PACKET_ROOT" \
-    AO2_PULSE_AUTO_ADVANCE_PROMPT="$AUTO_ADVANCE_PROMPT" \
-    npm run pulse:register-auto-advance
+  if python3 - "$SUMMARY" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+summary = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+raise SystemExit(0 if summary.get("exit_gate", {}).get("ready") is True else 1)
+PY
+  then
+    echo "pulse_register_auto_advance=skipped_exit_gate_ready"
+  else
+    AO2_PULSE_LOCAL_MIRROR_SOURCE="$PACKET_ROOT" \
+      AO2_PULSE_AUTO_ADVANCE_PROMPT="$AUTO_ADVANCE_PROMPT" \
+      npm run pulse:register-auto-advance
+  fi
 fi

@@ -75,6 +75,7 @@
     "release:readiness:final-closure-verifier": "node scripts/run-sh-script.js scripts/release-readiness-final-closure-verifier.sh",
     "release:artifact-size-budget-audit": "node scripts/run-sh-script.js scripts/release-artifact-size-budget-audit.sh",
     "release:readiness:regression-gate": "node scripts/run-sh-script.js scripts/release-readiness-regression-gate.sh",
+    "readiness:convergence": "node scripts/run-sh-script.js scripts/readiness-convergence-gate.sh",
     "local:canary": "node scripts/run-sh-script.js scripts/local-canary.sh",
     "rsi:claim-readiness": "node scripts/run-sh-script.js scripts/rsi-claim-readiness-audit.sh",
     "rsi:live-self-change-rehearsal": "node scripts/run-sh-script.js scripts/rsi-live-self-change-rehearsal.sh",
