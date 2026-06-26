@@ -18,9 +18,12 @@ ao2_gate_run_step "$LOG_DIR" pulse_resume_dry_run \
   npm run pulse:resume -- --dry-run
 ao2_gate_run_step "$LOG_DIR" pulse_lengthy_gate_contract \
   npm run pulse:lengthy-gate:contract
+ao2_gate_run_step "$LOG_DIR" operator_skill_pack_parity \
+  env AO2_OPERATOR_SKILL_PACK_PARITY_ROOT="$OUT_ROOT/operator-skill-pack-parity" \
+    npm run skills:operator-pack-parity
 ao2_gate_run_step "$LOG_DIR" bash_syntax_check \
-  bash -n scripts/lib/pulse-gate-lib.sh scripts/pulse-shared-gate-lib-audit.sh scripts/shared-gate-library-migration.sh scripts/public-hardening-subset.sh scripts/operator-evidence-index.sh scripts/script-tracking-intent-audit.sh scripts/script-tracking-decision-cleanup.sh scripts/script-tracking-review-pack.sh scripts/script-tracking-review-to-commit-plan.sh scripts/script-tracking-commit-ready-diff.sh scripts/script-tracking-ready-review-pack.sh scripts/pulse-next-task-quality-filter.sh scripts/pulse-lengthy-gate-runner.sh scripts/pulse-task-executor.sh scripts/pulse-code-agent-runner.sh
-ao2_gate_forbidden_string_scan "$LOG_DIR" scripts/lib/pulse-gate-lib.sh scripts/pulse-shared-gate-lib-audit.sh scripts/shared-gate-library-migration.sh scripts/public-hardening-subset.sh scripts/operator-evidence-index.sh scripts/script-tracking-intent-audit.sh scripts/script-tracking-decision-cleanup.sh scripts/script-tracking-review-pack.sh scripts/script-tracking-review-to-commit-plan.sh scripts/script-tracking-commit-ready-diff.sh scripts/script-tracking-ready-review-pack.sh scripts/pulse-next-task-quality-filter.sh scripts/pulse-lengthy-gate-runner.sh scripts/pulse-task-executor.sh scripts/pulse-code-agent-runner.sh
+  bash -n scripts/lib/pulse-gate-lib.sh scripts/pulse-shared-gate-lib-audit.sh scripts/shared-gate-library-migration.sh scripts/public-hardening-subset.sh scripts/operator-skill-pack-parity.sh scripts/operator-evidence-index.sh scripts/script-tracking-intent-audit.sh scripts/script-tracking-decision-cleanup.sh scripts/script-tracking-review-pack.sh scripts/script-tracking-review-to-commit-plan.sh scripts/script-tracking-commit-ready-diff.sh scripts/script-tracking-ready-review-pack.sh scripts/pulse-next-task-quality-filter.sh scripts/pulse-lengthy-gate-runner.sh scripts/pulse-task-executor.sh scripts/pulse-code-agent-runner.sh
+ao2_gate_forbidden_string_scan "$LOG_DIR" scripts/lib/pulse-gate-lib.sh scripts/pulse-shared-gate-lib-audit.sh scripts/shared-gate-library-migration.sh scripts/public-hardening-subset.sh scripts/operator-skill-pack-parity.sh scripts/operator-evidence-index.sh scripts/script-tracking-intent-audit.sh scripts/script-tracking-decision-cleanup.sh scripts/script-tracking-review-pack.sh scripts/script-tracking-review-to-commit-plan.sh scripts/script-tracking-commit-ready-diff.sh scripts/script-tracking-ready-review-pack.sh scripts/pulse-next-task-quality-filter.sh scripts/pulse-lengthy-gate-runner.sh scripts/pulse-task-executor.sh scripts/pulse-code-agent-runner.sh
 
 python3 - "$OUT_ROOT" "$SUMMARY" "$LOG_DIR" <<'PY'
 import json
@@ -35,6 +38,7 @@ steps = [
     ("public_stabilization_tests", "test_public_stabilization.py"),
     ("pulse_resume_dry_run", "pulse:resume -- --dry-run"),
     ("pulse_lengthy_gate_contract", "pulse:lengthy-gate:contract"),
+    ("operator_skill_pack_parity", "skills:operator-pack-parity / ao2.operator-skill-pack-parity.v1"),
     ("bash_syntax_check", "bash_syntax_check"),
     ("forbidden_string_scan", "forbidden_string_scan"),
 ]
@@ -49,7 +53,10 @@ payload = {
     "status": status,
     "artifact_root": str(out_root),
     "checks": checks,
-    "stable_subset": ["test_public_stabilization.py", "pulse:resume -- --dry-run", "pulse:lengthy-gate:contract", "bash_syntax_check", "forbidden_string_scan"],
+    "stable_subset": ["test_public_stabilization.py", "pulse:resume -- --dry-run", "pulse:lengthy-gate:contract", "skills:operator-pack-parity", "bash_syntax_check", "forbidden_string_scan"],
+    "evidence": {
+        "operator_skill_pack_parity": str(out_root / "operator-skill-pack-parity" / "summary.json"),
+    },
     "trust_boundary": {"local_only": True, "stores_credentials": False},
 }
 summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
