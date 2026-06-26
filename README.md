@@ -351,7 +351,9 @@ ao2-release-readiness -> ao2-release-readiness-hosted-artifact-gate
 
 Use the final verifier artifact to decide whether the public AO2 release
 readiness evidence chain is closed. Earlier artifacts remain useful for
-debugging the specific gate that produced them.
+debugging the specific gate that produced them. The consumer artifact also
+includes `dashboard.html`, which gives operators an RSI eligibility readback
+without granting autonomous RSI claim-publication authority.
 
 ## Pulse Auto-Advance Evidence
 
