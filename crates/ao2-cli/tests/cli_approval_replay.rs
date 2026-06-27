@@ -429,6 +429,61 @@ fn cli_report_writes_static_report_index_sidecar() {
         .as_str()
         .unwrap()
         .ends_with("index.html"));
+    assert_eq!(
+        index["operator_readback"]["schema_version"],
+        "ao2.risky-pr-operator-readback.v1"
+    );
+    assert_eq!(index["operator_readback"]["run_id"], "report-index-run");
+    assert_eq!(
+        index["operator_readback"]["manual_filesystem_archaeology_required"],
+        false
+    );
+    assert_eq!(
+        index["operator_readback"]["local_run_record"]["status"],
+        "present"
+    );
+    assert!(index["operator_readback"]["local_run_record"]["path"]
+        .as_str()
+        .unwrap()
+        .ends_with("run-record.json"));
+    assert_eq!(
+        index["operator_readback"]["static_report_export"]["status"],
+        "present"
+    );
+    assert!(
+        index["operator_readback"]["static_report_export"]["html_report"]
+            .as_str()
+            .unwrap()
+            .ends_with("index.html")
+    );
+    assert!(
+        index["operator_readback"]["static_report_export"]["report_index"]
+            .as_str()
+            .unwrap()
+            .ends_with("index.report.json")
+    );
+    assert_eq!(
+        index["operator_readback"]["evaluator_closure_evidence"]["status"],
+        "present"
+    );
+    assert_eq!(
+        index["operator_readback"]["evaluator_closure_evidence"]["verdict"],
+        "accepted"
+    );
+    assert!(
+        index["operator_readback"]["evaluator_closure_evidence"]["closure_count"]
+            .as_u64()
+            .unwrap()
+            >= 1
+    );
+    assert_eq!(
+        index["operator_readback"]["replay_evidence"]["status"],
+        "accepted"
+    );
+    assert_eq!(
+        index["operator_readback"]["replay_evidence"]["digest_failure_count"],
+        0
+    );
 
     let show = ao2([
         "runs",

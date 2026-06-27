@@ -472,8 +472,12 @@ Result:
   `ao2.risky-pr-static-report-index.v1` JSON sidecar maps operator questions
   to report/export/replay evidence without filesystem archaeology. The sidecar
   records the required report sections, the sections present in the rendered
-  HTML, and a fail-closed `report_contract_complete` result. The golden path
-  also runs `ao2 report verify`, which emits
+  HTML, and a fail-closed `report_contract_complete` result. The sidecar also
+  exposes `operator_readback` using
+  `ao2.risky-pr-operator-readback.v1`, with direct local run record,
+  static report/export, evaluator closure, and replay evidence pointers plus
+  `manual_filesystem_archaeology_required=false`. The golden path also runs
+  `ao2 report verify`, which emits
   `ao2.report-contract-verification.v1` against the reusable
   `ao2.report-contract.v1` schema. The report and index expose denied
   `request_digest` and approved `action_digest` values under the
