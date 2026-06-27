@@ -2,7 +2,7 @@
 
 [Watch the AO2 overview video](https://youtu.be/p222b0iCpbg)
 
-[![Latest release](https://img.shields.io/github/v/release/uesugitorachiyo/ao2?label=latest%20stable%20release)](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.80)
+[![Latest release](https://img.shields.io/github/v/release/uesugitorachiyo/ao2?label=latest%20stable%20release)](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.81)
 
 AO2 is a local-first governed software-delivery system for running agent work
 with policy checks, exact-digest approvals, replayable evidence, evaluator
@@ -274,7 +274,7 @@ published to a read-only control plane.
 
 ## Status
 
-This public export is prepared from AO2 `0.4.80`. It is intentionally
+This public export is prepared from AO2 `0.4.81`. It is intentionally
 local-first:
 
 - no provider API-key authentication paths;
@@ -307,7 +307,7 @@ Build a local release archive:
 ```sh
 npm run package:local
 tmpdir=$(mktemp -d /tmp/ao2-release.XXXXXX)
-archive=$(ls dist/ao2-0.4.80-*.tar.gz | head -1)
+archive=$(ls dist/ao2-0.4.81-*.tar.gz | head -1)
 tar -xzf "$archive" -C "$tmpdir"
 sh "$tmpdir/verify-release.sh"
 ```
@@ -318,7 +318,7 @@ checksum verification before install.
 ## Install From Stable Public Release
 
 The current stable public release is
-[`v0.4.80`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.80).
+[`v0.4.81`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.81).
 It publishes release archives for macOS, Ubuntu/Linux x86_64,
 Ubuntu/Linux aarch64, and Windows, plus `SHA256SUMS`, signed provenance, and
 release-readiness JSON evidence.
@@ -329,19 +329,19 @@ Download and verify a macOS archive:
 
 ```sh
 mkdir -p dist-release
-gh release download v0.4.80 --repo uesugitorachiyo/ao2 \
-  --pattern ao2-0.4.80-macos-aarch64.tar.gz \
+gh release download v0.4.81 --repo uesugitorachiyo/ao2 \
+  --pattern ao2-0.4.81-macos-aarch64.tar.gz \
   --pattern SHA256SUMS \
   --dir dist-release
-(cd dist-release && grep 'ao2-0.4.80-macos-aarch64.tar.gz' SHA256SUMS | shasum -a 256 -c -)
+(cd dist-release && grep 'ao2-0.4.81-macos-aarch64.tar.gz' SHA256SUMS | shasum -a 256 -c -)
 ```
 
 Use the same release base URL for Linux and Windows archives:
 
 ```text
-https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.80/ao2-0.4.80-linux-x86_64.tar.gz
-https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.80/ao2-0.4.80-linux-aarch64.tar.gz
-https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.80/ao2-0.4.80-windows-x86_64.tar.gz
+https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.81/ao2-0.4.81-linux-x86_64.tar.gz
+https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.81/ao2-0.4.81-linux-aarch64.tar.gz
+https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.81/ao2-0.4.81-windows-x86_64.tar.gz
 ```
 
 Run the Phase 1 promotion wrapper after starting a local ao2-control-plane
@@ -369,7 +369,7 @@ downloading the current archive:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke-windows-release.ps1 `
-  -Archive .\dist-windows\ao2-0.4.80-windows-x86_64.tar.gz
+  -Archive .\dist-windows\ao2-0.4.81-windows-x86_64.tar.gz
 ```
 
 The main CI workflow in `.github/workflows/ci.yml` runs on pull request and
