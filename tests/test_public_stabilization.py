@@ -11879,6 +11879,67 @@ def test_pulse_next_task_quality_filter_accepts_complete_task_board(tmp_path):
     assert summary["task_board_blockers"] == []
 
 
+def test_pulse_next_task_quality_filter_parses_hyphenated_bullet_task_titles(tmp_path):
+    packet = tmp_path / "packet.md"
+    task_board = tmp_path / "task-board.json"
+    out_root = tmp_path / "quality"
+    packet.write_text(
+        "# Packet\n\n"
+        "Next tasks:\n\n"
+        "- `ao2-control-plane-local-bootstrap-g108`: Control-plane local bootstrap - "
+        "Verify token-safe local control-plane startup/readback without recording secrets.\n",
+        encoding="utf-8",
+    )
+    task_board.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.ai-task-board.v1",
+                "status": "ready",
+                "release_objective": "Expose control-plane readback as bounded evidence.",
+                "source_recommendation": {"generation": 108},
+                "tasks": [
+                    {
+                        "task_id": "ao2-control-plane-local-bootstrap-g108",
+                        "stable_task_id": "ao2-control-plane-local-bootstrap",
+                        "title": "Control-plane local bootstrap",
+                        "status": "proposed",
+                        "required_evidence": ["ao2.control-plane-local-bootstrap.v1"],
+                        "stop_conditions": ["Stop if control-plane readback requires credentials."],
+                    }
+                ],
+                "trust_boundary": {"local_only": True, "stores_credentials": False},
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["npm", "run", "pulse:next-task-quality-filter"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "AO2_PULSE_NEXT_TASK_QUALITY_PACKET": str(packet),
+            "AO2_PULSE_NEXT_TASK_QUALITY_TASK_BOARD": str(task_board),
+            "AO2_PULSE_NEXT_TASK_QUALITY_ROOT": str(out_root),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "passed"
+    assert summary["task_board_drift_gate"] == "passed"
+    assert summary["quality_score"] >= 50
+    assert [item["title"] for item in summary["tasks"]] == [
+        "Control-plane local bootstrap"
+    ]
+
+
 def test_pulse_next_task_quality_filter_rejects_unknown_status_evidence_task_id(tmp_path):
     packet = tmp_path / "packet.md"
     task_board = tmp_path / "task-board.json"

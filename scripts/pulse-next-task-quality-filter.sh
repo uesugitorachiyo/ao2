@@ -26,7 +26,7 @@ out_root = Path(sys.argv[4]).resolve()
 summary_path = Path(sys.argv[5]).resolve()
 text = packet.read_text(encoding="utf-8") if packet.is_file() else ""
 task_titles = re.findall(r"^## \d+\. (.+)$", text, flags=re.MULTILINE)
-task_titles.extend(re.findall(r"^- `[^`]+`: ([^-]+?) - .+$", text, flags=re.MULTILINE))
+task_titles.extend(re.findall(r"^- `[^`]+`: (.+?) - .+$", text, flags=re.MULTILINE))
 product_slice_keywords = [
     "risky-pr",
     "risky pr",
