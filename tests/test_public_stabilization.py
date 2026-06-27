@@ -627,18 +627,18 @@ def test_public_release_links_and_install_guide_track_current_prerelease():
     install = read("docs/INSTALL.md")
 
     for needle in [
-        "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.80",
-        "https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.80",
+        "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.81",
+        "https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.81",
         "img.shields.io/github/v/release/uesugitorachiyo/ao2",
-        "gh release download v0.4.80 --repo uesugitorachiyo/ao2",
-        "ao2-0.4.80-macos-aarch64.tar.gz",
-        "ao2-0.4.80-linux-x86_64.tar.gz",
-        "ao2-0.4.80-windows-x86_64.tar.gz",
+        "gh release download v0.4.81 --repo uesugitorachiyo/ao2",
+        "ao2-0.4.81-macos-aarch64.tar.gz",
+        "ao2-0.4.81-linux-x86_64.tar.gz",
+        "ao2-0.4.81-windows-x86_64.tar.gz",
         "SHA256SUMS",
     ]:
         assert needle in readme
 
-    assert "The current stable public release line is `v0.4.80`." in install
+    assert "The current stable public release line is `v0.4.81`." in install
     assert "v0.4.79" not in install
 
 
@@ -695,7 +695,7 @@ def test_public_release_download_verify_is_checksum_first_and_post_merge_canarie
         "verifies every\nasset listed in `SHA256SUMS`",
         "verifies signed\nprovenance",
         "public release download checksum verification",
-        "stable public release archives at v0.4.80",
+        "stable public release archives at v0.4.81",
     ]:
         assert needle in install + "\n" + verification
 
@@ -832,7 +832,7 @@ def test_release_metadata_drift_audit_is_exposed_and_documented():
     assert "ao2.release-metadata-drift-audit.v1" in verification
 
     public_release_index = read("docs/release/PUBLIC-RELEASE-VERIFICATION.md")
-    assert "AO2 control-plane stable release: `v0.1.13`" in public_release_index
+    assert "AO2 control-plane stable release: `v0.1.14`" in public_release_index
     assert "AO2 control-plane prerelease" not in public_release_index
 
 
@@ -871,15 +871,15 @@ def test_public_release_pair_digest_audit_rejects_closure_release_asset_drift(tm
     ao2_release = tmp_path / "ao2-release.json"
     control_plane_release = tmp_path / "control-plane-release.json"
     ao2_assets = [
-        ("ao2-0.4.80-linux-aarch64.tar.gz", "c" * 64, 3345601),
-        ("ao2-0.4.80-linux-x86_64.tar.gz", "d" * 64, 3345603),
-        ("ao2-0.4.80-macos-aarch64.tar.gz", "e" * 64, 3345605),
-        ("ao2-0.4.80-windows-x86_64.tar.gz", "f" * 64, 3345607),
+        ("ao2-0.4.81-linux-aarch64.tar.gz", "c" * 64, 3345601),
+        ("ao2-0.4.81-linux-x86_64.tar.gz", "d" * 64, 3345603),
+        ("ao2-0.4.81-macos-aarch64.tar.gz", "e" * 64, 3345605),
+        ("ao2-0.4.81-windows-x86_64.tar.gz", "f" * 64, 3345607),
     ]
     control_plane_assets = [
-        ("ao2-control-plane-0.1.13-linux-x86_64.tar.gz", "b" * 64, 4236805),
-        ("ao2-control-plane-0.1.13-macos-aarch64.tar.gz", "1" * 64, 4236807),
-        ("ao2-control-plane-0.1.13-windows-x86_64.tar.gz", "2" * 64, 4236809),
+        ("ao2-control-plane-0.1.14-linux-x86_64.tar.gz", "b" * 64, 4236805),
+        ("ao2-control-plane-0.1.14-macos-aarch64.tar.gz", "1" * 64, 4236807),
+        ("ao2-control-plane-0.1.14-windows-x86_64.tar.gz", "2" * 64, 4236809),
     ]
 
     closure_index.write_text(
@@ -916,11 +916,11 @@ def test_public_release_pair_digest_audit_rejects_closure_release_asset_drift(tm
     ao2_release.write_text(
         json.dumps(
             {
-                "tagName": "v0.4.80",
-                "name": "AO2 v0.4.80 stable",
+                "tagName": "v0.4.81",
+                "name": "AO2 v0.4.81 stable",
                 "isPrerelease": False,
                 "publishedAt": "2026-06-10T18:45:16Z",
-                "url": "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.80",
+                "url": "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.81",
                 "assets": [
                     {"name": name, "digest": "sha256:" + digest, "size": size}
                     for name, digest, size in ao2_assets
@@ -935,13 +935,13 @@ def test_public_release_pair_digest_audit_rejects_closure_release_asset_drift(tm
     control_plane_release.write_text(
         json.dumps(
             {
-                "tagName": "v0.1.13",
-                "name": "ao2-control-plane v0.1.13",
+                "tagName": "v0.1.14",
+                "name": "ao2-control-plane v0.1.14",
                 "isPrerelease": False,
                 "publishedAt": "2026-06-12T05:53:59Z",
                 "url": (
                     "https://github.com/uesugitorachiyo/ao2-control-plane/"
-                    "releases/tag/v0.1.13"
+                    "releases/tag/v0.1.14"
                 ),
                 "assets": [
                     {"name": name, "digest": "sha256:" + digest, "size": size}
@@ -1056,26 +1056,26 @@ def test_public_release_pair_digest_audit_rejects_missing_or_mismatched_full_arc
         assert needle in script
 
     ao2_archives = {
-        "ao2-0.4.80-linux-aarch64.tar.gz": ("a" * 64, 101),
-        "ao2-0.4.80-linux-x86_64.tar.gz": ("b" * 64, 102),
-        "ao2-0.4.80-macos-aarch64.tar.gz": ("c" * 64, 103),
-        "ao2-0.4.80-windows-x86_64.tar.gz": ("d" * 64, 104),
+        "ao2-0.4.81-linux-aarch64.tar.gz": ("a" * 64, 101),
+        "ao2-0.4.81-linux-x86_64.tar.gz": ("b" * 64, 102),
+        "ao2-0.4.81-macos-aarch64.tar.gz": ("c" * 64, 103),
+        "ao2-0.4.81-windows-x86_64.tar.gz": ("d" * 64, 104),
     }
     cp_archives = {
-        "ao2-control-plane-0.1.13-linux-x86_64.tar.gz": ("e" * 64, 201),
-        "ao2-control-plane-0.1.13-macos-aarch64.tar.gz": ("f" * 64, 202),
-        "ao2-control-plane-0.1.13-windows-x86_64.tar.gz": ("1" * 64, 203),
+        "ao2-control-plane-0.1.14-linux-x86_64.tar.gz": ("e" * 64, 201),
+        "ao2-control-plane-0.1.14-macos-aarch64.tar.gz": ("f" * 64, 202),
+        "ao2-control-plane-0.1.14-windows-x86_64.tar.gz": ("1" * 64, 203),
     }
 
     def release_fixture(path: Path, component: str, archives: dict[str, tuple[str, int]]):
         path.write_text(
             json.dumps(
                 {
-                    "tagName": "v0.4.80" if component == "ao2" else "v0.1.13",
+                    "tagName": "v0.4.81" if component == "ao2" else "v0.1.14",
                     "name": (
-                        "AO2 v0.4.80 stable"
+                        "AO2 v0.4.81 stable"
                         if component == "ao2"
-                        else "ao2-control-plane v0.1.13"
+                        else "ao2-control-plane v0.1.14"
                     ),
                     "isPrerelease": False,
                     "publishedAt": "2026-06-12T00:00:00Z",
@@ -1161,13 +1161,13 @@ def test_public_release_pair_digest_audit_rejects_missing_or_mismatched_full_arc
     assert any(
         item["component"] == "ao2"
         and item["code"] == "required_archive_presence"
-        and "ao2-0.4.80-windows-x86_64.tar.gz" in item["missing_assets"]
+        and "ao2-0.4.81-windows-x86_64.tar.gz" in item["missing_assets"]
         for item in missing_failed
     )
 
     drift_closure = tmp_path / "drift-closure.json"
     drift_cp = dict(cp_archives)
-    drift_cp["ao2-control-plane-0.1.13-windows-x86_64.tar.gz"] = ("1" * 64, 999)
+    drift_cp["ao2-control-plane-0.1.14-windows-x86_64.tar.gz"] = ("1" * 64, 999)
     write_closure(drift_closure, ao2_archives, drift_cp)
     drift_result = subprocess.run(
         ["npm", "run", "release:public-pair-digest-audit"],
@@ -1200,7 +1200,7 @@ def test_public_release_pair_digest_audit_rejects_missing_or_mismatched_full_arc
 
     extra_public_archives = dict(cp_archives)
     extra_public_archives[
-        "ao2-control-plane-0.1.13-linux-riscv64.tar.gz"
+        "ao2-control-plane-0.1.14-linux-riscv64.tar.gz"
     ] = ("2" * 64, 204)
     release_fixture(cp_release, "ao2-control-plane", extra_public_archives)
     extra_public_closure = tmp_path / "extra-public-closure.json"
@@ -1229,7 +1229,7 @@ def test_public_release_pair_digest_audit_rejects_missing_or_mismatched_full_arc
             encoding="utf-8"
         )
     )
-    extra_public_name = "ao2-control-plane-0.1.13-linux-riscv64.tar.gz"
+    extra_public_name = "ao2-control-plane-0.1.14-linux-riscv64.tar.gz"
     assert any(
         item["component"] == "ao2-control-plane"
         and item["code"] == "public_archive_closure_parity"
@@ -2397,10 +2397,10 @@ def test_operator_readiness_summary_composes_final_release_go_no_go(tmp_path):
                     "ao2": {
                         "status": "passed",
                         "required_archive_names": [
-                            "ao2-0.4.80-linux-aarch64.tar.gz",
-                            "ao2-0.4.80-linux-x86_64.tar.gz",
-                            "ao2-0.4.80-macos-aarch64.tar.gz",
-                            "ao2-0.4.80-windows-x86_64.tar.gz",
+                            "ao2-0.4.81-linux-aarch64.tar.gz",
+                            "ao2-0.4.81-linux-x86_64.tar.gz",
+                            "ao2-0.4.81-macos-aarch64.tar.gz",
+                            "ao2-0.4.81-windows-x86_64.tar.gz",
                         ],
                         "missing_assets": [],
                         "mismatched_assets": [],
@@ -2408,9 +2408,9 @@ def test_operator_readiness_summary_composes_final_release_go_no_go(tmp_path):
                     "ao2-control-plane": {
                         "status": "passed",
                         "required_archive_names": [
-                            "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
-                            "ao2-control-plane-0.1.13-macos-aarch64.tar.gz",
-                            "ao2-control-plane-0.1.13-windows-x86_64.tar.gz",
+                            "ao2-control-plane-0.1.14-linux-x86_64.tar.gz",
+                            "ao2-control-plane-0.1.14-macos-aarch64.tar.gz",
+                            "ao2-control-plane-0.1.14-windows-x86_64.tar.gz",
                         ],
                         "missing_assets": [],
                         "mismatched_assets": [],
@@ -2819,7 +2819,7 @@ def test_public_release_operator_checklist_closure_verifies_unapproved_checklist
                     "operator_readiness_ready": True,
                 },
                 "operator_decision": {
-                    "required_confirmation": "public-release-reviewed-v0.4.80-v0.1.13",
+                    "required_confirmation": "public-release-reviewed-v0.4.81-v0.1.14",
                     "go_no_go_reviewed": False,
                     "release_pages_reviewed": False,
                     "artifact_digests_reviewed": False,
@@ -3009,10 +3009,10 @@ def test_dual_repo_public_release_approval_closure_composes_ao2_and_control_plan
             {
                 "schema_version": "ao2.cp-public-release-pair-verification.v1",
                 "status": "passed",
-                "ao2": {"release_repo": "uesugitorachiyo/ao2", "release_tag": "v0.4.80"},
+                "ao2": {"release_repo": "uesugitorachiyo/ao2", "release_tag": "v0.4.81"},
                 "control_plane": {
                     "release_repo": "uesugitorachiyo/ao2-control-plane",
-                    "release_tag": "v0.1.13",
+                    "release_tag": "v0.1.14",
                 },
                 "common_platforms": ["linux-x86_64", "macos-aarch64", "windows-x86_64"],
                 "gaps": [],
@@ -3318,8 +3318,8 @@ cat > "$AO2_STABLE_RELEASE_READINESS_ROOT/summary.json" <<'JSON'
   "schema_version": "ao2.stable-release-readiness.v1",
   "stable_release_ready": false,
   "components": [
-    {"name": "ao2", "repo": "uesugitorachiyo/ao2", "tag": "v0.4.80"},
-    {"name": "ao2-control-plane", "repo": "uesugitorachiyo/ao2-control-plane", "tag": "v0.1.13"}
+    {"name": "ao2", "repo": "uesugitorachiyo/ao2", "tag": "v0.4.81"},
+    {"name": "ao2-control-plane", "repo": "uesugitorachiyo/ao2-control-plane", "tag": "v0.1.14"}
   ],
   "promotion_blockers": [
     {"component": "ao2", "code": "stable_release_absent", "severity": "blocking"},
@@ -3496,8 +3496,8 @@ cat > "$AO2_STABLE_RELEASE_READINESS_ROOT/summary.json" <<'JSON'
   "schema_version": "ao2.stable-release-readiness.v1",
   "stable_release_ready": false,
   "components": [
-    {"name": "ao2", "repo": "uesugitorachiyo/ao2", "tag": "v0.4.80"},
-    {"name": "ao2-control-plane", "repo": "uesugitorachiyo/ao2-control-plane", "tag": "v0.1.13"}
+    {"name": "ao2", "repo": "uesugitorachiyo/ao2", "tag": "v0.4.81"},
+    {"name": "ao2-control-plane", "repo": "uesugitorachiyo/ao2-control-plane", "tag": "v0.1.14"}
   ],
   "promotion_blockers": [
     {"component": "ao2", "code": "stable_release_absent", "severity": "blocking"},
@@ -3899,11 +3899,11 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
                 "evidence_gate_status": "passed",
                 "blockers": [],
                 "components": [
-                    {"name": "ao2", "repo": "uesugitorachiyo/ao2", "tag": "v0.4.80"},
+                    {"name": "ao2", "repo": "uesugitorachiyo/ao2", "tag": "v0.4.81"},
                     {
                         "name": "ao2-control-plane",
                         "repo": "uesugitorachiyo/ao2-control-plane",
-                        "tag": "v0.1.13",
+                        "tag": "v0.1.14",
                     },
                 ],
                 "trust_boundary": {
@@ -5393,8 +5393,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "Stable Promotion Evidence Index",
         "ao2-stable-promotion-evidence-index",
         "ao2.stable-promotion-evidence-index.v1",
-        "ao2-0.4.80-linux-aarch64.tar.gz",
-        "ao2-control-plane-0.1.13-windows-x86_64.tar.gz",
+        "ao2-0.4.81-linux-aarch64.tar.gz",
+        "ao2-control-plane-0.1.14-windows-x86_64.tar.gz",
     ]:
         assert needle in verification
 
@@ -6309,7 +6309,7 @@ def _write_release_readiness_consumer_fixture(root: Path):
                 "assets": [
                     {"name": "SHA256SUMS"},
                     {
-                        "name": "ao2-control-plane-0.1.13-linux-x86_64.tar.gz",
+                        "name": "ao2-control-plane-0.1.14-linux-x86_64.tar.gz",
                         "sha256": "a" * 64,
                         "size_bytes": 4096,
                     },
@@ -6835,7 +6835,7 @@ def test_release_readiness_artifact_consumer_rejects_bad_fixture_evidence(tmp_pa
                         "assets": [
                             {
                                 "name": (
-                                    "ao2-control-plane-0.1.13-linux-x86_64.tar.gz"
+                                    "ao2-control-plane-0.1.14-linux-x86_64.tar.gz"
                                 )
                             }
                         ],
@@ -7413,8 +7413,8 @@ def test_dual_public_release_smoke_workflow_and_docs_contract():
         assert needle in workflow
 
     for needle in [
-        "AO2 stable release: `v0.4.80`",
-        "AO2 control-plane stable release: `v0.1.13`",
+        "AO2 stable release: `v0.4.81`",
+        "AO2 control-plane stable release: `v0.1.14`",
         "ao2-dual-public-release-smoke",
         "ao2.dual-public-release-smoke.v1",
         "published AO2 Linux x86_64 archive",
@@ -13450,10 +13450,10 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
     assert manifest["schema_version"] == "ao2.release-train-manifest.v1"
-    assert manifest["stable"]["ao2"] == {"tag": "v0.4.80", "version": "0.4.80"}
+    assert manifest["stable"]["ao2"] == {"tag": "v0.4.81", "version": "0.4.81"}
     assert manifest["stable"]["ao2_control_plane"] == {
-        "tag": "v0.1.13",
-        "version": "0.1.13",
+        "tag": "v0.1.14",
+        "version": "0.1.14",
     }
     assert manifest["next_patch"]["ao2"] == {"tag": "v0.4.81", "version": "0.4.81"}
     assert manifest["next_patch"]["ao2_control_plane"] == {
@@ -13462,7 +13462,7 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
     }
     assert (
         manifest["stable"]["promotion_confirm"]
-        == "promote-stable-v0.4.80-v0.1.13"
+        == "promote-stable-v0.4.81-v0.1.14"
     )
     assert (
         manifest["next_patch"]["promotion_confirm"]
@@ -13500,8 +13500,8 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
     ]:
         workflow = read(workflow_path)
         assert "stable release-train manifest" in workflow
-        assert "default: v0.4.80" not in workflow
-        assert "default: v0.1.13" not in workflow
+        assert "default: v0.4.81" not in workflow
+        assert "default: v0.1.14" not in workflow
     post_stable = read(".github/workflows/post-stable-release-verification.yml")
     windows_smoke = read(".github/workflows/windows-release-smoke.yml")
     assert "Resolve stable release train defaults" in post_stable
@@ -13510,8 +13510,8 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
     assert "Resolve stable release train defaults" in windows_smoke
     assert "scripts/release-train-env.sh stable" in windows_smoke
     assert "AO2_RELEASE_TRAIN_AO2_VERSION" in windows_smoke
-    assert "default: 0.4.80" not in post_stable
-    assert "default: 0.4.80" not in windows_smoke
+    assert "default: 0.4.81" not in post_stable
+    assert "default: 0.4.81" not in windows_smoke
 
 
 def test_public_release_consumer_smoke_defaults_to_release_train_manifest(tmp_path):
@@ -14073,7 +14073,7 @@ def test_release_train_manifest_parity_audit_contract(tmp_path):
     assert summary["byte_identical"] is True
     assert summary["schema_aligned"] is True
     assert summary["target_aligned"] is True
-    assert summary["stable"]["ao2"]["tag"] == "v0.4.80"
+    assert summary["stable"]["ao2"]["tag"] == "v0.4.81"
     assert summary["next_patch"]["ao2"]["tag"] == "v0.4.81"
 
     for needle in [
@@ -14332,8 +14332,8 @@ def test_candidate_readiness_packet_contract(tmp_path):
                 "schema_aligned": True,
                 "target_aligned": True,
                 "stable": {
-                    "ao2": {"tag": "v0.4.80", "version": "0.4.80"},
-                    "ao2_control_plane": {"tag": "v0.1.13", "version": "0.1.13"},
+                    "ao2": {"tag": "v0.4.81", "version": "0.4.81"},
+                    "ao2_control_plane": {"tag": "v0.1.14", "version": "0.1.14"},
                 },
                 "next_patch": {
                     "ao2": {"tag": "v0.4.81", "version": "0.4.81"},
@@ -15497,8 +15497,8 @@ def test_dual_repo_public_release_verification_index_is_documented():
         "# Public Release Verification",
         "uesugitorachiyo/ao2",
         "uesugitorachiyo/ao2-control-plane",
-        "v0.4.80",
-        "v0.1.13",
+        "v0.4.81",
+        "v0.1.14",
         "Post Stable Release Verification",
         ".github/workflows/post-stable-release-verification.yml",
         "post-stable-release-smoke-${{ runner.os }}",
@@ -15574,8 +15574,8 @@ def test_release_immutability_audit_composes_stable_asset_and_download_checks():
     assert "npm run release:immutability-audit" in verification
     assert "ao2.release-immutability-audit.v1" in verification
     assert "stable public release" in readme
-    assert "v0.4.80" in readme
-    assert "ao2-0.4.80-linux-aarch64.tar.gz" in readme
+    assert "v0.4.81" in readme
+    assert "ao2-0.4.81-linux-aarch64.tar.gz" in readme
     assert "https://youtu.be/p222b0iCpbg" in readme
     assert "stable public release" in install
     assert "v0.4.81" in next_patch
@@ -15682,8 +15682,8 @@ def test_public_release_consumer_smoke_runs_against_offline_fixture(tmp_path):
     fixture = tmp_path / "fixture"
     out_root = tmp_path / "out"
     target_label = "linux-x86_64"
-    ao2_version = "0.4.80"
-    cp_version = "0.1.13"
+    ao2_version = "0.4.81"
+    cp_version = "0.1.14"
 
     def write_executable(path: Path, body: str) -> None:
         path.write_text(body, encoding="utf-8")
@@ -15719,7 +15719,7 @@ def test_public_release_consumer_smoke_runs_against_offline_fixture(tmp_path):
         """#!/usr/bin/env sh
 set -eu
 if [ "${1:-}" = "version" ] && [ "${2:-}" = "--json" ]; then
-  printf '{"package":"ao2","version":"0.4.80","target":"linux-x86_64","release_manifest_schema":"ao2.release-manifest.v1"}\n'
+  printf '{"package":"ao2","version":"0.4.81","target":"linux-x86_64","release_manifest_schema":"ao2.release-manifest.v1"}\n'
   exit 0
 fi
 if [ "${1:-}" = "--help" ]; then
@@ -15780,8 +15780,8 @@ exit 2
     assert summary["schema_version"] == "ao2.public-release-consumer-smoke.v1"
     assert summary["status"] == "passed"
     assert summary["target_label"] == target_label
-    assert summary["release_pair"]["ao2"]["tag"] == "v0.4.80"
-    assert summary["release_pair"]["ao2_control_plane"]["tag"] == "v0.1.13"
+    assert summary["release_pair"]["ao2"]["tag"] == "v0.4.81"
+    assert summary["release_pair"]["ao2_control_plane"]["tag"] == "v0.1.14"
     assert summary["archives"]["ao2"]["manifest_schema"] == "ao2.release-manifest.v1"
     assert (
         summary["archives"]["ao2_control_plane"]["manifest_schema"]
