@@ -61,25 +61,50 @@ if effective_task_board_path and effective_task_board_path.is_file():
     if task_board:
         control_plane_readback = task_board.get("control_plane_readback") or {}
         trust_boundary = task_board.get("trust_boundary") or {}
+        can_mutate_ao2_artifacts = bool(control_plane_readback.get("can_mutate_ao2_artifacts"))
         mutates_releases = bool(
             control_plane_readback.get("can_mutate_release_metadata")
             or trust_boundary.get("mutates_releases")
         )
         requires_credentials = bool(control_plane_readback.get("requires_credentials"))
+        control_plane_approves_release = bool(
+            control_plane_readback.get("control_plane_approves_release")
+            or trust_boundary.get("control_plane_approves_release")
+        )
+        authority_boundary = {
+            "role": control_plane_readback.get("role", "read_only_observer"),
+            "requires_credentials": requires_credentials,
+            "can_mutate_ao2_artifacts": can_mutate_ao2_artifacts,
+            "can_mutate_release_metadata": mutates_releases,
+            "control_plane_approves_release": control_plane_approves_release,
+        }
+        view_trust_boundary = {
+            "local_only": True,
+            "stores_credentials": False,
+            "requires_credentials": requires_credentials,
+            "mutates_releases": mutates_releases,
+            "control_plane_approves_release": control_plane_approves_release,
+        }
         task_board_readback = {
             "status": "passed"
             if (
                 task_board.get("schema_version") == "ao2.ai-task-board.v1"
                 and isinstance(task_board.get("tasks"), list)
                 and not requires_credentials
+                and not can_mutate_ao2_artifacts
                 and not mutates_releases
+                and not control_plane_approves_release
             )
             else "failed",
             "schema_version": task_board.get("schema_version"),
             "task_count": len(task_board.get("tasks") or []),
-            "control_plane_role": control_plane_readback.get("role", "read_only_observer"),
+            "control_plane_role": authority_boundary["role"],
             "requires_credentials": requires_credentials,
+            "can_mutate_ao2_artifacts": can_mutate_ao2_artifacts,
             "mutates_releases": mutates_releases,
+            "control_plane_approves_release": control_plane_approves_release,
+            "authority_boundary": authority_boundary,
+            "trust_boundary": view_trust_boundary,
         }
         if task_board_source == "fixture_catalog":
             task_board_readback["source"] = "fixture_catalog"
@@ -174,7 +199,8 @@ if task_board_readback.get("status") == "passed" and task_board:
         "task_count": len(tasks),
         "task_status_counts": status_counts,
         "read_only": True,
-        "trust_boundary": {"local_only": True, "stores_credentials": False},
+        "authority_boundary": authority_boundary,
+        "trust_boundary": view_trust_boundary,
     }
     view_summary_path.write_text(
         json.dumps(view_summary, indent=2, sort_keys=True) + "\n",
@@ -189,6 +215,8 @@ if task_board_readback.get("status") == "passed" and task_board:
         "board_state_summary": str(board_state_summary_path) if board_state_summary_path and board_state_summary_path.is_file() else None,
         "task_count": len(tasks),
         "read_only": True,
+        "authority_boundary": authority_boundary,
+        "trust_boundary": view_trust_boundary,
     }
 
 consumer_smoke_cases = [

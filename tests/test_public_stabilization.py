@@ -12406,7 +12406,23 @@ def test_control_plane_fixture_consumer_smoke_reads_ai_task_board_fixture(tmp_pa
         "task_count": 1,
         "control_plane_role": "read_only_observer",
         "requires_credentials": False,
+        "can_mutate_ao2_artifacts": False,
         "mutates_releases": False,
+        "control_plane_approves_release": False,
+        "authority_boundary": {
+            "can_mutate_ao2_artifacts": False,
+            "can_mutate_release_metadata": False,
+            "control_plane_approves_release": False,
+            "requires_credentials": False,
+            "role": "read_only_observer",
+        },
+        "trust_boundary": {
+            "control_plane_approves_release": False,
+            "local_only": True,
+            "mutates_releases": False,
+            "requires_credentials": False,
+            "stores_credentials": False,
+        },
     }
 
 
@@ -12531,11 +12547,32 @@ def test_control_plane_fixture_consumer_smoke_writes_operator_task_board_view_fr
     assert view["status"] == "passed"
     assert view["source"] == "fixture_catalog"
     assert view["read_only"] is True
+    assert view["trust_boundary"] == {
+        "control_plane_approves_release": False,
+        "local_only": True,
+        "mutates_releases": False,
+        "requires_credentials": False,
+        "stores_credentials": False,
+    }
     assert view["task_count"] == 1
     view_summary = json.loads(Path(view["summary"]).read_text(encoding="utf-8"))
     assert view_summary["schema_version"] == "ao2.control-plane-operator-task-board-view.v1"
     assert view_summary["status"] == "passed"
     assert view_summary["task_status_counts"] == {"blocked": 1}
+    assert view_summary["authority_boundary"] == {
+        "can_mutate_ao2_artifacts": False,
+        "can_mutate_release_metadata": False,
+        "control_plane_approves_release": False,
+        "requires_credentials": False,
+        "role": "read_only_observer",
+    }
+    assert view_summary["trust_boundary"] == {
+        "control_plane_approves_release": False,
+        "local_only": True,
+        "mutates_releases": False,
+        "requires_credentials": False,
+        "stores_credentials": False,
+    }
     view_html = Path(view_summary["html"]).read_text(encoding="utf-8")
     for needle in [
         "AO2 Control Plane Task Board",

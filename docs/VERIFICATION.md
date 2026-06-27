@@ -301,7 +301,11 @@ read-only `task_board_readback` without credentials or release mutation
 authority. When readback passes, the smoke also writes
 `operator-task-board-view/summary.json` with
 `ao2.control-plane-operator-task-board-view.v1` and a local
-`operator-task-board.html` read-only operator view.
+`operator-task-board.html` read-only operator view. The view summary carries
+machine-readable `authority_boundary` and `trust_boundary` fields so automated
+readback can prove the control plane remains a read-only observer: it requires
+no credentials, stores no credentials, cannot mutate AO2 artifacts or release
+metadata, and cannot approve releases.
 
 `npm run pulse:task-executor` reads an `ao2.pulse-task-manifest.v1` manifest
 from `.ao2-local/pulse/latest/pulse-task-manifest.json` by default and emits
