@@ -30,6 +30,7 @@ payload = {
     "state_summary": None,
     "task_count": 0,
     "status_counts": {},
+    "status_transition_source": None,
     "next_actions": [],
     "trust_boundary": {"local_only": True, "stores_credentials": False},
 }
@@ -63,18 +64,36 @@ else:
                 "status": status,
                 "next_action": item.get("next_action"),
             })
+        status_transition_source = (
+            state_summary.get("status_transition_source")
+            if isinstance(state_summary.get("status_transition_source"), dict)
+            else board.get("status_transition_source")
+        )
         payload.update({
             "status": "passed",
             "reason": "task_board_state_read",
             "state_summary": str(state_summary_path) if state_summary_path.is_file() else None,
             "task_count": len(tasks),
             "status_counts": state_summary.get("status_counts") or status_counts,
+            "status_transition_source": status_transition_source
+            if isinstance(status_transition_source, dict)
+            else None,
             "next_actions": state_summary.get("next_actions") or next_actions,
         })
 
 summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 print(f"summary={summary_path}")
 print(f"status={payload['status']}")
+if isinstance(payload.get("status_transition_source"), dict):
+    source = payload["status_transition_source"]
+    line = f"status_transition_source={source.get('status', 'unknown')}"
+    if source.get("task_board_generation") is not None:
+        line += f" evidence_generation={source.get('task_board_generation')}"
+    if source.get("current_generation") is not None:
+        line += f" board_generation={source.get('current_generation')}"
+    if source.get("updates_applied") is not None:
+        line += f" updates_applied={source.get('updates_applied')}"
+    print(line)
 if payload["status"] != "passed":
     raise SystemExit(1)
 PY

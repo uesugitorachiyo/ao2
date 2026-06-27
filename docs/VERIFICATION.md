@@ -225,7 +225,10 @@ status counts and next actions for dashboard/control-plane ingestion.
 and emits `ao2.pulse-task-board-state.v1` at
 `target/pulse-task-board-state/latest/summary.json` for local dashboards,
 operator scripts, or any standalone AO2 install that only needs the current
-task state. `npm run pulse:next-actions` reads the same current board and emits
+task state. The summary and command output include the board's
+`status_transition_source` so operators can see whether task status evidence was
+applied, missing, or ignored as `stale_generation` without opening the full
+board artifact. `npm run pulse:next-actions` reads the same current board and emits
 `ao2.pulse-next-actions.v1` plus
 `target/pulse-next-actions/latest/next-actions.md`, giving standalone AO2
 operators a compact command for the current actionable task list. Each action
