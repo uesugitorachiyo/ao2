@@ -10090,6 +10090,14 @@ def test_pulse_task_board_state_reads_current_board_without_regeneration(tmp_pat
     assert summary["task_board"] == str(task_board_root / "summary.json")
     assert summary["state_summary"] == str(task_board_root / "board-state-summary.json")
     assert summary["task_count"] > 0
+    assert summary["status_transition_source"]["status"] in {
+        "not_found",
+        "loaded",
+        "applied",
+        "stale_generation",
+        "skipped",
+    }
+    assert "status_transition_source=" in state_result.stdout
     assert summary["trust_boundary"] == {"local_only": True, "stores_credentials": False}
 
 
