@@ -50200,6 +50200,7 @@ fn render_report_index_for_run(
     let run_dir = run_dir(target, run_id);
     let run_record_path = run_dir.join("run-record.json");
     let evidence_pack_path = run_dir.join("evidence-pack").join("evidence-pack.json");
+    let report_index_path = report_index_path(report_path);
     let evidence_pack: serde_json::Value = read_json_file(&evidence_pack_path)?;
     let report_html = fs::read_to_string(report_path)
         .with_context(|| format!("read rendered report {}", report_path.display()))?;
@@ -50286,6 +50287,38 @@ fn render_report_index_for_run(
             "run_record": run_record_path,
             "evidence_pack": evidence_pack_path,
             "html_report": report_path,
+            "report_index": report_index_path,
+        },
+        "operator_readback": {
+            "schema_version": "ao2.risky-pr-operator-readback.v1",
+            "run_id": run_id,
+            "manual_filesystem_archaeology_required": false,
+            "local_run_record": {
+                "status": if run_record_path.is_file() { "present" } else { "missing" },
+                "path": run_record_path,
+            },
+            "static_report_export": {
+                "status": if report_path.is_file() { "present" } else { "missing" },
+                "html_report": report_path,
+                "report_index": report_index_path,
+                "evidence_pack": evidence_pack_path,
+            },
+            "evaluator_closure_evidence": {
+                "status": if !closure_verdict.is_empty() && !closures.is_empty() { "present" } else { "missing" },
+                "verdict": closure_verdict,
+                "closure_count": closures.len(),
+            },
+            "replay_evidence": {
+                "status": replay.status,
+                "digest_failure_count": replay.digest_failures.len(),
+                "event_count": replay.event_count,
+                "artifact_count": replay.artifact_count,
+            },
+            "trust_boundary": {
+                "local_only": true,
+                "stores_credentials": false,
+                "provider_api_key_required": false,
+            },
         },
         "policy_decisions": {
             "count": policy_decisions.len(),
