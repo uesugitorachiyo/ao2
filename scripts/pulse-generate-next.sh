@@ -883,7 +883,13 @@ if status_evidence_path and status_evidence_path.is_file():
     try:
         status_evidence = json.loads(status_evidence_path.read_text(encoding="utf-8"))
         evidence_generation = status_evidence.get("task_board_generation")
-        if evidence_generation is not None and evidence_generation != generation:
+        stale_generation = False
+        if isinstance(evidence_generation, int):
+            stale_generation = (
+                evidence_generation > generation
+                or evidence_generation < generation - 1
+            )
+        if stale_generation:
             task_status_updates = {}
             status_transition_source.update({
                 "status": "stale_generation",
@@ -900,6 +906,9 @@ if status_evidence_path and status_evidence_path.is_file():
                 for task_id, value in status_evidence.get("task_statuses", {}).items()
                 if isinstance(value, dict)
             }
+            generation_relation = "same_generation"
+            if isinstance(evidence_generation, int) and evidence_generation < generation:
+                generation_relation = "previous_generation"
             status_transition_source.update({
                 "status": "loaded",
                 "schema_version": status_evidence.get(
@@ -908,6 +917,7 @@ if status_evidence_path and status_evidence_path.is_file():
                 ),
                 "task_board_generation": evidence_generation,
                 "current_generation": generation,
+                "generation_relation": generation_relation,
             })
     except json.JSONDecodeError as exc:
         status_transition_source.update({
