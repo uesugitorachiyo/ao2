@@ -2,6 +2,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use sha2::{Digest, Sha256};
+
 #[test]
 fn sdd_validate_passes_and_fails_with_rule_text() {
     let valid = fixture("valid_minimal.json");
@@ -72,6 +74,161 @@ fn sdd_plan_writes_provider_canonical_json_verbatim() {
     assert!(target
         .join("target/sdd-planner/01JCODEXABCDEFGHJKMNPQRSTV/attempt-1.json")
         .is_file());
+}
+
+#[test]
+fn sdd_plan_shrinks_surface_map_by_default_and_records_context_evidence() {
+    let temp = tempfile::tempdir().unwrap();
+    let target = temp.path().join("large-surface");
+    create_large_sdd_target(&target);
+
+    let prompt_text = "Build a tiny CLI by updating src main rs hello handling.";
+    let prompt = temp.path().join("prompt.md");
+    fs::write(&prompt, prompt_text).unwrap();
+    let out = temp.path().join("plan.json");
+    let capture = temp.path().join("provider-request.json");
+    let candidate = fixture("codex-candidate.json");
+    let path = prepend_path(&mock_bins());
+
+    let output = ao2(
+        [
+            "sdd",
+            "plan",
+            "--prompt",
+            &format!("@{}", prompt.display()),
+            "--target",
+            target.to_str().unwrap(),
+            "--provider",
+            "codex",
+            "--out",
+            out.to_str().unwrap(),
+        ],
+        [
+            ("PATH", path.as_str()),
+            ("SDD_MOCK_STDOUT", candidate.to_str().unwrap()),
+            ("SDD_MOCK_CAPTURE", capture.to_str().unwrap()),
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+
+    let full_map = sdd_planner::scan(&target, "0".repeat(40)).unwrap();
+    let expected_map =
+        sdd_planner::shrink(&full_map, prompt_text, sdd_planner::DEFAULT_BUDGET_TOKENS);
+    assert!(
+        expected_map.files.len() < full_map.files.len(),
+        "fixture should exceed the default context budget"
+    );
+
+    let request: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&capture).unwrap()).unwrap();
+    assert_eq!(
+        request["context"]["surface_map"],
+        serde_json::to_value(&expected_map).unwrap()
+    );
+
+    let plan: serde_json::Value = serde_json::from_str(&fs::read_to_string(&out).unwrap()).unwrap();
+    assert_eq!(
+        plan["target"]["surface_map_sha256"],
+        surface_map_sha256(&expected_map)
+    );
+
+    let stdout = stdout(&output);
+    assert!(
+        stdout.contains("context_shrink_enabled=true"),
+        "stdout missing shrink evidence: {stdout}"
+    );
+    assert!(
+        stdout.contains(&format!(
+            "context_budget_tokens={}",
+            sdd_planner::DEFAULT_BUDGET_TOKENS
+        )),
+        "stdout missing budget evidence: {stdout}"
+    );
+
+    let build_log_dir = value_for(&stdout, "build_log_dir=");
+    let context: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(Path::new(build_log_dir).join("context.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(context["context_shrink_enabled"], true);
+    assert_eq!(
+        context["context_budget_tokens"],
+        sdd_planner::DEFAULT_BUDGET_TOKENS
+    );
+    assert_eq!(context["full_file_count"], full_map.files.len());
+    assert_eq!(context["shrunken_file_count"], expected_map.files.len());
+    assert_eq!(
+        context["full_surface_map_sha256"],
+        surface_map_sha256(&full_map)
+    );
+    assert_eq!(
+        context["shrunken_surface_map_sha256"],
+        surface_map_sha256(&expected_map)
+    );
+}
+
+#[test]
+fn sdd_plan_honors_context_budget_tokens() {
+    let temp = tempfile::tempdir().unwrap();
+    let target = temp.path().join("budgeted-surface");
+    create_large_sdd_target(&target);
+
+    let prompt_text = "Update package metadata.";
+    let prompt = temp.path().join("prompt.md");
+    fs::write(&prompt, prompt_text).unwrap();
+    let out = temp.path().join("plan.json");
+    let capture = temp.path().join("provider-request.json");
+    let candidate = candidate_with_step_paths(temp.path(), &["Cargo.toml"]);
+    let path = prepend_path(&mock_bins());
+
+    let output = ao2(
+        [
+            "sdd",
+            "plan",
+            "--prompt",
+            &format!("@{}", prompt.display()),
+            "--target",
+            target.to_str().unwrap(),
+            "--provider",
+            "codex",
+            "--context-budget-tokens",
+            "1",
+            "--out",
+            out.to_str().unwrap(),
+        ],
+        [
+            ("PATH", path.as_str()),
+            ("SDD_MOCK_STDOUT", candidate.to_str().unwrap()),
+            ("SDD_MOCK_CAPTURE", capture.to_str().unwrap()),
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+
+    let full_map = sdd_planner::scan(&target, "0".repeat(40)).unwrap();
+    let expected_map = sdd_planner::shrink(&full_map, prompt_text, 1);
+    let request: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&capture).unwrap()).unwrap();
+    assert_eq!(
+        request["context"]["surface_map"],
+        serde_json::to_value(&expected_map).unwrap()
+    );
+    assert!(
+        expected_map.files.len() < full_map.files.len(),
+        "custom budget should shrink the full surface map"
+    );
+
+    let stdout = stdout(&output);
+    assert!(
+        stdout.contains("context_budget_tokens=1"),
+        "stdout missing custom budget evidence: {stdout}"
+    );
+    let build_log_dir = value_for(&stdout, "build_log_dir=");
+    let context: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(Path::new(build_log_dir).join("context.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(context["context_budget_tokens"], 1);
+    assert_eq!(context["shrunken_file_count"], expected_map.files.len());
 }
 
 #[test]
@@ -749,6 +906,57 @@ fn copy_fixture(src: &Path, dst: &Path) {
             fs::copy(entry.path(), &target).unwrap();
         }
     }
+}
+
+fn create_large_sdd_target(target: &Path) {
+    fs::create_dir_all(target.join("src/generated")).unwrap();
+    fs::write(
+        target.join("Cargo.toml"),
+        "[package]\nname='tiny'\nversion='0.1.0'\n",
+    )
+    .unwrap();
+    fs::write(target.join("README.md"), "# Tiny\n").unwrap();
+    fs::write(
+        target.join("src/main.rs"),
+        "fn main() { println!(\"hello\"); }\n",
+    )
+    .unwrap();
+    for i in 0..600 {
+        fs::write(
+            target.join(format!("src/generated/context_noise_{i:04}.rs")),
+            format!("pub fn context_noise_{i:04}() {{}}\n"),
+        )
+        .unwrap();
+    }
+}
+
+fn candidate_with_step_paths(temp: &Path, paths: &[&str]) -> PathBuf {
+    let mut candidate: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(fixture("codex-candidate.json")).unwrap())
+            .unwrap();
+    candidate["plan"]["steps"][0]["paths"] = serde_json::json!(paths);
+    let path = temp.join("codex-candidate-custom.json");
+    fs::write(&path, serde_json::to_string(&candidate).unwrap()).unwrap();
+    path
+}
+
+fn surface_map_sha256(surface_map: &sdd_planner::SurfaceMap) -> String {
+    let value = serde_json::to_value(surface_map).unwrap();
+    let canonical = sdd_planner::canonical_json(&value);
+    let mut hasher = Sha256::new();
+    hasher.update(canonical.as_bytes());
+    hex_lower(hasher.finalize())
+}
+
+fn hex_lower(bytes: impl AsRef<[u8]>) -> String {
+    use std::fmt::Write as _;
+
+    let bytes = bytes.as_ref();
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        write!(&mut out, "{byte:02x}").expect("write to string");
+    }
+    out
 }
 
 fn ao2<const N: usize, const M: usize>(

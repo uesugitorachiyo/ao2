@@ -88,7 +88,8 @@ The local run record must include:
 - event log
 - workflow version
 - role states
-- scoped context artifacts
+- scoped context artifacts, including bounded SDD surface-map metadata and
+  shrink/provenance digests
 - policy decisions
 - approval tickets
 - artifacts

@@ -217,7 +217,7 @@ Reject the demo if any answer requires verbal narration or manual filesystem arc
 | ID | Scenario | Pass Condition |
 |---|---|---|
 | UAT-01 | Workflow compilation | Run reaches `compiled`; schema validation passes; role contracts are visible. |
-| UAT-02 | Scoped context | Planner and implementer have bounded context bundle artifacts with digest and lineage. |
+| UAT-02 | Scoped context | Planner and implementer have bounded context bundle artifacts with digest and lineage; SDD planning records full and shrunken surface-map digests, file counts, budget, and shrink-enabled status. |
 | UAT-03 | Policy denial | Risky action records `tool.requested` and `tool.denied` before execution. |
 | UAT-04 | Narrow approval | Approved action digest is exact; original denied action remains denied. |
 | UAT-05 | Evidence artifacts | Plan, patch, command log, test log, review, and closure artifacts have provenance. |
