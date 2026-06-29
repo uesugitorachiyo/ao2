@@ -103,10 +103,13 @@ The packet emits `ao2.live-mutation-dry-run-packet.v1` under
 `target/live-mutation-dry-run-packet/latest/summary.json`, plus proposed and
 rollback patch artifacts for a tiny documentation-only mutation class. It
 records the changed-file plan, verification plan, rollback artifact,
-authority boundary, provider boundary, and session boundary. It does not apply
-the patch, create a branch, push commits, upload artifacts, publish releases,
-and does not call providers. This packet is AO2 execution evidence for a future governed
-live-mutation chain; it is not authority to mutate the repository.
+exact docs-only dry-run apply result, forbidden-path checks, authority boundary,
+provider boundary, and session boundary. The patch is applied and rolled back
+only inside a temporary isolated workspace to prove the exact patch and rollback
+pair. It does not apply the patch to the live repository, create a branch, push
+commits, upload artifacts, publish releases, and does not call providers. This
+packet is AO2 execution evidence for a future governed live-mutation chain; it
+is not authority to mutate the repository.
 
 Run the explicit live self-change rehearsal with:
 

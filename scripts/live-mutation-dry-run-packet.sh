@@ -15,7 +15,10 @@ python3 - "$ROOT" "$SUMMARY" "$PROPOSED_PATCH" "$ROLLBACK_PATCH" "$VERIFICATION_
 import difflib
 import hashlib
 import json
+import shutil
+import subprocess
 import sys
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -67,6 +70,60 @@ rollback_patch = unified_diff(proposed, original)
 proposed_patch_path.write_text(proposed_patch, encoding="utf-8")
 rollback_patch_path.write_text(rollback_patch, encoding="utf-8")
 
+forbidden_path_patterns = [
+    ".github/",
+    "crates/",
+    "scripts/",
+    "schemas/",
+    "package.json",
+    "package-lock.json",
+    "Cargo.toml",
+    "Cargo.lock",
+]
+forbidden_path_violations = [
+    target_rel
+    for forbidden in forbidden_path_patterns
+    if target_rel == forbidden.rstrip("/") or target_rel.startswith(forbidden)
+]
+if forbidden_path_violations:
+    raise SystemExit(f"target path is outside docs-only allowlist: {target_rel}")
+
+with tempfile.TemporaryDirectory(prefix="ao2-docs-only-patch-") as temp_dir:
+    isolated_root = Path(temp_dir)
+    isolated_target = isolated_root / target_rel
+    isolated_target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(target_path, isolated_target)
+    subprocess.run(
+        ["git", "apply", "--check", str(proposed_patch_path)],
+        cwd=isolated_root,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    subprocess.run(
+        ["git", "apply", str(proposed_patch_path)],
+        cwd=isolated_root,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    isolated_after_sha = sha256_file(isolated_target)
+    if isolated_after_sha != sha256_text(proposed):
+        raise SystemExit("isolated dry-run apply produced unexpected target digest")
+    subprocess.run(
+        ["git", "apply", str(rollback_patch_path)],
+        cwd=isolated_root,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    isolated_rollback_sha = sha256_file(isolated_target)
+    if isolated_rollback_sha != before_sha:
+        raise SystemExit("isolated rollback did not restore target digest")
+
 verification_plan = {
     "schema_version": "ao2.live-mutation-dry-run-verification-plan.v1",
     "required": True,
@@ -105,6 +162,8 @@ payload = {
             "path": target_rel,
             "action": "modify",
             "before_sha256": before_sha,
+            "allowed_path_class": "docs_only",
+            "forbidden_path_check": "passed",
             "proposed_patch": {
                 "path": proposed_patch_path.name,
                 "sha256": sha256_text(proposed_patch),
@@ -123,7 +182,24 @@ payload = {
         "path": rollback_patch_path.name,
         "sha256": sha256_text(rollback_patch),
         "same_change_class": True,
-        "rehearsal_status": "not_executed_dry_run_packet",
+        "rehearsal_status": "passed_in_isolated_workspace",
+    },
+    "exact_docs_only_patch": {
+        "required": True,
+        "status": "dry_run_apply_passed",
+        "isolated_workspace": True,
+        "isolated_workspace_retained": False,
+        "target_after_apply_sha256": isolated_after_sha,
+        "target_after_rollback_sha256": isolated_rollback_sha,
+        "proposed_patch_sha256": sha256_text(proposed_patch),
+        "rollback_patch_sha256": sha256_text(rollback_patch),
+        "applies_to_live_repo": False,
+    },
+    "forbidden_path_checks": {
+        "status": "passed",
+        "allowed_path_class": "docs_only",
+        "forbidden_patterns": forbidden_path_patterns,
+        "violations": [],
     },
     "authority_boundary": {
         "requires_covenant_authority": True,

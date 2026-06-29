@@ -70,6 +70,8 @@ def test_live_mutation_dry_run_packet_emits_non_mutating_execution_plan(tmp_path
             "path": "docs/VERIFICATION.md",
             "action": "modify",
             "before_sha256": before_sha,
+            "allowed_path_class": "docs_only",
+            "forbidden_path_check": "passed",
             "proposed_patch": {
                 "path": "proposed-live-mutation.patch",
                 "sha256": summary["changed_file_plan"][0]["proposed_patch"]["sha256"],
@@ -93,9 +95,40 @@ def test_live_mutation_dry_run_packet_emits_non_mutating_execution_plan(tmp_path
         "path": "rollback-live-mutation.patch",
         "sha256": summary["rollback_artifact"]["sha256"],
         "same_change_class": True,
-        "rehearsal_status": "not_executed_dry_run_packet",
+        "rehearsal_status": "passed_in_isolated_workspace",
     }
     assert len(summary["rollback_artifact"]["sha256"]) == 64
+    assert summary["exact_docs_only_patch"] == {
+        "required": True,
+        "status": "dry_run_apply_passed",
+        "isolated_workspace": True,
+        "isolated_workspace_retained": False,
+        "target_after_apply_sha256": summary["exact_docs_only_patch"][
+            "target_after_apply_sha256"
+        ],
+        "target_after_rollback_sha256": before_sha,
+        "proposed_patch_sha256": summary["changed_file_plan"][0]["proposed_patch"][
+            "sha256"
+        ],
+        "rollback_patch_sha256": summary["rollback_artifact"]["sha256"],
+        "applies_to_live_repo": False,
+    }
+    assert len(summary["exact_docs_only_patch"]["target_after_apply_sha256"]) == 64
+    assert summary["forbidden_path_checks"] == {
+        "status": "passed",
+        "allowed_path_class": "docs_only",
+        "forbidden_patterns": [
+            ".github/",
+            "crates/",
+            "scripts/",
+            "schemas/",
+            "package.json",
+            "package-lock.json",
+            "Cargo.toml",
+            "Cargo.lock",
+        ],
+        "violations": [],
+    }
     assert summary["authority_boundary"] == {
         "requires_covenant_authority": True,
         "requires_forge_plan": True,
