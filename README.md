@@ -93,6 +93,21 @@ to the repository, mutate the repository, use the network, require provider
 keys, or publish the full RSI claim. It is evidence for a governed self-change
 rehearsal, not proof of live autonomous self-mutation.
 
+Run the AO2 live-mutation dry-run execution packet with:
+
+```sh
+npm run live-mutation:dry-run-packet
+```
+
+The packet emits `ao2.live-mutation-dry-run-packet.v1` under
+`target/live-mutation-dry-run-packet/latest/summary.json`, plus proposed and
+rollback patch artifacts for a tiny documentation-only mutation class. It
+records the changed-file plan, verification plan, rollback artifact,
+authority boundary, provider boundary, and session boundary. It does not apply
+the patch, create a branch, push commits, upload artifacts, publish releases,
+and does not call providers. This packet is AO2 execution evidence for a future governed
+live-mutation chain; it is not authority to mutate the repository.
+
 Run the explicit live self-change rehearsal with:
 
 ```sh

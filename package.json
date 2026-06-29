@@ -89,6 +89,7 @@
     "rsi:cross-repo-e2e": "node scripts/run-sh-script.js scripts/rsi-cross-repo-e2e.sh",
     "rsi:operator-closure-packet": "node scripts/run-sh-script.js scripts/rsi-operator-closure-packet.sh",
     "rsi:self-change-dry-run": "node scripts/run-sh-script.js scripts/rsi-governed-self-change-dry-run.sh",
+    "live-mutation:dry-run-packet": "node scripts/run-sh-script.js scripts/live-mutation-dry-run-packet.sh",
     "pulse:local-mirror": "node scripts/run-sh-script.js scripts/pulse-local-mirror.sh",
     "pulse:resume": "node scripts/run-sh-script.js scripts/pulse-resume.sh",
     "pulse:execute-safety-corpus": "node scripts/run-sh-script.js scripts/pulse-execute-safety-corpus.sh",
