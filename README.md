@@ -102,14 +102,20 @@ npm run live-mutation:dry-run-packet
 The packet emits `ao2.live-mutation-dry-run-packet.v1` under
 `target/live-mutation-dry-run-packet/latest/summary.json`, plus proposed and
 rollback patch artifacts for a tiny documentation-only mutation class. It
-records the changed-file plan, verification plan, rollback artifact,
-exact docs-only dry-run apply result, forbidden-path checks, authority boundary,
+records the exact changed-file list, verification plan, rollback patch,
+docs-only dry-run apply result, forbidden-path checks, authority boundary,
 provider boundary, and session boundary. The patch is applied and rolled back
 only inside a temporary isolated workspace to prove the exact patch and rollback
 pair. It does not apply the patch to the live repository, create a branch, push
-commits, upload artifacts, publish releases, and does not call providers. This
-packet is AO2 execution evidence for a future governed live-mutation chain; it
-is not authority to mutate the repository.
+commits, upload artifacts, publish releases, and does not call providers.
+
+The packet is AO2 execution evidence for a future governed live-mutation chain;
+it is not self-authorizing. AO2 must not perform a live repository mutation
+unless the caller provides explicit exact-scope operator approval for the first
+docs-only class and the surrounding Foundry approval gate, Covenant ticket,
+Forge guard, Sentinel/Promoter boundary, rollback rehearsal, and Command
+readback all pass. Broad or fully unsupervised complex live mutation remains
+outside AO2's claimed authority.
 
 Run the explicit live self-change rehearsal with:
 
