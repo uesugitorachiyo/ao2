@@ -11,8 +11,11 @@ use sdd_planner::dispatch::{
 use sdd_planner::provider::claude::ClaudeProvider;
 use sdd_planner::provider::codex::CodexProvider;
 use sdd_planner::{
-    orchestrate, scan, validate, OrchestrateError, Plan, Provider, ProviderError, SurfaceMap,
+    canonical_json, orchestrate, scan, shrink, validate, OrchestrateError, Plan, Provider,
+    ProviderError, SurfaceMap, DEFAULT_BUDGET_TOKENS,
 };
+use serde::Serialize;
+use sha2::{Digest, Sha256};
 
 #[derive(Debug, Subcommand)]
 pub enum SddCommand {
@@ -23,6 +26,12 @@ pub enum SddCommand {
         target: PathBuf,
         #[arg(long)]
         provider: SddProvider,
+        #[arg(
+            long = "context-budget-tokens",
+            default_value_t = DEFAULT_BUDGET_TOKENS,
+            help = "Token budget for the shrunken SDD planning surface map"
+        )]
+        context_budget_tokens: usize,
         #[arg(long)]
         out: Option<PathBuf>,
     },
@@ -81,8 +90,9 @@ fn run_inner(command: SddCommand) -> std::result::Result<(), SddCliError> {
             prompt,
             target,
             provider,
+            context_budget_tokens,
             out,
-        } => sdd_plan(prompt, target, provider, out),
+        } => sdd_plan(prompt, target, provider, context_budget_tokens, out),
         SddCommand::Validate { plan, surface_map } => sdd_validate(plan, surface_map),
         SddCommand::Dispatch {
             plan,
@@ -97,11 +107,23 @@ fn sdd_plan(
     prompt: String,
     target: PathBuf,
     provider_kind: SddProvider,
+    context_budget_tokens: usize,
     out: Option<PathBuf>,
 ) -> std::result::Result<(), SddCliError> {
     let prompt_text = read_prompt(&prompt)?;
     let head_sha = git_head_sha(&target).unwrap_or_else(|| "0".repeat(40));
     let surface_map = scan(&target, head_sha).map_err(SddCliError::Io)?;
+    let full_surface_map_sha256 = surface_map_sha256(&surface_map)?;
+    let shrunken_surface_map = shrink(&surface_map, &prompt_text, context_budget_tokens);
+    let shrunken_surface_map_sha256 = surface_map_sha256(&shrunken_surface_map)?;
+    let context_metadata = ContextMetadata {
+        full_surface_map_sha256,
+        shrunken_surface_map_sha256,
+        full_file_count: surface_map.files.len(),
+        shrunken_file_count: shrunken_surface_map.files.len(),
+        context_budget_tokens,
+        context_shrink_enabled: true,
+    };
     let build_log_root = target.join("target").join("sdd-planner");
 
     let provider: Box<dyn Provider> = match provider_kind {
@@ -112,12 +134,17 @@ fn sdd_plan(
     let outcome = orchestrate(
         provider.as_ref(),
         &prompt_text,
-        &surface_map,
+        &shrunken_surface_map,
         &build_log_root,
         &target,
         provider_kind.as_str(),
     )
     .map_err(SddCliError::Orchestrate)?;
+
+    write_context_metadata(
+        &outcome.build_log_dir.join("context.json"),
+        &context_metadata,
+    )?;
 
     if let Some(path) = out {
         write_text(&path, &outcome.canonical_json)?;
@@ -127,6 +154,27 @@ fn sdd_plan(
     println!("plan_id={}", outcome.plan_id);
     println!("build_log_dir={}", outcome.build_log_dir.display());
     println!("attempts_used={}", outcome.attempts_used);
+    println!(
+        "full_surface_map_sha256={}",
+        context_metadata.full_surface_map_sha256
+    );
+    println!(
+        "shrunken_surface_map_sha256={}",
+        context_metadata.shrunken_surface_map_sha256
+    );
+    println!("full_file_count={}", context_metadata.full_file_count);
+    println!(
+        "shrunken_file_count={}",
+        context_metadata.shrunken_file_count
+    );
+    println!(
+        "context_budget_tokens={}",
+        context_metadata.context_budget_tokens
+    );
+    println!(
+        "context_shrink_enabled={}",
+        context_metadata.context_shrink_enabled
+    );
     Ok(())
 }
 
@@ -201,6 +249,43 @@ fn write_text(path: &Path, text: &str) -> std::result::Result<(), SddCliError> {
         fs::create_dir_all(parent).map_err(SddCliError::Io)?;
     }
     fs::write(path, text).map_err(SddCliError::Io)
+}
+
+#[derive(Debug, Serialize)]
+struct ContextMetadata {
+    full_surface_map_sha256: String,
+    shrunken_surface_map_sha256: String,
+    full_file_count: usize,
+    shrunken_file_count: usize,
+    context_budget_tokens: usize,
+    context_shrink_enabled: bool,
+}
+
+fn write_context_metadata(
+    path: &Path,
+    metadata: &ContextMetadata,
+) -> std::result::Result<(), SddCliError> {
+    let value = serde_json::to_value(metadata).map_err(SddCliError::Serde)?;
+    write_text(path, &canonical_json(&value))
+}
+
+fn surface_map_sha256(surface_map: &SurfaceMap) -> std::result::Result<String, SddCliError> {
+    let value = serde_json::to_value(surface_map).map_err(SddCliError::Serde)?;
+    let canonical = canonical_json(&value);
+    let mut hasher = Sha256::new();
+    hasher.update(canonical.as_bytes());
+    Ok(hex_lower(hasher.finalize()))
+}
+
+fn hex_lower(bytes: impl AsRef<[u8]>) -> String {
+    use std::fmt::Write as _;
+
+    let bytes = bytes.as_ref();
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        write!(&mut out, "{byte:02x}").expect("write to string");
+    }
+    out
 }
 
 fn git_head_sha(target: &Path) -> Option<String> {

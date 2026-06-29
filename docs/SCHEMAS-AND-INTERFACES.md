@@ -177,6 +177,41 @@ MVP artifact types:
 - `closure_report`
 - `evidence_pack`
 
+### SDD Planning Context Interface
+
+`ao2 sdd plan` scans the target repository into a deterministic `surface_map`
+metadata object, then uses token-aware context shrink by default before sending
+the provider request. The provider sees bounded file metadata only: paths, kinds,
+hashes, and public symbols. AO2 does not send full file bodies and does not rely
+on long conversational compaction for SDD planning.
+
+The default planning budget is `8000` cl100k_base tokens and can be overridden
+per run:
+
+```sh
+ao2 sdd plan \
+  --prompt @prompt.md \
+  --target /path/to/repo \
+  --provider codex \
+  --context-budget-tokens 12000 \
+  --out plan.json
+```
+
+The full scanned map is still measured for provenance. Provider planning,
+validation, and `target.surface_map_sha256` all use the same shrunken map.
+Each successful plan writes `<target>/target/sdd-planner/<plan_id>/context.json`
+and also prints:
+
+- `full_surface_map_sha256`
+- `shrunken_surface_map_sha256`
+- `full_file_count`
+- `shrunken_file_count`
+- `context_budget_tokens`
+- `context_shrink_enabled`
+
+AO Atlas remains the oversized mission/workgraph context layer. The AO2 SDD
+shrinker is the per-run tactical selector for the immediate planning prompt.
+
 ### `policy_decision.schema.json`
 
 ## SDD Run Spec Provider Modes
