@@ -101,13 +101,18 @@ npm run live-mutation:dry-run-packet
 
 The packet emits `ao2.live-mutation-dry-run-packet.v1` under
 `target/live-mutation-dry-run-packet/latest/summary.json`, plus proposed and
-rollback patch artifacts for a tiny documentation-only mutation class. It
-records the exact changed-file list, verification plan, rollback patch,
-docs-only dry-run apply result, forbidden-path checks, authority boundary,
-provider boundary, and session boundary. The patch is applied and rolled back
-only inside a temporary isolated workspace to prove the exact patch and rollback
-pair. It does not apply the patch to the live repository, create a branch, push
-commits, upload artifacts, publish releases, and does not call providers.
+rollback patch artifacts for `docs_only_single_file` by default. It records the
+exact changed-file list, verification plan, rollback patch, docs-only dry-run
+apply result, forbidden-path checks, authority boundary, provider boundary,
+session boundary, and an embedded `ao2.bounded-patch-packet.v1`. That bounded
+patch packet names `mutation_class`, `allowed_paths`, `forbidden_paths`,
+`rollback_patch`, `verification_commands`, `expected_diff_limits`, and
+`evidence_digests`. AO2 validates the class before the isolated dry-run apply
+and refuses code or higher classes such as `low_risk_code`.
+The patch is applied and rolled back only inside a temporary isolated workspace
+to prove the exact patch and rollback pair. It does not apply the patch to the
+live repository, create a branch, push commits, upload artifacts, publish
+releases, and does not call providers.
 
 The packet is AO2 execution evidence for a future governed live-mutation chain;
 it is not self-authorizing. AO2 must not perform a live repository mutation
