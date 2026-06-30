@@ -304,10 +304,10 @@ def test_live_mutation_dry_run_packet_emits_test_only_packet(tmp_path):
     assert summary["session_boundary"]["applies_patch"] is False
 
 
-def test_live_mutation_dry_run_packet_denies_code_class(tmp_path):
-    verification_doc = REPO / "docs/VERIFICATION.md"
-    before_sha = sha256(verification_doc)
-    out_root = tmp_path / "live-mutation-denied-packet"
+def test_live_mutation_dry_run_packet_emits_low_risk_code_dry_run_packet(tmp_path):
+    code_target = REPO / "scripts/run-sh-script.js"
+    before_sha = sha256(code_target)
+    out_root = tmp_path / "live-mutation-low-risk-code-packet"
     result = subprocess.run(
         ["npm", "run", "live-mutation:dry-run-packet"],
         cwd=REPO,
@@ -320,9 +320,123 @@ def test_live_mutation_dry_run_packet_denies_code_class(tmp_path):
         text=True,
     )
 
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "live_mutation_dry_run_packet=passed" in result.stdout
+    assert sha256(code_target) == before_sha
+
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["target"] == {
+        "repo": "ao2",
+        "mutation_class": "low_risk_code",
+        "allowed_path_class": "low_risk_code",
+        "target_files": ["scripts/run-sh-script.js"],
+    }
+    assert summary["bounded_patch_packet"]["mutation_class"] == "low_risk_code"
+    assert summary["bounded_patch_packet"]["allowed_paths"] == [
+        "scripts/run-sh-script.js"
+    ]
+    assert summary["bounded_patch_packet"]["forbidden_paths"] == [
+        ".github/",
+        "crates/",
+        "docs/",
+        "schemas/",
+        "tests/",
+        "package.json",
+        "package-lock.json",
+        "Cargo.toml",
+        "Cargo.lock",
+    ]
+    assert summary["bounded_patch_packet"]["expected_diff_limits"][
+        "max_changed_files"
+    ] == 1
+    assert summary["bounded_patch_packet"]["expected_diff_limits"][
+        "max_added_lines"
+    ] == 1
+    assert summary["bounded_patch_packet"]["expected_diff_limits"][
+        "max_deleted_lines"
+    ] == 0
+    assert summary["bounded_patch_packet"]["verification_commands"] == [
+        "git diff --check",
+        "node scripts/run-sh-script.js scripts/readiness-convergence-gate.sh",
+    ]
+    assert summary["bounded_patch_packet"]["execution_boundary"] == {
+        "applies_to_live_repo": False,
+        "execute_outside_class": False,
+        "class_enforced_before_apply": True,
+    }
+    assert summary["changed_file_plan"] == [
+        {
+            "path": "scripts/run-sh-script.js",
+            "action": "modify",
+            "before_sha256": before_sha,
+            "allowed_path_class": "low_risk_code",
+            "forbidden_path_check": "passed",
+            "proposed_patch": {
+                "path": "proposed-live-mutation.patch",
+                "sha256": summary["changed_file_plan"][0]["proposed_patch"][
+                    "sha256"
+                ],
+            },
+        }
+    ]
+    assert summary["exact_low_risk_code_patch"] == {
+        "required": True,
+        "status": "dry_run_apply_passed",
+        "isolated_workspace": True,
+        "isolated_workspace_retained": False,
+        "target_after_apply_sha256": summary["exact_low_risk_code_patch"][
+            "target_after_apply_sha256"
+        ],
+        "target_after_rollback_sha256": before_sha,
+        "proposed_patch_sha256": summary["changed_file_plan"][0]["proposed_patch"][
+            "sha256"
+        ],
+        "rollback_patch_sha256": summary["rollback_artifact"]["sha256"],
+        "applies_to_live_repo": False,
+    }
+    assert summary["forbidden_path_checks"] == {
+        "status": "passed",
+        "allowed_path_class": "low_risk_code",
+        "forbidden_patterns": [
+            ".github/",
+            "crates/",
+            "docs/",
+            "schemas/",
+            "tests/",
+            "package.json",
+            "package-lock.json",
+            "Cargo.toml",
+            "Cargo.lock",
+        ],
+        "violations": [],
+    }
+    assert summary["session_boundary"]["mutates_repositories"] is False
+    assert summary["session_boundary"]["applies_patch"] is False
+    assert summary["authority_boundary"]["authority_status"] == (
+        "not_granted_in_ao2_packet"
+    )
+
+
+def test_live_mutation_dry_run_packet_denies_higher_code_class(tmp_path):
+    code_target = REPO / "scripts/run-sh-script.js"
+    before_sha = sha256(code_target)
+    out_root = tmp_path / "live-mutation-denied-packet"
+    result = subprocess.run(
+        ["npm", "run", "live-mutation:dry-run-packet"],
+        cwd=REPO,
+        env={
+            **os.environ,
+            "AO2_LIVE_MUTATION_DRY_RUN_PACKET_ROOT": str(out_root),
+            "AO2_LIVE_MUTATION_CLASS": "multi_repo_low_risk",
+        },
+        capture_output=True,
+        text=True,
+    )
+
     assert result.returncode != 0
-    assert "mutation class low_risk_code is denied by AO2 bounded patch packet policy" in (
-        result.stderr + result.stdout
+    assert (
+        "mutation class multi_repo_low_risk is denied by AO2 bounded patch packet policy"
+        in (result.stderr + result.stdout)
     )
     assert not (out_root / "summary.json").exists()
-    assert sha256(verification_doc) == before_sha
+    assert sha256(code_target) == before_sha

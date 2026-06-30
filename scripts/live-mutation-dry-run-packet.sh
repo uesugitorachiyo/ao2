@@ -112,10 +112,36 @@ class_profiles = {
         "max_added_lines": 1,
         "max_deleted_lines": 0,
     },
+    "low_risk_code": {
+        "target_rel": "scripts/run-sh-script.js",
+        "allowed_path_class": "low_risk_code",
+        "marker": "// AO2 low_risk_code dry-run mutation packet marker",
+        "needle": "const root = path.resolve(__dirname, \"..\");\n",
+        "insert": "before",
+        "forbidden_path_patterns": [
+            ".github/",
+            "crates/",
+            "docs/",
+            "schemas/",
+            "tests/",
+            "package.json",
+            "package-lock.json",
+            "Cargo.toml",
+            "Cargo.lock",
+        ],
+        "verification_commands": [
+            "git diff --check",
+            "node scripts/run-sh-script.js scripts/readiness-convergence-gate.sh",
+        ],
+        "exact_patch_key": "exact_low_risk_code_patch",
+        "temp_prefix": "ao2-low-risk-code-patch-",
+        "max_changed_files": 1,
+        "max_added_lines": 1,
+        "max_deleted_lines": 0,
+    },
 }
 denied_classes = {
     "docs_config_only",
-    "low_risk_code",
     "multi_repo_low_risk",
     "complex_repo_mutation",
 }
