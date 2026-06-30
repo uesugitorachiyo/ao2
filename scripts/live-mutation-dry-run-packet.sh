@@ -15,6 +15,7 @@ python3 - "$ROOT" "$SUMMARY" "$PROPOSED_PATCH" "$ROLLBACK_PATCH" "$VERIFICATION_
 import difflib
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -23,16 +24,44 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 root = Path(sys.argv[1])
-summary_path = Path(sys.argv[2])
-proposed_patch_path = Path(sys.argv[3])
-rollback_patch_path = Path(sys.argv[4])
-verification_plan_path = Path(sys.argv[5])
+summary_path = Path(sys.argv[2]).resolve()
+proposed_patch_path = Path(sys.argv[3]).resolve()
+rollback_patch_path = Path(sys.argv[4]).resolve()
+verification_plan_path = Path(sys.argv[5]).resolve()
 
 target_rel = "docs/VERIFICATION.md"
 target_path = root / target_rel
 original = target_path.read_text(encoding="utf-8")
 before_sha = hashlib.sha256(target_path.read_bytes()).hexdigest()
 marker = "npm run live-mutation:dry-run-packet # dry-run AO2 mutation execution packet"
+mutation_class = os.environ.get("AO2_LIVE_MUTATION_CLASS", "docs_only_single_file")
+allowed_class_limits = {
+    "docs_only_single_file": {
+        "max_changed_files": 1,
+        "max_added_lines": 1,
+        "max_deleted_lines": 0,
+    },
+    "docs_only_multi_file": {
+        "max_changed_files": 2,
+        "max_added_lines": 8,
+        "max_deleted_lines": 4,
+    },
+}
+denied_classes = {
+    "docs_config_only",
+    "test_only",
+    "low_risk_code",
+    "multi_repo_low_risk",
+    "complex_repo_mutation",
+}
+if mutation_class in denied_classes:
+    raise SystemExit(
+        f"mutation class {mutation_class} is denied by AO2 bounded patch packet policy"
+    )
+if mutation_class not in allowed_class_limits:
+    raise SystemExit(
+        f"mutation class {mutation_class} is not supported by AO2 bounded patch packet policy"
+    )
 
 if marker in original:
     raise SystemExit("live-mutation dry-run packet marker already exists in target")
@@ -65,8 +94,35 @@ def unified_diff(before: str, after: str) -> str:
     return text
 
 
+def diff_counts(diff_text: str) -> dict:
+    added = 0
+    deleted = 0
+    for line in diff_text.splitlines():
+        if line.startswith("+++") or line.startswith("---"):
+            continue
+        if line.startswith("+"):
+            added += 1
+        elif line.startswith("-"):
+            deleted += 1
+    return {"added": added, "deleted": deleted}
+
+
 proposed_patch = unified_diff(original, proposed)
 rollback_patch = unified_diff(proposed, original)
+proposed_patch_sha = sha256_text(proposed_patch)
+rollback_patch_sha = sha256_text(rollback_patch)
+patch_counts = diff_counts(proposed_patch)
+class_limits = allowed_class_limits[mutation_class]
+if patch_counts["added"] > class_limits["max_added_lines"]:
+    raise SystemExit(
+        f"proposed patch additions exceed {mutation_class} limit: {patch_counts['added']}"
+    )
+if patch_counts["deleted"] > class_limits["max_deleted_lines"]:
+    raise SystemExit(
+        f"proposed patch deletions exceed {mutation_class} limit: {patch_counts['deleted']}"
+    )
+if class_limits["max_changed_files"] < 1:
+    raise SystemExit("bounded patch packet class limit must allow at least one file")
 proposed_patch_path.write_text(proposed_patch, encoding="utf-8")
 rollback_patch_path.write_text(rollback_patch, encoding="utf-8")
 
@@ -87,6 +143,13 @@ forbidden_path_violations = [
 ]
 if forbidden_path_violations:
     raise SystemExit(f"target path is outside docs-only allowlist: {target_rel}")
+allowed_paths = [target_rel]
+if target_rel not in allowed_paths:
+    raise SystemExit("target path is not in bounded patch packet allowed_paths")
+if len(allowed_paths) > class_limits["max_changed_files"]:
+    raise SystemExit(
+        f"bounded patch packet changed-file count exceeds {mutation_class} limit"
+    )
 
 with tempfile.TemporaryDirectory(prefix="ao2-docs-only-patch-") as temp_dir:
     isolated_root = Path(temp_dir)
@@ -137,15 +200,52 @@ verification_plan_path.write_text(
     json.dumps(verification_plan, indent=2, sort_keys=True) + "\n",
     encoding="utf-8",
 )
+verification_plan_sha = sha256_file(verification_plan_path)
 
 source_digest = hashlib.sha256(
     "\n".join([
         before_sha,
-        sha256_text(proposed_patch),
-        sha256_text(rollback_patch),
-        sha256_file(verification_plan_path),
+        proposed_patch_sha,
+        rollback_patch_sha,
+        verification_plan_sha,
+        mutation_class,
+        "ao2.bounded-patch-packet.v1",
     ]).encode("utf-8")
 ).hexdigest()
+bounded_patch_packet = {
+    "schema_version": "ao2.bounded-patch-packet.v1",
+    "status": "class_validated_dry_run_only",
+    "mutation_class": mutation_class,
+    "allowed_paths": allowed_paths,
+    "forbidden_paths": forbidden_path_patterns,
+    "proposed_patch": {
+        "path": proposed_patch_path.name,
+        "sha256": proposed_patch_sha,
+    },
+    "rollback_patch": {
+        "path": rollback_patch_path.name,
+        "sha256": rollback_patch_sha,
+    },
+    "verification_commands": verification_plan["commands"],
+    "expected_diff_limits": {
+        "max_changed_files": class_limits["max_changed_files"],
+        "max_added_lines": class_limits["max_added_lines"],
+        "max_deleted_lines": class_limits["max_deleted_lines"],
+        "max_patch_bytes": len(proposed_patch.encode("utf-8")),
+    },
+    "evidence_digests": {
+        "target_before_sha256": before_sha,
+        "proposed_patch_sha256": proposed_patch_sha,
+        "rollback_patch_sha256": rollback_patch_sha,
+        "verification_plan_sha256": verification_plan_sha,
+        "source_digest_sha256": source_digest,
+    },
+    "execution_boundary": {
+        "applies_to_live_repo": False,
+        "execute_outside_class": False,
+        "class_enforced_before_apply": True,
+    },
+}
 
 payload = {
     "schema_version": "ao2.live-mutation-dry-run-packet.v1",
@@ -153,10 +253,11 @@ payload = {
     "status": "dry_run_packet_ready",
     "target": {
         "repo": "ao2",
-        "mutation_class": "tiny_documentation_change",
+        "mutation_class": mutation_class,
         "allowed_path_class": "docs_only",
-        "target_files": [target_rel],
+        "target_files": allowed_paths,
     },
+    "bounded_patch_packet": bounded_patch_packet,
     "changed_file_plan": [
         {
             "path": target_rel,
@@ -166,7 +267,7 @@ payload = {
             "forbidden_path_check": "passed",
             "proposed_patch": {
                 "path": proposed_patch_path.name,
-                "sha256": sha256_text(proposed_patch),
+                "sha256": proposed_patch_sha,
             },
         }
     ],
@@ -180,7 +281,7 @@ payload = {
     "rollback_artifact": {
         "required": True,
         "path": rollback_patch_path.name,
-        "sha256": sha256_text(rollback_patch),
+        "sha256": rollback_patch_sha,
         "same_change_class": True,
         "rehearsal_status": "passed_in_isolated_workspace",
     },
@@ -191,8 +292,8 @@ payload = {
         "isolated_workspace_retained": False,
         "target_after_apply_sha256": isolated_after_sha,
         "target_after_rollback_sha256": isolated_rollback_sha,
-        "proposed_patch_sha256": sha256_text(proposed_patch),
-        "rollback_patch_sha256": sha256_text(rollback_patch),
+        "proposed_patch_sha256": proposed_patch_sha,
+        "rollback_patch_sha256": rollback_patch_sha,
         "applies_to_live_repo": False,
     },
     "forbidden_path_checks": {
@@ -238,6 +339,7 @@ payload = {
             proposed_patch_path.name,
             rollback_patch_path.name,
             verification_plan_path.name,
+            "bounded_patch_packet",
         ],
     },
     "next_actions": [
