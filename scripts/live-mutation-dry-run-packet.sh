@@ -113,31 +113,51 @@ class_profiles = {
         "max_deleted_lines": 0,
     },
     "low_risk_code": {
-        "target_rel": "scripts/run-sh-script.js",
+        "target_rel": "crates/ao2-core/src/lib.rs",
         "allowed_path_class": "low_risk_code",
         "marker": "// AO2 low_risk_code dry-run mutation packet marker",
-        "needle": "const root = path.resolve(__dirname, \"..\");\n",
+        "needle": "mod obligations;\n",
         "insert": "before",
         "forbidden_path_patterns": [
             ".github/",
-            "crates/",
             "docs/",
+            "examples/",
+            "fixtures/",
             "schemas/",
-            "tests/",
+            "scripts/",
+            "skills/",
             "package.json",
             "package-lock.json",
+            "pnpm-workspace.yaml",
             "Cargo.toml",
             "Cargo.lock",
+            "deny.toml",
+            "rust-toolchain.toml",
+            "crates/ao2-adapters/",
+            "crates/ao2-adapter-codex/",
+            "crates/ao2-adapter-claude/",
+            "crates/sdd-planner/src/provider/",
         ],
         "verification_commands": [
             "git diff --check",
-            "node scripts/run-sh-script.js scripts/readiness-convergence-gate.sh",
+            "cargo test -p ao2-core",
         ],
         "exact_patch_key": "exact_low_risk_code_patch",
         "temp_prefix": "ao2-low-risk-code-patch-",
-        "max_changed_files": 1,
+        "max_changed_files": 2,
+        "max_source_files": 1,
+        "max_test_files": 1,
         "max_added_lines": 1,
         "max_deleted_lines": 0,
+        "denied_path_classes": [
+            "scripts",
+            "ci_workflows",
+            "release",
+            "secrets",
+            "config_expansion",
+            "provider_paths",
+            "broad_refactors",
+        ],
     },
 }
 denied_classes = {
@@ -156,6 +176,35 @@ if mutation_class not in class_profiles:
 
 profile = class_profiles[mutation_class]
 target_rel = profile["target_rel"]
+if mutation_class == "low_risk_code":
+    target_rel = os.environ.get("AO2_LIVE_MUTATION_TARGET", target_rel)
+
+
+def low_risk_path_kind(path: str) -> str:
+    if path.startswith("crates/ao2-core/src/") and path.endswith(".rs"):
+        return "source"
+    if path.startswith("crates/ao2-core/tests/") and path.endswith(".rs"):
+        return "test"
+    return "forbidden"
+
+
+def changed_path_counts(paths: list[str]) -> dict:
+    counts = {"source": 0, "test": 0}
+    for path in paths:
+        if mutation_class != "low_risk_code":
+            continue
+        kind = low_risk_path_kind(path)
+        if kind == "forbidden":
+            raise SystemExit(
+                f"target path is outside low_risk_code allowlist: {path}"
+            )
+        counts[kind] += 1
+    return counts
+
+
+if mutation_class == "low_risk_code":
+    changed_path_counts([target_rel])
+
 target_path = root / target_rel
 original = target_path.read_text(encoding="utf-8")
 before_sha = hashlib.sha256(target_path.read_bytes()).hexdigest()
@@ -223,8 +272,6 @@ if patch_counts["deleted"] > class_limits["max_deleted_lines"]:
     )
 if class_limits["max_changed_files"] < 1:
     raise SystemExit("bounded patch packet class limit must allow at least one file")
-proposed_patch_path.write_text(proposed_patch, encoding="utf-8")
-rollback_patch_path.write_text(rollback_patch, encoding="utf-8")
 
 forbidden_path_patterns = profile["forbidden_path_patterns"]
 forbidden_path_violations = [
@@ -243,6 +290,15 @@ if len(allowed_paths) > class_limits["max_changed_files"]:
     raise SystemExit(
         f"bounded patch packet changed-file count exceeds {mutation_class} limit"
     )
+path_counts = changed_path_counts(allowed_paths)
+if mutation_class == "low_risk_code":
+    if path_counts["source"] > class_limits["max_source_files"]:
+        raise SystemExit("low_risk_code packet exceeds one source file")
+    if path_counts["test"] > class_limits["max_test_files"]:
+        raise SystemExit("low_risk_code packet exceeds one test file")
+
+proposed_patch_path.write_text(proposed_patch, encoding="utf-8")
+rollback_patch_path.write_text(rollback_patch, encoding="utf-8")
 
 with tempfile.TemporaryDirectory(prefix=profile["temp_prefix"]) as temp_dir:
     isolated_root = Path(temp_dir)
@@ -335,6 +391,16 @@ bounded_patch_packet = {
         "class_enforced_before_apply": True,
     },
 }
+if mutation_class == "low_risk_code":
+    bounded_patch_packet["path_limits"] = {
+        "mutation_class": mutation_class,
+        "max_source_files": class_limits["max_source_files"],
+        "max_test_files": class_limits["max_test_files"],
+        "max_changed_files": class_limits["max_changed_files"],
+        "requires_rollback_patch": True,
+        "requires_verification_commands": True,
+        "denied_path_classes": class_limits["denied_path_classes"],
+    }
 
 payload = {
     "schema_version": "ao2.live-mutation-dry-run-packet.v1",
