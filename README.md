@@ -107,11 +107,12 @@ apply result, forbidden-path checks, authority boundary, provider boundary,
 session boundary, and an embedded `ao2.bounded-patch-packet.v1`. That bounded
 patch packet names `mutation_class`, `allowed_paths`, `forbidden_paths`,
 `rollback_patch`, `verification_commands`, `expected_diff_limits`, and
-`evidence_digests`. AO2 validates the class before the isolated dry-run apply
-and refuses code or higher classes such as `low_risk_code`. Setting
-`AO2_LIVE_MUTATION_CLASS=test_only` emits a one-test-file dry-run packet with
-test-scoped verification and rollback evidence; it still does not grant live
-test mutation or production-code authority.
+`evidence_digests`. AO2 validates the class before the isolated dry-run apply.
+Setting `AO2_LIVE_MUTATION_CLASS=test_only` emits a one-test-file dry-run packet
+with test-scoped verification and rollback evidence. Setting
+`AO2_LIVE_MUTATION_CLASS=low_risk_code` emits a one-script-file dry-run packet
+with rollback and class-bound evidence, but it still does not grant live
+production-code execution authority. Higher code classes remain denied.
 The patch is applied and rolled back only inside a temporary isolated workspace
 to prove the exact patch and rollback pair. It does not apply the patch to the
 live repository, create a branch, push commits, upload artifacts, publish
