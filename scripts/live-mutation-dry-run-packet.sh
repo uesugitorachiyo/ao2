@@ -29,27 +29,92 @@ proposed_patch_path = Path(sys.argv[3]).resolve()
 rollback_patch_path = Path(sys.argv[4]).resolve()
 verification_plan_path = Path(sys.argv[5]).resolve()
 
-target_rel = "docs/VERIFICATION.md"
-target_path = root / target_rel
-original = target_path.read_text(encoding="utf-8")
-before_sha = hashlib.sha256(target_path.read_bytes()).hexdigest()
-marker = "npm run live-mutation:dry-run-packet # dry-run AO2 mutation execution packet"
 mutation_class = os.environ.get("AO2_LIVE_MUTATION_CLASS", "docs_only_single_file")
-allowed_class_limits = {
+class_profiles = {
     "docs_only_single_file": {
+        "target_rel": "docs/VERIFICATION.md",
+        "allowed_path_class": "docs_only",
+        "marker": "npm run live-mutation:dry-run-packet # dry-run AO2 mutation execution packet",
+        "needle": "npm run verify\n",
+        "insert": "after",
+        "forbidden_path_patterns": [
+            ".github/",
+            "crates/",
+            "scripts/",
+            "schemas/",
+            "package.json",
+            "package-lock.json",
+            "Cargo.toml",
+            "Cargo.lock",
+        ],
+        "verification_commands": [
+            "git diff --check",
+            "npm run public:hardening",
+            "npm run rsi:claim-readiness",
+        ],
+        "exact_patch_key": "exact_docs_only_patch",
+        "temp_prefix": "ao2-docs-only-patch-",
         "max_changed_files": 1,
         "max_added_lines": 1,
         "max_deleted_lines": 0,
     },
     "docs_only_multi_file": {
+        "target_rel": "docs/VERIFICATION.md",
+        "allowed_path_class": "docs_only",
+        "marker": "npm run live-mutation:dry-run-packet # dry-run AO2 mutation execution packet",
+        "needle": "npm run verify\n",
+        "insert": "after",
+        "forbidden_path_patterns": [
+            ".github/",
+            "crates/",
+            "scripts/",
+            "schemas/",
+            "package.json",
+            "package-lock.json",
+            "Cargo.toml",
+            "Cargo.lock",
+        ],
+        "verification_commands": [
+            "git diff --check",
+            "npm run public:hardening",
+            "npm run rsi:claim-readiness",
+        ],
+        "exact_patch_key": "exact_docs_only_patch",
+        "temp_prefix": "ao2-docs-only-patch-",
         "max_changed_files": 2,
         "max_added_lines": 8,
         "max_deleted_lines": 4,
     },
+    "test_only": {
+        "target_rel": "tests/test_readiness_convergence_gate.py",
+        "allowed_path_class": "test_only",
+        "marker": "# AO2 test_only dry-run mutation packet marker",
+        "needle": "def test_readiness_convergence_script_is_registered_and_operational():\n",
+        "insert": "before",
+        "forbidden_path_patterns": [
+            ".github/",
+            "crates/",
+            "docs/",
+            "scripts/",
+            "schemas/",
+            "package.json",
+            "package-lock.json",
+            "Cargo.toml",
+            "Cargo.lock",
+        ],
+        "verification_commands": [
+            "git diff --check",
+            "python3 -m pytest tests/test_readiness_convergence_gate.py",
+        ],
+        "exact_patch_key": "exact_test_only_patch",
+        "temp_prefix": "ao2-test-only-patch-",
+        "max_changed_files": 1,
+        "max_added_lines": 1,
+        "max_deleted_lines": 0,
+    },
 }
 denied_classes = {
     "docs_config_only",
-    "test_only",
     "low_risk_code",
     "multi_repo_low_risk",
     "complex_repo_mutation",
@@ -58,19 +123,28 @@ if mutation_class in denied_classes:
     raise SystemExit(
         f"mutation class {mutation_class} is denied by AO2 bounded patch packet policy"
     )
-if mutation_class not in allowed_class_limits:
+if mutation_class not in class_profiles:
     raise SystemExit(
         f"mutation class {mutation_class} is not supported by AO2 bounded patch packet policy"
     )
 
+profile = class_profiles[mutation_class]
+target_rel = profile["target_rel"]
+target_path = root / target_rel
+original = target_path.read_text(encoding="utf-8")
+before_sha = hashlib.sha256(target_path.read_bytes()).hexdigest()
+marker = profile["marker"]
 if marker in original:
     raise SystemExit("live-mutation dry-run packet marker already exists in target")
 
-needle = "npm run verify\n"
+needle = profile["needle"]
 if needle not in original:
     raise SystemExit("unable to locate verification ledger insertion point")
 
-proposed = original.replace(needle, needle + marker + "\n", 1)
+if profile["insert"] == "after":
+    proposed = original.replace(needle, needle + marker + "\n", 1)
+else:
+    proposed = original.replace(needle, marker + "\n" + needle, 1)
 
 
 def sha256_text(value: str) -> str:
@@ -112,7 +186,7 @@ rollback_patch = unified_diff(proposed, original)
 proposed_patch_sha = sha256_text(proposed_patch)
 rollback_patch_sha = sha256_text(rollback_patch)
 patch_counts = diff_counts(proposed_patch)
-class_limits = allowed_class_limits[mutation_class]
+class_limits = profile
 if patch_counts["added"] > class_limits["max_added_lines"]:
     raise SystemExit(
         f"proposed patch additions exceed {mutation_class} limit: {patch_counts['added']}"
@@ -126,23 +200,16 @@ if class_limits["max_changed_files"] < 1:
 proposed_patch_path.write_text(proposed_patch, encoding="utf-8")
 rollback_patch_path.write_text(rollback_patch, encoding="utf-8")
 
-forbidden_path_patterns = [
-    ".github/",
-    "crates/",
-    "scripts/",
-    "schemas/",
-    "package.json",
-    "package-lock.json",
-    "Cargo.toml",
-    "Cargo.lock",
-]
+forbidden_path_patterns = profile["forbidden_path_patterns"]
 forbidden_path_violations = [
     target_rel
     for forbidden in forbidden_path_patterns
     if target_rel == forbidden.rstrip("/") or target_rel.startswith(forbidden)
 ]
 if forbidden_path_violations:
-    raise SystemExit(f"target path is outside docs-only allowlist: {target_rel}")
+    raise SystemExit(
+        f"target path is outside {profile['allowed_path_class']} allowlist: {target_rel}"
+    )
 allowed_paths = [target_rel]
 if target_rel not in allowed_paths:
     raise SystemExit("target path is not in bounded patch packet allowed_paths")
@@ -151,7 +218,7 @@ if len(allowed_paths) > class_limits["max_changed_files"]:
         f"bounded patch packet changed-file count exceeds {mutation_class} limit"
     )
 
-with tempfile.TemporaryDirectory(prefix="ao2-docs-only-patch-") as temp_dir:
+with tempfile.TemporaryDirectory(prefix=profile["temp_prefix"]) as temp_dir:
     isolated_root = Path(temp_dir)
     isolated_target = isolated_root / target_rel
     isolated_target.parent.mkdir(parents=True, exist_ok=True)
@@ -190,11 +257,7 @@ with tempfile.TemporaryDirectory(prefix="ao2-docs-only-patch-") as temp_dir:
 verification_plan = {
     "schema_version": "ao2.live-mutation-dry-run-verification-plan.v1",
     "required": True,
-    "commands": [
-        "git diff --check",
-        "npm run public:hardening",
-        "npm run rsi:claim-readiness",
-    ],
+    "commands": profile["verification_commands"],
 }
 verification_plan_path.write_text(
     json.dumps(verification_plan, indent=2, sort_keys=True) + "\n",
@@ -254,7 +317,7 @@ payload = {
     "target": {
         "repo": "ao2",
         "mutation_class": mutation_class,
-        "allowed_path_class": "docs_only",
+        "allowed_path_class": profile["allowed_path_class"],
         "target_files": allowed_paths,
     },
     "bounded_patch_packet": bounded_patch_packet,
@@ -263,7 +326,7 @@ payload = {
             "path": target_rel,
             "action": "modify",
             "before_sha256": before_sha,
-            "allowed_path_class": "docs_only",
+            "allowed_path_class": profile["allowed_path_class"],
             "forbidden_path_check": "passed",
             "proposed_patch": {
                 "path": proposed_patch_path.name,
@@ -285,7 +348,7 @@ payload = {
         "same_change_class": True,
         "rehearsal_status": "passed_in_isolated_workspace",
     },
-    "exact_docs_only_patch": {
+    profile["exact_patch_key"]: {
         "required": True,
         "status": "dry_run_apply_passed",
         "isolated_workspace": True,
@@ -298,7 +361,7 @@ payload = {
     },
     "forbidden_path_checks": {
         "status": "passed",
-        "allowed_path_class": "docs_only",
+        "allowed_path_class": profile["allowed_path_class"],
         "forbidden_patterns": forbidden_path_patterns,
         "violations": [],
     },
