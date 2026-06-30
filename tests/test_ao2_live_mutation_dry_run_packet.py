@@ -228,6 +228,82 @@ def test_live_mutation_dry_run_packet_emits_non_mutating_execution_plan(tmp_path
     assert str(Path.home()) not in serialized
 
 
+def test_live_mutation_dry_run_packet_emits_test_only_packet(tmp_path):
+    test_target = REPO / "tests/test_readiness_convergence_gate.py"
+    before_sha = sha256(test_target)
+    out_root = tmp_path / "live-mutation-test-only-packet"
+    result = subprocess.run(
+        ["npm", "run", "live-mutation:dry-run-packet"],
+        cwd=REPO,
+        env={
+            **os.environ,
+            "AO2_LIVE_MUTATION_DRY_RUN_PACKET_ROOT": str(out_root),
+            "AO2_LIVE_MUTATION_CLASS": "test_only",
+        },
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "live_mutation_dry_run_packet=passed" in result.stdout
+    assert sha256(test_target) == before_sha
+
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["target"] == {
+        "repo": "ao2",
+        "mutation_class": "test_only",
+        "allowed_path_class": "test_only",
+        "target_files": ["tests/test_readiness_convergence_gate.py"],
+    }
+    assert summary["bounded_patch_packet"]["mutation_class"] == "test_only"
+    assert summary["bounded_patch_packet"]["allowed_paths"] == [
+        "tests/test_readiness_convergence_gate.py"
+    ]
+    assert summary["bounded_patch_packet"]["expected_diff_limits"][
+        "max_changed_files"
+    ] == 1
+    assert summary["bounded_patch_packet"]["expected_diff_limits"][
+        "max_added_lines"
+    ] == 1
+    assert summary["bounded_patch_packet"]["verification_commands"] == [
+        "git diff --check",
+        "python3 -m pytest tests/test_readiness_convergence_gate.py",
+    ]
+    assert summary["changed_file_plan"] == [
+        {
+            "path": "tests/test_readiness_convergence_gate.py",
+            "action": "modify",
+            "before_sha256": before_sha,
+            "allowed_path_class": "test_only",
+            "forbidden_path_check": "passed",
+            "proposed_patch": {
+                "path": "proposed-live-mutation.patch",
+                "sha256": summary["changed_file_plan"][0]["proposed_patch"][
+                    "sha256"
+                ],
+            },
+        }
+    ]
+    assert summary["exact_test_only_patch"] == {
+        "required": True,
+        "status": "dry_run_apply_passed",
+        "isolated_workspace": True,
+        "isolated_workspace_retained": False,
+        "target_after_apply_sha256": summary["exact_test_only_patch"][
+            "target_after_apply_sha256"
+        ],
+        "target_after_rollback_sha256": before_sha,
+        "proposed_patch_sha256": summary["changed_file_plan"][0]["proposed_patch"][
+            "sha256"
+        ],
+        "rollback_patch_sha256": summary["rollback_artifact"]["sha256"],
+        "applies_to_live_repo": False,
+    }
+    assert summary["forbidden_path_checks"]["allowed_path_class"] == "test_only"
+    assert summary["session_boundary"]["mutates_repositories"] is False
+    assert summary["session_boundary"]["applies_patch"] is False
+
+
 def test_live_mutation_dry_run_packet_denies_code_class(tmp_path):
     verification_doc = REPO / "docs/VERIFICATION.md"
     before_sha = sha256(verification_doc)
