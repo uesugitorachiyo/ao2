@@ -305,7 +305,7 @@ def test_live_mutation_dry_run_packet_emits_test_only_packet(tmp_path):
 
 
 def test_live_mutation_dry_run_packet_emits_low_risk_code_dry_run_packet(tmp_path):
-    code_target = REPO / "scripts/run-sh-script.js"
+    code_target = REPO / "crates/ao2-core/src/lib.rs"
     before_sha = sha256(code_target)
     out_root = tmp_path / "live-mutation-low-risk-code-packet"
     result = subprocess.run(
@@ -329,26 +329,35 @@ def test_live_mutation_dry_run_packet_emits_low_risk_code_dry_run_packet(tmp_pat
         "repo": "ao2",
         "mutation_class": "low_risk_code",
         "allowed_path_class": "low_risk_code",
-        "target_files": ["scripts/run-sh-script.js"],
+        "target_files": ["crates/ao2-core/src/lib.rs"],
     }
     assert summary["bounded_patch_packet"]["mutation_class"] == "low_risk_code"
     assert summary["bounded_patch_packet"]["allowed_paths"] == [
-        "scripts/run-sh-script.js"
+        "crates/ao2-core/src/lib.rs"
     ]
     assert summary["bounded_patch_packet"]["forbidden_paths"] == [
         ".github/",
-        "crates/",
         "docs/",
+        "examples/",
+        "fixtures/",
         "schemas/",
-        "tests/",
+        "scripts/",
+        "skills/",
         "package.json",
         "package-lock.json",
+        "pnpm-workspace.yaml",
         "Cargo.toml",
         "Cargo.lock",
+        "deny.toml",
+        "rust-toolchain.toml",
+        "crates/ao2-adapters/",
+        "crates/ao2-adapter-codex/",
+        "crates/ao2-adapter-claude/",
+        "crates/sdd-planner/src/provider/",
     ]
     assert summary["bounded_patch_packet"]["expected_diff_limits"][
         "max_changed_files"
-    ] == 1
+    ] == 2
     assert summary["bounded_patch_packet"]["expected_diff_limits"][
         "max_added_lines"
     ] == 1
@@ -357,8 +366,25 @@ def test_live_mutation_dry_run_packet_emits_low_risk_code_dry_run_packet(tmp_pat
     ] == 0
     assert summary["bounded_patch_packet"]["verification_commands"] == [
         "git diff --check",
-        "node scripts/run-sh-script.js scripts/readiness-convergence-gate.sh",
+        "cargo test -p ao2-core",
     ]
+    assert summary["bounded_patch_packet"]["path_limits"] == {
+        "mutation_class": "low_risk_code",
+        "max_source_files": 1,
+        "max_test_files": 1,
+        "max_changed_files": 2,
+        "requires_rollback_patch": True,
+        "requires_verification_commands": True,
+        "denied_path_classes": [
+            "scripts",
+            "ci_workflows",
+            "release",
+            "secrets",
+            "config_expansion",
+            "provider_paths",
+            "broad_refactors",
+        ],
+    }
     assert summary["bounded_patch_packet"]["execution_boundary"] == {
         "applies_to_live_repo": False,
         "execute_outside_class": False,
@@ -366,7 +392,7 @@ def test_live_mutation_dry_run_packet_emits_low_risk_code_dry_run_packet(tmp_pat
     }
     assert summary["changed_file_plan"] == [
         {
-            "path": "scripts/run-sh-script.js",
+            "path": "crates/ao2-core/src/lib.rs",
             "action": "modify",
             "before_sha256": before_sha,
             "allowed_path_class": "low_risk_code",
@@ -399,14 +425,23 @@ def test_live_mutation_dry_run_packet_emits_low_risk_code_dry_run_packet(tmp_pat
         "allowed_path_class": "low_risk_code",
         "forbidden_patterns": [
             ".github/",
-            "crates/",
             "docs/",
+            "examples/",
+            "fixtures/",
             "schemas/",
-            "tests/",
+            "scripts/",
+            "skills/",
             "package.json",
             "package-lock.json",
+            "pnpm-workspace.yaml",
             "Cargo.toml",
             "Cargo.lock",
+            "deny.toml",
+            "rust-toolchain.toml",
+            "crates/ao2-adapters/",
+            "crates/ao2-adapter-codex/",
+            "crates/ao2-adapter-claude/",
+            "crates/sdd-planner/src/provider/",
         ],
         "violations": [],
     }
@@ -415,6 +450,31 @@ def test_live_mutation_dry_run_packet_emits_low_risk_code_dry_run_packet(tmp_pat
     assert summary["authority_boundary"]["authority_status"] == (
         "not_granted_in_ao2_packet"
     )
+
+
+def test_live_mutation_dry_run_packet_denies_low_risk_script_target(tmp_path):
+    code_target = REPO / "scripts/run-sh-script.js"
+    before_sha = sha256(code_target)
+    out_root = tmp_path / "live-mutation-low-risk-script-denied"
+    result = subprocess.run(
+        ["npm", "run", "live-mutation:dry-run-packet"],
+        cwd=REPO,
+        env={
+            **os.environ,
+            "AO2_LIVE_MUTATION_DRY_RUN_PACKET_ROOT": str(out_root),
+            "AO2_LIVE_MUTATION_CLASS": "low_risk_code",
+            "AO2_LIVE_MUTATION_TARGET": "scripts/run-sh-script.js",
+        },
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "target path is outside low_risk_code allowlist" in (
+        result.stderr + result.stdout
+    )
+    assert not (out_root / "summary.json").exists()
+    assert sha256(code_target) == before_sha
 
 
 def test_live_mutation_dry_run_packet_denies_higher_code_class(tmp_path):

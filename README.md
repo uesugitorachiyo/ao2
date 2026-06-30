@@ -110,9 +110,11 @@ patch packet names `mutation_class`, `allowed_paths`, `forbidden_paths`,
 `evidence_digests`. AO2 validates the class before the isolated dry-run apply.
 Setting `AO2_LIVE_MUTATION_CLASS=test_only` emits a one-test-file dry-run packet
 with test-scoped verification and rollback evidence. Setting
-`AO2_LIVE_MUTATION_CLASS=low_risk_code` emits a one-script-file dry-run packet
-with rollback and class-bound evidence, but it still does not grant live
-production-code execution authority. Higher code classes remain denied.
+`AO2_LIVE_MUTATION_CLASS=low_risk_code` emits a source-bounded dry-run packet
+with max one source file plus one test file, rollback and verification-command
+requirements, and explicit denials for scripts, CI, release, secret,
+config-expansion, provider, and broad-refactor paths. It still does not grant
+live production-code execution authority. Higher code classes remain denied.
 The patch is applied and rolled back only inside a temporary isolated workspace
 to prove the exact patch and rollback pair. It does not apply the patch to the
 live repository, create a branch, push commits, upload artifacts, publish
