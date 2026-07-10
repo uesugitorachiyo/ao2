@@ -3,8 +3,9 @@
 mod sandbox_patch;
 
 pub use sandbox_patch::{
-    SandboxFileKind, SandboxFileState, SandboxPatchApprovalSubject, SandboxPatchOperation,
-    SandboxPatchOperationKind, SANDBOX_PATCH_APPROVAL_SUBJECT_SCHEMA,
+    preview_sandbox_patch, SandboxFileKind, SandboxFileState, SandboxPatchApprovalSubject,
+    SandboxPatchOperation, SandboxPatchOperationKind, SandboxPatchPreview,
+    SANDBOX_PATCH_APPROVAL_SUBJECT_SCHEMA,
 };
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -56,15 +57,6 @@ pub struct SandboxRunResult {
     pub changed_files: Vec<String>,
     pub diff_summary: String,
     pub transcript_summary: ProviderTranscriptSummary,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SandboxPatchPreview {
-    pub target_repo: PathBuf,
-    pub sandbox_path: PathBuf,
-    pub changed_files: Vec<String>,
-    pub diff_summary: String,
-    pub action_digest: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1252,25 +1244,6 @@ fn resolve_windows_path_command(command: &Path) -> Option<PathBuf> {
     None
 }
 
-pub fn preview_sandbox_patch(
-    target_repo: &Path,
-    sandbox_path: &Path,
-) -> Result<SandboxPatchPreview> {
-    ensure_target_repo(target_repo)?;
-    ensure_target_repo(sandbox_path)?;
-    let before = snapshot_files(target_repo)?;
-    let after = snapshot_files(sandbox_path)?;
-    let (changed_files, diff_summary) = summarize_diff(&before, &after);
-    let action_digest = sandbox_patch_digest(&changed_files, &diff_summary);
-    Ok(SandboxPatchPreview {
-        target_repo: target_repo.to_path_buf(),
-        sandbox_path: sandbox_path.to_path_buf(),
-        changed_files,
-        diff_summary,
-        action_digest,
-    })
-}
-
 pub fn apply_sandbox_patch(request: SandboxPatchApplyRequest) -> Result<SandboxPatchApplyResult> {
     let preview = preview_sandbox_patch(&request.target_repo, &request.sandbox_path)?;
     if preview.action_digest != request.expected_digest {
@@ -1303,18 +1276,6 @@ pub fn apply_sandbox_patch(request: SandboxPatchApplyRequest) -> Result<SandboxP
         action_digest: preview.action_digest,
         approver: request.approver,
     })
-}
-
-fn sandbox_patch_digest(changed_files: &[String], diff_summary: &str) -> String {
-    let payload = serde_json::json!({
-        "changed_files": changed_files,
-        "diff_summary": diff_summary
-    });
-    sha256_hex(
-        serde_json::to_string(&payload)
-            .unwrap_or_default()
-            .as_bytes(),
-    )
 }
 
 fn ensure_target_repo(target_repo: &Path) -> Result<()> {
@@ -1373,6 +1334,11 @@ pub fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
         if entry.file_type().is_dir() {
             fs::create_dir_all(&target)
                 .with_context(|| format!("create sandbox dir {}", target.display()))?;
+        } else if entry.file_type().is_symlink() {
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            copy_symlink(entry.path(), &target)?;
         } else if entry.file_type().is_file() {
             if let Some(parent) = target.parent() {
                 fs::create_dir_all(parent)?;
@@ -1383,6 +1349,29 @@ pub fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(unix)]
+fn copy_symlink(source: &Path, target: &Path) -> Result<()> {
+    use std::os::unix::fs::symlink;
+
+    let link_target = fs::read_link(source)
+        .with_context(|| format!("read sandbox symlink {}", source.display()))?;
+    symlink(&link_target, target).with_context(|| {
+        format!(
+            "copy sandbox symlink {} to {}",
+            source.display(),
+            target.display()
+        )
+    })
+}
+
+#[cfg(not(unix))]
+fn copy_symlink(source: &Path, _target: &Path) -> Result<()> {
+    anyhow::bail!(
+        "sandbox symlink copy is unsupported on this platform: {}",
+        source.display()
+    )
 }
 
 fn snapshot_files(root: &Path) -> Result<BTreeMap<String, String>> {

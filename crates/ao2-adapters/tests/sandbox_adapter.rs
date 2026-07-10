@@ -3,9 +3,10 @@ use std::path::Path;
 use std::process::Command;
 
 use ao2_adapters::{
-    apply_sandbox_patch, preview_sandbox_patch, AdapterRunRequest, LocalCliAdapter, ProviderKind,
-    SandboxFileKind, SandboxFileState, SandboxPatchApplyRequest, SandboxPatchApprovalSubject,
-    SandboxPatchOperation, SandboxPatchOperationKind, SandboxRunRequest,
+    apply_sandbox_patch, copy_dir_recursive, preview_sandbox_patch, AdapterRunRequest,
+    LocalCliAdapter, ProviderKind, SandboxFileKind, SandboxFileState, SandboxPatchApplyRequest,
+    SandboxPatchApprovalSubject, SandboxPatchOperation, SandboxPatchOperationKind,
+    SandboxRunRequest,
 };
 
 #[test]
@@ -254,6 +255,152 @@ fn approval_subject_digest_binds_every_contract_field() {
     assert_ne!(reordered.action_digest().unwrap(), original);
 }
 
+#[test]
+fn patch_digest_binds_content_base_repository_and_operation_kind() {
+    let temp = tempfile::tempdir().unwrap();
+    let target = init_git_target(temp.path(), &[("value.txt", b"before\n")]);
+    let sandbox = sandbox_copy(temp.path(), &target);
+    fs::write(sandbox.join("value.txt"), "after-one\n").unwrap();
+
+    let first = preview_sandbox_patch(&target, &sandbox).unwrap();
+    assert_eq!(
+        first.approval_subject.operations[0].kind,
+        SandboxPatchOperationKind::Modified
+    );
+
+    fs::write(sandbox.join("value.txt"), "after-two\n").unwrap();
+    let different_content = preview_sandbox_patch(&target, &sandbox).unwrap();
+    assert_ne!(first.action_digest, different_content.action_digest);
+    assert_ne!(
+        first.approval_subject.operations[0].after,
+        different_content.approval_subject.operations[0].after
+    );
+
+    fs::write(target.join("unrelated.txt"), "new base\n").unwrap();
+    commit_all(&target, "advance base");
+    fs::write(sandbox.join("unrelated.txt"), "new base\n").unwrap();
+    fs::write(sandbox.join("value.txt"), "after-one\n").unwrap();
+    let different_base = preview_sandbox_patch(&target, &sandbox).unwrap();
+    assert_ne!(first.action_digest, different_base.action_digest);
+    assert_ne!(
+        first.approval_subject.base_commit,
+        different_base.approval_subject.base_commit
+    );
+
+    let other_root = temp.path().join("other");
+    fs::create_dir_all(&other_root).unwrap();
+    let other_target = init_git_target(&other_root, &[("value.txt", b"before\n")]);
+    let other_sandbox = sandbox_copy(&other_root, &other_target);
+    fs::write(other_sandbox.join("value.txt"), "after-one\n").unwrap();
+    let different_repo = preview_sandbox_patch(&other_target, &other_sandbox).unwrap();
+    assert_ne!(
+        first.approval_subject.repository_identity,
+        different_repo.approval_subject.repository_identity
+    );
+    assert_ne!(first.action_digest, different_repo.action_digest);
+}
+
+#[test]
+fn patch_preview_rejects_non_git_target() {
+    let temp = tempfile::tempdir().unwrap();
+    let target = temp.path().join("plain-target");
+    let sandbox = temp.path().join("plain-sandbox");
+    fs::create_dir_all(&target).unwrap();
+    fs::create_dir_all(&sandbox).unwrap();
+    fs::write(target.join("value.txt"), "before\n").unwrap();
+    fs::write(sandbox.join("value.txt"), "after\n").unwrap();
+
+    let error = preview_sandbox_patch(&target, &sandbox).unwrap_err();
+    assert!(error.to_string().contains("Git"), "{error:#}");
+}
+
+#[test]
+fn preview_emits_sorted_contiguous_operations() {
+    let temp = tempfile::tempdir().unwrap();
+    let target = init_git_target(temp.path(), &[("z.txt", b"z\n"), ("m.txt", b"m\n")]);
+    let sandbox = sandbox_copy(temp.path(), &target);
+    fs::write(sandbox.join("a.txt"), "a\n").unwrap();
+    fs::write(sandbox.join("z.txt"), "changed\n").unwrap();
+    fs::remove_file(sandbox.join("m.txt")).unwrap();
+
+    let preview = preview_sandbox_patch(&target, &sandbox).unwrap();
+    let paths = preview
+        .approval_subject
+        .operations
+        .iter()
+        .map(|operation| operation.path.as_str())
+        .collect::<Vec<_>>();
+    let orders = preview
+        .approval_subject
+        .operations
+        .iter()
+        .map(|operation| operation.order)
+        .collect::<Vec<_>>();
+    let kinds = preview
+        .approval_subject
+        .operations
+        .iter()
+        .map(|operation| operation.kind.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(paths, vec!["a.txt", "m.txt", "z.txt"]);
+    assert_eq!(orders, vec![0, 1, 2]);
+    assert_eq!(
+        kinds,
+        vec![
+            SandboxPatchOperationKind::Added,
+            SandboxPatchOperationKind::Deleted,
+            SandboxPatchOperationKind::Modified,
+        ]
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn patch_digest_binds_symlink_target_and_executable_mode() {
+    use std::os::unix::fs::{symlink, PermissionsExt};
+
+    let temp = tempfile::tempdir().unwrap();
+    let target = init_git_target(
+        temp.path(),
+        &[("tool.sh", b"#!/bin/sh\n"), ("other.sh", b"#!/bin/sh\n")],
+    );
+    symlink("tool.sh", target.join("tool-link")).unwrap();
+    commit_all(&target, "add link");
+    let sandbox = sandbox_copy(temp.path(), &target);
+
+    fs::remove_file(sandbox.join("tool-link")).unwrap();
+    symlink("other.sh", sandbox.join("tool-link")).unwrap();
+    let link_change = preview_sandbox_patch(&target, &sandbox).unwrap();
+    let link_operation = link_change
+        .approval_subject
+        .operations
+        .iter()
+        .find(|operation| operation.path == "tool-link")
+        .unwrap();
+    assert_eq!(
+        link_operation.after.as_ref().unwrap().kind,
+        SandboxFileKind::Symlink
+    );
+
+    fs::remove_file(sandbox.join("tool-link")).unwrap();
+    symlink("tool.sh", sandbox.join("tool-link")).unwrap();
+    let mut permissions = fs::metadata(sandbox.join("tool.sh")).unwrap().permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(sandbox.join("tool.sh"), permissions).unwrap();
+    let mode_change = preview_sandbox_patch(&target, &sandbox).unwrap();
+    let mode_operation = mode_change
+        .approval_subject
+        .operations
+        .iter()
+        .find(|operation| operation.path == "tool.sh")
+        .unwrap();
+    assert_eq!(
+        mode_operation.after.as_ref().unwrap().unix_mode,
+        Some(0o755)
+    );
+    assert_ne!(link_change.action_digest, mode_change.action_digest);
+}
+
 fn shell_command() -> std::path::PathBuf {
     if cfg!(windows) {
         "powershell".into()
@@ -292,6 +439,17 @@ fn init_git_target(root: &Path, files: &[(&str, &[u8])]) -> std::path::PathBuf {
     git(&target, &["add", "-A"]);
     git(&target, &["commit", "--quiet", "-m", "fixture"]);
     target
+}
+
+fn commit_all(root: &Path, message: &str) {
+    git(root, &["add", "-A"]);
+    git(root, &["commit", "--quiet", "-m", message]);
+}
+
+fn sandbox_copy(root: &Path, target: &Path) -> std::path::PathBuf {
+    let sandbox = root.join("sandbox");
+    copy_dir_recursive(target, &sandbox).unwrap();
+    sandbox
 }
 
 fn sample_file_state(digit: char) -> SandboxFileState {
