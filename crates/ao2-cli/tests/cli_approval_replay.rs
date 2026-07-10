@@ -199,6 +199,11 @@ fn write_signed_project_plan_for_step_fixtures(
 
 fn init_git_repo(repo: &Path) {
     fs::create_dir_all(repo).unwrap();
+    fs::write(repo.join("README.md"), "before\n").unwrap();
+    init_existing_git_repo(repo);
+}
+
+fn init_existing_git_repo(repo: &Path) {
     assert!(Command::new("git")
         .args(["init"])
         .current_dir(repo)
@@ -220,9 +225,8 @@ fn init_git_repo(repo: &Path) {
         .unwrap()
         .status
         .success());
-    fs::write(repo.join("README.md"), "before\n").unwrap();
     assert!(Command::new("git")
-        .args(["add", "README.md"])
+        .args(["add", "-A"])
         .current_dir(repo)
         .output()
         .unwrap()
@@ -230,6 +234,23 @@ fn init_git_repo(repo: &Path) {
         .success());
     assert!(Command::new("git")
         .args(["commit", "-m", "initial"])
+        .current_dir(repo)
+        .output()
+        .unwrap()
+        .status
+        .success());
+}
+
+fn commit_all(repo: &Path, message: &str) {
+    assert!(Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(repo)
+        .output()
+        .unwrap()
+        .status
+        .success());
+    assert!(Command::new("git")
+        .args(["commit", "-m", message])
         .current_dir(repo)
         .output()
         .unwrap()
@@ -24602,8 +24623,90 @@ fn cli_adapter_sandbox_run_reports_diff_without_mutating_target() {
 fn cli_adapter_patch_preview_and_apply_promotes_exact_digest() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("repo");
-    fs::create_dir_all(&repo).unwrap();
+    init_git_repo(&repo);
     fs::write(repo.join("value.txt"), "before\n").unwrap();
+    commit_all(&repo, "add value fixture");
+
+    let run = ao2([
+        "adapter",
+        "run",
+        "--provider",
+        "scripted",
+        "--target",
+        repo.to_str().unwrap(),
+        "--command",
+        "sh",
+        "--args",
+        "-c\tprintf 'after\\n' > value.txt",
+        "--keep-sandbox",
+    ]);
+    assert!(run.status.success(), "{}", stderr(&run));
+    let run_json: serde_json::Value = serde_json::from_str(&stdout(&run)).unwrap();
+    let sandbox_path = run_json["sandbox_path"].as_str().unwrap();
+
+    let preview = ao2([
+        "adapter",
+        "patch",
+        "preview",
+        "--target",
+        repo.to_str().unwrap(),
+        "--sandbox",
+        sandbox_path,
+    ]);
+    assert!(preview.status.success(), "{}", stderr(&preview));
+    let preview_json: serde_json::Value = serde_json::from_str(&stdout(&preview)).unwrap();
+    let digest = preview_json["action_digest"].as_str().unwrap();
+    assert_eq!(
+        preview_json["approval_subject"]["schema_version"],
+        "ao2.sandbox-patch-approval-subject.v1"
+    );
+    assert_eq!(
+        preview_json["approval_subject"]["operation_type"],
+        "sandbox_patch_apply"
+    );
+    assert_eq!(
+        preview_json["approval_subject"]["operations"][0]["order"],
+        0
+    );
+    assert_eq!(
+        preview_json["approval_subject"]["operations"][0]["path"],
+        "value.txt"
+    );
+
+    let apply = ao2([
+        "adapter",
+        "patch",
+        "apply",
+        "--target",
+        repo.to_str().unwrap(),
+        "--sandbox",
+        sandbox_path,
+        "--digest",
+        digest,
+        "--approver",
+        "human:cli-test",
+    ]);
+    assert!(apply.status.success(), "{}", stderr(&apply));
+    let apply_json: serde_json::Value = serde_json::from_str(&stdout(&apply)).unwrap();
+    assert_eq!(apply_json["action_digest"], digest);
+    assert_eq!(
+        apply_json["approval_subject"],
+        preview_json["approval_subject"]
+    );
+    assert_eq!(apply_json["applied_files"][0], "value.txt");
+    assert_eq!(
+        fs::read_to_string(repo.join("value.txt")).unwrap(),
+        "after\n"
+    );
+}
+
+#[test]
+fn cli_adapter_patch_apply_rejects_digest_after_target_commit_drift() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("repo");
+    init_git_repo(&repo);
+    fs::write(repo.join("value.txt"), "before\n").unwrap();
+    commit_all(&repo, "add value fixture");
 
     let run = ao2([
         "adapter",
@@ -24635,6 +24738,9 @@ fn cli_adapter_patch_preview_and_apply_promotes_exact_digest() {
     let preview_json: serde_json::Value = serde_json::from_str(&stdout(&preview)).unwrap();
     let digest = preview_json["action_digest"].as_str().unwrap();
 
+    fs::write(repo.join("base-drift.txt"), "advanced base\n").unwrap();
+    commit_all(&repo, "advance target after preview");
+
     let apply = ao2([
         "adapter",
         "patch",
@@ -24648,12 +24754,15 @@ fn cli_adapter_patch_preview_and_apply_promotes_exact_digest() {
         "--approver",
         "human:cli-test",
     ]);
-    assert!(apply.status.success(), "{}", stderr(&apply));
-    let apply_json: serde_json::Value = serde_json::from_str(&stdout(&apply)).unwrap();
-    assert_eq!(apply_json["applied_files"][0], "value.txt");
+    assert!(!apply.status.success());
+    assert!(
+        stderr(&apply).contains("digest mismatch"),
+        "{}",
+        stderr(&apply)
+    );
     assert_eq!(
         fs::read_to_string(repo.join("value.txt")).unwrap(),
-        "after\n"
+        "before\n"
     );
 }
 
@@ -24695,6 +24804,7 @@ fn cli_run_provider_prompt_executes_provider_backed_risky_run() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
     copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    init_existing_git_repo(&repo);
     let prompt_path = temp.path().join("prompt.sh");
     fs::write(
         &prompt_path,
@@ -24742,6 +24852,7 @@ fn cli_provider_score_rates_provider_evidence_for_existing_run() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
     copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    init_existing_git_repo(&repo);
     let prompt_path = temp.path().join("prompt.sh");
     fs::write(
         &prompt_path,
@@ -24814,6 +24925,7 @@ fn cli_provider_score_fails_rejected_replay_even_with_provider_metadata() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
     copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    init_existing_git_repo(&repo);
     let prompt_path = temp.path().join("prompt.sh");
     fs::write(
         &prompt_path,
@@ -24905,6 +25017,7 @@ fn cli_run_provider_prompt_honors_zero_repair_budget() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
     copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    init_existing_git_repo(&repo);
     let prompt_path = temp.path().join("prompt.sh");
     fs::write(
         &prompt_path,
@@ -24953,6 +25066,7 @@ fn cli_repair_resume_uses_rejected_evidence_context_for_new_run() {
     let repo = temp.path().join("real-project-repair-resume");
     fs::create_dir_all(repo.join("docs")).unwrap();
     fs::write(repo.join("README.md"), "real project\n").unwrap();
+    init_existing_git_repo(&repo);
     let workflow = temp.path().join("repair-resume.yaml");
     fs::write(
         &workflow,
