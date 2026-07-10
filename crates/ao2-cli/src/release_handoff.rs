@@ -568,10 +568,7 @@ fn evaluator_nested<'a>(
 ) -> Option<&'a serde_json::Value> {
     let mut current = value;
     for key in keys {
-        match current.get(*key) {
-            Some(next) => current = next,
-            None => return None,
-        }
+        current = current.get(*key)?;
     }
     Some(current)
 }
