@@ -15846,6 +15846,7 @@ Acceptance:
     assert_eq!(state["steps"][1]["status"], "rejected");
     assert!(!fs::read_to_string(state_path).unwrap().contains("Bearer "));
 
+    fs::remove_dir_all(&messaging.target).unwrap();
     write_project_app_step_fixture(temp.path(), "messaging");
     let resume_out_dir = temp.path().join("project-run-resumed");
     let resumed_run = ao2([
