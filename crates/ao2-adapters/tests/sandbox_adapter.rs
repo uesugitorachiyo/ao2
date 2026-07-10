@@ -401,6 +401,61 @@ fn patch_digest_binds_symlink_target_and_executable_mode() {
     assert_ne!(link_change.action_digest, mode_change.action_digest);
 }
 
+#[test]
+fn apply_rejects_target_content_changed_after_preview_before_any_write() {
+    assert_drift_rejected(|target, _sandbox| {
+        fs::write(target.join("a.txt"), "target drift\n").unwrap();
+    });
+}
+
+#[test]
+fn apply_rejects_sandbox_content_changed_after_preview_before_any_write() {
+    assert_drift_rejected(|_target, sandbox| {
+        fs::write(sandbox.join("a.txt"), "sandbox drift\n").unwrap();
+    });
+}
+
+#[test]
+fn apply_rejects_target_head_changed_after_preview_before_any_write() {
+    assert_drift_rejected(|target, _sandbox| {
+        fs::write(target.join("unrelated.txt"), "new base\n").unwrap();
+        commit_all(target, "advance target head");
+    });
+}
+
+#[cfg(unix)]
+#[test]
+fn sandbox_patch_apply_preserves_symlink_and_reports_subject() {
+    use std::os::unix::fs::symlink;
+
+    let temp = tempfile::tempdir().unwrap();
+    let target = init_git_target(
+        temp.path(),
+        &[("tool.sh", b"#!/bin/sh\n"), ("other.sh", b"#!/bin/sh\n")],
+    );
+    symlink("tool.sh", target.join("tool-link")).unwrap();
+    commit_all(&target, "add link");
+    let sandbox = sandbox_copy(temp.path(), &target);
+    fs::remove_file(sandbox.join("tool-link")).unwrap();
+    symlink("other.sh", sandbox.join("tool-link")).unwrap();
+    let preview = preview_sandbox_patch(&target, &sandbox).unwrap();
+
+    let applied = apply_sandbox_patch(SandboxPatchApplyRequest {
+        target_repo: target.clone(),
+        sandbox_path: sandbox,
+        expected_digest: preview.action_digest.clone(),
+        approver: "human:test".to_string(),
+    })
+    .unwrap();
+
+    assert_eq!(
+        fs::read_link(target.join("tool-link")).unwrap(),
+        Path::new("other.sh")
+    );
+    assert_eq!(applied.approval_subject, preview.approval_subject);
+    assert_eq!(applied.action_digest, preview.action_digest);
+}
+
 fn shell_command() -> std::path::PathBuf {
     if cfg!(windows) {
         "powershell".into()
@@ -450,6 +505,39 @@ fn sandbox_copy(root: &Path, target: &Path) -> std::path::PathBuf {
     let sandbox = root.join("sandbox");
     copy_dir_recursive(target, &sandbox).unwrap();
     sandbox
+}
+
+fn assert_drift_rejected(drift: impl FnOnce(&Path, &Path)) {
+    let temp = tempfile::tempdir().unwrap();
+    let target = init_git_target(
+        temp.path(),
+        &[("a.txt", b"before-a\n"), ("b.txt", b"before-b\n")],
+    );
+    let sandbox = sandbox_copy(temp.path(), &target);
+    fs::write(sandbox.join("a.txt"), "approved-a\n").unwrap();
+    fs::write(sandbox.join("b.txt"), "approved-b\n").unwrap();
+    let preview = preview_sandbox_patch(&target, &sandbox).unwrap();
+
+    drift(&target, &sandbox);
+    let target_a_before_apply = fs::read(target.join("a.txt")).unwrap();
+    let target_b_before_apply = fs::read(target.join("b.txt")).unwrap();
+    let error = apply_sandbox_patch(SandboxPatchApplyRequest {
+        target_repo: target.clone(),
+        sandbox_path: sandbox,
+        expected_digest: preview.action_digest,
+        approver: "human:test".to_string(),
+    })
+    .unwrap_err();
+
+    assert!(error.to_string().contains("digest mismatch"), "{error:#}");
+    assert_eq!(
+        fs::read(target.join("a.txt")).unwrap(),
+        target_a_before_apply
+    );
+    assert_eq!(
+        fs::read(target.join("b.txt")).unwrap(),
+        target_b_before_apply
+    );
 }
 
 fn sample_file_state(digit: char) -> SandboxFileState {
