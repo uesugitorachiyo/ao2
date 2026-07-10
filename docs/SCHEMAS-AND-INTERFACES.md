@@ -177,6 +177,65 @@ MVP artifact types:
 - `closure_report`
 - `evidence_pack`
 
+### `ao2.sandbox-patch-approval-subject.v1`
+
+AO2 sandbox patch preview, approval tickets, apply results, and retained
+evidence use one canonical approval subject:
+
+```json
+{
+  "schema_version": "ao2.sandbox-patch-approval-subject.v1",
+  "repository_identity": "sha256:<64 lowercase hex characters>",
+  "base_commit": "<40 or 64 lowercase hex characters>",
+  "operation_type": "sandbox_patch_apply",
+  "operations": [
+    {
+      "order": 0,
+      "path": "src/example.rs",
+      "kind": "modified",
+      "before": {
+        "kind": "regular_file",
+        "content_sha256": "sha256:<64 lowercase hex characters>",
+        "symlink_target_sha256": null,
+        "unix_mode": 420
+      },
+      "after": {
+        "kind": "regular_file",
+        "content_sha256": "sha256:<64 lowercase hex characters>",
+        "symlink_target_sha256": null,
+        "unix_mode": 420
+      }
+    }
+  ]
+}
+```
+
+`repository_identity` hashes the canonical Git common-directory identity. Raw
+local repository paths are not emitted. `base_commit` is the exact target
+`HEAD`. A target without a valid Git identity and commit is rejected.
+
+Operation paths are normalized repository-relative paths. Absolute paths,
+parent traversal, non-normal components, and paths that cannot be represented
+canonically are rejected. Operations are sorted by path and have contiguous
+zero-based `order` values. `kind` is `added`, `modified`, or `deleted`.
+
+Regular-file state binds the content SHA-256 and supported Unix mode. Symlink
+state binds the symlink target bytes and mode without following the link.
+Unsupported filesystem entry types fail closed. `before` is absent only for an
+addition; `after` is absent only for a deletion.
+
+The action digest is the SHA-256 of the serialized typed subject. Apply
+reconstructs the subject from the current target and retained sandbox before
+the first target write and requires the reconstructed digest to equal the
+approved digest. Repository substitution, target or sandbox content drift,
+base-commit drift, mode changes, symlink changes, operation changes, and order
+changes therefore invalidate the approval.
+
+P0-A makes the approval action identifier content- and base-bound. It does not
+validate who approved it, establish the stronger ticket authority required by
+P0-B, or make application transactional. Those remain blocked by P0-B, P0-C,
+and P0-D.
+
 ### SDD Planning Context Interface
 
 `ao2 sdd plan` scans the target repository into a deterministic `surface_map`
