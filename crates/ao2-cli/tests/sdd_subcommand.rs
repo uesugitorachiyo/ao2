@@ -906,6 +906,28 @@ fn copy_fixture(src: &Path, dst: &Path) {
             fs::copy(entry.path(), &target).unwrap();
         }
     }
+    init_git_fixture(dst);
+}
+
+fn init_git_fixture(repo: &Path) {
+    for args in [
+        &["init", "--quiet"][..],
+        &["config", "user.name", "AO2 Test"][..],
+        &["config", "user.email", "ao2-test@example.invalid"][..],
+        &["add", "-A"][..],
+        &["commit", "--quiet", "-m", "fixture"][..],
+    ] {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(repo)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {args:?} failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 }
 
 fn create_large_sdd_target(target: &Path) {

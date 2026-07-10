@@ -168,6 +168,28 @@ Approval rules:
 - approval must include approver identity, timestamp, risk class, policy version, and expiry;
 - agent transcript cannot self-approve.
 
+### Content-Bound Sandbox Patch Approval
+
+For sandbox patch application, the exact action digest is computed from
+`ao2.sandbox-patch-approval-subject.v1`. The subject binds the target Git
+repository identity, exact `HEAD`, canonical ordered operations, relative
+paths, operation kinds, before and after content, symlink targets, and
+supported Unix modes. Preview emits both the subject and its digest. The
+approval ticket carries that digest, and apply returns the same subject in its
+evidence.
+
+Immediately before the first target write, apply rebuilds the subject from the
+current target and retained sandbox. Any target, sandbox, repository, commit,
+path, type, content, mode, symlink, operation, or ordering drift rejects the
+apply. The target remains unchanged on these validation failures. Raw local
+repository paths are not part of the emitted subject.
+
+P0-A makes the approval action identifier content- and base-bound. It does not
+validate who approved it, establish the stronger ticket authority required by
+P0-B, or make application transactional. Those remain blocked by P0-B, P0-C,
+and P0-D. This contract does not authorize provider execution, release work,
+promotion, or an RSI claim.
+
 ## Security Requirements
 
 Minimum sandbox profiles:

@@ -4,6 +4,8 @@ use std::sync::Mutex;
 
 use ao2_runtime::{run_risky_pr_provider_free, RunOptions, RunStatus};
 
+mod support;
+
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 fn copy_fixture(src: &Path, dst: &Path) {
@@ -18,6 +20,7 @@ fn copy_fixture(src: &Path, dst: &Path) {
             fs::copy(entry.path(), &target).unwrap();
         }
     }
+    support::commit_fixture(dst);
 }
 
 #[test]

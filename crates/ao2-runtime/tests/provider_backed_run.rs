@@ -8,6 +8,8 @@ use ao2_runtime::{
     ApprovalOptions, ProviderRunOptions, ResumeOptions, RunStatus, RunSummary,
 };
 
+mod support;
+
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 fn run_provider_backed_end_to_end(options: ProviderRunOptions) -> anyhow::Result<RunSummary> {
@@ -48,6 +50,7 @@ fn copy_fixture(src: &Path, dst: &Path) {
             fs::copy(entry.path(), &target).unwrap();
         }
     }
+    support::commit_fixture(dst);
 }
 
 #[test]
@@ -99,6 +102,32 @@ printf 'Cost: $0.001\n'
     assert!(evidence.contains("sandbox_patch_preview"));
     assert!(evidence.contains("sandbox_patch_apply"));
     let evidence_json: serde_json::Value = serde_json::from_str(&evidence).unwrap();
+    let preview_ref = evidence_json["artifacts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|artifact| artifact["artifact_type"] == "sandbox_patch_preview")
+        .unwrap();
+    let preview: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(preview_ref["uri"].as_str().unwrap()).unwrap())
+            .unwrap();
+    let sandbox_ticket = summary
+        .approvals
+        .iter()
+        .find(|ticket| ticket.requested_action == "sandbox:apply")
+        .unwrap();
+    assert_eq!(
+        preview["approval_subject"]["schema_version"],
+        "ao2.sandbox-patch-approval-subject.v1"
+    );
+    assert_eq!(sandbox_ticket.action_digest, preview["action_digest"]);
+    assert!(matches!(
+        preview["approval_subject"]["base_commit"]
+            .as_str()
+            .unwrap()
+            .len(),
+        40 | 64
+    ));
     let provider_contract = &evidence_json["runtime_contract"]["provider_adapter_contract"];
     assert_eq!(
         provider_contract["schema_version"],
@@ -147,6 +176,57 @@ printf 'Cost: $0.001\n'
     .unwrap();
     assert_eq!(replay.status, RunStatus::Accepted);
     assert!(replay.digest_failures.is_empty());
+
+    env.restore();
+}
+
+#[test]
+fn approved_sandbox_patch_rejects_target_head_drift_before_resume_apply() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    let env = EnvSnapshot::clear_for_runtime();
+
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("discount-service");
+    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    let prompt = "printf 'changed after approval test\\n' > approval-drift.txt\n";
+
+    let waiting = run_risky_pr_with_provider_prompt(ProviderRunOptions {
+        target_repo: repo.clone(),
+        workflow_path: Path::new("../../examples/risky-pr-run/risky-pr.yaml").to_path_buf(),
+        run_id: Some("sandbox-stale-base-run".to_string()),
+        provider: ProviderKind::Scripted,
+        prompt: prompt.to_string(),
+        max_repair_attempts: 1,
+        max_budget_usd: None,
+        repair_source: None,
+    })
+    .unwrap();
+    assert_eq!(waiting.status, RunStatus::WaitingForApproval);
+    let ticket = waiting
+        .approvals
+        .iter()
+        .find(|ticket| ticket.status == "pending" && ticket.requested_action == "sandbox:apply")
+        .unwrap();
+    approve_risky_pr_ticket(ApprovalOptions {
+        target_repo: repo.clone(),
+        ticket_id: ticket.ticket_id.clone(),
+        approver: "human:test-operator".to_string(),
+    })
+    .unwrap();
+
+    fs::write(repo.join("base-drift.txt"), "new target base\n").unwrap();
+    support::commit_all(&repo, "advance target base after sandbox approval");
+
+    let error = resume_risky_pr_provider_free(ResumeOptions {
+        target_repo: repo.clone(),
+        run_id: "sandbox-stale-base-run".to_string(),
+    })
+    .unwrap_err();
+    assert!(
+        error.to_string().contains("approval") && error.to_string().contains("changed"),
+        "{error:#}"
+    );
+    assert!(!repo.join("approval-drift.txt").exists());
 
     env.restore();
 }
@@ -288,6 +368,7 @@ fn provider_backed_real_project_template_accepts_without_discount_assumptions() 
     let repo = temp.path().join("real-project");
     fs::create_dir_all(repo.join("docs")).unwrap();
     fs::write(repo.join("README.md"), "real project\n").unwrap();
+    support::commit_fixture(&repo);
     let workflow = temp.path().join("test-generation.yaml");
     fs::write(
         &workflow,
@@ -362,6 +443,7 @@ fn provider_backed_real_project_template_repairs_after_verifier_failure() {
     let repo = temp.path().join("real-project-repair");
     fs::create_dir_all(repo.join("docs")).unwrap();
     fs::write(repo.join("README.md"), "real project\n").unwrap();
+    support::commit_fixture(&repo);
     let workflow = temp.path().join("bug-fix.yaml");
     fs::write(
         &workflow,
@@ -682,6 +764,7 @@ fn provider_backed_real_project_repair_prompt_includes_verifier_context_for_pyth
     let repo = temp.path().join("python-repair-context");
     fs::create_dir_all(repo.join("src")).unwrap();
     fs::write(repo.join("README.md"), "python repair context\n").unwrap();
+    support::commit_fixture(&repo);
     let workflow = write_real_project_workflow(
         temp.path(),
         "python-repair-context.yaml",
@@ -760,6 +843,7 @@ fn create_node_package_repo(repo: &Path) {
     )
     .unwrap();
     fs::write(repo.join("src/.gitkeep"), "").unwrap();
+    support::commit_fixture(repo);
 }
 
 fn create_node_workspace_repo(repo: &Path) {
@@ -790,6 +874,7 @@ fn create_node_workspace_repo(repo: &Path) {
     )
     .unwrap();
     fs::write(repo.join("packages/app/src/.gitkeep"), "").unwrap();
+    support::commit_fixture(repo);
 }
 
 fn write_real_project_workflow(

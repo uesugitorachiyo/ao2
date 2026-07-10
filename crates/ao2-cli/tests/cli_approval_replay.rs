@@ -27,6 +27,11 @@ fn copy_fixture(src: &Path, dst: &Path) {
     }
 }
 
+fn copy_git_fixture(src: &Path, dst: &Path) {
+    copy_fixture(src, dst);
+    init_existing_git_repo(dst);
+}
+
 struct ProjectAppStepFixture {
     spec: PathBuf,
     target: PathBuf,
@@ -36,6 +41,7 @@ struct ProjectAppStepFixture {
 fn write_project_app_step_fixture(root: &Path, label: &str) -> ProjectAppStepFixture {
     let target = root.join(format!("{label}-target"));
     copy_fixture(Path::new("../../fixtures/missed-call-recovery"), &target);
+    init_existing_git_repo(&target);
     let spec = root.join(format!("{label}-spec.md"));
     fs::write(
         &spec,
@@ -142,6 +148,7 @@ printf 'Input tokens: 37\n'
 "#,
     )
     .unwrap();
+    commit_all(&target, "project app-step fixture");
     ProjectAppStepFixture {
         spec,
         target,
@@ -199,6 +206,11 @@ fn write_signed_project_plan_for_step_fixtures(
 
 fn init_git_repo(repo: &Path) {
     fs::create_dir_all(repo).unwrap();
+    fs::write(repo.join("README.md"), "before\n").unwrap();
+    init_existing_git_repo(repo);
+}
+
+fn init_existing_git_repo(repo: &Path) {
     assert!(Command::new("git")
         .args(["init"])
         .current_dir(repo)
@@ -220,9 +232,15 @@ fn init_git_repo(repo: &Path) {
         .unwrap()
         .status
         .success());
-    fs::write(repo.join("README.md"), "before\n").unwrap();
     assert!(Command::new("git")
-        .args(["add", "README.md"])
+        .args(["config", "core.longpaths", "true"])
+        .current_dir(repo)
+        .output()
+        .unwrap()
+        .status
+        .success());
+    assert!(Command::new("git")
+        .args(["add", "-A"])
         .current_dir(repo)
         .output()
         .unwrap()
@@ -230,6 +248,32 @@ fn init_git_repo(repo: &Path) {
         .success());
     assert!(Command::new("git")
         .args(["commit", "-m", "initial"])
+        .current_dir(repo)
+        .output()
+        .unwrap()
+        .status
+        .success());
+}
+
+fn commit_all(repo: &Path, message: &str) {
+    assert!(Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(repo)
+        .output()
+        .unwrap()
+        .status
+        .success());
+    let status = Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(repo)
+        .output()
+        .unwrap();
+    assert!(status.status.success());
+    if status.stdout.is_empty() {
+        return;
+    }
+    assert!(Command::new("git")
+        .args(["commit", "-m", message])
         .current_dir(repo)
         .output()
         .unwrap()
@@ -249,7 +293,7 @@ fn read_test_http_request(stream: &mut TcpStream, buffer: &mut [u8]) -> usize {
 fn cli_can_pause_approve_resume_and_replay() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let run = ao2([
         "run",
@@ -297,7 +341,7 @@ fn cli_can_pause_approve_resume_and_replay() {
 fn cli_report_writes_static_report_index_sidecar() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let run = ao2([
         "run",
@@ -510,7 +554,7 @@ struct CompletedReportFixture {
 fn completed_report_fixture(run_id: &str) -> CompletedReportFixture {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let run = ao2([
         "run",
@@ -5810,7 +5854,7 @@ acceptance:
 fn cli_factory_queue_run_next_executes_persisted_plan_and_records_evidence_refs() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("factory-target");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let request = temp.path().join("request.yaml");
     fs::write(
         &request,
@@ -5915,7 +5959,7 @@ verifier: python -m pytest -q
 fn cli_factory_queue_run_next_executes_provider_backed_persisted_plan() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("factory-target");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let request = temp.path().join("request.yaml");
     fs::write(
         &request,
@@ -12736,7 +12780,7 @@ fn cli_plugin_wrapper_harness_runs_digest_pinned_app_run_with_redacted_evidence(
     let readiness_sha256 = sha256_path(&readiness);
 
     let repo = temp.path().join("app-target");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let spec = temp.path().join("factory-app-discount.md");
     fs::write(
         &spec,
@@ -13345,7 +13389,7 @@ fn cli_plugin_wrapper_harness_fails_closed_for_bad_inputs() {
 fn cli_factory_pack_evidence_exports_ao2_owned_pack_for_factory_parity_oracle() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("factory-target");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let request = temp.path().join("request.yaml");
     fs::write(
         &request,
@@ -13566,7 +13610,7 @@ fn cli_factory_pack_evidence_signs_evidence_pack_for_release_handoff() {
 
 fn pack_evidence_seed_completed_entry(temp_root: &Path, run_id: &str) -> PathBuf {
     let repo = temp_root.join(format!("pack-target-{run_id}"));
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let request = temp_root.join(format!("pack-request-{run_id}.yaml"));
     fs::write(
         &request,
@@ -13680,7 +13724,7 @@ fn cli_factory_pack_evidence_rejects_unknown_run_id() {
 fn cli_factory_pack_evidence_blocks_when_queue_has_no_completed_entries() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("empty-target");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let out = temp.path().join("packed-empty.json");
     let pack = ao2([
         "factory",
@@ -13706,7 +13750,7 @@ fn cli_factory_pack_evidence_blocks_when_queue_has_no_completed_entries() {
 fn cli_factory_queue_run_next_rejects_tampered_queued_plan_digest() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("factory-target");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let request = temp.path().join("request.yaml");
     fs::write(
         &request,
@@ -13792,7 +13836,7 @@ fn cli_factory_queue_run_next_blocks_unreadable_queued_plan_before_claiming() {
 
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("factory-target");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let request = temp.path().join("request.yaml");
     fs::write(&request, "title: Unreadable queued plan\n").unwrap();
     let runspec = temp.path().join("runspec.yaml");
@@ -13869,7 +13913,7 @@ fn cli_factory_queue_run_next_blocks_unreadable_queued_plan_before_claiming() {
 fn cli_factory_run_executes_legacy_roles_runspec_and_persists_runtime_task_graph_evidence() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("factory-target");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let request = temp.path().join("request.yaml");
     fs::write(
         &request,
@@ -14019,7 +14063,7 @@ roles:
 fn cli_factory_run_executes_materialized_plan_and_replays_without_factory_driver() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("factory-target");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let request = temp.path().join("request.yaml");
     fs::write(
         &request,
@@ -14725,7 +14769,7 @@ acceptance:
 fn cli_factory_replacement_smoke_chains_ao2_primary_run_and_evidence_pack() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("factory-target");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let request = temp.path().join("request.yaml");
     fs::write(
         &request,
@@ -14836,7 +14880,7 @@ acceptance:
 fn cli_factory_governed_run_chains_planning_execution_evidence_and_signed_closure() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("factory-target");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let request = temp.path().join("request.yaml");
     fs::write(
         &request,
@@ -15044,7 +15088,7 @@ Acceptance:
 fn cli_greenfield_governed_run_chains_spec_ingest_execution_and_signed_closure() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("greenfield-target");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let spec = temp.path().join("greenfield-discount.md");
     fs::write(
         &spec,
@@ -15147,7 +15191,7 @@ printf 'Input tokens: 13\n'
 fn cli_factory_greenfield_run_chains_spec_to_governed_evidence() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("greenfield-target");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let spec = temp.path().join("factory-greenfield-discount.md");
     fs::write(
         &spec,
@@ -15255,7 +15299,7 @@ printf 'Input tokens: 17\n'
 fn cli_factory_app_run_chains_spec_to_release_review_evidence() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("app-target");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let spec = temp.path().join("factory-app-discount.md");
     fs::write(
         &spec,
@@ -15809,6 +15853,7 @@ Acceptance:
     assert_eq!(state["steps"][1]["status"], "rejected");
     assert!(!fs::read_to_string(state_path).unwrap().contains("Bearer "));
 
+    fs::remove_dir_all(&messaging.target).unwrap();
     write_project_app_step_fixture(temp.path(), "messaging");
     let resume_out_dir = temp.path().join("project-run-resumed");
     let resumed_run = ao2([
@@ -20372,7 +20417,7 @@ fn cli_greenfield_three_os_smoke_gate_rejects_control_plane_release_approval() {
 fn cli_factory_governed_run_reports_auto_discovered_role_contracts() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("factory-target");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let factory_repo = temp.path().join("factory-v3");
     let runspec = factory_repo.join("ao/runspecs/factory-v3-smoke.yaml");
     fs::create_dir_all(runspec.parent().unwrap()).unwrap();
@@ -20479,7 +20524,7 @@ acceptance:
 fn cli_factory_governed_run_supports_provider_backed_execution() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("factory-target");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let request = temp.path().join("request.yaml");
     fs::write(
         &request,
@@ -20574,7 +20619,7 @@ printf 'Input tokens: 13\n'
 fn cli_factory_replacement_smoke_can_run_provider_backed_workflow() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("factory-target");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let request = temp.path().join("request.yaml");
     fs::write(
         &request,
@@ -20663,7 +20708,7 @@ printf 'Input tokens: 12\n'
 fn cli_factory_replacement_smoke_accepts_relative_target_paths() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     fs::write(
         temp.path().join("request.yaml"),
         r#"title: AO2 relative target replacement smoke
@@ -22174,7 +22219,7 @@ fn cli_memory_export_filters_links_and_signs_bundle() {
 fn cli_provider_smoke_all_reports_scripted_ready() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let smoke = ao2([
         "provider",
@@ -22211,7 +22256,7 @@ fn cli_provider_smoke_all_reports_scripted_ready() {
 fn cli_provider_smoke_all_persists_history() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let smoke = ao2([
         "provider",
@@ -22252,7 +22297,7 @@ fn cli_provider_smoke_all_persists_history() {
 fn cli_provider_gate_fails_without_smoke_history() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let gate = ao2([
         "provider",
@@ -22278,7 +22323,7 @@ fn cli_provider_gate_fails_without_smoke_history() {
 fn cli_provider_gate_passes_after_scripted_smoke() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let smoke = ao2([
         "provider",
@@ -22317,7 +22362,7 @@ fn cli_provider_gate_requires_live_provider_when_requested() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
     let bin = temp.path().join("bin");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     write_fake_codex(&bin);
     let path = prepend_path(&bin);
 
@@ -22392,7 +22437,7 @@ fn cli_provider_gate_requires_live_provider_when_requested() {
 fn cli_provider_pilot_blocks_when_gate_not_ready() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt = temp.path().join("pilot-prompt.txt");
     fs::write(&prompt, "Fix the discount validation bug.\n").unwrap();
 
@@ -22471,7 +22516,7 @@ fn cli_provider_pilot_builds_command_after_gate_passes() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
     let bin = temp.path().join("bin");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     write_fake_codex(&bin);
     let path = prepend_path(&bin);
     let prompt = temp.path().join("pilot-prompt.txt");
@@ -22687,7 +22732,7 @@ fn cli_provider_smoke_all_guards_live_codex_without_explicit_env() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
     let bin = temp.path().join("bin");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     write_fake_codex(&bin);
     let path = prepend_path(&bin);
 
@@ -22722,7 +22767,7 @@ fn cli_provider_smoke_all_runs_live_codex_when_explicitly_enabled() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
     let bin = temp.path().join("bin");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     write_fake_codex(&bin);
     let path = prepend_path(&bin);
 
@@ -22772,7 +22817,7 @@ fn cli_provider_smoke_all_guards_live_claude_without_explicit_env() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
     let bin = temp.path().join("bin");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     write_fake_claude(&bin);
     let path = prepend_path(&bin);
 
@@ -22807,7 +22852,7 @@ fn cli_provider_smoke_all_runs_live_claude_when_explicitly_enabled() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
     let bin = temp.path().join("bin");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     write_fake_claude(&bin);
     let path = prepend_path(&bin);
 
@@ -22878,7 +22923,7 @@ fn cli_template_list_and_show_exposes_real_project_templates() {
 fn cli_init_provider_profiles_and_template_run_support_fast_start() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let init = ao2(["init", "--target", repo.to_str().unwrap()]);
     assert!(init.status.success(), "{}", stderr(&init));
@@ -23341,7 +23386,7 @@ fn cli_release_gate_fails_without_obligation_gate_metadata() {
 fn cli_release_summary_enrich_embeds_latest_obligation_gate_metadata() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let run = ao2([
         "run",
@@ -23500,7 +23545,7 @@ fn cli_release_summary_enrich_accepts_explicit_obligation_gate_artifacts() {
 fn cli_workbench_release_summary_enrich_and_gate_api() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let dist = temp.path().join("dist");
     let provenance = temp.path().join("dist-provenance");
     let summary_path = temp.path().join("summary.json");
@@ -24602,8 +24647,90 @@ fn cli_adapter_sandbox_run_reports_diff_without_mutating_target() {
 fn cli_adapter_patch_preview_and_apply_promotes_exact_digest() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("repo");
-    fs::create_dir_all(&repo).unwrap();
+    init_git_repo(&repo);
     fs::write(repo.join("value.txt"), "before\n").unwrap();
+    commit_all(&repo, "add value fixture");
+
+    let run = ao2([
+        "adapter",
+        "run",
+        "--provider",
+        "scripted",
+        "--target",
+        repo.to_str().unwrap(),
+        "--command",
+        "sh",
+        "--args",
+        "-c\tprintf 'after\\n' > value.txt",
+        "--keep-sandbox",
+    ]);
+    assert!(run.status.success(), "{}", stderr(&run));
+    let run_json: serde_json::Value = serde_json::from_str(&stdout(&run)).unwrap();
+    let sandbox_path = run_json["sandbox_path"].as_str().unwrap();
+
+    let preview = ao2([
+        "adapter",
+        "patch",
+        "preview",
+        "--target",
+        repo.to_str().unwrap(),
+        "--sandbox",
+        sandbox_path,
+    ]);
+    assert!(preview.status.success(), "{}", stderr(&preview));
+    let preview_json: serde_json::Value = serde_json::from_str(&stdout(&preview)).unwrap();
+    let digest = preview_json["action_digest"].as_str().unwrap();
+    assert_eq!(
+        preview_json["approval_subject"]["schema_version"],
+        "ao2.sandbox-patch-approval-subject.v1"
+    );
+    assert_eq!(
+        preview_json["approval_subject"]["operation_type"],
+        "sandbox_patch_apply"
+    );
+    assert_eq!(
+        preview_json["approval_subject"]["operations"][0]["order"],
+        0
+    );
+    assert_eq!(
+        preview_json["approval_subject"]["operations"][0]["path"],
+        "value.txt"
+    );
+
+    let apply = ao2([
+        "adapter",
+        "patch",
+        "apply",
+        "--target",
+        repo.to_str().unwrap(),
+        "--sandbox",
+        sandbox_path,
+        "--digest",
+        digest,
+        "--approver",
+        "human:cli-test",
+    ]);
+    assert!(apply.status.success(), "{}", stderr(&apply));
+    let apply_json: serde_json::Value = serde_json::from_str(&stdout(&apply)).unwrap();
+    assert_eq!(apply_json["action_digest"], digest);
+    assert_eq!(
+        apply_json["approval_subject"],
+        preview_json["approval_subject"]
+    );
+    assert_eq!(apply_json["applied_files"][0], "value.txt");
+    assert_eq!(
+        fs::read_to_string(repo.join("value.txt")).unwrap(),
+        "after\n"
+    );
+}
+
+#[test]
+fn cli_adapter_patch_apply_rejects_digest_after_target_commit_drift() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("repo");
+    init_git_repo(&repo);
+    fs::write(repo.join("value.txt"), "before\n").unwrap();
+    commit_all(&repo, "add value fixture");
 
     let run = ao2([
         "adapter",
@@ -24635,6 +24762,9 @@ fn cli_adapter_patch_preview_and_apply_promotes_exact_digest() {
     let preview_json: serde_json::Value = serde_json::from_str(&stdout(&preview)).unwrap();
     let digest = preview_json["action_digest"].as_str().unwrap();
 
+    fs::write(repo.join("base-drift.txt"), "advanced base\n").unwrap();
+    commit_all(&repo, "advance target after preview");
+
     let apply = ao2([
         "adapter",
         "patch",
@@ -24648,12 +24778,15 @@ fn cli_adapter_patch_preview_and_apply_promotes_exact_digest() {
         "--approver",
         "human:cli-test",
     ]);
-    assert!(apply.status.success(), "{}", stderr(&apply));
-    let apply_json: serde_json::Value = serde_json::from_str(&stdout(&apply)).unwrap();
-    assert_eq!(apply_json["applied_files"][0], "value.txt");
+    assert!(!apply.status.success());
+    assert!(
+        stderr(&apply).contains("digest mismatch"),
+        "{}",
+        stderr(&apply)
+    );
     assert_eq!(
         fs::read_to_string(repo.join("value.txt")).unwrap(),
-        "after\n"
+        "before\n"
     );
 }
 
@@ -24694,7 +24827,7 @@ fn cli_adapter_prompt_runs_scripted_provider_inside_sandbox() {
 fn cli_run_provider_prompt_executes_provider_backed_risky_run() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("prompt.sh");
     fs::write(
         &prompt_path,
@@ -24741,7 +24874,7 @@ printf 'Input tokens: 10\n'
 fn cli_provider_score_rates_provider_evidence_for_existing_run() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("prompt.sh");
     fs::write(
         &prompt_path,
@@ -24813,7 +24946,7 @@ printf 'Input tokens: 10\n'
 fn cli_provider_score_fails_rejected_replay_even_with_provider_metadata() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("prompt.sh");
     fs::write(
         &prompt_path,
@@ -24904,7 +25037,7 @@ printf 'Input tokens: 10\n'
 fn cli_run_provider_prompt_honors_zero_repair_budget() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("prompt.sh");
     fs::write(
         &prompt_path,
@@ -24953,6 +25086,7 @@ fn cli_repair_resume_uses_rejected_evidence_context_for_new_run() {
     let repo = temp.path().join("real-project-repair-resume");
     fs::create_dir_all(repo.join("docs")).unwrap();
     fs::write(repo.join("README.md"), "real project\n").unwrap();
+    init_existing_git_repo(&repo);
     let workflow = temp.path().join("repair-resume.yaml");
     fs::write(
         &workflow,
@@ -25064,7 +25198,7 @@ printf 'Changed files: docs/fixed.txt\n'
 fn cli_report_renders_evidence_cockpit_for_existing_run() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("prompt.sh");
     fs::write(
         &prompt_path,
@@ -25127,7 +25261,7 @@ printf 'Input tokens: 15\n'
 fn cli_runs_list_and_show_reports_existing_runs() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let run = ao2([
         "run",
@@ -25172,7 +25306,7 @@ fn cli_runs_list_and_show_reports_existing_runs() {
 fn cli_report_open_prints_browser_target_for_existing_cockpit() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let run = ao2([
         "run",
@@ -25204,7 +25338,7 @@ fn cli_report_open_prints_browser_target_for_existing_cockpit() {
 fn cli_cockpit_serve_once_returns_existing_report_html() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let run = ao2([
         "run",
@@ -25262,7 +25396,7 @@ fn cli_cockpit_serve_once_returns_existing_report_html() {
 fn cli_cockpit_index_lists_runs_and_serves_index_html() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let run = ao2([
         "run",
@@ -25328,7 +25462,7 @@ fn cli_cockpit_index_lists_runs_and_serves_index_html() {
 fn cli_workbench_export_builds_operator_dashboard() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("prompt.sh");
     fs::write(
         &prompt_path,
@@ -25461,7 +25595,7 @@ printf 'Changed files: discount_service/discounts.py\n'
 fn cli_workbench_lists_fleet_monitoring_commands() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let export = ao2(["workbench", "export", "--target", repo.to_str().unwrap()]);
     assert!(export.status.success(), "{}", stderr(&export));
@@ -25479,7 +25613,7 @@ fn cli_workbench_lists_fleet_monitoring_commands() {
 fn cli_workbench_serve_once_returns_dashboard_html() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let run = ao2([
         "run",
@@ -25537,7 +25671,7 @@ fn cli_workbench_serve_once_returns_dashboard_html() {
 fn cli_workbench_serve_once_with_operator_renders_ao_operator_runspec_input() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_ao2"))
         .args([
@@ -25575,7 +25709,7 @@ fn cli_workbench_serve_once_with_operator_renders_ao_operator_runspec_input() {
 fn cli_workbench_provider_contract_api_reports_verification_status() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_ao2"))
         .args([
@@ -25630,7 +25764,7 @@ fn cli_workbench_release_health_api_checks_release_assets() {
     let repo = temp.path().join("discount-service");
     let assets = temp.path().join("release-assets");
     fs::create_dir_all(&assets).unwrap();
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let macos = package_test_archive(temp.path(), "macos-aarch64");
     let linux = package_test_archive(temp.path(), "linux-aarch64");
@@ -25749,7 +25883,7 @@ fn cli_workbench_release_history_api_compares_downloaded_releases() {
     let v2 = releases.join("v9.9.9-test");
     fs::create_dir_all(&v1).unwrap();
     fs::create_dir_all(&v2).unwrap();
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     fs::write(
         v1.join("release-doctor.json"),
@@ -25884,7 +26018,7 @@ fn cli_workbench_release_history_export_attaches_to_signed_support_bundle() {
     let releases = temp.path().join("release-download");
     let v1 = releases.join("v9.9.9-test");
     fs::create_dir_all(&v1).unwrap();
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     fs::write(
         v1.join("release-doctor.json"),
         serde_json::json!({
@@ -26007,7 +26141,7 @@ fn cli_workbench_release_comparison_api_generates_and_verifies_signed_bundle() {
     let out_dir = temp.path().join("release-comparison-bundles");
     let release = releases.join("v9.9.9-test");
     fs::create_dir_all(&release).unwrap();
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     fs::write(
         release.join("release-doctor.json"),
         serde_json::json!({
@@ -26138,7 +26272,7 @@ fn cli_workbench_release_comparison_export_attaches_to_signed_support_bundle() {
     let out_dir = temp.path().join("release-comparison-bundles");
     let release = releases.join("v9.9.9-test");
     fs::create_dir_all(&release).unwrap();
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     fs::write(
         release.join("release-doctor.json"),
         serde_json::json!({
@@ -26318,7 +26452,7 @@ fn cli_workbench_release_comparison_export_attaches_to_signed_support_bundle() {
 fn cli_workbench_provider_pilot_acceptance_export_attaches_to_signed_support_bundle() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let acceptance_bundle = temp.path().join("provider-pilot-acceptance.json");
     fs::write(
         &acceptance_bundle,
@@ -26491,7 +26625,7 @@ fn cli_workbench_release_comparison_latest_returns_newest_verified_bundle() {
     let out_dir = temp.path().join("release-comparison-bundles");
     let release = releases.join("v9.9.9-test");
     fs::create_dir_all(&release).unwrap();
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     fs::write(
         release.join("release-doctor.json"),
         serde_json::json!({
@@ -26599,7 +26733,7 @@ fn cli_workbench_release_retention_preview_and_prune_removes_old_evidence() {
     let repo = temp.path().join("discount-service");
     let releases = temp.path().join("release-download");
     let bundles = temp.path().join("release-comparison-bundles");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     for tag in ["v9.9.7-test", "v9.9.8-test", "v9.9.9-test"] {
         let dir = releases.join(tag);
         fs::create_dir_all(&dir).unwrap();
@@ -26896,7 +27030,7 @@ fn cli_release_compare_verify_validates_signed_bundle_manifest() {
 fn cli_workbench_api_returns_runs_with_token() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let run = ao2([
         "run",
@@ -28078,7 +28212,7 @@ fn cli_workbench_memory_publish_latest_api_default_on_rejects_unsigned_when_side
 fn cli_workbench_memory_dashboard_proxy_api_and_controls() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
@@ -28184,7 +28318,7 @@ fn cli_workbench_memory_dashboard_proxy_api_and_controls() {
 fn cli_workbench_run_evidence_summary_api_reports_replay_score_and_provider_summary() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("prompt.sh");
     fs::write(
         &prompt_path,
@@ -29881,7 +30015,7 @@ fn cli_release_phase1_history_fetch_accepts_api_token_env_without_token_leak() {
 fn cli_workbench_run_evidence_publish_api_posts_signed_pack() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let signing_key = temp.path().join("workbench-evidence-signing-key.pem");
     generate_native_signing_key(&signing_key, 2048);
 
@@ -30031,7 +30165,7 @@ fn cli_workbench_run_evidence_publish_api_posts_signed_pack() {
 fn cli_workbench_run_evidence_publish_api_posts_signed_operator_packet() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let signing_key = temp
         .path()
         .join("workbench-operator-packet-signing-key.pem");
@@ -30135,7 +30269,7 @@ fn cli_workbench_run_evidence_publish_api_posts_signed_operator_packet() {
 fn cli_workbench_run_evidence_detail_proxy_fetches_control_plane_html() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let sha = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -30244,7 +30378,7 @@ fn cli_workbench_run_evidence_detail_proxy_fetches_control_plane_html() {
 fn cli_workbench_run_evidence_dashboard_proxy_opens_attention_filter() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     listener.set_nonblocking(true).unwrap();
@@ -30347,7 +30481,7 @@ fn cli_workbench_run_evidence_dashboard_proxy_opens_attention_filter() {
 fn cli_workbench_run_evidence_summary_api_reports_obligation_ledger() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("prompt.sh");
     fs::write(
         &prompt_path,
@@ -30466,7 +30600,7 @@ printf 'Changed files: discount_service/discounts.py\n'
 fn cli_workbench_obligation_annotation_api_updates_sidecar_ledger() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let signing_key = temp.path().join("obligation-annotation-key.pem");
     generate_native_signing_key(&signing_key, 3072);
     let prompt_path = temp.path().join("prompt.sh");
@@ -30637,7 +30771,7 @@ printf 'Changed files: README.md\n'
 fn cli_workbench_obligation_gate_api_writes_stage_artifact() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let signing_key = temp.path().join("obligation-gate-key.pem");
     generate_native_signing_key(&signing_key, 3072);
     let prompt_path = temp.path().join("prompt.sh");
@@ -30762,7 +30896,7 @@ fn cli_workbench_obligation_gate_api_default_on_rejects_unsigned_when_workbench_
     // a raw obligation-gate-*.json artifact under .ao2/runs/.
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("prompt.sh");
     fs::write(
         &prompt_path,
@@ -30890,7 +31024,7 @@ fn cli_workbench_obligation_gate_api_allow_unsigned_form_param_preserves_legacy_
     // signature block reports `present=false`.
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("prompt.sh");
     fs::write(
         &prompt_path,
@@ -30997,7 +31131,7 @@ printf 'Changed files: README.md\n'
 fn cli_workbench_run_evidence_summary_api_rejects_unknown_run() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_ao2"))
         .args([
@@ -31049,7 +31183,7 @@ fn cli_workbench_run_evidence_summary_api_rejects_unknown_run() {
 fn cli_workbench_run_evidence_summary_renders_summary_controls() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("prompt.sh");
     fs::write(
         &prompt_path,
@@ -31104,7 +31238,7 @@ printf 'Changed files: discount_service/discounts.py\n'
 fn cli_workbench_run_evidence_diff_api_compares_two_runs() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let baseline = ao2([
         "run",
@@ -31206,7 +31340,7 @@ printf 'Changed files: discount_service/discounts.py\n'
 fn cli_workbench_run_evidence_diff_api_rejects_unknown_run() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let baseline = ao2([
         "run",
@@ -31267,7 +31401,7 @@ fn cli_workbench_run_evidence_diff_api_rejects_unknown_run() {
 fn cli_workbench_run_evidence_changes_api_compares_previous_run() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let baseline = ao2([
         "run",
@@ -31370,7 +31504,7 @@ printf 'Changed files: discount_service/discounts.py\n'
 fn cli_workbench_run_evidence_changes_api_rejects_without_previous_run() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let run = ao2([
         "run",
@@ -31434,7 +31568,7 @@ fn cli_workbench_run_evidence_changes_api_rejects_without_previous_run() {
 fn cli_workbench_run_evidence_diff_renders_controls() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     for run_id in ["workbench-diff-left", "workbench-diff-right"] {
         let run = ao2([
@@ -31466,7 +31600,7 @@ fn cli_workbench_run_evidence_diff_renders_controls() {
 fn cli_workbench_evidence_export_writes_summary_bundle() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("prompt.sh");
     fs::write(
         &prompt_path,
@@ -31559,7 +31693,7 @@ printf 'Changed files: discount_service/discounts.py\n'
 fn cli_workbench_evidence_export_writes_operator_packet_for_support_readback() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let signing_key = temp.path().join("operator-packet-support-signing-key.pem");
     generate_native_signing_key(&signing_key, 2048);
     let prompt_path = temp.path().join("operator-packet-prompt.sh");
@@ -31741,7 +31875,7 @@ printf 'Changed files: discount_service/discounts.py\n'
 fn cli_workbench_evidence_export_writes_diff_bundle() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     for run_id in ["workbench-export-left", "workbench-export-right"] {
         let run = ao2([
@@ -31814,7 +31948,7 @@ fn cli_workbench_evidence_export_writes_diff_bundle() {
 fn cli_workbench_evidence_export_writes_changes_bundle() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let baseline = ao2([
         "run",
@@ -31902,7 +32036,7 @@ fn cli_workbench_evidence_export_writes_changes_bundle() {
 fn cli_workbench_evidence_export_requires_operator_token() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let run = ao2([
         "run",
@@ -31965,7 +32099,7 @@ fn cli_workbench_evidence_export_requires_operator_token() {
 fn cli_workbench_evidence_export_renders_controls() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let run = ao2([
         "run",
@@ -31997,7 +32131,7 @@ fn cli_workbench_evidence_export_renders_controls() {
 fn cli_workbench_api_returns_provider_matrix_with_token() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_ao2"))
         .args([
@@ -32057,7 +32191,7 @@ fn cli_workbench_api_returns_provider_matrix_with_token() {
 fn cli_workbench_provider_smoke_api_runs_when_execution_enabled() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_ao2"))
         .args([
@@ -32119,7 +32253,7 @@ fn cli_workbench_provider_smoke_api_runs_live_codex_when_explicitly_enabled() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
     let bin = temp.path().join("bin");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     write_fake_codex(&bin);
     let path = prepend_path(&bin);
 
@@ -32176,7 +32310,7 @@ fn cli_workbench_provider_smoke_api_runs_live_claude_when_explicitly_enabled() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
     let bin = temp.path().join("bin");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     write_fake_claude(&bin);
     let path = prepend_path(&bin);
 
@@ -32232,7 +32366,7 @@ fn cli_workbench_provider_smoke_api_runs_live_claude_when_explicitly_enabled() {
 fn cli_workbench_provider_pilot_api_blocks_when_gate_not_ready() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt = temp.path().join("pilot-prompt.txt");
     fs::write(&prompt, "Fix the discount validation bug.\n").unwrap();
 
@@ -32285,7 +32419,7 @@ fn cli_workbench_provider_pilot_api_builds_command_after_gate_passes() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
     let bin = temp.path().join("bin");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     write_fake_codex(&bin);
     let path = prepend_path(&bin);
     let prompt = temp.path().join("pilot-prompt.txt");
@@ -32356,7 +32490,7 @@ fn cli_workbench_provider_pilot_api_builds_command_after_gate_passes() {
 fn cli_workbench_provider_pilot_api_requires_operator_token() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt = temp.path().join("pilot-prompt.txt");
     fs::write(&prompt, "Fix the discount validation bug.\n").unwrap();
 
@@ -32403,7 +32537,7 @@ fn cli_workbench_provider_pilot_api_requires_operator_token() {
 fn cli_workbench_provider_pilot_preflight_reports_invalid_prompt() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let missing_prompt = temp.path().join("missing-pilot-prompt.txt");
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_ao2"))
@@ -32463,7 +32597,7 @@ fn cli_workbench_provider_pilot_preflight_reports_invalid_prompt() {
 fn cli_workbench_provider_pilot_preflight_blocks_when_gate_not_ready() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt = temp.path().join("pilot-prompt.txt");
     fs::write(&prompt, "Fix the discount validation bug.\n").unwrap();
 
@@ -32518,7 +32652,7 @@ fn cli_workbench_provider_pilot_preflight_passes_after_gate_ready() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
     let bin = temp.path().join("bin");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     write_fake_codex(&bin);
     let path = prepend_path(&bin);
     let prompt = temp.path().join("pilot-prompt.txt");
@@ -32593,7 +32727,7 @@ fn cli_workbench_provider_pilot_preflight_passes_after_gate_ready() {
 fn cli_workbench_provider_pilot_preflight_requires_operator_token() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt = temp.path().join("pilot-prompt.txt");
     fs::write(&prompt, "Fix the discount validation bug.\n").unwrap();
 
@@ -32640,7 +32774,7 @@ fn cli_workbench_provider_pilot_preflight_requires_operator_token() {
 fn cli_workbench_provider_pilot_renders_preflight_control() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_ao2"))
         .args([
@@ -32704,7 +32838,7 @@ fn cli_workbench_provider_pilot_renders_preflight_control() {
 fn cli_workbench_provider_pilot_latest_acceptance_api_returns_newest_valid_bundle() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let acceptance_root = temp.path().join("acceptance-root");
     let stale_dir = acceptance_root.join("v0.4.54");
     let latest_dir = acceptance_root.join("v0.4.55");
@@ -32827,7 +32961,7 @@ fn cli_workbench_provider_pilot_latest_acceptance_api_returns_newest_valid_bundl
 fn cli_workbench_provider_pilot_latest_acceptance_api_reads_nested_release_provider_bundles() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let acceptance_root = temp.path().join("acceptance-root");
     let antigravity_dir = acceptance_root.join("v0.4.80").join("antigravity");
     write_provider_pilot_acceptance_fixture(ProviderPilotAcceptanceFixture {
@@ -32887,7 +33021,7 @@ fn cli_workbench_provider_pilot_latest_acceptance_api_reads_nested_release_provi
 fn cli_workbench_provider_pilot_latest_acceptance_api_filters_sorts_and_limits_history() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let acceptance_root = temp.path().join("acceptance-root");
     write_provider_pilot_acceptance_fixture(ProviderPilotAcceptanceFixture {
         dir: acceptance_root.join("v0.4.57"),
@@ -32984,7 +33118,7 @@ fn cli_workbench_provider_pilot_latest_acceptance_api_filters_sorts_and_limits_h
 fn cli_workbench_provider_pilot_latest_acceptance_api_reports_trend_regression() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let acceptance_root = temp.path().join("acceptance-root");
     write_provider_pilot_acceptance_fixture(ProviderPilotAcceptanceFixture {
         dir: acceptance_root.join("v0.4.59"),
@@ -33064,7 +33198,7 @@ fn cli_workbench_provider_pilot_latest_acceptance_api_reports_trend_regression()
 fn cli_workbench_provider_pilot_cost_ledger_api_reports_budget_usage_totals() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let acceptance_root = temp.path().join("acceptance-root");
     write_provider_cost_ledger_fixture(
         &acceptance_root.join("v0.4.67"),
@@ -33135,7 +33269,7 @@ fn cli_workbench_provider_pilot_cost_ledger_api_reports_budget_usage_totals() {
 fn cli_workbench_provider_pilot_cost_trend_api_reports_release_deltas() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let acceptance_root = temp.path().join("acceptance-root");
     write_provider_cost_ledger_fixture(
         &acceptance_root.join("v0.4.66"),
@@ -33337,7 +33471,7 @@ fn write_provider_cost_ledger_fixture(
 fn cli_workbench_provider_pilot_export_latest_acceptance_api_exports_newest_bundle() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let acceptance_root = temp.path().join("acceptance-root");
     let latest_dir = acceptance_root.join("v0.4.59");
     fs::create_dir_all(&latest_dir).unwrap();
@@ -33424,7 +33558,7 @@ fn cli_workbench_provider_pilot_export_latest_acceptance_api_exports_newest_bund
 fn cli_workbench_provider_pilot_start_requires_execution_flag() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt = temp.path().join("pilot-prompt.txt");
     fs::write(&prompt, "Fix the discount validation bug.\n").unwrap();
 
@@ -33470,7 +33604,7 @@ fn cli_workbench_provider_pilot_start_requires_execution_flag() {
 fn cli_workbench_provider_pilot_start_blocks_when_gate_not_ready() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt = temp.path().join("pilot-prompt.txt");
     fs::write(&prompt, "Fix the discount validation bug.\n").unwrap();
 
@@ -33528,7 +33662,7 @@ fn cli_workbench_provider_pilot_start_requires_exact_action_digest() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
     let bin = temp.path().join("bin");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     write_fake_codex(&bin);
     let path = prepend_path(&bin);
     let prompt = temp.path().join("pilot-prompt.txt");
@@ -33607,7 +33741,7 @@ fn cli_workbench_provider_pilot_start_queues_ready_codex_pilot() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
     let bin = temp.path().join("bin");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     write_fake_codex(&bin);
     let path = prepend_path(&bin);
     let prompt = temp.path().join("pilot-prompt.txt");
@@ -33711,7 +33845,7 @@ fn cli_workbench_provider_pilot_start_queues_ready_codex_pilot() {
 fn cli_workbench_launch_api_builds_governed_run_command() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let signing_key = temp.path().join("support-signing-key.pem");
     generate_native_signing_key(&signing_key, 2048);
 
@@ -33808,7 +33942,7 @@ fn cli_workbench_launch_api_builds_governed_run_command() {
 fn cli_workbench_launch_api_preflights_real_ao_operator_runspec_contracts() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let factory_repo = temp.path().join("factory-v3");
     let runspec = factory_repo.join("ao/runspecs/factory-v3-smoke.yaml");
     fs::create_dir_all(runspec.parent().unwrap()).unwrap();
@@ -33930,7 +34064,7 @@ status_required = true
 fn cli_workbench_operator_tokens_enforce_roles_and_render_identity() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let signing_key = temp.path().join("operator-support-signing-key.pem");
     generate_native_signing_key(&signing_key, 2048);
 
@@ -34051,7 +34185,7 @@ fn cli_workbench_operator_tokens_enforce_roles_and_render_identity() {
 fn cli_workbench_operator_token_rejects_invalid_role_config() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let output = ao2([
         "workbench",
@@ -34072,7 +34206,7 @@ fn cli_workbench_operator_token_rejects_invalid_role_config() {
 fn cli_workbench_queue_requires_explicit_execution_flag() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_ao2"))
         .args([
@@ -34112,7 +34246,7 @@ fn cli_workbench_queue_requires_explicit_execution_flag() {
 fn cli_workbench_queue_rejects_launch_when_minimum_score_not_met() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let run = ao2([
         "run",
@@ -34168,7 +34302,7 @@ fn cli_workbench_queue_rejects_launch_when_minimum_score_not_met() {
 fn cli_workbench_queue_executes_scripted_run_and_reports_evidence() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("prompt.sh");
     fs::write(
         &prompt_path,
@@ -34240,7 +34374,7 @@ printf 'Changed files: discount_service/discounts.py\n'
 fn cli_workbench_queue_starts_repair_resume_from_rejected_evidence() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let failed_prompt = temp.path().join("repair-source-prompt.sh");
     fs::write(
         &failed_prompt,
@@ -34376,7 +34510,7 @@ printf 'Changed files: discount_service/discounts.py\n'
 fn cli_workbench_queue_persists_failed_history_across_restart() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let missing_prompt = temp.path().join("missing-prompt.sh");
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_ao2"))
@@ -34459,7 +34593,7 @@ fn cli_workbench_queue_persists_failed_history_across_restart() {
 fn cli_workbench_queue_detail_reports_provider_failure_diagnostics() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let failing_prompt = temp.path().join("invalid-local-auth-missing-prompt.sh");
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_ao2"))
@@ -34573,7 +34707,7 @@ fn cli_workbench_queue_wait_timeout_message_reports_last_observed_job() {
 fn cli_workbench_support_bundle_summarizes_queue_failure_diagnostics() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let missing_prompt = temp.path().join("support-diagnostics-missing-prompt.sh");
     let signing_key = temp.path().join("support-diagnostics-key.pem");
     generate_native_signing_key(&signing_key, 3072);
@@ -34681,7 +34815,7 @@ fn cli_workbench_support_bundle_summarizes_queue_failure_diagnostics() {
 fn cli_workbench_queue_can_cancel_running_job() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("slow-prompt.sh");
     fs::write(
         &prompt_path,
@@ -34750,7 +34884,7 @@ PY
 fn cli_workbench_queue_can_retry_failed_job_and_renders_controls() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let missing_prompt = temp.path().join("retry-missing-prompt.sh");
 
     let mut child = Command::new(env!("CARGO_BIN_EXE_ao2"))
@@ -34818,7 +34952,7 @@ fn cli_workbench_queue_can_retry_failed_job_and_renders_controls() {
 fn cli_workbench_queue_job_detail_reports_logs() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("detail-prompt.sh");
     fs::write(
         &prompt_path,
@@ -34899,7 +35033,7 @@ printf 'Changed files: discount_service/discounts.py\n'
 fn cli_workbench_queue_live_logs_update_while_job_runs() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("live-logs-prompt.sh");
     fs::write(
         &prompt_path,
@@ -34967,7 +35101,7 @@ printf 'Changed files: discount_service/discounts.py\n'
 fn cli_workbench_queue_log_tail_bounds_large_logs() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("tail-logs-prompt.sh");
     fs::write(
         &prompt_path,
@@ -35036,7 +35170,7 @@ printf 'Changed files: discount_service/discounts.py\n'
 fn cli_workbench_queue_renders_live_log_controls() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("live-log-controls-prompt.sh");
     fs::write(
         &prompt_path,
@@ -35088,7 +35222,7 @@ printf 'Changed files: discount_service/discounts.py\n'
 fn cli_workbench_queue_detail_page_renders_job_logs_and_metrics() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("detail-page-prompt.sh");
     fs::write(
         &prompt_path,
@@ -35151,7 +35285,7 @@ printf 'Changed files: discount_service/discounts.py\n'
 fn cli_workbench_queue_records_runtime_metrics() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("metrics-prompt.sh");
     fs::write(
         &prompt_path,
@@ -35202,7 +35336,7 @@ PY
 fn cli_workbench_queue_writes_audit_events_for_cancel_and_retry() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let slow_prompt = temp.path().join("audit-slow-prompt.sh");
     fs::write(
         &slow_prompt,
@@ -35302,7 +35436,7 @@ PY
 fn cli_workbench_queue_filters_by_status() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("filter-prompt.sh");
     fs::write(
         &prompt_path,
@@ -35359,7 +35493,7 @@ PY
 fn cli_workbench_queue_retention_prunes_old_jobs() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let first_missing_prompt = temp.path().join("retention-first-missing.sh");
     let second_missing_prompt = temp.path().join("retention-second-missing.sh");
     let mut child = Command::new(env!("CARGO_BIN_EXE_ao2"))
@@ -35404,7 +35538,7 @@ fn cli_workbench_queue_retention_prunes_old_jobs() {
 fn cli_workbench_queue_audit_api_filters_events_and_renders_panel() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let slow_prompt = temp.path().join("audit-panel-slow.sh");
     fs::write(
         &slow_prompt,
@@ -35490,7 +35624,7 @@ PY
 fn cli_workbench_queue_export_writes_support_bundle_with_logs_and_audit() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("support-bundle-prompt.sh");
     fs::write(
         &prompt_path,
@@ -35609,7 +35743,7 @@ printf 'Changed files: discount_service/discounts.py\n'
 fn cli_workbench_queue_export_preview_redacts_secrets_without_writing_bundle() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp
         .path()
         .join("support-bundle-redaction-preview-prompt.sh");
@@ -35816,7 +35950,7 @@ printf 'Changed files: discount_service/discounts.py\n'
 fn cli_workbench_queue_export_attaches_evidence_exports() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let prompt_path = temp.path().join("support-bundle-evidence-prompt.sh");
     fs::write(
         &prompt_path,
@@ -35899,7 +36033,7 @@ printf 'Changed files: discount_service/discounts.py\n'
 fn cli_workbench_queue_export_writes_signed_support_metadata() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let signing_key = temp.path().join("workbench-support-signing-key.pem");
     generate_native_signing_key(&signing_key, 3072);
     let prompt_path = temp.path().join("signed-support-bundle-prompt.sh");
@@ -45018,7 +45152,7 @@ fn cli_workbench_support_verify_rejects_tampered_bundle_body() {
 fn cli_control_plane_ingest_writes_read_only_snapshot() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let run = ao2([
         "run",
@@ -45101,7 +45235,7 @@ fn cli_control_plane_ingest_writes_read_only_snapshot() {
 fn cli_control_plane_serve_once_returns_dashboard_and_snapshot_api() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let run = ao2([
         "run",
@@ -45181,7 +45315,7 @@ fn cli_control_plane_serve_once_returns_dashboard_and_snapshot_api() {
 fn cli_control_plane_export_writes_static_dashboard() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let run = ao2([
         "run",
@@ -45226,8 +45360,8 @@ fn cli_control_plane_index_combines_multiple_repo_snapshots() {
     let temp = tempfile::tempdir().unwrap();
     let repo_a = temp.path().join("discount-service-a");
     let repo_b = temp.path().join("discount-service-b");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo_a);
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo_b);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo_a);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo_b);
 
     let run_a = ao2([
         "run",
@@ -45294,8 +45428,8 @@ fn cli_control_plane_refresh_reingests_targets_and_writes_fleet_snapshot() {
     let temp = tempfile::tempdir().unwrap();
     let repo_a = temp.path().join("refresh-service-a");
     let repo_b = temp.path().join("refresh-service-b");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo_a);
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo_b);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo_a);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo_b);
 
     let run_a = ao2([
         "run",
@@ -45354,7 +45488,7 @@ fn cli_control_plane_refresh_reingests_targets_and_writes_fleet_snapshot() {
 fn cli_control_plane_health_reports_provider_readiness_rollup() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
 
     let smoke = ao2([
         "provider",
@@ -45420,8 +45554,8 @@ fn cli_control_plane_export_and_serve_fleet_dashboard() {
     let temp = tempfile::tempdir().unwrap();
     let repo_a = temp.path().join("discount-service-a");
     let repo_b = temp.path().join("discount-service-b");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo_a);
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo_b);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo_a);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo_b);
 
     let run_a = ao2([
         "run",
@@ -45534,8 +45668,8 @@ fn cli_control_plane_bundle_writes_portable_fleet_support_artifacts() {
     let temp = tempfile::tempdir().unwrap();
     let repo_a = temp.path().join("bundle-service-a");
     let repo_b = temp.path().join("bundle-service-b");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo_a);
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo_b);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo_a);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo_b);
 
     let run_a = ao2([
         "run",
@@ -45612,8 +45746,8 @@ fn cli_control_plane_bundle_verify_checks_manifest_and_schema() {
     let temp = tempfile::tempdir().unwrap();
     let repo_a = temp.path().join("verify-bundle-service-a");
     let repo_b = temp.path().join("verify-bundle-service-b");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo_a);
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo_b);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo_a);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo_b);
 
     for (repo, run_id) in [
         (&repo_a, "fleet-bundle-verify-a"),
@@ -46407,7 +46541,7 @@ fn create_signed_workbench_support_bundle_with_failed_job(
     name: &str,
 ) -> (PathBuf, PathBuf) {
     let repo = base.join(format!("{name}-repo"));
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let signing_key = base.join(format!("{name}-support-signing-key.pem"));
     let missing_prompt = base.join(format!("{name}-missing-prompt.sh"));
     generate_native_signing_key(&signing_key, 2048);
@@ -46455,7 +46589,7 @@ fn create_signed_workbench_support_bundle_fixture(
     export_evidence: bool,
 ) -> (PathBuf, PathBuf) {
     let repo = base.join(format!("{name}-repo"));
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
     let signing_key = base.join(format!("{name}-support-signing-key.pem"));
     let prompt_path = base.join(format!("{name}-prompt.sh"));
     generate_native_signing_key(&signing_key, 2048);
@@ -46633,8 +46767,8 @@ fn cli_control_plane_sources_save_and_refresh_from_source_list() {
     let temp = tempfile::tempdir().unwrap();
     let repo_a = temp.path().join("sources-service-a");
     let repo_b = temp.path().join("sources-service-b");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo_a);
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo_b);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo_a);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo_b);
 
     for (repo, run_id) in [(&repo_a, "fleet-sources-a"), (&repo_b, "fleet-sources-b")] {
         let run = ao2([
@@ -46695,8 +46829,8 @@ fn cli_control_plane_history_records_refresh_snapshots() {
     let temp = tempfile::tempdir().unwrap();
     let repo_a = temp.path().join("history-service-a");
     let repo_b = temp.path().join("history-service-b");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo_a);
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo_b);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo_a);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo_b);
 
     for (repo, run_id) in [(&repo_a, "fleet-history-a"), (&repo_b, "fleet-history-b")] {
         let run = ao2([
@@ -47304,8 +47438,8 @@ fn write_empty_fleet_snapshot(path: &Path) {
 fn create_two_entry_control_plane_history(base: &Path) -> (PathBuf, PathBuf, PathBuf, PathBuf) {
     let repo_a = base.join("history-diff-service-a");
     let repo_b = base.join("history-diff-service-b");
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo_a);
-    copy_fixture(Path::new("../../fixtures/discount-service"), &repo_b);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo_a);
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo_b);
 
     for (repo, run_id) in [
         (&repo_a, "fleet-history-diff-a"),

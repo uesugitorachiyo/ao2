@@ -1,5 +1,13 @@
 //! Local agent adapter contract and process wrapper.
 
+mod sandbox_patch;
+
+pub use sandbox_patch::{
+    preview_sandbox_patch, SandboxFileKind, SandboxFileState, SandboxPatchApprovalSubject,
+    SandboxPatchOperation, SandboxPatchOperationKind, SandboxPatchPreview,
+    SANDBOX_PATCH_APPROVAL_SUBJECT_SCHEMA,
+};
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -52,15 +60,6 @@ pub struct SandboxRunResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SandboxPatchPreview {
-    pub target_repo: PathBuf,
-    pub sandbox_path: PathBuf,
-    pub changed_files: Vec<String>,
-    pub diff_summary: String,
-    pub action_digest: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SandboxPatchApplyRequest {
     pub target_repo: PathBuf,
     pub sandbox_path: PathBuf,
@@ -73,6 +72,7 @@ pub struct SandboxPatchApplyResult {
     pub target_repo: PathBuf,
     pub sandbox_path: PathBuf,
     pub applied_files: Vec<String>,
+    pub approval_subject: SandboxPatchApprovalSubject,
     pub action_digest: String,
     pub approver: String,
 }
@@ -1245,25 +1245,6 @@ fn resolve_windows_path_command(command: &Path) -> Option<PathBuf> {
     None
 }
 
-pub fn preview_sandbox_patch(
-    target_repo: &Path,
-    sandbox_path: &Path,
-) -> Result<SandboxPatchPreview> {
-    ensure_target_repo(target_repo)?;
-    ensure_target_repo(sandbox_path)?;
-    let before = snapshot_files(target_repo)?;
-    let after = snapshot_files(sandbox_path)?;
-    let (changed_files, diff_summary) = summarize_diff(&before, &after);
-    let action_digest = sandbox_patch_digest(&changed_files, &diff_summary);
-    Ok(SandboxPatchPreview {
-        target_repo: target_repo.to_path_buf(),
-        sandbox_path: sandbox_path.to_path_buf(),
-        changed_files,
-        diff_summary,
-        action_digest,
-    })
-}
-
 pub fn apply_sandbox_patch(request: SandboxPatchApplyRequest) -> Result<SandboxPatchApplyResult> {
     let preview = preview_sandbox_patch(&request.target_repo, &request.sandbox_path)?;
     if preview.action_digest != request.expected_digest {
@@ -1274,18 +1255,38 @@ pub fn apply_sandbox_patch(request: SandboxPatchApplyRequest) -> Result<SandboxP
         );
     }
 
-    for file in &preview.changed_files {
-        let source = request.sandbox_path.join(file);
-        let target = request.target_repo.join(file);
-        if source.exists() {
-            if let Some(parent) = target.parent() {
-                fs::create_dir_all(parent)?;
+    validate_apply_platform_support(&preview.approval_subject)?;
+    for operation in &preview.approval_subject.operations {
+        let source = request.sandbox_path.join(&operation.path);
+        let target = request.target_repo.join(&operation.path);
+        match (&operation.kind, &operation.after) {
+            (SandboxPatchOperationKind::Deleted, None) => {
+                remove_patch_target(&target)?;
             }
-            fs::copy(&source, &target)
-                .with_context(|| format!("apply sandbox file {}", target.display()))?;
-        } else if target.exists() {
-            fs::remove_file(&target)
-                .with_context(|| format!("remove deleted sandbox file {}", target.display()))?;
+            (
+                SandboxPatchOperationKind::Added | SandboxPatchOperationKind::Modified,
+                Some(state),
+            ) => {
+                if let Some(parent) = target.parent() {
+                    fs::create_dir_all(parent)?;
+                }
+                match state.kind {
+                    SandboxFileKind::RegularFile => {
+                        remove_target_symlink(&target)?;
+                        fs::copy(&source, &target)
+                            .with_context(|| format!("apply sandbox file {}", target.display()))?;
+                        set_unix_mode(&target, state.unix_mode)?;
+                    }
+                    SandboxFileKind::Symlink => {
+                        remove_patch_target(&target)?;
+                        apply_symlink(&source, &target)?;
+                    }
+                }
+            }
+            _ => anyhow::bail!(
+                "invalid sandbox patch operation state for {}",
+                operation.path
+            ),
         }
     }
 
@@ -1293,21 +1294,90 @@ pub fn apply_sandbox_patch(request: SandboxPatchApplyRequest) -> Result<SandboxP
         target_repo: request.target_repo,
         sandbox_path: request.sandbox_path,
         applied_files: preview.changed_files,
+        approval_subject: preview.approval_subject,
         action_digest: preview.action_digest,
         approver: request.approver,
     })
 }
 
-fn sandbox_patch_digest(changed_files: &[String], diff_summary: &str) -> String {
-    let payload = serde_json::json!({
-        "changed_files": changed_files,
-        "diff_summary": diff_summary
-    });
-    sha256_hex(
-        serde_json::to_string(&payload)
-            .unwrap_or_default()
-            .as_bytes(),
+fn validate_apply_platform_support(subject: &SandboxPatchApprovalSubject) -> Result<()> {
+    #[cfg(not(unix))]
+    if subject.operations.iter().any(|operation| {
+        operation
+            .after
+            .as_ref()
+            .is_some_and(|state| state.kind == SandboxFileKind::Symlink)
+    }) {
+        anyhow::bail!("sandbox symlink apply is unsupported on this platform");
+    }
+
+    let _ = subject;
+    Ok(())
+}
+
+fn remove_target_symlink(target: &Path) -> Result<()> {
+    match fs::symlink_metadata(target) {
+        Ok(metadata) if metadata.file_type().is_symlink() => fs::remove_file(target)
+            .with_context(|| format!("remove target symlink {}", target.display())),
+        Ok(metadata) if metadata.is_dir() => anyhow::bail!(
+            "sandbox patch target unexpectedly resolves to a directory: {}",
+            target.display()
+        ),
+        Ok(_) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => {
+            Err(error).with_context(|| format!("inspect sandbox patch target {}", target.display()))
+        }
+    }
+}
+
+fn remove_patch_target(target: &Path) -> Result<()> {
+    match fs::symlink_metadata(target) {
+        Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => anyhow::bail!(
+            "sandbox patch refuses to remove directory target: {}",
+            target.display()
+        ),
+        Ok(_) => fs::remove_file(target)
+            .with_context(|| format!("remove sandbox patch target {}", target.display())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => {
+            Err(error).with_context(|| format!("inspect sandbox patch target {}", target.display()))
+        }
+    }
+}
+
+#[cfg(unix)]
+fn apply_symlink(source: &Path, target: &Path) -> Result<()> {
+    use std::os::unix::fs::symlink;
+
+    let link_target = fs::read_link(source)
+        .with_context(|| format!("read sandbox symlink {}", source.display()))?;
+    symlink(&link_target, target)
+        .with_context(|| format!("apply sandbox symlink {}", target.display()))
+}
+
+#[cfg(not(unix))]
+fn apply_symlink(_source: &Path, target: &Path) -> Result<()> {
+    anyhow::bail!(
+        "sandbox symlink apply is unsupported on this platform: {}",
+        target.display()
     )
+}
+
+#[cfg(unix)]
+fn set_unix_mode(target: &Path, mode: Option<u32>) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    if let Some(mode) = mode {
+        fs::set_permissions(target, fs::Permissions::from_mode(mode))
+            .with_context(|| format!("set sandbox patch mode on {}", target.display()))?;
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn set_unix_mode(_target: &Path, _mode: Option<u32>) -> Result<()> {
+    Ok(())
 }
 
 fn ensure_target_repo(target_repo: &Path) -> Result<()> {
@@ -1366,6 +1436,11 @@ pub fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
         if entry.file_type().is_dir() {
             fs::create_dir_all(&target)
                 .with_context(|| format!("create sandbox dir {}", target.display()))?;
+        } else if entry.file_type().is_symlink() {
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            copy_symlink(entry.path(), &target)?;
         } else if entry.file_type().is_file() {
             if let Some(parent) = target.parent() {
                 fs::create_dir_all(parent)?;
@@ -1376,6 +1451,29 @@ pub fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(unix)]
+fn copy_symlink(source: &Path, target: &Path) -> Result<()> {
+    use std::os::unix::fs::symlink;
+
+    let link_target = fs::read_link(source)
+        .with_context(|| format!("read sandbox symlink {}", source.display()))?;
+    symlink(&link_target, target).with_context(|| {
+        format!(
+            "copy sandbox symlink {} to {}",
+            source.display(),
+            target.display()
+        )
+    })
+}
+
+#[cfg(not(unix))]
+fn copy_symlink(source: &Path, _target: &Path) -> Result<()> {
+    anyhow::bail!(
+        "sandbox symlink copy is unsupported on this platform: {}",
+        source.display()
+    )
 }
 
 fn snapshot_files(root: &Path) -> Result<BTreeMap<String, String>> {
