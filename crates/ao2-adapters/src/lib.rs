@@ -1,5 +1,12 @@
 //! Local agent adapter contract and process wrapper.
 
+mod sandbox_patch;
+
+pub use sandbox_patch::{
+    SandboxFileKind, SandboxFileState, SandboxPatchApprovalSubject, SandboxPatchOperation,
+    SandboxPatchOperationKind, SANDBOX_PATCH_APPROVAL_SUBJECT_SCHEMA,
+};
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};

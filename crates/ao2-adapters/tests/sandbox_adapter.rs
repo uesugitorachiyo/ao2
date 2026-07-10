@@ -4,7 +4,8 @@ use std::process::Command;
 
 use ao2_adapters::{
     apply_sandbox_patch, preview_sandbox_patch, AdapterRunRequest, LocalCliAdapter, ProviderKind,
-    SandboxPatchApplyRequest, SandboxRunRequest,
+    SandboxFileKind, SandboxFileState, SandboxPatchApplyRequest, SandboxPatchApprovalSubject,
+    SandboxPatchOperation, SandboxPatchOperationKind, SandboxRunRequest,
 };
 
 #[test]
@@ -227,6 +228,32 @@ fn sandbox_patch_applies_file_deletions() {
     );
 }
 
+#[test]
+fn approval_subject_digest_binds_every_contract_field() {
+    let subject = sample_approval_subject();
+    let original = subject.action_digest().unwrap();
+
+    let mut different_repo = subject.clone();
+    different_repo.repository_identity = format!("sha256:{}", "2".repeat(64));
+    assert_ne!(different_repo.action_digest().unwrap(), original);
+
+    let mut different_base = subject.clone();
+    different_base.base_commit = "b".repeat(40);
+    assert_ne!(different_base.action_digest().unwrap(), original);
+
+    let mut different_operation = subject.clone();
+    different_operation.operations[0].kind = SandboxPatchOperationKind::Deleted;
+    assert_ne!(different_operation.action_digest().unwrap(), original);
+
+    let mut different_before = subject.clone();
+    different_before.operations[0].before = Some(sample_file_state('6'));
+    assert_ne!(different_before.action_digest().unwrap(), original);
+
+    let mut reordered = subject.clone();
+    reordered.operations.swap(0, 1);
+    assert_ne!(reordered.action_digest().unwrap(), original);
+}
+
 fn shell_command() -> std::path::PathBuf {
     if cfg!(windows) {
         "powershell".into()
@@ -265,6 +292,40 @@ fn init_git_target(root: &Path, files: &[(&str, &[u8])]) -> std::path::PathBuf {
     git(&target, &["add", "-A"]);
     git(&target, &["commit", "--quiet", "-m", "fixture"]);
     target
+}
+
+fn sample_file_state(digit: char) -> SandboxFileState {
+    SandboxFileState {
+        kind: SandboxFileKind::RegularFile,
+        content_sha256: Some(format!("sha256:{}", digit.to_string().repeat(64))),
+        symlink_target_sha256: None,
+        unix_mode: Some(0o644),
+    }
+}
+
+fn sample_approval_subject() -> SandboxPatchApprovalSubject {
+    SandboxPatchApprovalSubject {
+        schema_version: "ao2.sandbox-patch-approval-subject.v1".to_string(),
+        repository_identity: format!("sha256:{}", "1".repeat(64)),
+        base_commit: "a".repeat(40),
+        operation_type: "sandbox_patch_apply".to_string(),
+        operations: vec![
+            SandboxPatchOperation {
+                order: 0,
+                path: "a.txt".to_string(),
+                kind: SandboxPatchOperationKind::Modified,
+                before: Some(sample_file_state('3')),
+                after: Some(sample_file_state('4')),
+            },
+            SandboxPatchOperation {
+                order: 1,
+                path: "b.txt".to_string(),
+                kind: SandboxPatchOperationKind::Added,
+                before: None,
+                after: Some(sample_file_state('5')),
+            },
+        ],
+    }
 }
 
 fn shell_args(script: &str) -> Vec<String> {
