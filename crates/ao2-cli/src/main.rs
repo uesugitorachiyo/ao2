@@ -9393,6 +9393,7 @@ fn factory_project_plan_init_app_step_repo(target: &Path) -> Result<()> {
         &["init", "--quiet"][..],
         &["config", "user.email", "ao2-factory@example.invalid"][..],
         &["config", "user.name", "AO2 Factory"][..],
+        &["config", "core.longpaths", "true"][..],
         &["add", "-A"][..],
         &["commit", "--quiet", "-m", "factory project app-step base"][..],
     ] {

@@ -233,6 +233,13 @@ fn init_existing_git_repo(repo: &Path) {
         .status
         .success());
     assert!(Command::new("git")
+        .args(["config", "core.longpaths", "true"])
+        .current_dir(repo)
+        .output()
+        .unwrap()
+        .status
+        .success());
+    assert!(Command::new("git")
         .args(["add", "-A"])
         .current_dir(repo)
         .output()
