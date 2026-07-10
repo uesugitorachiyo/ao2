@@ -9384,6 +9384,35 @@ fn factory_app_run_bundle_reject_secret_fields(
     Ok(())
 }
 
+fn factory_project_plan_init_app_step_repo(target: &Path) -> Result<()> {
+    let git_dir = target.join(".git");
+    if git_dir.exists() {
+        return Ok(());
+    }
+    for args in [
+        &["init", "--quiet"][..],
+        &["config", "user.email", "ao2-factory@example.invalid"][..],
+        &["config", "user.name", "AO2 Factory"][..],
+        &["add", "-A"][..],
+        &["commit", "--quiet", "-m", "factory project app-step base"][..],
+    ] {
+        let output = ProcessCommand::new("git")
+            .args(args)
+            .current_dir(target)
+            .output()
+            .with_context(|| format!("run git {args:?} in {}", target.display()))?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "initialize factory project app-step git repo {} with git {:?}: {}",
+                target.display(),
+                args,
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+    Ok(())
+}
+
 fn factory_project_plan_json(options: FactoryProjectPlanOptions<'_>) -> Result<serde_json::Value> {
     if !options.project_spec.is_file() {
         anyhow::bail!(
@@ -9442,6 +9471,12 @@ fn factory_project_plan_json(options: FactoryProjectPlanOptions<'_>) -> Result<s
         let target_path = apps_dir.join(&step_id);
         fs::create_dir_all(&target_path)
             .with_context(|| format!("create {}", target_path.display()))?;
+        let target_readme = target_path.join("README.md");
+        atomic_write_text(
+            &target_readme,
+            &format!("# {project_title} - {step_id}\n\nFactory project app-step target.\n"),
+        )?;
+        factory_project_plan_init_app_step_repo(&target_path)?;
         let step_spec = format!(
             "# {project_title} - {step_id}\n\nProject run: {run_id}\n\nSource project spec: {}\n\nApp step:\n- {step_line}\n\nAcceptance:\n- Implement this app step without changing AO trust boundaries.\n- Verifier command: `{}`.\n- Release acceptance remains owned by factory-v3 evaluator-closer.\n",
             options.project_spec.display(),
@@ -34744,6 +34779,11 @@ fn plugin_manifest(out_dir: PathBuf, json_output: bool) -> Result<()> {
         &plugin_manifest_signing_key_generator_ps1(),
     )?;
     atomic_write_text(&app_target_placeholder_path, "packaged sample app target\n")?;
+    factory_project_plan_init_app_step_repo(
+        app_target_placeholder_path
+            .parent()
+            .context("resolve plugin sample app target")?,
+    )?;
 
     let app_args = serde_json::json!({
         "schema_version": "ao2.plugin-wrapper-args.v1",
