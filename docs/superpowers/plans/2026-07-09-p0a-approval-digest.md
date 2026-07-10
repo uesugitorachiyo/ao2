@@ -28,6 +28,7 @@
 - Modify `crates/ao2-runtime/tests/provider_backed_run.rs`: assert preview evidence exposes the bound subject and provider flow remains approval-gated.
 - Modify `crates/ao2-runtime/tests/approval_replay.rs`: assert replay rejects approval evidence whose patch subject no longer matches current state.
 - Modify `crates/ao2-runtime/tests/risky_pr_run.rs`: migrate provider-free mutation fixtures to committed Git targets.
+- Modify `crates/ao2-runtime/src/lib.rs`: reject a stale approved sandbox ticket instead of issuing a replacement pending ticket for a changed subject.
 - Modify `crates/ao2-cli/tests/cli_approval_replay.rs`: assert CLI preview output carries the canonical subject and apply fails before writes after drift.
 - Modify `docs/SCHEMAS-AND-INTERFACES.md`: document `ao2.sandbox-patch-approval-subject.v1`.
 - Modify `docs/SDD-risky-pr-run.md`: document preview-to-ticket-to-apply binding and P0-B/P0-C exclusions.
@@ -654,6 +655,7 @@ git commit -m "fix: reject sandbox patch drift before apply"
 ### Task 6: Bind Runtime Approval Evidence to the Canonical Subject
 
 **Files:**
+- Modify: `crates/ao2-runtime/src/lib.rs`
 - Modify: `crates/ao2-runtime/tests/provider_backed_run.rs`
 - Modify: `crates/ao2-runtime/tests/approval_replay.rs`
 - Modify: `crates/ao2-runtime/tests/risky_pr_run.rs`
@@ -686,6 +688,12 @@ assert_eq!(preview["approval_subject"]["base_commit"].as_str().unwrap().len(), 4
 Pause a fixture run, approve its exact ticket, mutate or commit the fixture
 target, resume, and assert the run rejects before writing sandbox output to the
 target. The rejection text must identify approval-subject or digest mismatch.
+
+After the test fails by returning a replacement `WaitingForApproval` summary,
+update `run_provider_role` to detect an approved `sandbox:apply` ticket for the
+same requester whose digest differs from the current preview. Emit
+`approval.denied` with reason `sandbox changed after approval` and return an
+error before searching for or creating a pending replacement ticket.
 
 - [ ] **Step 3: Run runtime tests**
 

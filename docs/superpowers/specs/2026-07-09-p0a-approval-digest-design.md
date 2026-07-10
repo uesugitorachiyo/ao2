@@ -139,6 +139,9 @@ digest.
 6. Preview serializes the subject and hashes the exact serialized bytes.
 7. Runtime places that digest in the existing `ToolRequest` and approval
    ticket.
+   If an approved sandbox ticket exists for the same run role but its digest no
+   longer matches the current subject, runtime rejects the run instead of
+   creating a replacement pending ticket.
 8. Apply reruns steps 1 through 6 from current state.
 9. Apply compares the recomputed digest with `expected_digest` before creating,
    copying, chmodding, or deleting any target path.
