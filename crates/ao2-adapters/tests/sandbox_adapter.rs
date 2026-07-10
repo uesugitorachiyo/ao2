@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 
 use ao2_adapters::{
     apply_sandbox_patch, preview_sandbox_patch, AdapterRunRequest, LocalCliAdapter, ProviderKind,
@@ -84,9 +85,7 @@ fn sandbox_run_can_keep_sandbox_for_manual_inspection() {
 #[test]
 fn sandbox_patch_apply_requires_exact_digest_and_then_promotes_changes() {
     let temp = tempfile::tempdir().unwrap();
-    let target = temp.path().join("target");
-    fs::create_dir_all(&target).unwrap();
-    fs::write(target.join("value.txt"), "before\n").unwrap();
+    let target = init_git_target(temp.path(), &[("value.txt", b"before\n")]);
 
     let request = AdapterRunRequest {
         role_id: "sandbox-apply-test".to_string(),
@@ -178,10 +177,10 @@ fn sandbox_run_rejects_working_dir_that_escapes_sandbox() {
 #[test]
 fn sandbox_patch_applies_file_deletions() {
     let temp = tempfile::tempdir().unwrap();
-    let target = temp.path().join("target");
-    fs::create_dir_all(&target).unwrap();
-    fs::write(target.join("keep.txt"), "keep\n").unwrap();
-    fs::write(target.join("remove.txt"), "doomed\n").unwrap();
+    let target = init_git_target(
+        temp.path(),
+        &[("keep.txt", b"keep\n"), ("remove.txt", b"doomed\n")],
+    );
 
     let request = AdapterRunRequest {
         role_id: "sandbox-delete-test".to_string(),
@@ -234,6 +233,38 @@ fn shell_command() -> std::path::PathBuf {
     } else {
         "sh".into()
     }
+}
+
+fn git(root: &Path, args: &[&str]) {
+    let output = Command::new("git")
+        .args(args)
+        .current_dir(root)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "git {args:?} failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn init_git_target(root: &Path, files: &[(&str, &[u8])]) -> std::path::PathBuf {
+    let target = root.join("target");
+    fs::create_dir_all(&target).unwrap();
+    git(&target, &["init", "--quiet"]);
+    git(&target, &["config", "user.name", "AO2 Test"]);
+    git(
+        &target,
+        &["config", "user.email", "ao2-test@example.invalid"],
+    );
+    for (path, bytes) in files {
+        let path = target.join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, bytes).unwrap();
+    }
+    git(&target, &["add", "-A"]);
+    git(&target, &["commit", "--quiet", "-m", "fixture"]);
+    target
 }
 
 fn shell_args(script: &str) -> Vec<String> {

@@ -8,6 +8,8 @@ use ao2_runtime::{
     ApprovalOptions, ProviderRunOptions, ResumeOptions, RunStatus, RunSummary,
 };
 
+mod support;
+
 static ENV_LOCK: Mutex<()> = Mutex::new(());
 
 fn run_provider_backed_end_to_end(options: ProviderRunOptions) -> anyhow::Result<RunSummary> {
@@ -48,6 +50,7 @@ fn copy_fixture(src: &Path, dst: &Path) {
             fs::copy(entry.path(), &target).unwrap();
         }
     }
+    support::commit_fixture(dst);
 }
 
 #[test]
