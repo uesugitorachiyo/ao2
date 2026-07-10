@@ -1447,6 +1447,14 @@ fn apply_provider_prompt_patch_for_role(
         expected_side_effects: vec!["repo_write".to_string()],
     };
 
+    let consumed_path = ctx.run_dir.join("consumed-tickets.json");
+    let mut consumed: Vec<String> = if consumed_path.exists() {
+        let content = fs::read_to_string(&consumed_path)?;
+        serde_json::from_str(&content).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
     let approved_ticket = ctx
         .approvals
         .iter()
@@ -1455,8 +1463,36 @@ fn apply_provider_prompt_patch_for_role(
                 && t.action_digest == preview.action_digest
                 && t.status == "approved"
                 && t.requester == tool_request.principal
+                && !consumed.contains(&t.ticket_id)
         })
         .cloned();
+
+    if approved_ticket.is_none() {
+        let stale_approved_ticket = ctx.approvals.iter().find(|ticket| {
+            ticket.requested_action == "sandbox:apply"
+                && ticket.scope == "sandbox_patch"
+                && ticket.status == "approved"
+                && ticket.requester == tool_request.principal
+                && ticket.action_digest != preview.action_digest
+                && !consumed.contains(&ticket.ticket_id)
+        });
+        if let Some(ticket) = stale_approved_ticket {
+            emit(
+                ctx,
+                "approval.denied",
+                Some(role_id),
+                Some(action_id),
+                Actor::system(),
+                json!({
+                    "reason": "sandbox changed after approval",
+                    "approved_ticket_id": ticket.ticket_id,
+                    "approved_action_digest": ticket.action_digest,
+                    "current_action_digest": preview.action_digest,
+                }),
+            )?;
+            anyhow::bail!("approval verification failed: sandbox changed after approval");
+        }
+    }
 
     match approved_ticket {
         None => {
@@ -1601,13 +1637,6 @@ fn apply_provider_prompt_patch_for_role(
                 )?;
                 anyhow::bail!("approval verification failed: ticket is not approved");
             }
-            let consumed_path = ctx.run_dir.join("consumed-tickets.json");
-            let mut consumed: Vec<String> = if consumed_path.exists() {
-                let content = fs::read_to_string(&consumed_path)?;
-                serde_json::from_str(&content).unwrap_or_default()
-            } else {
-                Vec::new()
-            };
             if consumed.contains(&ticket.ticket_id) {
                 emit(
                     ctx,

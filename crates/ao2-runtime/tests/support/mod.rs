@@ -21,3 +21,9 @@ pub fn commit_fixture(root: &Path) {
     git(root, &["add", "-A"]);
     git(root, &["commit", "--quiet", "-m", "fixture"]);
 }
+
+#[allow(dead_code)]
+pub fn commit_all(root: &Path, message: &str) {
+    git(root, &["add", "-A"]);
+    git(root, &["commit", "--quiet", "-m", message]);
+}
