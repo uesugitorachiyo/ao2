@@ -132,9 +132,18 @@ pub struct AoEvent {
     pub trace_id: String,
     pub span_id: String,
     pub payload: serde_json::Value,
+    #[serde(default)]
+    pub policy_integrity: Option<PolicyIntegrityBinding>,
     pub payload_digest: String,
     pub schema_version: String,
     pub sensitivity: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct PolicyIntegrityBinding {
+    pub policy_identity: String,
+    pub policy_version: String,
+    pub policy_digest: String,
 }
 
 impl AoEvent {
@@ -163,9 +172,33 @@ impl AoEvent {
             span_id: sha256_hex(format!("span:{run_id}:{event_type}:{}", Utc::now()))[..16]
                 .to_string(),
             payload,
+            policy_integrity: None,
             payload_digest: sha256_hex(payload_bytes),
             schema_version: "ao2.event.v1".to_string(),
             sensitivity: "internal".to_string(),
+        }
+    }
+
+    pub fn with_policy_integrity(mut self, policy_integrity: PolicyIntegrityBinding) -> Self {
+        self.policy_integrity = Some(policy_integrity);
+        self.payload_digest =
+            Self::canonical_payload_digest(&self.payload, self.policy_integrity.as_ref());
+        self
+    }
+
+    pub fn canonical_payload_digest(
+        payload: &serde_json::Value,
+        policy_integrity: Option<&PolicyIntegrityBinding>,
+    ) -> String {
+        match policy_integrity {
+            Some(binding) => sha256_hex(
+                serde_json::to_vec(&serde_json::json!({
+                    "payload": payload,
+                    "policy_integrity": binding,
+                }))
+                .unwrap_or_default(),
+            ),
+            None => sha256_hex(serde_json::to_vec(payload).unwrap_or_default()),
         }
     }
 }

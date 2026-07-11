@@ -18,7 +18,7 @@ use ao2_core::{
 };
 use ao2_policy::{
     create_approval_ticket, deny, evaluate, fail_on_forbidden_provider_api_keys, grant_exact,
-    ToolRequest,
+    integrity_binding, ToolRequest,
 };
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
@@ -964,7 +964,8 @@ pub fn replay_run(options: ReplayOptions) -> Result<ReplaySummary> {
             .with_context(|| format!("parse event line {}", index + 1))?;
         event_count += 1;
         event_types.push(event.event_type.clone());
-        let expected = sha256_hex(serde_json::to_vec(&event.payload)?);
+        let expected =
+            AoEvent::canonical_payload_digest(&event.payload, event.policy_integrity.as_ref());
         if expected != event.payload_digest {
             digest_failures.push(format!("event {} payload digest mismatch", event.event_id));
         }
@@ -1163,15 +1164,27 @@ fn emit(
     actor: Actor,
     payload: serde_json::Value,
 ) -> Result<()> {
-    let event = AoEvent::new(
-        &ctx.run_id,
-        &ctx.workflow_id,
-        event_type,
-        role_id,
-        task_id,
-        actor,
-        payload,
-    );
+    let event = match ctx.policy_decisions.last() {
+        Some(decision) => AoEvent::new(
+            &ctx.run_id,
+            &ctx.workflow_id,
+            event_type,
+            role_id,
+            task_id,
+            actor,
+            payload,
+        )
+        .with_policy_integrity(integrity_binding(decision)),
+        None => AoEvent::new(
+            &ctx.run_id,
+            &ctx.workflow_id,
+            event_type,
+            role_id,
+            task_id,
+            actor,
+            payload,
+        ),
+    };
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
