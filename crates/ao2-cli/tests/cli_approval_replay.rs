@@ -24871,6 +24871,62 @@ printf 'Input tokens: 10\n'
 }
 
 #[test]
+fn cli_provider_run_requires_explicit_auto_approval_identity() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("discount-service");
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    let prompt_path = temp.path().join("prompt.sh");
+    fs::write(
+        &prompt_path,
+        r#"cat > discount_service/discounts.py <<'PY'
+def calculate_discount(price: float, discount_rate: float) -> float:
+    if price < 0:
+        raise ValueError("price must be non-negative")
+    if discount_rate < 0 or discount_rate > 1:
+        raise ValueError("discount_rate must be between 0 and 1")
+    return price * (1 - discount_rate)
+PY
+printf 'Summary: explicit approval identity regression\n'
+printf 'Changed files: discount_service/discounts.py\n'
+printf 'Input tokens: 10\n'
+"#,
+    )
+    .unwrap();
+
+    let run = ao2_without_auto_approval_identity([
+        "run",
+        "../../examples/risky-pr-run/risky-pr.yaml",
+        "--target",
+        repo.to_str().unwrap(),
+        "--run-id",
+        "provider-cli-explicit-approver",
+        "--provider",
+        "scripted",
+        "--provider-prompt-file",
+        prompt_path.to_str().unwrap(),
+    ]);
+
+    assert!(run.status.success(), "{}", stderr(&run));
+    assert!(stdout(&run).contains("status=WaitingForApproval"));
+    let evidence: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(
+            repo.join(".ao2/runs/provider-cli-explicit-approver/evidence-pack/evidence-pack.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let pending = evidence["approvals"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|ticket| {
+            ticket["requested_action"] == "sandbox:apply" && ticket["status"] == "pending"
+        })
+        .expect("sandbox approval remains pending without explicit auto approver");
+    assert_eq!(pending["approver"], serde_json::Value::Null);
+}
+
+#[test]
 fn cli_provider_score_rates_provider_evidence_for_existing_run() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
@@ -47864,6 +47920,20 @@ fn ao2<const N: usize>(args: [&str; N]) -> std::process::Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_ao2"));
     command.args(args);
     command.env("AO2_AUTO_APPROVE_SANDBOX_PATCH", "1");
+    command.env(
+        "AO2_AUTO_APPROVE_SANDBOX_PATCH_APPROVER",
+        "human:test-auto-approve",
+    );
+    command.env_remove("OPENAI_API_KEY");
+    command.env_remove("ANTHROPIC_API_KEY");
+    command.output().unwrap()
+}
+
+fn ao2_without_auto_approval_identity<const N: usize>(args: [&str; N]) -> std::process::Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ao2"));
+    command.args(args);
+    command.env("AO2_AUTO_APPROVE_SANDBOX_PATCH", "1");
+    command.env_remove("AO2_AUTO_APPROVE_SANDBOX_PATCH_APPROVER");
     command.env_remove("OPENAI_API_KEY");
     command.env_remove("ANTHROPIC_API_KEY");
     command.output().unwrap()
@@ -48255,6 +48325,10 @@ fn ao2_with_env<const N: usize, const M: usize>(
     command.args(args);
     command.envs(env);
     command.env("AO2_AUTO_APPROVE_SANDBOX_PATCH", "1");
+    command.env(
+        "AO2_AUTO_APPROVE_SANDBOX_PATCH_APPROVER",
+        "human:test-auto-approve",
+    );
     command.env_remove("OPENAI_API_KEY");
     command.env_remove("ANTHROPIC_API_KEY");
     command.output().unwrap()

@@ -284,9 +284,14 @@ pub fn run_risky_pr_with_provider_prompt(options: ProviderRunOptions) -> Result<
         }
     };
 
+    let auto_approver = std::env::var("AO2_AUTO_APPROVE_SANDBOX_PATCH_APPROVER")
+        .ok()
+        .filter(|approver| !approver.trim().is_empty());
     if status == RunStatus::WaitingForApproval
         && std::env::var("AO2_AUTO_APPROVE_SANDBOX_PATCH").is_ok()
+        && auto_approver.is_some()
     {
+        let auto_approver = auto_approver.expect("auto approver checked above");
         while status == RunStatus::WaitingForApproval {
             let pending = ctx
                 .approvals
@@ -297,7 +302,7 @@ pub fn run_risky_pr_with_provider_prompt(options: ProviderRunOptions) -> Result<
                 approve_risky_pr_ticket(ApprovalOptions {
                     target_repo: target_repo.clone(),
                     ticket_id: ticket.ticket_id,
-                    approver: "human:local-user-auto-approve".to_string(),
+                    approver: auto_approver.clone(),
                 })?;
                 let resumed = resume_risky_pr_provider_free(ResumeOptions {
                     target_repo: target_repo.clone(),
