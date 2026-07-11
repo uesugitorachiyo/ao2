@@ -954,6 +954,7 @@ pub fn replay_run(options: ReplayOptions) -> Result<ReplaySummary> {
     let mut event_count = 0;
     let mut event_types = Vec::new();
     let mut digest_failures = Vec::new();
+    let mut last_integrity_checkpoint = None;
 
     for (index, line) in events.lines().enumerate() {
         if line.trim().is_empty() {
@@ -967,6 +968,9 @@ pub fn replay_run(options: ReplayOptions) -> Result<ReplaySummary> {
         if expected != event.payload_digest {
             digest_failures.push(format!("event {} payload digest mismatch", event.event_id));
         }
+        if event.event_type == "run.record.integrity.checkpoint" {
+            last_integrity_checkpoint = Some(event.payload);
+        }
     }
 
     for artifact in &ctx.artifacts {
@@ -977,6 +981,12 @@ pub fn replay_run(options: ReplayOptions) -> Result<ReplaySummary> {
             digest_failures.push(format!("artifact {} digest mismatch", artifact.artifact_id));
         }
     }
+
+    verify_run_record_integrity(
+        &ctx,
+        last_integrity_checkpoint.as_ref(),
+        &mut digest_failures,
+    )?;
 
     if !digest_failures.is_empty() {
         return Err(anyhow!("digest mismatch: {}", digest_failures.join("; ")));
@@ -3541,6 +3551,15 @@ fn write_run_record(
     report_path: &Path,
 ) -> Result<()> {
     let path = ctx.run_dir.join("run-record.json");
+    let replay_integrity = run_record_integrity(ctx)?;
+    emit(
+        ctx,
+        "run.record.integrity.checkpoint",
+        None,
+        None,
+        Actor::system(),
+        replay_integrity.clone(),
+    )?;
     let record = json!({
         "schema_version": "ao2.run-record.v1",
         "run_id": ctx.run_id,
@@ -3561,10 +3580,55 @@ fn write_run_record(
         "repair_attempts": ctx.repair_attempts,
         "closures": ctx.closure_reports,
         "closure": ctx.closure_reports.last(),
+        "replay_integrity": replay_integrity,
         "evidence_pack": evidence_pack_path,
         "report": report_path
     });
     atomic_write(path, serde_json::to_string_pretty(&record)?)?;
+    Ok(())
+}
+
+fn run_record_integrity(ctx: &RunContext) -> Result<serde_json::Value> {
+    let policy_decisions = serde_json::to_value(&ctx.policy_decisions)?;
+    let approval_tickets = serde_json::to_value(&ctx.approvals)?;
+    let control_state = json!({
+        "run_id": ctx.run_id,
+        "policy_decisions": policy_decisions,
+        "approval_tickets": approval_tickets,
+    });
+    Ok(json!({
+        "schema_version": "ao2.run-record-replay-integrity.v1",
+        "run_id": ctx.run_id,
+        "policy_decisions_digest": sha256_hex(serde_json::to_vec(&ctx.policy_decisions)?),
+        "approval_tickets_digest": sha256_hex(serde_json::to_vec(&ctx.approvals)?),
+        "control_state_digest": sha256_hex(serde_json::to_vec(&control_state)?),
+    }))
+}
+
+fn verify_run_record_integrity(
+    ctx: &RunContext,
+    last_integrity_checkpoint: Option<&serde_json::Value>,
+    digest_failures: &mut Vec<String>,
+) -> Result<()> {
+    let record_path = ctx.run_dir.join("run-record.json");
+    let record: serde_json::Value = serde_json::from_slice(
+        &fs::read(&record_path)
+            .with_context(|| format!("read run record {}", record_path.display()))?,
+    )
+    .with_context(|| format!("parse run record {}", record_path.display()))?;
+    let Some(recorded_integrity) = record.get("replay_integrity") else {
+        // Run records written before the integrity checkpoint was introduced remain replayable.
+        return Ok(());
+    };
+    let expected = run_record_integrity(ctx)?;
+    if recorded_integrity != &expected {
+        digest_failures.push("run record integrity mismatch".to_string());
+    }
+    match last_integrity_checkpoint {
+        Some(checkpoint) if checkpoint == &expected => {}
+        Some(_) => digest_failures.push("run record integrity checkpoint mismatch".to_string()),
+        None => digest_failures.push("run record integrity checkpoint missing".to_string()),
+    }
     Ok(())
 }
 
