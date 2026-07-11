@@ -1,0 +1,21 @@
+{
+  "schema_version": "ao2.event-hash-vectors.v1",
+  "legacy_algorithm": "ao2.event.payload.v1",
+  "policy_bound_algorithm": "ao2.event.policy-integrity.v2",
+  "vectors": [
+    {
+      "name": "sandbox_apply_policy_binding",
+      "payload": {
+        "action": "sandbox:apply",
+        "request_digest": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+      },
+      "legacy_payload_digest": "cf2c3b8985eb644a7786f5e45bcca145abe9b92243ab46ff87051d98d041ddba",
+      "policy_integrity": {
+        "policy_identity": "ao2-policy.local",
+        "policy_version": "ao2.local.deny-by-default.v1",
+        "policy_digest": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+      },
+      "policy_bound_payload_digest": "45483e0ac1a5ac97e7fc13c11268dc7bc89de3c16c4a46b580ed31174d84ee8f"
+    }
+  ]
+}

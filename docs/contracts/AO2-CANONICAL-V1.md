@@ -15,3 +15,14 @@ artifact digests and signatures.
 
 Golden vectors live at `tests/fixtures/canonical-json-vectors.json` and are
 run in both AO2 and AO2 Control Plane test suites.
+
+## Event Hash Migration Boundary
+
+Event records without `policy_integrity` retain the historical
+`ao2.event.payload.v1` digest: SHA-256 over serialized payload bytes. Event
+records with `policy_integrity` use `ao2.event.policy-integrity.v2`: SHA-256
+over the serialized object containing both `payload` and the typed policy
+identity, version, and digest. Replay selects the hash subject from the
+recorded field and verifies it exactly; it does not downgrade a policy-bound
+event to the legacy calculation. Versioned vectors live at
+`tests/fixtures/event-hash-vectors.json`.
