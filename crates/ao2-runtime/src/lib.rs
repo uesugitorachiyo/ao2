@@ -284,30 +284,35 @@ pub fn run_risky_pr_with_provider_prompt(options: ProviderRunOptions) -> Result<
         }
     };
 
+    let auto_approver = std::env::var("AO2_AUTO_APPROVE_SANDBOX_PATCH_APPROVER")
+        .ok()
+        .filter(|approver| !approver.trim().is_empty());
     if status == RunStatus::WaitingForApproval
         && std::env::var("AO2_AUTO_APPROVE_SANDBOX_PATCH").is_ok()
     {
-        while status == RunStatus::WaitingForApproval {
-            let pending = ctx
-                .approvals
-                .iter()
-                .find(|t| t.status == "pending" && t.requested_action == "sandbox:apply")
-                .cloned();
-            if let Some(ticket) = pending {
-                approve_risky_pr_ticket(ApprovalOptions {
-                    target_repo: target_repo.clone(),
-                    ticket_id: ticket.ticket_id,
-                    approver: "human:local-user-auto-approve".to_string(),
-                })?;
-                let resumed = resume_risky_pr_provider_free(ResumeOptions {
-                    target_repo: target_repo.clone(),
-                    run_id: ctx.run_id.clone(),
-                })?;
-                status = resumed.status;
-                let (new_ctx, _) = load_run_context(&target_repo, &ctx.run_id)?;
-                ctx = new_ctx;
-            } else {
-                break;
+        if let Some(auto_approver) = auto_approver {
+            while status == RunStatus::WaitingForApproval {
+                let pending = ctx
+                    .approvals
+                    .iter()
+                    .find(|t| t.status == "pending" && t.requested_action == "sandbox:apply")
+                    .cloned();
+                if let Some(ticket) = pending {
+                    approve_risky_pr_ticket(ApprovalOptions {
+                        target_repo: target_repo.clone(),
+                        ticket_id: ticket.ticket_id,
+                        approver: auto_approver.clone(),
+                    })?;
+                    let resumed = resume_risky_pr_provider_free(ResumeOptions {
+                        target_repo: target_repo.clone(),
+                        run_id: ctx.run_id.clone(),
+                    })?;
+                    status = resumed.status;
+                    let (new_ctx, _) = load_run_context(&target_repo, &ctx.run_id)?;
+                    ctx = new_ctx;
+                } else {
+                    break;
+                }
             }
         }
     }
