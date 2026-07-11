@@ -170,12 +170,52 @@ printf 'Cost: $0.001\n'
     assert!(events.contains("\"event_type\":\"sandbox.patch.applied\""));
 
     let replay = ao2_runtime::replay_run(ao2_runtime::ReplayOptions {
-        target_repo: repo,
+        target_repo: repo.clone(),
         run_id: "provider-run".to_string(),
     })
     .unwrap();
     assert_eq!(replay.status, RunStatus::Accepted);
     assert!(replay.digest_failures.is_empty());
+
+    // Replay must reject independently changed patch bytes and base commits.
+    // The preview artifact is the exact approval subject recorded for the sandbox
+    // apply, so neither substitution may be treated as the approved patch.
+    let preview_path = Path::new(preview_ref["uri"].as_str().unwrap()).to_path_buf();
+    let original_preview = fs::read_to_string(&preview_path).unwrap();
+    let mut changed_bytes: serde_json::Value = serde_json::from_str(&original_preview).unwrap();
+    changed_bytes["approval_subject"]["operations"][0]["after"]["content_sha256"] =
+        serde_json::json!("changed-patch-bytes");
+    fs::write(
+        &preview_path,
+        serde_json::to_string_pretty(&changed_bytes).unwrap(),
+    )
+    .unwrap();
+    let changed_bytes_replay = ao2_runtime::replay_run(ao2_runtime::ReplayOptions {
+        target_repo: repo.clone(),
+        run_id: "provider-run".to_string(),
+    });
+    assert!(changed_bytes_replay
+        .unwrap_err()
+        .to_string()
+        .contains("digest mismatch"));
+
+    fs::write(&preview_path, &original_preview).unwrap();
+    let mut changed_base: serde_json::Value = serde_json::from_str(&original_preview).unwrap();
+    changed_base["approval_subject"]["base_commit"] =
+        serde_json::json!("0000000000000000000000000000000000000000");
+    fs::write(
+        &preview_path,
+        serde_json::to_string_pretty(&changed_base).unwrap(),
+    )
+    .unwrap();
+    let changed_base_replay = ao2_runtime::replay_run(ao2_runtime::ReplayOptions {
+        target_repo: repo,
+        run_id: "provider-run".to_string(),
+    });
+    assert!(changed_base_replay
+        .unwrap_err()
+        .to_string()
+        .contains("digest mismatch"));
 
     env.restore();
 }

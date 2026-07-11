@@ -33,6 +33,23 @@
     "closure": { "type": ["object", "null"] },
     "evidence_pack": { "type": "string" },
     "report": { "type": "string" },
-    "repair_attempts": { "type": "array" }
+    "repair_attempts": { "type": "array" },
+    "replay_integrity": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "run_id",
+        "policy_decisions_digest",
+        "approval_tickets_digest",
+        "control_state_digest"
+      ],
+      "properties": {
+        "schema_version": { "const": "ao2.run-record-replay-integrity.v1" },
+        "run_id": { "type": "string" },
+        "policy_decisions_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "approval_tickets_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "control_state_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    }
   }
 }

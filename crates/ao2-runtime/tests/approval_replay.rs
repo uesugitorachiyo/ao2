@@ -146,6 +146,109 @@ fn replay_reconstructs_state_and_rejects_tampered_artifacts() {
 }
 
 #[test]
+fn replay_rejects_run_record_with_changed_policy_request_digest() {
+    let _guard = ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let env = EnvSnapshot::clear_for_runtime();
+
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("discount-service");
+    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+
+    let waiting = start_risky_pr_provider_free(RunOptions {
+        target_repo: repo.clone(),
+        workflow_path: Path::new("../../examples/risky-pr-run/risky-pr.yaml").to_path_buf(),
+        run_id: Some("policy-binding-replay-run".to_string()),
+    })
+    .unwrap();
+    approve_risky_pr_ticket(ApprovalOptions {
+        target_repo: repo.clone(),
+        ticket_id: waiting.approval_ticket.ticket_id,
+        approver: "human:test-operator".to_string(),
+    })
+    .unwrap();
+    resume_risky_pr_provider_free(ResumeOptions {
+        target_repo: repo.clone(),
+        run_id: "policy-binding-replay-run".to_string(),
+    })
+    .unwrap();
+
+    let record_path = repo.join(".ao2/runs/policy-binding-replay-run/run-record.json");
+    let mut record: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&record_path).unwrap()).unwrap();
+    let policy = record["policy_decisions"].as_array_mut().unwrap();
+    assert!(!policy.is_empty(), "fixture must record a policy decision");
+    policy[0]["request_digest"] = serde_json::json!("sha256:changed-policy-request-digest");
+    fs::write(&record_path, serde_json::to_string_pretty(&record).unwrap()).unwrap();
+
+    let result = replay_run(ReplayOptions {
+        target_repo: repo,
+        run_id: "policy-binding-replay-run".to_string(),
+    });
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("run record integrity mismatch"),
+        "changed policy request digest must be rejected during replay, got: {err}"
+    );
+
+    env.restore();
+}
+
+#[test]
+fn replay_rejects_run_record_with_reused_approval_identifier() {
+    let _guard = ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let env = EnvSnapshot::clear_for_runtime();
+
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("discount-service");
+    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+
+    let waiting = start_risky_pr_provider_free(RunOptions {
+        target_repo: repo.clone(),
+        workflow_path: Path::new("../../examples/risky-pr-run/risky-pr.yaml").to_path_buf(),
+        run_id: Some("approval-binding-replay-run".to_string()),
+    })
+    .unwrap();
+    approve_risky_pr_ticket(ApprovalOptions {
+        target_repo: repo.clone(),
+        ticket_id: waiting.approval_ticket.ticket_id,
+        approver: "human:test-operator".to_string(),
+    })
+    .unwrap();
+    resume_risky_pr_provider_free(ResumeOptions {
+        target_repo: repo.clone(),
+        run_id: "approval-binding-replay-run".to_string(),
+    })
+    .unwrap();
+
+    let record_path = repo.join(".ao2/runs/approval-binding-replay-run/run-record.json");
+    let mut record: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&record_path).unwrap()).unwrap();
+    let approvals = record["approval_tickets"].as_array_mut().unwrap();
+    assert!(
+        !approvals.is_empty(),
+        "fixture must record an approval ticket"
+    );
+    approvals[0]["ticket_id"] = serde_json::json!("approval-id-reused-from-another-run");
+    fs::write(&record_path, serde_json::to_string_pretty(&record).unwrap()).unwrap();
+
+    let result = replay_run(ReplayOptions {
+        target_repo: repo,
+        run_id: "approval-binding-replay-run".to_string(),
+    });
+    let err = result.unwrap_err().to_string();
+    assert!(
+        err.contains("run record integrity mismatch"),
+        "reused approval identifier must be rejected during replay, got: {err}"
+    );
+
+    env.restore();
+}
+
+#[test]
 fn approve_rejects_tampered_approval_request() {
     let _guard = ENV_LOCK.lock().unwrap();
     let env = EnvSnapshot::clear_for_runtime();
