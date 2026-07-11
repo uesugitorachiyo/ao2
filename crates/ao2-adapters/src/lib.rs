@@ -63,6 +63,7 @@ pub struct SandboxRunResult {
 pub struct SandboxPatchApplyRequest {
     pub target_repo: PathBuf,
     pub sandbox_path: PathBuf,
+    pub expected_subject: SandboxPatchApprovalSubject,
     pub expected_digest: String,
     pub approver: String,
 }
@@ -1247,6 +1248,13 @@ fn resolve_windows_path_command(command: &Path) -> Option<PathBuf> {
 
 pub fn apply_sandbox_patch(request: SandboxPatchApplyRequest) -> Result<SandboxPatchApplyResult> {
     let preview = preview_sandbox_patch(&request.target_repo, &request.sandbox_path)?;
+    if preview.approval_subject != request.expected_subject {
+        anyhow::bail!("approval subject mismatch: proposed bytes or base commit changed");
+    }
+    let expected_subject_digest = request.expected_subject.action_digest()?;
+    if expected_subject_digest != request.expected_digest {
+        anyhow::bail!("approval digest mismatch: expected digest does not match approved subject");
+    }
     if preview.action_digest != request.expected_digest {
         anyhow::bail!(
             "digest mismatch: expected {}, got {}",

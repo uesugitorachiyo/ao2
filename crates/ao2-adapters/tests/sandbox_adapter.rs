@@ -116,6 +116,7 @@ fn sandbox_patch_apply_requires_exact_digest_and_then_promotes_changes() {
     let wrong = apply_sandbox_patch(SandboxPatchApplyRequest {
         target_repo: target.clone(),
         sandbox_path: sandbox.sandbox_path.clone(),
+        expected_subject: preview.approval_subject.clone(),
         expected_digest: "wrong-digest".to_string(),
         approver: "human:test".to_string(),
     });
@@ -128,6 +129,7 @@ fn sandbox_patch_apply_requires_exact_digest_and_then_promotes_changes() {
     let applied = apply_sandbox_patch(SandboxPatchApplyRequest {
         target_repo: target.clone(),
         sandbox_path: sandbox.sandbox_path,
+        expected_subject: preview.approval_subject.clone(),
         expected_digest: preview.action_digest,
         approver: "human:test".to_string(),
     })
@@ -215,6 +217,7 @@ fn sandbox_patch_applies_file_deletions() {
     let applied = apply_sandbox_patch(SandboxPatchApplyRequest {
         target_repo: target.clone(),
         sandbox_path: sandbox.sandbox_path,
+        expected_subject: preview.approval_subject.clone(),
         expected_digest: preview.action_digest,
         approver: "human:test".to_string(),
     })
@@ -443,6 +446,7 @@ fn sandbox_patch_apply_preserves_symlink_and_reports_subject() {
     let applied = apply_sandbox_patch(SandboxPatchApplyRequest {
         target_repo: target.clone(),
         sandbox_path: sandbox,
+        expected_subject: preview.approval_subject.clone(),
         expected_digest: preview.action_digest.clone(),
         approver: "human:test".to_string(),
     })
@@ -524,12 +528,16 @@ fn assert_drift_rejected(drift: impl FnOnce(&Path, &Path)) {
     let error = apply_sandbox_patch(SandboxPatchApplyRequest {
         target_repo: target.clone(),
         sandbox_path: sandbox,
+        expected_subject: preview.approval_subject,
         expected_digest: preview.action_digest,
         approver: "human:test".to_string(),
     })
     .unwrap_err();
 
-    assert!(error.to_string().contains("digest mismatch"), "{error:#}");
+    assert!(
+        error.to_string().contains("approval subject mismatch"),
+        "{error:#}"
+    );
     assert_eq!(
         fs::read(target.join("a.txt")).unwrap(),
         target_a_before_apply
