@@ -426,6 +426,40 @@ fn apply_rejects_target_head_changed_after_preview_before_any_write() {
     });
 }
 
+#[test]
+fn apply_rejects_approval_subject_with_stale_base_commit_before_any_write() {
+    let temp = tempfile::tempdir().unwrap();
+    let target = init_git_target(temp.path(), &[("value.txt", b"before\n")]);
+    let sandbox = sandbox_copy(temp.path(), &target);
+    fs::write(sandbox.join("value.txt"), "approved\n").unwrap();
+    let preview = preview_sandbox_patch(&target, &sandbox).unwrap();
+
+    let mut stale_subject = preview.approval_subject.clone();
+    stale_subject.base_commit = "0".repeat(40);
+    assert_ne!(
+        stale_subject.action_digest().unwrap(),
+        preview.action_digest
+    );
+
+    let error = apply_sandbox_patch(SandboxPatchApplyRequest {
+        target_repo: target.clone(),
+        sandbox_path: sandbox,
+        expected_subject: stale_subject,
+        expected_digest: preview.action_digest,
+        approver: "human:test".to_string(),
+    })
+    .unwrap_err();
+
+    assert!(
+        error.to_string().contains("approval subject mismatch"),
+        "{error:#}"
+    );
+    assert_eq!(
+        fs::read_to_string(target.join("value.txt")).unwrap(),
+        "before\n"
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn sandbox_patch_apply_preserves_symlink_and_reports_subject() {
