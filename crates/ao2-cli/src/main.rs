@@ -63274,9 +63274,11 @@ fn adapter_patch(command: AdapterPatchCommand) -> Result<()> {
             digest,
             approver,
         } => {
+            let preview = preview_sandbox_patch(&target, &sandbox)?;
             let applied = apply_sandbox_patch(SandboxPatchApplyRequest {
                 target_repo: target,
                 sandbox_path: sandbox,
+                expected_subject: preview.approval_subject,
                 expected_digest: digest,
                 approver,
             })?;

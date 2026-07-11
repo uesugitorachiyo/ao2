@@ -1705,6 +1705,7 @@ fn apply_provider_prompt_patch_for_role(
             let applied = apply_sandbox_patch(SandboxPatchApplyRequest {
                 target_repo: ctx.target_repo.clone(),
                 sandbox_path: sandbox_dir.clone(),
+                expected_subject: preview.approval_subject.clone(),
                 expected_digest: preview.action_digest.clone(),
                 approver: ticket
                     .approver
