@@ -10,6 +10,23 @@ use ao2_core::{
     new_id, sha256_hex, Actor, AoEvent, ArtifactRef, ClosureReport, PolicyDecision,
     PolicyIntegrityBinding, RunStatus,
 };
+use serde::Deserialize;
+
+#[derive(Debug, Deserialize)]
+struct EventHashVectorSet {
+    legacy_algorithm: String,
+    policy_bound_algorithm: String,
+    vectors: Vec<EventHashVector>,
+}
+
+#[derive(Debug, Deserialize)]
+struct EventHashVector {
+    name: String,
+    payload: serde_json::Value,
+    legacy_payload_digest: String,
+    policy_integrity: PolicyIntegrityBinding,
+    policy_bound_payload_digest: String,
+}
 
 #[test]
 fn new_id_is_prefixed_and_unique() {
@@ -160,6 +177,35 @@ fn policy_integrity_binding_changes_the_canonical_event_digest() {
         baseline_event.payload_digest,
         event(changed_digest).payload_digest
     );
+}
+
+#[test]
+fn event_hash_vectors_preserve_legacy_and_policy_bound_migration_contracts() {
+    let vectors: EventHashVectorSet = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/event-hash-vectors.json"
+    ))
+    .expect("event hash vector fixture parses");
+    assert_eq!(vectors.legacy_algorithm, "ao2.event.payload.v1");
+    assert_eq!(
+        vectors.policy_bound_algorithm,
+        "ao2.event.policy-integrity.v2"
+    );
+    assert!(!vectors.vectors.is_empty());
+
+    for vector in vectors.vectors {
+        assert_eq!(
+            AoEvent::canonical_payload_digest(&vector.payload, None),
+            vector.legacy_payload_digest,
+            "legacy {}",
+            vector.name
+        );
+        assert_eq!(
+            AoEvent::canonical_payload_digest(&vector.payload, Some(&vector.policy_integrity)),
+            vector.policy_bound_payload_digest,
+            "policy-bound {}",
+            vector.name
+        );
+    }
 }
 
 #[test]
