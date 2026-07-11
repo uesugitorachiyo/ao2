@@ -7,7 +7,8 @@
 //! (deterministic trace id, payload digest, correlation == run id).
 
 use ao2_core::{
-    new_id, sha256_hex, Actor, AoEvent, ArtifactRef, ClosureReport, PolicyDecision, RunStatus,
+    new_id, sha256_hex, Actor, AoEvent, ArtifactRef, ClosureReport, PolicyDecision,
+    PolicyIntegrityBinding, RunStatus,
 };
 
 #[test]
@@ -110,6 +111,55 @@ fn ao_event_new_sets_envelope_invariants() {
     let expected_digest = sha256_hex(serde_json::to_vec(&payload).unwrap());
     assert_eq!(event.payload_digest, expected_digest);
     assert_eq!(event.payload, payload);
+}
+
+#[test]
+fn policy_integrity_binding_changes_the_canonical_event_digest() {
+    let payload = serde_json::json!({"operation":"sandbox:apply"});
+    let baseline = PolicyIntegrityBinding {
+        policy_identity: "ao2-policy.local".to_string(),
+        policy_version: "v1".to_string(),
+        policy_digest: "a".repeat(64),
+    };
+    let changed_identity = PolicyIntegrityBinding {
+        policy_identity: "ao-covenant.production".to_string(),
+        ..baseline.clone()
+    };
+    let changed_version = PolicyIntegrityBinding {
+        policy_version: "v2".to_string(),
+        ..baseline.clone()
+    };
+    let changed_digest = PolicyIntegrityBinding {
+        policy_digest: "b".repeat(64),
+        ..baseline.clone()
+    };
+
+    let event = |binding| {
+        AoEvent::new(
+            "run-policy",
+            "workflow",
+            "policy.evaluated",
+            None,
+            None,
+            Actor::system(),
+            payload.clone(),
+        )
+        .with_policy_integrity(binding)
+    };
+    let baseline_event = event(baseline);
+
+    assert_ne!(
+        baseline_event.payload_digest,
+        event(changed_identity).payload_digest
+    );
+    assert_ne!(
+        baseline_event.payload_digest,
+        event(changed_version).payload_digest
+    );
+    assert_ne!(
+        baseline_event.payload_digest,
+        event(changed_digest).payload_digest
+    );
 }
 
 #[test]

@@ -1,10 +1,19 @@
 use anyhow::{anyhow, Result};
-use ao2_core::{new_id, sha256_hex, ApprovalTicket, PolicyDecision};
+use ao2_core::{new_id, sha256_hex, ApprovalTicket, PolicyDecision, PolicyIntegrityBinding};
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 pub const POLICY_VERSION: &str = "ao2.local.deny-by-default.v1";
+pub const POLICY_IDENTITY: &str = "ao2-policy.local";
+
+pub fn integrity_binding(decision: &PolicyDecision) -> PolicyIntegrityBinding {
+    PolicyIntegrityBinding {
+        policy_identity: POLICY_IDENTITY.to_string(),
+        policy_version: decision.policy_version.clone(),
+        policy_digest: sha256_hex(serde_json::to_vec(decision).unwrap_or_default()),
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolRequest {

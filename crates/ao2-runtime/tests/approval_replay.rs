@@ -373,6 +373,56 @@ fn replay_rejects_corrupted_events_file() {
     env.restore();
 }
 
+#[test]
+fn replay_rejects_changed_policy_integrity_binding_in_event() {
+    let _guard = ENV_LOCK.lock().unwrap();
+    let env = EnvSnapshot::clear_for_runtime();
+
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("discount-service");
+    copy_fixture(Path::new("../../fixtures/discount-service"), &repo);
+    start_risky_pr_provider_free(RunOptions {
+        target_repo: repo.clone(),
+        workflow_path: Path::new("../../examples/risky-pr-run/risky-pr.yaml").to_path_buf(),
+        run_id: Some("policy-event-integrity-run".to_string()),
+    })
+    .unwrap();
+
+    let events_path = repo.join(".ao2/runs/policy-event-integrity-run/events.jsonl");
+    let events = fs::read_to_string(&events_path).unwrap();
+    let mut event_values = events
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+        .collect::<Vec<_>>();
+    let event = event_values
+        .iter_mut()
+        .find(|event| event["policy_integrity"].is_object())
+        .expect("policy-bound event must be recorded");
+    event["policy_integrity"]["policy_digest"] = serde_json::json!("0".repeat(64));
+    fs::write(
+        &events_path,
+        event_values
+            .iter()
+            .map(serde_json::to_string)
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+            .join("\n")
+            + "\n",
+    )
+    .unwrap();
+
+    let replay = replay_run(ReplayOptions {
+        target_repo: repo,
+        run_id: "policy-event-integrity-run".to_string(),
+    });
+    assert!(replay
+        .unwrap_err()
+        .to_string()
+        .contains("payload digest mismatch"));
+
+    env.restore();
+}
+
 struct EnvSnapshot {
     openai: Option<std::ffi::OsString>,
     anthropic: Option<std::ffi::OsString>,

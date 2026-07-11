@@ -32,6 +32,15 @@
     "trace_id": { "type": "string" },
     "span_id": { "type": "string" },
     "payload": {},
+    "policy_integrity": {
+      "type": ["object", "null"],
+      "required": ["policy_identity", "policy_version", "policy_digest"],
+      "properties": {
+        "policy_identity": { "type": "string" },
+        "policy_version": { "type": "string" },
+        "policy_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
     "payload_digest": { "type": "string" },
     "schema_version": { "type": "string" },
     "sensitivity": { "type": "string" }
