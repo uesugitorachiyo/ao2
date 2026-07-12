@@ -479,6 +479,87 @@ def test_live_mutation_dry_run_packet_emits_low_risk_code_dry_run_packet(tmp_pat
     )
 
 
+def test_live_mutation_dry_run_packet_emits_non_ao_repo_diff_approval_rehearsal(tmp_path):
+    sample_target = REPO / "fixtures/discount-service/README.md"
+    before_sha = sha256(sample_target)
+    out_root = tmp_path / "non-ao-diff-approval-packet"
+    result = subprocess.run(
+        ["npm", "run", "live-mutation:dry-run-packet"],
+        cwd=REPO,
+        env={
+            **os.environ,
+            "AO2_LIVE_MUTATION_DRY_RUN_PACKET_ROOT": str(out_root),
+            "AO2_LIVE_MUTATION_CLASS": "non_ao_repo_diff_approval_packet",
+        },
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "live_mutation_dry_run_packet=passed" in result.stdout
+    assert sha256(sample_target) == before_sha
+
+    summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    approval_packet = summary["non_ao_repo_diff_approval_packet"]
+    assert summary["target"] == {
+        "repo": "non-ao-fixture/discount-service",
+        "mutation_class": "non_ao_repo_diff_approval_packet",
+        "allowed_path_class": "non_ao_fixture_docs_only",
+        "target_files": ["README.md"],
+    }
+    assert summary["bounded_patch_packet"]["mutation_class"] == (
+        "non_ao_repo_diff_approval_packet"
+    )
+    assert summary["bounded_patch_packet"]["allowed_paths"] == [
+        "fixtures/discount-service/README.md"
+    ]
+    assert approval_packet == {
+        "schema_version": "ao2.non-ao-diff-approval-packet-rehearsal.v1",
+        "status": "approval_packet_ready_but_not_granted",
+        "sample_repo": "non-ao-fixture/discount-service",
+        "sample_repo_path": "fixtures/discount-service",
+        "target_file": "README.md",
+        "base_commit": "fixture-only-no-git-commit",
+        "base_tree_sha256": before_sha,
+        "proposed_patch_sha256": summary["changed_file_plan"][0]["proposed_patch"][
+            "sha256"
+        ],
+        "rollback_patch_sha256": summary["rollback_artifact"]["sha256"],
+        "approval_packet_sha256": approval_packet["approval_packet_sha256"],
+        "approval_granted": False,
+        "operator_review_required": True,
+        "mutates_sample_repo": False,
+        "mutates_live_repo": False,
+        "calls_providers": False,
+        "creates_branch": False,
+        "pushes_commits": False,
+        "rsi_status": "denied",
+    }
+    assert len(approval_packet["approval_packet_sha256"]) == 64
+    assert summary["changed_file_plan"] == [
+        {
+            "path": "fixtures/discount-service/README.md",
+            "display_path": "README.md",
+            "action": "modify",
+            "before_sha256": before_sha,
+            "allowed_path_class": "non_ao_fixture_docs_only",
+            "forbidden_path_check": "passed",
+            "proposed_patch": {
+                "path": "proposed-live-mutation.patch",
+                "sha256": summary["changed_file_plan"][0]["proposed_patch"][
+                    "sha256"
+                ],
+            },
+        }
+    ]
+    assert summary["session_boundary"]["mutates_repositories"] is False
+    assert summary["session_boundary"]["applies_patch"] is False
+    assert summary["provider_boundary"]["provider_calls_allowed"] is False
+    assert summary["authority_boundary"]["authority_status"] == (
+        "not_granted_in_ao2_packet"
+    )
+
+
 def test_live_mutation_dry_run_packet_denies_low_risk_script_target(tmp_path):
     code_target = REPO / "scripts/run-sh-script.js"
     before_sha = sha256(code_target)
