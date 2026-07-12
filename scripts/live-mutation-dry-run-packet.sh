@@ -159,6 +159,38 @@ class_profiles = {
             "broad_refactors",
         ],
     },
+    "non_ao_repo_diff_approval_packet": {
+        "target_rel": "fixtures/discount-service/README.md",
+        "display_target_rel": "README.md",
+        "target_repo": "non-ao-fixture/discount-service",
+        "sample_repo_path": "fixtures/discount-service",
+        "allowed_path_class": "non_ao_fixture_docs_only",
+        "marker": "AO2 non-AO diff approval packet rehearsal marker",
+        "needle": "Verifier:\n",
+        "insert": "before",
+        "forbidden_path_patterns": [
+            ".github/",
+            "crates/",
+            "docs/",
+            "examples/",
+            "scripts/",
+            "schemas/",
+            "package.json",
+            "package-lock.json",
+            "Cargo.toml",
+            "Cargo.lock",
+        ],
+        "verification_commands": [
+            "git diff --check",
+            "python3 -m pytest fixtures/discount-service/tests",
+        ],
+        "exact_patch_key": "exact_non_ao_fixture_docs_patch",
+        "temp_prefix": "ao2-non-ao-approval-packet-",
+        "max_changed_files": 1,
+        "max_added_lines": 1,
+        "max_deleted_lines": 0,
+        "include_non_ao_approval_packet": True,
+    },
 }
 denied_classes = {
     "docs_config_only",
@@ -284,6 +316,7 @@ if forbidden_path_violations:
         f"target path is outside {profile['allowed_path_class']} allowlist: {target_rel}"
     )
 allowed_paths = [target_rel]
+display_target_rel = profile.get("display_target_rel", target_rel)
 if target_rel not in allowed_paths:
     raise SystemExit("target path is not in bounded patch packet allowed_paths")
 if len(allowed_paths) > class_limits["max_changed_files"]:
@@ -369,6 +402,43 @@ rollback_receipt_digest = hashlib.sha256(
         rollback_patch_sha,
     ]).encode("utf-8")
 ).hexdigest()
+non_ao_approval_packet = None
+if profile.get("include_non_ao_approval_packet"):
+    approval_packet_sha = hashlib.sha256(
+        "\n".join([
+            "ao2.non-ao-diff-approval-packet-rehearsal.v1",
+            profile["target_repo"],
+            profile["sample_repo_path"],
+            display_target_rel,
+            before_sha,
+            proposed_patch_sha,
+            rollback_patch_sha,
+            source_digest,
+            "approval_granted=false",
+            "calls_providers=false",
+            "mutates_live_repo=false",
+        ]).encode("utf-8")
+    ).hexdigest()
+    non_ao_approval_packet = {
+        "schema_version": "ao2.non-ao-diff-approval-packet-rehearsal.v1",
+        "status": "approval_packet_ready_but_not_granted",
+        "sample_repo": profile["target_repo"],
+        "sample_repo_path": profile["sample_repo_path"],
+        "target_file": display_target_rel,
+        "base_commit": "fixture-only-no-git-commit",
+        "base_tree_sha256": before_sha,
+        "proposed_patch_sha256": proposed_patch_sha,
+        "rollback_patch_sha256": rollback_patch_sha,
+        "approval_packet_sha256": approval_packet_sha,
+        "approval_granted": False,
+        "operator_review_required": True,
+        "mutates_sample_repo": False,
+        "mutates_live_repo": False,
+        "calls_providers": False,
+        "creates_branch": False,
+        "pushes_commits": False,
+        "rsi_status": "denied",
+    }
 bounded_patch_packet = {
     "schema_version": "ao2.bounded-patch-packet.v1",
     "status": "class_validated_dry_run_only",
@@ -419,25 +489,13 @@ payload = {
     "generated_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     "status": "dry_run_packet_ready",
     "target": {
-        "repo": "ao2",
+        "repo": profile.get("target_repo", "ao2"),
         "mutation_class": mutation_class,
         "allowed_path_class": profile["allowed_path_class"],
-        "target_files": allowed_paths,
+        "target_files": [display_target_rel],
     },
     "bounded_patch_packet": bounded_patch_packet,
-    "changed_file_plan": [
-        {
-            "path": target_rel,
-            "action": "modify",
-            "before_sha256": before_sha,
-            "allowed_path_class": profile["allowed_path_class"],
-            "forbidden_path_check": "passed",
-            "proposed_patch": {
-                "path": proposed_patch_path.name,
-                "sha256": proposed_patch_sha,
-            },
-        }
-    ],
+    "changed_file_plan": [],
     "verification_plan": {
         "required": True,
         "commands": verification_plan["commands"],
@@ -537,6 +595,22 @@ payload = {
         "bind this packet to Covenant authority, Forge dry-run plan, Foundry gate, Sentinel verdict, rollback rehearsal, and Command readback before any live mutation class is requested",
     ],
 }
+changed_file_record = {
+    "path": target_rel,
+    "action": "modify",
+    "before_sha256": before_sha,
+    "allowed_path_class": profile["allowed_path_class"],
+    "forbidden_path_check": "passed",
+    "proposed_patch": {
+        "path": proposed_patch_path.name,
+        "sha256": proposed_patch_sha,
+    },
+}
+if display_target_rel != target_rel:
+    changed_file_record["display_path"] = display_target_rel
+payload["changed_file_plan"] = [changed_file_record]
+if non_ao_approval_packet is not None:
+    payload["non_ao_repo_diff_approval_packet"] = non_ao_approval_packet
 
 summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 print(f"summary={summary_path}")
