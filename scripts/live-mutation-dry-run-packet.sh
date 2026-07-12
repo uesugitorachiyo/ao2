@@ -357,6 +357,18 @@ source_digest = hashlib.sha256(
         "ao2.bounded-patch-packet.v1",
     ]).encode("utf-8")
 ).hexdigest()
+rollback_receipt_digest = hashlib.sha256(
+    "\n".join([
+        "ao2.rollback-receipt-replay.v1",
+        mutation_class,
+        target_rel,
+        before_sha,
+        isolated_after_sha,
+        isolated_rollback_sha,
+        proposed_patch_sha,
+        rollback_patch_sha,
+    ]).encode("utf-8")
+).hexdigest()
 bounded_patch_packet = {
     "schema_version": "ao2.bounded-patch-packet.v1",
     "status": "class_validated_dry_run_only",
@@ -450,6 +462,30 @@ payload = {
         "proposed_patch_sha256": proposed_patch_sha,
         "rollback_patch_sha256": rollback_patch_sha,
         "applies_to_live_repo": False,
+    },
+    "rollback_receipt_replay": {
+        "schema_version": "ao2.rollback-receipt-replay.v1",
+        "status": "passed",
+        "mode": "dry_run_only",
+        "sample_repo": "isolated_temp_workspace",
+        "target_file": target_rel,
+        "target_before_sha256": before_sha,
+        "target_after_apply_sha256": isolated_after_sha,
+        "target_after_rollback_sha256": isolated_rollback_sha,
+        "rollback_patch": {
+            "path": rollback_patch_path.name,
+            "sha256": rollback_patch_sha,
+        },
+        "replay_steps": [
+            "copy target into isolated workspace",
+            "apply proposed patch",
+            "apply rollback patch",
+            "verify target digest restored",
+        ],
+        "receipt_digest": rollback_receipt_digest,
+        "mutates_live_repo": False,
+        "calls_providers": False,
+        "approval_granted": False,
     },
     "forbidden_path_checks": {
         "status": "passed",
