@@ -403,6 +403,7 @@ rollback_receipt_digest = hashlib.sha256(
     ]).encode("utf-8")
 ).hexdigest()
 non_ao_approval_packet = None
+explicit_opt_in_approval_rehearsal_packet = None
 if profile.get("include_non_ao_approval_packet"):
     approval_packet_sha = hashlib.sha256(
         "\n".join([
@@ -437,6 +438,25 @@ if profile.get("include_non_ao_approval_packet"):
         "calls_providers": False,
         "creates_branch": False,
         "pushes_commits": False,
+        "rsi_status": "denied",
+    }
+    explicit_opt_in_approval_rehearsal_packet = {
+        "schema_version": "ao2.explicit-opt-in-approval-rehearsal.v1",
+        "status": "operator_opt_in_required_not_granted",
+        "source_approval_packet_schema": "ao2.non-ao-diff-approval-packet-rehearsal.v1",
+        "approval_packet_sha256": approval_packet_sha,
+        "explicit_opt_in_required": True,
+        "explicit_opt_in_granted": False,
+        "operator_identity_bound": False,
+        "base_tree_sha256": before_sha,
+        "proposed_patch_sha256": proposed_patch_sha,
+        "rollback_patch_sha256": rollback_patch_sha,
+        "provider_execution_started": False,
+        "mutates_live_repo": False,
+        "creates_branch": False,
+        "pushes_commits": False,
+        "publishes_releases": False,
+        "no_promotion_requested": True,
         "rsi_status": "denied",
     }
 bounded_patch_packet = {
@@ -611,6 +631,8 @@ if display_target_rel != target_rel:
 payload["changed_file_plan"] = [changed_file_record]
 if non_ao_approval_packet is not None:
     payload["non_ao_repo_diff_approval_packet"] = non_ao_approval_packet
+if explicit_opt_in_approval_rehearsal_packet is not None:
+    payload["explicit_opt_in_approval_rehearsal_packet"] = explicit_opt_in_approval_rehearsal_packet
 
 summary_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 print(f"summary={summary_path}")
