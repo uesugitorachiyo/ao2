@@ -175,6 +175,33 @@ def test_live_mutation_dry_run_packet_emits_non_mutating_execution_plan(tmp_path
         "applies_to_live_repo": False,
     }
     assert len(summary["exact_docs_only_patch"]["target_after_apply_sha256"]) == 64
+    assert summary["rollback_receipt_replay"] == {
+        "schema_version": "ao2.rollback-receipt-replay.v1",
+        "status": "passed",
+        "mode": "dry_run_only",
+        "sample_repo": "isolated_temp_workspace",
+        "target_file": "docs/VERIFICATION.md",
+        "target_before_sha256": before_sha,
+        "target_after_apply_sha256": summary["exact_docs_only_patch"][
+            "target_after_apply_sha256"
+        ],
+        "target_after_rollback_sha256": before_sha,
+        "rollback_patch": {
+            "path": "rollback-live-mutation.patch",
+            "sha256": summary["rollback_artifact"]["sha256"],
+        },
+        "replay_steps": [
+            "copy target into isolated workspace",
+            "apply proposed patch",
+            "apply rollback patch",
+            "verify target digest restored",
+        ],
+        "receipt_digest": summary["rollback_receipt_replay"]["receipt_digest"],
+        "mutates_live_repo": False,
+        "calls_providers": False,
+        "approval_granted": False,
+    }
+    assert len(summary["rollback_receipt_replay"]["receipt_digest"]) == 64
     assert summary["forbidden_path_checks"] == {
         "status": "passed",
         "allowed_path_class": "docs_only",
