@@ -501,6 +501,7 @@ def test_live_mutation_dry_run_packet_emits_non_ao_repo_diff_approval_rehearsal(
 
     summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
     approval_packet = summary["non_ao_repo_diff_approval_packet"]
+    opt_in_packet = summary["explicit_opt_in_approval_rehearsal_packet"]
     assert summary["target"] == {
         "repo": "non-ao-fixture/discount-service",
         "mutation_class": "non_ao_repo_diff_approval_packet",
@@ -536,6 +537,27 @@ def test_live_mutation_dry_run_packet_emits_non_ao_repo_diff_approval_rehearsal(
         "rsi_status": "denied",
     }
     assert len(approval_packet["approval_packet_sha256"]) == 64
+    assert opt_in_packet == {
+        "schema_version": "ao2.explicit-opt-in-approval-rehearsal.v1",
+        "status": "operator_opt_in_required_not_granted",
+        "source_approval_packet_schema": "ao2.non-ao-diff-approval-packet-rehearsal.v1",
+        "approval_packet_sha256": approval_packet["approval_packet_sha256"],
+        "explicit_opt_in_required": True,
+        "explicit_opt_in_granted": False,
+        "operator_identity_bound": False,
+        "base_tree_sha256": before_sha,
+        "proposed_patch_sha256": summary["changed_file_plan"][0]["proposed_patch"][
+            "sha256"
+        ],
+        "rollback_patch_sha256": summary["rollback_artifact"]["sha256"],
+        "provider_execution_started": False,
+        "mutates_live_repo": False,
+        "creates_branch": False,
+        "pushes_commits": False,
+        "publishes_releases": False,
+        "no_promotion_requested": True,
+        "rsi_status": "denied",
+    }
     assert summary["changed_file_plan"] == [
         {
             "path": "fixtures/discount-service/README.md",
