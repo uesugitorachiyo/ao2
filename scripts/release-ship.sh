@@ -1,13 +1,18 @@
 #!/bin/sh
 set -eu
 
-# Guarded end-to-end release publisher for the private AO2 repository.
+# Guarded end-to-end AO2 release publisher.
 AO2_VERSION="${AO2_VERSION:-$(scripts/current-version.sh)}"
 AO2_RELEASE_TAG="${AO2_RELEASE_TAG:-v$AO2_VERSION}"
 AO2_RELEASE_REPO="${AO2_RELEASE_REPO:-uesugitorachiyo/ao2}"
-AO2_RELEASE_TITLE="${AO2_RELEASE_TITLE:-AO2 $AO2_RELEASE_TAG}"
-AO2_RELEASE_NOTES="${AO2_RELEASE_NOTES:-Private AO2 release $AO2_RELEASE_TAG.}"
+AO2_RELEASE_CHANNEL="${AO2_RELEASE_CHANNEL:-}"
+AO2_RELEASE_TITLE="${AO2_RELEASE_TITLE:-}"
+AO2_RELEASE_NOTES_FILE="${AO2_RELEASE_NOTES_FILE:-}"
 AO2_RELEASE_SHIP_CONFIRM="${AO2_RELEASE_SHIP_CONFIRM:-}"
+AO2_RELEASE_SHIP_DRY_RUN="${AO2_RELEASE_SHIP_DRY_RUN:-0}"
+AO2_RELEASE_TARGET_COMMIT="${AO2_RELEASE_TARGET_COMMIT:-$(git rev-parse HEAD)}"
+AO2_RELEASE_PUBLICATION_DIR="${AO2_RELEASE_PUBLICATION_DIR:-target/release-publication/$AO2_RELEASE_TAG}"
+AO2_RELEASE_PUBLICATION_LIST="${AO2_RELEASE_PUBLICATION_LIST:-target/release-publication/$AO2_RELEASE_TAG.assets.txt}"
 AO2_RELEASE_DOWNLOAD_DIR="${AO2_RELEASE_DOWNLOAD_DIR:-target/release-download/$AO2_RELEASE_TAG}"
 AO2_RELEASE_DOCTOR_JSON="${AO2_RELEASE_DOCTOR_JSON:-$AO2_RELEASE_DOWNLOAD_DIR/release-doctor.json}"
 AO2_RELEASE_COMPARISON_DIR="${AO2_RELEASE_COMPARISON_DIR:-target/release-comparison-bundles}"
@@ -44,10 +49,24 @@ AO2_UBUNTU_SSH_TARGET="${AO2_UBUNTU_SSH_TARGET:-ao2-ubuntu-nucx}"
 AO2_WINDOWS_SSH_TARGET="${AO2_WINDOWS_SSH_TARGET:-win-hp255-via-ubuntu}"
 AO2_REQUIRE_NATIVE_WINDOWS_SMOKE="${AO2_REQUIRE_NATIVE_WINDOWS_SMOKE:-1}"
 
-if [ "$AO2_RELEASE_SHIP_CONFIRM" != "ship-$AO2_RELEASE_TAG" ]; then
+if [ "$AO2_RELEASE_SHIP_DRY_RUN" != "1" ] && [ "$AO2_RELEASE_SHIP_CONFIRM" != "ship-$AO2_RELEASE_TAG" ]; then
   echo "refusing to publish release; set AO2_RELEASE_SHIP_CONFIRM=ship-$AO2_RELEASE_TAG" >&2
   exit 1
 fi
+
+if [ "$AO2_RELEASE_TARGET_COMMIT" != "$(git rev-parse HEAD)" ]; then
+  echo "refusing to publish unreviewed moving head; expected $AO2_RELEASE_TARGET_COMMIT, observed $(git rev-parse HEAD)" >&2
+  exit 1
+fi
+
+AO2_RELEASE_CONTRACT_REQUIRE_ASSETS=0 \
+AO2_RELEASE_CHANNEL="$AO2_RELEASE_CHANNEL" \
+AO2_RELEASE_TITLE="$AO2_RELEASE_TITLE" \
+AO2_RELEASE_NOTES_FILE="$AO2_RELEASE_NOTES_FILE" \
+AO2_RELEASE_CODEX_PILOT_ACCEPTANCE="$AO2_RELEASE_CODEX_PILOT_ACCEPTANCE" \
+AO2_RELEASE_CLAUDE_PILOT_ACCEPTANCE="$AO2_RELEASE_CLAUDE_PILOT_ACCEPTANCE" \
+AO2_RELEASE_ANTIGRAVITY_PILOT_ACCEPTANCE="$AO2_RELEASE_ANTIGRAVITY_PILOT_ACCEPTANCE" \
+  scripts/release-publication-contract.sh
 
 if [ "${AO2_RELEASE_SHIP_ALLOW_DIRTY:-0}" != "1" ] && [ -n "$(git status --porcelain)" ]; then
   echo "refusing to publish release from dirty worktree; commit first or set AO2_RELEASE_SHIP_ALLOW_DIRTY=1" >&2
@@ -69,6 +88,19 @@ AO2_REQUIRE_NATIVE_WINDOWS_SMOKE="$AO2_REQUIRE_NATIVE_WINDOWS_SMOKE" \
   npm run smoke:three-os
 
 npm run release:gate
+
+AO2_RELEASE_PUBLICATION_DIR="$AO2_RELEASE_PUBLICATION_DIR" \
+AO2_RELEASE_PUBLICATION_LIST="$AO2_RELEASE_PUBLICATION_LIST" \
+  scripts/release-stage-publication-assets.sh
+
+AO2_RELEASE_PUBLICATION_DIR="$AO2_RELEASE_PUBLICATION_DIR" \
+AO2_RELEASE_CHANNEL="$AO2_RELEASE_CHANNEL" \
+AO2_RELEASE_TITLE="$AO2_RELEASE_TITLE" \
+AO2_RELEASE_NOTES_FILE="$AO2_RELEASE_NOTES_FILE" \
+AO2_RELEASE_CODEX_PILOT_ACCEPTANCE="$AO2_RELEASE_CODEX_PILOT_ACCEPTANCE" \
+AO2_RELEASE_CLAUDE_PILOT_ACCEPTANCE="$AO2_RELEASE_CLAUDE_PILOT_ACCEPTANCE" \
+AO2_RELEASE_ANTIGRAVITY_PILOT_ACCEPTANCE="$AO2_RELEASE_ANTIGRAVITY_PILOT_ACCEPTANCE" \
+  scripts/release-publication-contract.sh
 
 if [ "$AO2_RELEASE_CODEX_PILOT_ACCEPTANCE" = "1" ]; then
   AO2_BIN="$AO2_RELEASE_CODEX_PILOT_BIN" \
@@ -106,50 +138,49 @@ if [ "$AO2_RELEASE_ANTIGRAVITY_PILOT_ACCEPTANCE" = "1" ]; then
   printf "release_antigravity_provider_pilot_acceptance=passed\n"
 fi
 
-if ! git rev-parse "$AO2_RELEASE_TAG" >/dev/null 2>&1; then
-  git tag -a "$AO2_RELEASE_TAG" -m "AO2 $AO2_RELEASE_TAG"
+if git rev-parse "refs/tags/$AO2_RELEASE_TAG" >/dev/null 2>&1 \
+  || git ls-remote --exit-code --tags origin "refs/tags/$AO2_RELEASE_TAG" >/dev/null 2>&1; then
+  echo "refusing to reuse existing release tag: $AO2_RELEASE_TAG" >&2
+  exit 1
 fi
-git push origin "$AO2_RELEASE_TAG"
 
 if gh release view "$AO2_RELEASE_TAG" --repo "$AO2_RELEASE_REPO" >/dev/null 2>&1; then
-  gh release upload "$AO2_RELEASE_TAG" \
-    dist/ao2-"$AO2_VERSION"-macos-aarch64.tar.gz \
-    dist-provenance/ao2-"$AO2_VERSION"-macos-aarch64.tar.gz.sha256 \
-    dist-provenance/ao2-"$AO2_VERSION"-macos-aarch64.tar.gz.sig \
-    dist-linux/ao2-"$AO2_VERSION"-linux-aarch64.tar.gz \
-    dist-provenance/ao2-"$AO2_VERSION"-linux-aarch64.tar.gz.sha256 \
-    dist-provenance/ao2-"$AO2_VERSION"-linux-aarch64.tar.gz.sig \
-    dist-linux-x86_64/ao2-"$AO2_VERSION"-linux-x86_64.tar.gz \
-    dist-provenance/ao2-"$AO2_VERSION"-linux-x86_64.tar.gz.sha256 \
-    dist-provenance/ao2-"$AO2_VERSION"-linux-x86_64.tar.gz.sig \
-    dist-windows/ao2-"$AO2_VERSION"-windows-x86_64.tar.gz \
-    dist-provenance/ao2-"$AO2_VERSION"-windows-x86_64.tar.gz.sha256 \
-    dist-provenance/ao2-"$AO2_VERSION"-windows-x86_64.tar.gz.sig \
-    dist-provenance/ao2-release-provenance.json \
-    dist-provenance/ao2-release-provenance.json.sig \
-    dist-provenance/ao2-release-signing-public.pem \
+  echo "refusing to overwrite existing release: $AO2_RELEASE_TAG" >&2
+  exit 1
+fi
+
+if [ "$AO2_RELEASE_SHIP_DRY_RUN" = "1" ]; then
+  printf "release_ship_dry_run=passed\n"
+  printf "release_ship_mutations=not_executed\n"
+  printf "release_ship_target_commit=%s\n" "$AO2_RELEASE_TARGET_COMMIT"
+  printf "release_ship_asset_list=%s\n" "$AO2_RELEASE_PUBLICATION_LIST"
+  exit 0
+fi
+
+git tag -a "$AO2_RELEASE_TAG" "$AO2_RELEASE_TARGET_COMMIT" -m "$AO2_RELEASE_TITLE"
+git push origin "$AO2_RELEASE_TAG"
+
+set --
+while IFS= read -r asset; do
+  [ -n "$asset" ] || continue
+  set -- "$@" "$AO2_RELEASE_PUBLICATION_DIR/$asset"
+done < "$AO2_RELEASE_PUBLICATION_LIST"
+
+if [ "$AO2_RELEASE_CHANNEL" = "prerelease" ]; then
+  gh release create "$AO2_RELEASE_TAG" "$@" \
     --repo "$AO2_RELEASE_REPO" \
-    --clobber
-else
-  gh release create "$AO2_RELEASE_TAG" \
-    dist/ao2-"$AO2_VERSION"-macos-aarch64.tar.gz \
-    dist-provenance/ao2-"$AO2_VERSION"-macos-aarch64.tar.gz.sha256 \
-    dist-provenance/ao2-"$AO2_VERSION"-macos-aarch64.tar.gz.sig \
-    dist-linux/ao2-"$AO2_VERSION"-linux-aarch64.tar.gz \
-    dist-provenance/ao2-"$AO2_VERSION"-linux-aarch64.tar.gz.sha256 \
-    dist-provenance/ao2-"$AO2_VERSION"-linux-aarch64.tar.gz.sig \
-    dist-linux-x86_64/ao2-"$AO2_VERSION"-linux-x86_64.tar.gz \
-    dist-provenance/ao2-"$AO2_VERSION"-linux-x86_64.tar.gz.sha256 \
-    dist-provenance/ao2-"$AO2_VERSION"-linux-x86_64.tar.gz.sig \
-    dist-windows/ao2-"$AO2_VERSION"-windows-x86_64.tar.gz \
-    dist-provenance/ao2-"$AO2_VERSION"-windows-x86_64.tar.gz.sha256 \
-    dist-provenance/ao2-"$AO2_VERSION"-windows-x86_64.tar.gz.sig \
-    dist-provenance/ao2-release-provenance.json \
-    dist-provenance/ao2-release-provenance.json.sig \
-    dist-provenance/ao2-release-signing-public.pem \
-    --repo "$AO2_RELEASE_REPO" \
+    --verify-tag \
     --title "$AO2_RELEASE_TITLE" \
-    --notes "$AO2_RELEASE_NOTES"
+    --notes-file "$AO2_RELEASE_NOTES_FILE" \
+    --prerelease \
+    --latest=false
+else
+  gh release create "$AO2_RELEASE_TAG" "$@" \
+    --repo "$AO2_RELEASE_REPO" \
+    --verify-tag \
+    --title "$AO2_RELEASE_TITLE" \
+    --notes-file "$AO2_RELEASE_NOTES_FILE" \
+    --latest
 fi
 
 AO2_RELEASE_TAG="$AO2_RELEASE_TAG" \

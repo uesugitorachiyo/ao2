@@ -55,13 +55,28 @@ version = subprocess.check_output([str(root / "scripts" / "current-version.sh")]
 tag = f"v{version}"
 expected_release_assets = [
     f"ao2-{version}-macos-aarch64.tar.gz",
+    f"ao2-{version}-macos-aarch64.tar.gz.sha256",
+    f"ao2-{version}-macos-aarch64.tar.gz.sig",
+    f"ao2-{version}-macos-aarch64.sbom.cdx.json",
     f"ao2-{version}-linux-aarch64.tar.gz",
+    f"ao2-{version}-linux-aarch64.tar.gz.sha256",
+    f"ao2-{version}-linux-aarch64.tar.gz.sig",
+    f"ao2-{version}-linux-aarch64.sbom.cdx.json",
     f"ao2-{version}-linux-x86_64.tar.gz",
+    f"ao2-{version}-linux-x86_64.tar.gz.sha256",
+    f"ao2-{version}-linux-x86_64.tar.gz.sig",
+    f"ao2-{version}-linux-x86_64.sbom.cdx.json",
     f"ao2-{version}-windows-x86_64.tar.gz",
+    f"ao2-{version}-windows-x86_64.tar.gz.sha256",
+    f"ao2-{version}-windows-x86_64.tar.gz.sig",
+    f"ao2-{version}-windows-x86_64.sbom.cdx.json",
     "SHA256SUMS",
     "ao2-release-provenance.json",
     "ao2-release-provenance.json.sig",
     "ao2-release-signing-public.pem",
+    "ao2-release-artifact-closure-index.json",
+    "ao2-release-readiness-summary.json",
+    "ao2-release-train-control-plane-bridge-summary.json",
 ]
 checks = []
 for name in ["cross_os_attestation", "public_ship_dry_run"]:

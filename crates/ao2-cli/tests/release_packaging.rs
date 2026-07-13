@@ -3476,6 +3476,8 @@ fn release_build_all_script_and_manual_workflow_cover_public_release_sequence() 
         .expect("release build-all script exists");
     let ship_script = fs::read_to_string(root.join("scripts/release-ship.sh"))
         .expect("release ship script exists");
+    let stage_script = fs::read_to_string(root.join("scripts/release-stage-publication-assets.sh"))
+        .expect("release publication staging script exists");
     let workflow = fs::read_to_string(root.join(".github/workflows/public-release-build.yml"))
         .expect("manual public release build workflow exists");
     let package_json = fs::read_to_string(root.join("package.json")).expect("package json exists");
@@ -3506,12 +3508,10 @@ fn release_build_all_script_and_manual_workflow_cover_public_release_sequence() 
     assert!(!ship_script.contains("mirror_run_pair ao-runtime"));
     assert!(!ship_script.contains("mirror_run_pair ao-control-plane"));
     assert!(!ship_script.contains("mirror_run_pair ao-operator"));
-    assert!(ship_script.contains("dist-linux-x86_64/ao2-\"$AO2_VERSION\"-linux-x86_64.tar.gz"));
-    assert!(ship_script.contains("dist-provenance/ao2-\"$AO2_VERSION\"-linux-x86_64.tar.gz.sha256"));
-    assert!(
-        ship_script.contains("dist-provenance/ao2-\"$AO2_VERSION\"-macos-aarch64.tar.gz.sha256")
-    );
-    assert!(ship_script.contains("dist-provenance/ao2-\"$AO2_VERSION\"-macos-aarch64.tar.gz.sig"));
+    assert!(stage_script.contains("dist-linux-x86_64/ao2-$AO2_VERSION-linux-x86_64.tar.gz"));
+    assert!(stage_script.contains("dist-provenance/$base.tar.gz.sha256"));
+    assert!(stage_script.contains("dist/ao2-$AO2_VERSION-macos-aarch64.tar.gz"));
+    assert!(stage_script.contains("dist-provenance/$base.tar.gz.sig"));
     assert!(ship_script.contains("AO2_NATIVE_WINDOWS_DOWNLOAD_VERIFY=1"));
     assert!(ship_script.contains("npm run release:download-verify"));
     assert!(ship_script.contains("doctor --json --release"));
@@ -3522,6 +3522,115 @@ fn release_build_all_script_and_manual_workflow_cover_public_release_sequence() 
     assert!(!workflow.contains("\n  push:"));
     assert!(workflow.contains("npm run release:build-all"));
     assert!(workflow.contains("actions/upload-artifact@v7.0.1"));
+}
+
+#[test]
+fn public_release_publisher_enforces_prerelease_channel_and_immutable_asset_contract() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let contract = fs::read_to_string(root.join("scripts/release-publication-contract.sh"))
+        .expect("release publication contract exists");
+    let stage = fs::read_to_string(root.join("scripts/release-stage-publication-assets.sh"))
+        .expect("release publication staging script exists");
+    let ship = fs::read_to_string(root.join("scripts/release-ship.sh"))
+        .expect("release ship script exists");
+
+    for needle in [
+        "AO2_RELEASE_CHANNEL",
+        "AO2_RELEASE_NOTES_FILE",
+        "AO2_RELEASE_TITLE",
+        "external beta",
+        "AO2_RELEASE_CODEX_PILOT_ACCEPTANCE",
+        "AO2_RELEASE_CLAUDE_PILOT_ACCEPTANCE",
+        "AO2_RELEASE_ANTIGRAVITY_PILOT_ACCEPTANCE",
+        "AO2_RELEASE_PRIVATE_KEY",
+        "prerelease version requires AO2_RELEASE_CHANNEL=prerelease",
+        "stable version requires AO2_RELEASE_CHANNEL=stable",
+    ] {
+        assert!(
+            contract.contains(needle),
+            "missing contract guard: {needle}"
+        );
+    }
+
+    for target in [
+        "macos-aarch64",
+        "linux-aarch64",
+        "linux-x86_64",
+        "windows-x86_64",
+    ] {
+        assert!(stage.contains(target), "missing staged target: {target}");
+    }
+    for asset in [
+        "SHA256SUMS",
+        ".tar.gz.sha256",
+        ".tar.gz.sig",
+        ".sbom.cdx.json",
+        "ao2-release-provenance.json",
+        "ao2-release-provenance.json.sig",
+        "ao2-release-signing-public.pem",
+        "ao2-release-artifact-closure-index.json",
+        "ao2-release-readiness-summary.json",
+        "ao2-release-train-control-plane-bridge-summary.json",
+    ] {
+        assert!(stage.contains(asset), "missing staged asset: {asset}");
+    }
+
+    assert!(!ship.contains("Private AO2 release"));
+    assert!(!ship.contains("gh release upload"));
+    assert!(!ship.contains("--clobber"));
+    assert!(ship.contains("scripts/release-publication-contract.sh"));
+    assert!(ship.contains("scripts/release-stage-publication-assets.sh"));
+    assert!(ship.contains("AO2_RELEASE_SHIP_DRY_RUN"));
+    assert!(ship.contains("--prerelease"));
+    assert!(ship.contains("--latest=false"));
+    assert!(ship.contains("refusing to overwrite existing release"));
+    assert!(ship.contains("refusing to reuse existing release tag"));
+}
+
+#[test]
+#[cfg(not(windows))]
+fn publication_contract_rejects_stable_channel_and_provider_pilots_for_beta() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let temp = tempfile::tempdir().expect("tempdir");
+    let notes = temp.path().join("notes.md");
+    let signing_key = temp.path().join("test-only-signing-key.pem");
+    fs::write(
+        &notes,
+        "# AO2 External Beta\n\nThis external beta is not stable.\n",
+    )
+    .expect("write notes fixture");
+    fs::write(&signing_key, "test-only fixture\n").expect("write key-presence fixture");
+
+    let run_contract = |channel: &str, pilot: &str| {
+        Command::new("bash")
+            .arg(root.join("scripts/release-publication-contract.sh"))
+            .current_dir(&root)
+            .env("AO2_RELEASE_CONTRACT_REQUIRE_ASSETS", "0")
+            .env("AO2_RELEASE_CHANNEL", channel)
+            .env("AO2_RELEASE_TITLE", "AO2 v0.5.0-beta.1 External Beta")
+            .env("AO2_RELEASE_NOTES_FILE", &notes)
+            .env("AO2_RELEASE_PRIVATE_KEY", &signing_key)
+            .env("AO2_RELEASE_CODEX_PILOT_ACCEPTANCE", pilot)
+            .output()
+            .expect("run release publication contract")
+    };
+
+    let accepted = run_contract("prerelease", "0");
+    assert!(
+        accepted.status.success(),
+        "{}",
+        String::from_utf8_lossy(&accepted.stderr)
+    );
+
+    let stable_channel = run_contract("stable", "0");
+    assert!(!stable_channel.status.success());
+    assert!(String::from_utf8_lossy(&stable_channel.stderr)
+        .contains("prerelease version requires AO2_RELEASE_CHANNEL=prerelease"));
+
+    let provider_pilot = run_contract("prerelease", "1");
+    assert!(!provider_pilot.status.success());
+    assert!(String::from_utf8_lossy(&provider_pilot.stderr)
+        .contains("AO2_RELEASE_CODEX_PILOT_ACCEPTANCE must remain disabled"));
 }
 
 #[test]
