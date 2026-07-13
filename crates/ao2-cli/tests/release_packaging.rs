@@ -3643,6 +3643,269 @@ fn beta_release_notes_include_explicit_uninstall_commands() {
     assert!(notes.contains("Remove-Item -Force -ErrorAction SilentlyContinue"));
 }
 
+fn approved_asset_fixture(root: &Path) -> (PathBuf, PathBuf, PathBuf, String) {
+    let publication_dir = root.join("publication");
+    let publication_list = root.join("publication.assets.txt");
+    let manifest = root.join("approved-assets.sha256");
+    fs::create_dir_all(&publication_dir).expect("create publication fixture");
+
+    let mut names = Vec::new();
+    let mut manifest_lines = Vec::new();
+    for index in 0..23 {
+        let name = format!("asset-{index:02}.bin");
+        let path = publication_dir.join(&name);
+        fs::write(&path, format!("approved asset {index}\n")).expect("write staged asset");
+        names.push(name.clone());
+        manifest_lines.push(format!("{}  {name}", sha256_file_hex(&path)));
+    }
+    fs::write(&publication_list, names.join("\n") + "\n").expect("write publication list");
+    fs::write(&manifest, manifest_lines.join("\n") + "\n").expect("write approved manifest");
+    let digest = sha256_file_hex(&manifest);
+    (publication_dir, publication_list, manifest, digest)
+}
+
+fn run_approved_asset_verifier(
+    root: &Path,
+    publication_dir: &Path,
+    publication_list: &Path,
+    manifest: &Path,
+    digest: &str,
+) -> std::process::Output {
+    Command::new("python3")
+        .arg(root.join("scripts/release-verify-approved-assets.py"))
+        .arg("--manifest")
+        .arg(manifest)
+        .arg("--manifest-sha256")
+        .arg(digest)
+        .arg("--publication-dir")
+        .arg(publication_dir)
+        .arg("--publication-list")
+        .arg(publication_list)
+        .output()
+        .expect("run approved asset verifier")
+}
+
+#[test]
+#[cfg(not(windows))]
+fn approved_asset_verifier_accepts_exact_23_asset_set() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let temp = tempfile::tempdir().expect("tempdir");
+    let (publication_dir, publication_list, manifest, digest) =
+        approved_asset_fixture(temp.path());
+
+    let output = run_approved_asset_verifier(
+        &root,
+        &publication_dir,
+        &publication_list,
+        &manifest,
+        &digest,
+    );
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains(&format!(
+        "release_approved_asset_manifest_sha256={digest}"
+    )));
+    assert!(stdout.contains("release_approved_asset_count=23"));
+    assert!(stdout.contains("release_approved_assets=passed"));
+}
+
+#[test]
+#[cfg(not(windows))]
+fn approved_asset_verifier_rejects_one_changed_byte() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let temp = tempfile::tempdir().expect("tempdir");
+    let (publication_dir, publication_list, manifest, digest) =
+        approved_asset_fixture(temp.path());
+    let changed = publication_dir.join("asset-07.bin");
+    let mut bytes = fs::read(&changed).expect("read asset");
+    bytes[0] ^= 1;
+    fs::write(&changed, bytes).expect("change one byte");
+
+    let output = run_approved_asset_verifier(
+        &root,
+        &publication_dir,
+        &publication_list,
+        &manifest,
+        &digest,
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("approved asset hash mismatch: asset-07.bin"));
+}
+
+#[test]
+#[cfg(not(windows))]
+fn approved_asset_verifier_rejects_missing_and_extra_assets() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+
+    let missing_temp = tempfile::tempdir().expect("tempdir");
+    let (missing_dir, missing_list, missing_manifest, missing_digest) =
+        approved_asset_fixture(missing_temp.path());
+    fs::remove_file(missing_dir.join("asset-03.bin")).expect("remove staged asset");
+    let missing = run_approved_asset_verifier(
+        &root,
+        &missing_dir,
+        &missing_list,
+        &missing_manifest,
+        &missing_digest,
+    );
+    assert!(!missing.status.success());
+    assert!(String::from_utf8_lossy(&missing.stderr)
+        .contains("approved staged asset is missing: asset-03.bin"));
+
+    let extra_temp = tempfile::tempdir().expect("tempdir");
+    let (extra_dir, extra_list, extra_manifest, extra_digest) =
+        approved_asset_fixture(extra_temp.path());
+    fs::write(extra_dir.join("unapproved.bin"), b"extra\n").expect("write extra asset");
+    let mut list = fs::read_to_string(&extra_list).expect("read publication list");
+    list.push_str("unapproved.bin\n");
+    fs::write(&extra_list, list).expect("append publication list");
+    let extra = run_approved_asset_verifier(
+        &root,
+        &extra_dir,
+        &extra_list,
+        &extra_manifest,
+        &extra_digest,
+    );
+    assert!(!extra.status.success());
+    assert!(String::from_utf8_lossy(&extra.stderr)
+        .contains("staged publication set has extra asset: unapproved.bin"));
+}
+
+#[test]
+#[cfg(not(windows))]
+fn approved_asset_verifier_rejects_changed_manifest_digest() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let temp = tempfile::tempdir().expect("tempdir");
+    let (publication_dir, publication_list, manifest, digest) =
+        approved_asset_fixture(temp.path());
+    let mut text = fs::read_to_string(&manifest).expect("read manifest");
+    text.push('\n');
+    fs::write(&manifest, text).expect("change manifest bytes");
+
+    let output = run_approved_asset_verifier(
+        &root,
+        &publication_dir,
+        &publication_list,
+        &manifest,
+        &digest,
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("approved manifest SHA-256 mismatch"));
+}
+
+#[test]
+#[cfg(not(windows))]
+fn approved_asset_verifier_rejects_duplicate_and_unsafe_manifest_names() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+
+    let duplicate_temp = tempfile::tempdir().expect("tempdir");
+    let (duplicate_dir, duplicate_list, duplicate_manifest, _) =
+        approved_asset_fixture(duplicate_temp.path());
+    let mut duplicate_text =
+        fs::read_to_string(&duplicate_manifest).expect("read duplicate manifest");
+    let first = duplicate_text
+        .lines()
+        .next()
+        .expect("first manifest line")
+        .to_owned();
+    duplicate_text.push_str(&first);
+    duplicate_text.push('\n');
+    fs::write(&duplicate_manifest, duplicate_text).expect("write duplicate manifest");
+    let duplicate_digest = sha256_file_hex(&duplicate_manifest);
+    let duplicate = run_approved_asset_verifier(
+        &root,
+        &duplicate_dir,
+        &duplicate_list,
+        &duplicate_manifest,
+        &duplicate_digest,
+    );
+    assert!(!duplicate.status.success());
+    assert!(String::from_utf8_lossy(&duplicate.stderr)
+        .contains("duplicate approved asset name: asset-00.bin"));
+
+    for unsafe_name in [
+        "/tmp/asset.bin",
+        "../asset.bin",
+        "nested/asset.bin",
+        "nested\\asset.bin",
+        ".",
+        "..",
+    ] {
+        let unsafe_temp = tempfile::tempdir().expect("tempdir");
+        let (unsafe_dir, unsafe_list, unsafe_manifest, _) =
+            approved_asset_fixture(unsafe_temp.path());
+        let text = fs::read_to_string(&unsafe_manifest).expect("read unsafe manifest");
+        let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
+        let hash = lines[0].split_once("  ").expect("manifest separator").0;
+        lines[0] = format!("{hash}  {unsafe_name}");
+        fs::write(&unsafe_manifest, lines.join("\n") + "\n")
+            .expect("write unsafe manifest");
+        let unsafe_digest = sha256_file_hex(&unsafe_manifest);
+        let output = run_approved_asset_verifier(
+            &root,
+            &unsafe_dir,
+            &unsafe_list,
+            &unsafe_manifest,
+            &unsafe_digest,
+        );
+        assert!(
+            !output.status.success(),
+            "unsafe manifest name unexpectedly accepted: {unsafe_name}"
+        );
+        assert!(String::from_utf8_lossy(&output.stderr)
+            .contains("approved manifest contains unsafe asset name"));
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn approved_asset_verifier_rejects_manifest_and_asset_symlinks() {
+    use std::os::unix::fs::symlink;
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+
+    let manifest_temp = tempfile::tempdir().expect("tempdir");
+    let (manifest_dir, manifest_list, manifest, digest) =
+        approved_asset_fixture(manifest_temp.path());
+    let manifest_link = manifest_temp.path().join("manifest-link.sha256");
+    symlink(&manifest, &manifest_link).expect("symlink manifest");
+    let manifest_output = run_approved_asset_verifier(
+        &root,
+        &manifest_dir,
+        &manifest_list,
+        &manifest_link,
+        &digest,
+    );
+    assert!(!manifest_output.status.success());
+    assert!(String::from_utf8_lossy(&manifest_output.stderr)
+        .contains("approved manifest must be a regular non-symlink file"));
+
+    let asset_temp = tempfile::tempdir().expect("tempdir");
+    let (asset_dir, asset_list, asset_manifest, asset_digest) =
+        approved_asset_fixture(asset_temp.path());
+    let asset = asset_dir.join("asset-05.bin");
+    let real_asset = asset_dir.join("asset-05-real.bin");
+    fs::rename(&asset, &real_asset).expect("move real asset");
+    symlink(&real_asset, &asset).expect("symlink asset");
+    let asset_output = run_approved_asset_verifier(
+        &root,
+        &asset_dir,
+        &asset_list,
+        &asset_manifest,
+        &asset_digest,
+    );
+    assert!(!asset_output.status.success());
+    assert!(String::from_utf8_lossy(&asset_output.stderr)
+        .contains("approved staged asset must be a regular non-symlink file: asset-05.bin"));
+}
+
 #[test]
 fn linux_x86_64_docker_packaging_constrains_emulated_build_parallelism() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
