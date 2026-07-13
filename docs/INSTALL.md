@@ -21,6 +21,76 @@ the normal flow is:
 5. Run `ao2 doctor` to confirm install, PATH, release provenance, local tools,
    and provider health.
 
+## Install the v0.5.0-beta.1 External Beta
+
+[`v0.5.0-beta.1`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.0-beta.1)
+is an external beta, not AO2 1.0 or the stable update channel. AO2 `v0.4.81`
+remains the latest stable release. The beta is qualified with
+[AO2 Control Plane v0.1.15](https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.15).
+
+Choose one supported archive:
+
+- `ao2-0.5.0-beta.1-macos-aarch64.tar.gz`
+- `ao2-0.5.0-beta.1-linux-aarch64.tar.gz`
+- `ao2-0.5.0-beta.1-linux-x86_64.tar.gz`
+- `ao2-0.5.0-beta.1-windows-x86_64.tar.gz`
+
+Download the complete public asset set, then verify its checksums before using
+an archive:
+
+```sh
+mkdir -p ao2-beta && cd ao2-beta
+gh release download v0.5.0-beta.1 --repo uesugitorachiyo/ao2
+shasum -a 256 -c SHA256SUMS
+```
+
+On macOS and Linux, extract the archive for the host and run its offline
+verification before installation:
+
+```sh
+tar -xzf ao2-0.5.0-beta.1-<platform>.tar.gz
+./verify-release.sh
+AO2_INSTALL_DIR="$HOME/.local/bin" ./install.sh
+ao2 version --json
+ao2 doctor --json
+```
+
+On Windows, run the archive's `Verify-Release.ps1` before `install.ps1`, then
+confirm the installed identity with `ao2.exe version --json`.
+
+To upgrade an existing v0.4.81 installation after verifying the beta archive:
+
+```sh
+ao2 install update \
+  --archive ao2-0.5.0-beta.1-<platform>.tar.gz \
+  --provenance-dir .
+ao2 version --json
+```
+
+The update preserves the previous binary as the rollback copy. Restore it with:
+
+```sh
+ao2 install rollback
+ao2 version --json
+```
+
+To return explicitly to v0.4.81 without a rollback copy, download and verify
+the matching archive from the
+[`v0.4.81` release](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.81)
+and run its installer. The beta is not selected by stable update checks.
+
+Uninstall from the default Unix location with:
+
+```sh
+rm -f "$HOME/.local/bin/ao2" \
+  "$HOME/.local/bin/ao2.rollback" \
+  "$HOME/.local/bin/ao2.install-verification.json"
+```
+
+For Windows and custom installation directories, use the platform-specific
+removal commands in [Uninstall](#uninstall). Uninstall does not remove
+repository-local run evidence.
+
 ## Verify Downloaded Release Assets
 
 From the repository checkout:
