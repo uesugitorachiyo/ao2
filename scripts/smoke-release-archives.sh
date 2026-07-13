@@ -77,6 +77,12 @@ case "$(uname -s)-$(uname -m)" in
     install_dir="$work/bin"
     repo="$work/repo"
     mkdir -p "$extract" "$repo/src"
+    git init -q "$repo"
+    git -C "$repo" config user.name "AO2 Test"
+    git -C "$repo" config user.email "ao2-test@example.invalid"
+    printf "initial\n" > "$repo/src/value.txt"
+    git -C "$repo" add -A
+    git -C "$repo" commit -q -m fixture
     tar -xzf "$macos_archive_dir/$macos_archive_name" -C "$extract"
     test -f "$extract/RELEASE-MANIFEST.json"
     grep -q '"schema_version": "ao2.release-manifest.v1"' "$extract/RELEASE-MANIFEST.json"
@@ -130,6 +136,24 @@ SH
       --provider scripted \
       --provider-prompt-file "$work/prompt.sh" \
       --max-repair-attempts 1 >/tmp/ao2-macos-run.out
+    approval_count=0
+    while grep -q "status=WaitingForApproval" /tmp/ao2-macos-run.out; do
+      ticket_id=$(jq -r '
+        .approvals[]
+        | select(.requested_action == "sandbox:apply" and .status == "pending")
+        | .ticket_id
+      ' "$repo/.ao2/runs/macos-install-smoke-repair/evidence-pack/evidence-pack.json")
+      test -n "$ticket_id"
+      "$install_dir/ao2" approve "$ticket_id" \
+        --target "$repo" \
+        --approver human:release-smoke >/tmp/ao2-macos-approve.out
+      grep -q "status=approved" /tmp/ao2-macos-approve.out
+      approval_count=$((approval_count + 1))
+      test "$approval_count" -le 2
+      "$install_dir/ao2" run --resume macos-install-smoke-repair \
+        --target "$repo" >/tmp/ao2-macos-run.out
+    done
+    test "$approval_count" -eq 2
     grep -q "status=Accepted" /tmp/ao2-macos-run.out
     /usr/bin/env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY "$install_dir/ao2" replay macos-install-smoke-repair --target "$repo" >/tmp/ao2-macos-replay.json
     grep -q "\"digest_failures\": \\[\\]" /tmp/ao2-macos-replay.json
@@ -163,6 +187,12 @@ docker run --rm \
     install_dir="$work/bin"
     repo="$work/repo"
     mkdir -p "$extract" "$repo/src"
+    git init -q "$repo"
+    git -C "$repo" config user.name "AO2 Test"
+    git -C "$repo" config user.email "ao2-test@example.invalid"
+    printf "initial\n" > "$repo/src/value.txt"
+    git -C "$repo" add -A
+    git -C "$repo" commit -q -m fixture
     tar -xzf "/dist/'"$linux_archive_name"'" -C "$extract"
     test -f "$extract/RELEASE-MANIFEST.json"
     grep -q "\"schema_version\": \"ao2.release-manifest.v1\"" "$extract/RELEASE-MANIFEST.json"
@@ -216,6 +246,21 @@ SH
       --provider scripted \
       --provider-prompt-file "$work/prompt.sh" \
       --max-repair-attempts 1 >/tmp/ao2-run.out
+    approval_count=0
+    while grep -q "status=WaitingForApproval" /tmp/ao2-run.out; do
+      ticket_id=$(jq -r ".approvals[] | select(.requested_action == \"sandbox:apply\" and .status == \"pending\") | .ticket_id" \
+        "$repo/.ao2/runs/ubuntu-install-smoke-repair/evidence-pack/evidence-pack.json")
+      test -n "$ticket_id"
+      "$install_dir/ao2" approve "$ticket_id" \
+        --target "$repo" \
+        --approver human:release-smoke >/tmp/ao2-approve.out
+      grep -q "status=approved" /tmp/ao2-approve.out
+      approval_count=$((approval_count + 1))
+      test "$approval_count" -le 2
+      "$install_dir/ao2" run --resume ubuntu-install-smoke-repair \
+        --target "$repo" >/tmp/ao2-run.out
+    done
+    test "$approval_count" -eq 2
     grep -q "status=Accepted" /tmp/ao2-run.out
     "$install_dir/ao2" replay ubuntu-install-smoke-repair --target "$repo" >/tmp/ao2-replay.json
     grep -q "\"digest_failures\": \\[\\]" /tmp/ao2-replay.json
