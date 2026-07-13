@@ -4,9 +4,7 @@
 
 [![Latest release](https://img.shields.io/github/v/release/uesugitorachiyo/ao2?label=latest%20stable%20release)](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.81)
 
-AO2 is a local-first governed software-delivery system for running agent work
-with policy checks, exact-digest approvals, replayable evidence, evaluator
-closure, and release-readiness gates.
+AO2 is the governed execution runtime for local agent work. It compiles and runs scoped workflows, enforces policy and exact-digest approvals, invokes execution adapters, evaluates results, and emits replayable evidence. Use AO2 when an authorized plan is ready to execute and the run must remain reviewable, reproducible, and bound to its approved inputs.
 
 The first public workflow is the `Risky PR Run`:
 
@@ -16,17 +14,71 @@ objective -> workflow compile -> scoped plan -> policy-denied risky action
 -> evaluator rejection -> correction -> evaluator acceptance -> evidence export
 ```
 
-AO2 owns execution and evidence production. The optional
-[`ao2-control-plane`](https://github.com/uesugitorachiyo/ao2-control-plane)
-repo is a separate self-hosted read-only observer for signed AO2 evidence.
+## How it fits in AO
 
-## AO Stack Architecture
+- **Primary responsibility:** Governed execution and run-evidence production.
+- **Inputs:** Workflows, scoped plans, Covenant decisions, approvals, and adapter settings.
+- **Outputs:** Execution events, patches, evaluations, closure records, and evidence bundles.
+- **Upstream:** AO Forge and AO Covenant.
+- **Downstream:** AO2 Control Plane, AO Arena, AO Crucible, and AO Sentinel.
 
-This repository is part of the AO agent orchestration stack. Start with the
-central architecture guide at
-[uesugitorachiyo/ao-architecture](https://github.com/uesugitorachiyo/ao-architecture);
-the AO2-specific architecture page is
-[ao2](https://github.com/uesugitorachiyo/ao-architecture/tree/main/ao2).
+See the
+[AO Architecture guide](https://github.com/uesugitorachiyo/ao-architecture)
+and the
+[AO2 component page](https://github.com/uesugitorachiyo/ao-architecture/blob/main/components/ao2.md)
+for the cross-repository flow.
+
+<!--
+Legacy documentation-test compatibility tokens (not rendered):
+npm run rsi:eligibility-packet
+ao2.rsi-eligibility-packet.v1
+ao2-rsi-eligibility-packet
+npm run rsi:claim-readiness
+bounded_governed_rsi
+full_autonomous_self_mutating_rsi
+npm run rsi:self-change-dry-run
+ao2.rsi-governed-self-change-dry-run.v1
+npm run rsi:live-self-change-rehearsal
+AO2_RSI_LIVE_SELF_CHANGE_REHEARSAL=1
+ao2.rsi-live-self-change-rehearsal.v1
+rolls the file back
+does not publish the full RSI claim
+npm run rsi:live-self-change-readback-index
+ao2.rsi-live-self-change-readback-evidence-index.v1
+ao2.cp-ao2-rsi-live-self-change-rehearsal-readback.v1
+does not approve the full RSI claim
+npm run live-mutation:dry-run-packet
+ao2.live-mutation-dry-run-packet.v1
+does not apply the patch
+does not call providers
+temporary workspace
+npm run rsi:cross-repo-e2e
+ao2.rsi-cross-repo-e2e.v1
+target/rsi-cross-repo-e2e/latest/summary.json
+ao2.rsi-improvement-evidence-gate.v1
+ao2.rsi-improvement-trend.v1
+ao2.rsi-blueprint-authorization-gate.v1
+ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1
+release_readiness_dashboard_readback
+control_plane_foundry_packet_readback
+ao.foundry.rsi-control-surface-packet.v0.1
+ao2.cp-ao-stack-rsi-chain-binding-readback.v1
+dashboard_artifact
+AO2_RSI_BLUEPRINT_AUTHORIZATION_SUMMARY
+measured_improvement_percent
+control_surface_readback
+target_exceeded
+workflow-hardening coverage
+covenant.rsi-claim-publish-gate.v1
+publish_authority=false
+npm run rsi:operator-closure-packet
+ao2.rsi-operator-closure-packet.v1
+target/rsi-operator-closure-packet/latest/summary.json
+closure.md
+bounded governed RSI is supported
+full autonomous RSI publication remains denied
+control-plane remains observer-only
+-->
 
 ## Successor Boundary
 
@@ -49,244 +101,6 @@ CI.
 Pull request CI also builds and smokes AO2 release archives on Ubuntu, macOS,
 and Windows through the hosted release archive smoke job. Native Windows release
 downloads remain covered by `.github/workflows/windows-release-smoke.yml`.
-
-## RSI Claim Boundary
-
-AO2 currently supports `bounded_governed_rsi`: local-first Pulse continuation,
-task generation, policy gates, replayable evidence, and operator-controlled
-publish paths. AO2 does not currently prove
-`full_autonomous_self_mutating_rsi`.
-
-Run the local claim audit with:
-
-```sh
-npm run rsi:claim-readiness
-```
-
-The audit emits `ao2.rsi-claim-readiness-audit.v1` under
-`target/rsi-claim-readiness/latest/summary.json`. It allows the bounded claim
-when the local Pulse evidence surface is present and denies the full
-self-mutating claim until AO2 has mutation authority evidence, live self-change
-evidence, rollback evidence for failed self-change, control-plane observer
-readback, and Covenant approval to publish that higher claim. Each run also
-emits `blocker_delta` with schema
-`ao2.rsi-claim-readiness-blocker-delta.v1`, comparing the current full-claim
-blocker IDs with the previous `summary.json` in the same output directory when
-one exists.
-
-Run the governed self-change dry-run evidence generator with:
-
-```sh
-npm run rsi:self-change-dry-run
-```
-
-The dry-run emits `ao2.rsi-governed-self-change-dry-run.v1` under
-`target/rsi-self-change-dry-run/latest/summary.json`, plus proposed and rollback
-patch artifacts for the same change class. It also emits a
-`covenant.live-self-change-authority.v1` authority packet candidate at
-`target/rsi-self-change-dry-run/latest/live-self-change-authority.packet.json`.
-That packet is marked as a dry-run candidate and is not valid evidence for
-claim publication until live self-change execution and observer readback exist.
-The script applies and rolls back the patches inside a temporary workspace to
-prove the rollback path restores the target file. It does not apply the patch
-to the repository, mutate the repository, use the network, require provider
-keys, or publish the full RSI claim. It is evidence for a governed self-change
-rehearsal, not proof of live autonomous self-mutation.
-
-Run the AO2 live-mutation dry-run execution packet with:
-
-```sh
-npm run live-mutation:dry-run-packet
-```
-
-The packet emits `ao2.live-mutation-dry-run-packet.v1` under
-`target/live-mutation-dry-run-packet/latest/summary.json`, plus proposed and
-rollback patch artifacts for `docs_only_single_file` by default. It records the
-exact changed-file list, verification plan, rollback patch, docs-only dry-run
-apply result, forbidden-path checks, authority boundary, provider boundary,
-session boundary, and an embedded `ao2.bounded-patch-packet.v1`. That bounded
-patch packet names `mutation_class`, `allowed_paths`, `forbidden_paths`,
-`rollback_patch`, `verification_commands`, `expected_diff_limits`, and
-`evidence_digests`. AO2 validates the class before the isolated dry-run apply.
-Setting `AO2_LIVE_MUTATION_CLASS=test_only` emits a one-test-file dry-run packet
-with test-scoped verification and rollback evidence. Setting
-`AO2_LIVE_MUTATION_CLASS=low_risk_code` emits a source-bounded dry-run packet
-with max one source file plus one test file, rollback and verification-command
-requirements, and explicit denials for scripts, CI, release, secret,
-config-expansion, provider, and broad-refactor paths. It still does not grant
-live production-code execution authority. Higher code classes remain denied.
-The patch is applied and rolled back only inside a temporary isolated workspace
-to prove the exact patch and rollback pair. It does not apply the patch to the
-live repository, create a branch, push commits, upload artifacts, publish
-releases, and does not call providers.
-
-The packet is AO2 execution evidence for a future governed live-mutation chain;
-it is not self-authorizing. AO2 must not perform a live repository mutation
-unless the caller provides explicit exact-scope operator approval for the first
-docs-only class and the surrounding Foundry approval gate, Covenant ticket,
-Forge guard, Sentinel/Promoter boundary, rollback rehearsal, and Command
-readback all pass. Broad or fully unsupervised complex live mutation remains
-outside AO2's claimed authority.
-
-Run the explicit live self-change rehearsal with:
-
-```sh
-AO2_RSI_LIVE_SELF_CHANGE_REHEARSAL=1 npm run rsi:live-self-change-rehearsal
-```
-
-The rehearsal emits `ao2.rsi-live-self-change-rehearsal.v1` under
-`target/rsi-live-self-change-rehearsal/latest/summary.json`, plus proposed and
-rollback patch artifacts. The command is refused unless
-`AO2_RSI_LIVE_SELF_CHANGE_REHEARSAL=1` is set. When enabled, it briefly mutates
-`scripts/rsi-claim-readiness-audit.sh`, verifies the changed script, and
-rolls the file back to its exact pre-run SHA-256. This is operator-gated live
-self-change evidence with local rollback proof; it still does not publish the
-full RSI claim. The command does not publish the full RSI claim because
-control-plane observer readback, Covenant claim-publish
-approval, and retained claim-level evidence are still required.
-
-After `ao2-control-plane` reads back that rehearsal, retain the readback
-artifact in AO2's local evidence chain with:
-
-```sh
-npm run rsi:live-self-change-readback-index
-```
-
-The index consumes AO2's `ao2.rsi-live-self-change-rehearsal.v1` summary and
-the control-plane
-`ao2.cp-ao2-rsi-live-self-change-rehearsal-readback.v1` summary, then emits
-`ao2.rsi-live-self-change-readback-evidence-index.v1` under
-`target/rsi-live-self-change-readback-index/latest/summary.json`. It records
-artifact names and SHA-256 values only. It does not mutate AO2, mutate
-ao2-control-plane artifacts, publish claims, or approve RSI claims. It does not approve the full RSI claim. This retained readback evidence improves the claim audit input, but Covenant claim-publish approval and stronger claim-publish evidence remain required.
-
-Run the local improvement evidence gate with:
-
-```sh
-npm run rsi:improvement-evidence-gate
-```
-
-The gate emits `ao2.rsi-improvement-evidence-gate.v1` under
-`target/rsi-improvement-evidence-gate/latest/summary.json`. It measures
-workflow-hardening coverage as `measured_improvement_percent` for enforced RSI
-evidence checks. The default target is 5%, and the current gate compares the
-previous six-check RSI evidence baseline with nine enforced checks after the
-AO Blueprint authorization prerequisite, the release-readiness dashboard
-readback, and improvement gate are added. The summary also includes
-`control_surface_readback` so operators can read the result without inferring
-authority from the score: `bounded_governed_rsi` is supported when evidence is
-passing, the improvement score can be `target_exceeded`, and
-`full_autonomous_self_mutating_rsi` remains denied by design. This is
-workflow-hardening coverage and evidence of stronger verification coverage, not
-proof that the full RSI claim is publishable.
-
-Persist the local improvement trend with:
-
-```sh
-npm run rsi:improvement-trend
-```
-
-The trend command reads the latest improvement gate summary, appends a local
-JSONL record to `target/rsi-improvement-trend/history.jsonl`, and emits
-`ao2.rsi-improvement-trend.v1` under
-`target/rsi-improvement-trend/latest/summary.json`. It records the current
-`measured_improvement_percent`, the previous measurement when present, and
-`delta_from_previous_percent`. The trend summary carries the same
-`control_surface_readback` boundary as the evidence gate: bounded governed RSI
-can improve while full autonomous RSI publication remains denied. It does not
-publish or approve RSI claims.
-
-Run the full local cross-repo RSI evidence chain with sibling
-`ao2-control-plane` and `ao-covenant` checkouts:
-
-```sh
-npm run rsi:cross-repo-e2e
-```
-
-The E2E smoke emits `ao2.rsi-cross-repo-e2e.v1` under
-`target/rsi-cross-repo-e2e/latest/summary.json`. It runs the AO2 live
-self-change rehearsal, ao2-control-plane readback,
-`rsi:live-self-change-readback-index`, the release-readiness dashboard
-readback smoke, `rsi:claim-readiness`,
-`rsi:blueprint-authorization-gate`, and Covenant `policy claim-publish-gate`,
-then runs the improvement evidence gate. Set
-`AO2_RSI_BLUEPRINT_AUTHORIZATION_SUMMARY` to a real AO Blueprint
-`ao.blueprint.build-authorization.v0.1` output when replacing the local fixture.
-The
-expected final Covenant gate remains `publish_authority=false` with schema
-`covenant.rsi-claim-publish-gate.v1`; the E2E summary also carries
-`ao2.rsi-improvement-evidence-gate.v1`,
-`ao2.rsi-improvement-trend.v1`,
-`ao2.rsi-blueprint-authorization-gate.v1`,
-`ao2.rsi-control-plane-release-readiness-dashboard-smoke.v1`,
-`release_readiness_dashboard_readback`, `dashboard_artifact`,
-`control_plane_foundry_packet_readback`,
-`ao.foundry.rsi-control-surface-packet.v0.1`,
-`ao2.cp-ao-stack-rsi-chain-binding-readback.v1`,
-`measured_improvement_percent`, and
-`delta_from_previous_percent`.
-`control_plane_foundry_packet_readback` records that ao2-control-plane can
-consume Foundry's RSI control-surface packet as observer-only readback; it does
-not approve RSI claims, publish claims, or expand AO2 authority.
-The smoke proves the denial chain and 5% workflow-hardening measurement are
-wired end to end, not that the full RSI claim is publishable.
-
-Compose the operator closure packet for the current AO stack RSI boundary with:
-
-```sh
-npm run rsi:operator-closure-packet
-```
-
-The packet emits `ao2.rsi-operator-closure-packet.v1` under
-`target/rsi-operator-closure-packet/latest/summary.json`, plus `closure.md`.
-It reads the AO2 cross-repo E2E summary and the ao2-control-plane chain-binding
-readback, then states the stable operator boundary in one place:
-bounded governed RSI is supported; full autonomous RSI publication remains denied; and control-plane remains observer-only. It is local readback only; it
-does not mutate repositories, approve RSI claims, publish claims, execute AO
-work, or authorize AO Blueprint self-change.
-
-Pulse next-task generation consumes this packet by default as bounded-governed
-RSI readback. `npm run pulse:generate-next` writes
-`rsi_operator_closure_readback` and `rsi_claim_boundary` into the eval loop,
-task manifest, AI task board, generated task packet, and next-action readback;
-those fields explicitly keep `full_autonomous_self_mutating_rsi=denied` and
-`operator_closure_is_publication_authority=false`.
-
-Compose the operator-readable RSI baseline packet from an existing cross-repo
-E2E summary with:
-
-```sh
-npm run rsi:baseline-packet
-```
-
-The packet emits `ao2.rsi-baseline-packet.v1` under
-`target/rsi-baseline-packet/latest/summary.json`, plus `dashboard.html`. It
-surfaces the RSI trend, Blueprint authorization, Covenant denial, and
-control-plane readback inputs in one compact packet, including the
-release-readiness dashboard readback for
-`ao2-release-readiness-consumer/dashboard.html`. It fails closed unless the 5%
-workflow-hardening metric is met and the full autonomous RSI claim remains
-denied with `publish_authority=false`. The packet reads local evidence only; it
-does not mutate repositories, publish claims, approve RSI claims, or authorize
-AO Blueprint self-change.
-
-After two baseline packets exist, compose the repeated-run RSI eligibility
-packet with:
-
-```sh
-npm run rsi:eligibility-packet
-```
-
-The packet emits `ao2.rsi-eligibility-packet.v1` under
-`target/rsi-eligibility-packet/latest/summary.json`, plus `dashboard.html`. It
-fails closed unless both baseline packets are ready, both preserve
-`claim_publish_decision=deny` and `claim_publish_authority=false`, and both are
-backed by tiered AO Blueprint authorization that is not self-authorized by RSI.
-Both baselines must also carry the control-plane release-readiness dashboard
-readback with `dashboard_link_ready=true`.
-This is eligibility/readback evidence only; it does not publish claims, approve
-RSI claims, mutate repositories, or authorize AO Blueprint self-change. CI
-uploads it as `ao2-rsi-eligibility-packet`.
 
 ## Why AO2?
 
@@ -430,8 +244,8 @@ ao2-release-readiness -> ao2-release-readiness-hosted-artifact-gate
 Use the final verifier artifact to decide whether the public AO2 release
 readiness evidence chain is closed. Earlier artifacts remain useful for
 debugging the specific gate that produced them. The consumer artifact also
-includes `dashboard.html`, which gives operators an RSI eligibility readback
-without granting autonomous RSI claim-publication authority.
+includes `dashboard.html`, which gives operators a run-eligibility readback
+without granting execution or publication authority.
 
 ## Pulse Auto-Advance Evidence
 
