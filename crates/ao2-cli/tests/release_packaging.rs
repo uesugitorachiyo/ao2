@@ -3634,6 +3634,16 @@ fn publication_contract_rejects_stable_channel_and_provider_pilots_for_beta() {
 }
 
 #[test]
+fn beta_release_notes_include_explicit_uninstall_commands() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let notes = fs::read_to_string(root.join("docs/release/v0.5.0-beta.1.md"))
+        .expect("beta release notes exist");
+
+    assert!(notes.contains("rm -f \"$HOME/.local/bin/ao2\""));
+    assert!(notes.contains("Remove-Item -Force -ErrorAction SilentlyContinue"));
+}
+
+#[test]
 fn linux_x86_64_docker_packaging_constrains_emulated_build_parallelism() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let script = fs::read_to_string(root.join("scripts/package-linux-x86_64-docker.sh"))
