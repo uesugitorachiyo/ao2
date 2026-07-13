@@ -58,7 +58,8 @@ checks = []
 for name in ["public_release_train", "release_readiness_static"]:
     code = int((log_dir / f"{name}.log.exit-code").read_text(encoding="utf-8").strip())
     checks.append({"name": name, "status": "passed" if code == 0 else "failed", "exit_code": code, "log": str(log_dir / f"{name}.log")})
-version_docs_ok = bool(version) and all(text.strip() for text in [readme, install, ready]) and re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version) is not None
+semver_pattern = r"[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?"
+version_docs_ok = bool(version) and all(text.strip() for text in [readme, install, ready]) and re.fullmatch(semver_pattern, version) is not None
 manifest_ok = manifest.get("trust_boundary", {}).get("provider_api_key_auth") == "forbidden"
 checks.extend([
     {"name": "version_changelog_docs_consistency", "status": "passed" if version_docs_ok else "failed", "version": version},

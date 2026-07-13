@@ -64,6 +64,9 @@ fn cli_packages_current_binary_for_local_distribution() {
     assert!(entries
         .iter()
         .any(|entry| entry == "RELEASE-VERIFICATION.json"));
+    assert!(entries.iter().any(|entry| entry == "BUILD-PROVENANCE.json"));
+    assert!(entries.iter().any(|entry| entry == "SBOM.cdx.json"));
+    assert!(entries.iter().any(|entry| entry == "UNINSTALL.txt"));
     assert!(entries.iter().any(|entry| entry == "LICENSE"));
     assert!(entries.iter().any(|entry| entry == "NOTICE"));
 
@@ -93,11 +96,22 @@ fn cli_packages_current_binary_for_local_distribution() {
         manifest_json["verifiers"],
         serde_json::json!(["verify-release.sh", "Verify-Release.ps1"])
     );
+    let archive_files: BTreeSet<String> = entries.iter().cloned().collect();
+    let manifest_files: BTreeSet<String> = manifest_json["files"]
+        .as_array()
+        .expect("manifest files")
+        .iter()
+        .map(|value| value.as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(manifest_files, archive_files);
 
     for required_checksum_entry in [
         format!("bin/{expected_binary}"),
         "RELEASE-MANIFEST.json".to_string(),
         "RELEASE-VERIFICATION.json".to_string(),
+        "BUILD-PROVENANCE.json".to_string(),
+        "SBOM.cdx.json".to_string(),
+        "UNINSTALL.txt".to_string(),
         "install.sh".to_string(),
         "install.ps1".to_string(),
         "verify-release.sh".to_string(),
@@ -138,6 +152,83 @@ fn cli_packages_current_binary_for_local_distribution() {
         .expect("checksum coverage")
         .iter()
         .any(|path| path == "RELEASE-MANIFEST.json"));
+    let checksum_coverage: BTreeSet<String> = verification_json["checksum_coverage"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|value| value.as_str().unwrap().to_string())
+        .collect();
+    let expected_coverage: BTreeSet<String> = archive_files
+        .iter()
+        .filter(|path| path.as_str() != "SHA256SUMS")
+        .cloned()
+        .collect();
+    assert_eq!(checksum_coverage, expected_coverage);
+
+    let provenance = archive_text_entry(Path::new(archive_path), "BUILD-PROVENANCE.json");
+    let provenance_json: serde_json::Value =
+        serde_json::from_str(&provenance).expect("build provenance is json");
+    assert_eq!(provenance_json["schema_version"], "ao2.build-provenance.v1");
+    assert_eq!(provenance_json["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(provenance_json["git_commit"].as_str().unwrap().len(), 40);
+    assert_ne!(provenance_json["build_profile"], "unknown");
+
+    let sbom = archive_text_entry(Path::new(archive_path), "SBOM.cdx.json");
+    let sbom_json: serde_json::Value = serde_json::from_str(&sbom).expect("SBOM is json");
+    assert_eq!(sbom_json["bomFormat"], "CycloneDX");
+    assert_eq!(sbom_json["specVersion"], "1.5");
+    assert!(sbom_json["components"].as_array().unwrap().len() > 10);
+}
+
+#[test]
+fn cli_release_archives_are_byte_reproducible() {
+    let ao2 = env!("CARGO_BIN_EXE_ao2");
+    let first = tempfile::tempdir().expect("first tempdir");
+    let second = tempfile::tempdir().expect("second tempdir");
+
+    let package = |out: &Path| {
+        let output = Command::new(ao2)
+            .args([
+                "release",
+                "package",
+                "--out-dir",
+                out.to_str().expect("utf8 out dir"),
+                "--version",
+                env!("CARGO_PKG_VERSION"),
+            ])
+            .output()
+            .expect("run ao2 release package");
+        assert!(
+            output.status.success(),
+            "stdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        fs::read(json["archive"].as_str().unwrap()).expect("read archive")
+    };
+
+    assert_eq!(package(first.path()), package(second.path()));
+}
+
+#[test]
+fn cli_release_profile_packaging_rejects_version_substitution() {
+    let out = tempfile::tempdir().expect("tempdir");
+    let output = Command::new(env!("CARGO_BIN_EXE_ao2"))
+        .env("AO2_PACKAGED_BUILD_PROFILE", "release")
+        .args([
+            "release",
+            "package",
+            "--out-dir",
+            out.path().to_str().unwrap(),
+            "--version",
+            "9.9.9-substituted",
+        ])
+        .output()
+        .expect("run ao2 release package");
+
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("does not match compiled binary"));
 }
 
 #[test]
@@ -3684,6 +3775,10 @@ fn install_guide_documents_update_verify_and_provider_fast_start() {
     assert!(install.contains("ao2 provider doctor --provider scripted"));
     assert!(install.contains("ao2 provider matrix --json"));
     assert!(install.contains("ao2 run --template bug-fix"));
+    assert!(install.contains("## Uninstall"));
+    assert!(install.contains("ao2.install-verification.json"));
+    assert!(install.contains(".ao2/"));
+    assert!(install.contains("AO2_INSTALL_DIR"));
     assert!(readme.contains("docs/INSTALL.md"));
 }
 
@@ -3716,6 +3811,53 @@ fn native_windows_smoke_assets_are_manual_and_exercise_installed_binary() {
     assert!(!workflow.contains("\n  push:"));
     assert!(workflow.contains("windows-latest"));
     assert!(workflow.contains("scripts/smoke-windows-release.ps1"));
+}
+
+#[test]
+fn cross_target_release_builds_pin_source_commit_and_hosted_smoke_checks_identity() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    for script in [
+        "scripts/package-linux-aarch64-docker.sh",
+        "scripts/package-linux-x86_64-docker.sh",
+        "scripts/package-windows-x86_64-docker.sh",
+    ] {
+        let source = fs::read_to_string(root.join(script)).expect("package script exists");
+        assert!(
+            source.contains("AO2_BUILD_GIT_COMMIT"),
+            "{script} must pin build commit"
+        );
+    }
+    let hosted = fs::read_to_string(root.join("scripts/release-archive-hosted-smoke.sh"))
+        .expect("hosted smoke exists");
+    assert!(hosted.contains("BUILD-PROVENANCE.json"));
+    assert!(hosted.contains("SBOM.cdx.json"));
+    assert!(hosted.contains("UNINSTALL.txt"));
+    assert!(hosted.contains("build_profile"));
+    assert!(hosted.contains("git_commit"));
+}
+
+#[test]
+fn evidence_migration_contract_has_an_executable_consumer_gate() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let migration = fs::read_to_string(root.join("docs/release/0.5-evidence-migration.md"))
+        .expect("migration guide exists");
+    let gate = fs::read_to_string(root.join("scripts/evidence-compatibility-gate.sh"))
+        .expect("compatibility gate exists");
+
+    assert!(migration.contains("ao2.event.payload.v1"));
+    assert!(migration.contains("ao2.event.policy-integrity.v2"));
+    assert!(migration.contains("legacy"));
+    assert!(migration.contains("AO2_CONTROL_PLANE_ROOT"));
+    assert!(
+        gate.contains("event_hash_vectors_preserve_legacy_and_policy_bound_migration_contracts")
+    );
+    assert!(gate.contains("ao2_canonical_v1_matches_shared_golden_vectors"));
+    assert!(
+        gate.contains("post_signed_evidence_pack_verifies_over_exact_bytes_not_reserialization")
+    );
+    assert!(gate.contains(
+        "post_signed_evidence_pack_stores_exact_signed_bytes_ignoring_evidence_pack_field"
+    ));
 }
 
 #[cfg(unix)]

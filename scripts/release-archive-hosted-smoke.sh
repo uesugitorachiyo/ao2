@@ -17,6 +17,7 @@ case "$(uname -s)-$(uname -m)" in
 esac
 
 version="${AO2_RELEASE_HOSTED_VERSION:-$(scripts/current-version.sh)}"
+expected_commit="${AO2_BUILD_GIT_COMMIT:-${GITHUB_SHA:-$(git rev-parse HEAD)}}"
 root="${AO2_RELEASE_HOSTED_SMOKE_ROOT:-target/release-archive-hosted-smoke/$target_label}"
 summary_json="${AO2_RELEASE_HOSTED_SMOKE_JSON:-$root/summary.json}"
 dist="$root/dist"
@@ -28,6 +29,7 @@ rm -rf "$root"
 mkdir -p "$dist" "$extract" "$install_dir"
 
 test -f "$binary"
+AO2_PACKAGED_GIT_COMMIT="$expected_commit" AO2_PACKAGED_BUILD_PROFILE=release \
 cargo run -p ao2-cli -- release package \
   --out-dir "$dist" \
   --version "$version" \
@@ -37,6 +39,9 @@ cargo run -p ao2-cli -- release package \
 test -f "$archive"
 tar -xzf "$archive" -C "$extract"
 test -f "$extract/RELEASE-MANIFEST.json"
+test -f "$extract/BUILD-PROVENANCE.json"
+test -f "$extract/SBOM.cdx.json"
+test -f "$extract/UNINSTALL.txt"
 grep -q '"schema_version": "ao2.release-manifest.v1"' "$extract/RELEASE-MANIFEST.json"
 grep -q "\"target\": \"$target_label\"" "$extract/RELEASE-MANIFEST.json"
 grep -q '"binary": "ao2"' "$extract/RELEASE-MANIFEST.json"
@@ -55,6 +60,25 @@ grep -q '"release_acceptance_owner": "factory-v3 evaluator-closer"' "$install_ve
 
 "$installed" --help >/dev/null
 "$installed" version --json >"$root/version.json"
+python3 - "$root/version.json" "$extract/BUILD-PROVENANCE.json" "$extract/SBOM.cdx.json" "$version" "$expected_commit" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+version = json.loads(Path(sys.argv[1]).read_text())
+provenance = json.loads(Path(sys.argv[2]).read_text())
+sbom = json.loads(Path(sys.argv[3]).read_text())
+expected_version = sys.argv[4]
+expected_commit = sys.argv[5]
+assert version["version"] == expected_version
+assert version["git_commit"] == expected_commit
+assert version["build_profile"] == "release"
+assert provenance["version"] == expected_version
+assert provenance["git_commit"] == expected_commit
+assert provenance["build_profile"] == "release"
+assert sbom["bomFormat"] == "CycloneDX"
+assert sbom["specVersion"] == "1.5"
+PY
 "$installed" adapter doctor --provider scripted >"$root/scripted-doctor.txt"
 "$installed" provider matrix --json >"$root/provider-matrix.json"
 
