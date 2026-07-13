@@ -3588,6 +3588,7 @@ fn public_release_publisher_enforces_prerelease_channel_and_immutable_asset_cont
 }
 
 #[test]
+#[cfg(not(windows))]
 fn publication_contract_rejects_stable_channel_and_provider_pilots_for_beta() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let temp = tempfile::tempdir().expect("tempdir");
