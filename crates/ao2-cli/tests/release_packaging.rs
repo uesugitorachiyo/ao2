@@ -1528,6 +1528,12 @@ fn release_archive_smoke_script_covers_ubuntu_and_windows_paths() {
     assert!(script.contains("provider matrix --json"));
     assert!(script.contains("provider contract --verify --require codex --json"));
     assert!(script.contains("provider_contract_verify=passed"));
+    assert!(script.contains("git init -q \"$repo\""));
+    assert!(script.contains("git -C \"$repo\" commit -q -m fixture"));
+    assert!(script.contains("requested_action == \"sandbox:apply\""));
+    assert!(script.contains("approve \"$ticket_id\""));
+    assert!(script.contains("run --resume"));
+    assert!(script.contains("test \"$approval_count\" -eq 2"));
     assert!(script.contains(" run \"$work/workflow.yaml\""));
     assert!(script.contains(" replay ubuntu-install-smoke-repair"));
     assert!(script.contains("docker run"));
