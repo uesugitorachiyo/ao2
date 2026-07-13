@@ -3643,7 +3643,10 @@ fn release_ship_rejects_missing_live_or_partial_dry_run_binding_before_external_
     assert!(!missing_live.status.success());
     assert!(String::from_utf8_lossy(&missing_live.stderr)
         .contains("live publication requires AO2_RELEASE_EXPECTED_ASSET_MANIFEST"));
-    assert!(!sentinel.exists(), "live failure reached an external command");
+    assert!(
+        !sentinel.exists(),
+        "live failure reached an external command"
+    );
 
     let partial_manifest = temp.path().join("manifest.sha256");
     fs::write(&partial_manifest, "fixture\n").expect("write partial manifest");
@@ -3683,7 +3686,9 @@ fn release_ship_places_manifest_verification_before_every_mutation() {
     let tag_push = ship
         .find("git push origin \"$AO2_RELEASE_TAG\"")
         .expect("tag push mutation");
-    let release_create = ship.find("gh release create").expect("GitHub release mutation");
+    let release_create = ship
+        .find("gh release create")
+        .expect("GitHub release mutation");
     let dry_run_exit = ship
         .find("release_ship_dry_run=passed")
         .expect("dry-run success output");
@@ -3755,8 +3760,7 @@ fn release_ship_prebuild_binding_logic_accepts_neither_or_both_only_for_dry_run(
 fn one_byte_drift_stops_before_mutation_sentinel() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let temp = tempfile::tempdir().expect("tempdir");
-    let (publication_dir, publication_list, manifest, digest) =
-        approved_asset_fixture(temp.path());
+    let (publication_dir, publication_list, manifest, digest) = approved_asset_fixture(temp.path());
     let changed = publication_dir.join("asset-11.bin");
     let mut bytes = fs::read(&changed).expect("read staged asset");
     bytes[0] ^= 1;
@@ -3781,7 +3785,10 @@ fn one_byte_drift_stops_before_mutation_sentinel() {
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr)
         .contains("approved asset hash mismatch: asset-11.bin"));
-    assert!(!sentinel.exists(), "one-byte drift reached mutation sentinel");
+    assert!(
+        !sentinel.exists(),
+        "one-byte drift reached mutation sentinel"
+    );
 }
 
 #[test]
@@ -3887,8 +3894,7 @@ fn run_approved_asset_verifier(
 fn approved_asset_verifier_accepts_exact_23_asset_set() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let temp = tempfile::tempdir().expect("tempdir");
-    let (publication_dir, publication_list, manifest, digest) =
-        approved_asset_fixture(temp.path());
+    let (publication_dir, publication_list, manifest, digest) = approved_asset_fixture(temp.path());
 
     let output = run_approved_asset_verifier(
         &root,
@@ -3904,9 +3910,7 @@ fn approved_asset_verifier_accepts_exact_23_asset_set() {
         String::from_utf8_lossy(&output.stderr)
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains(&format!(
-        "release_approved_asset_manifest_sha256={digest}"
-    )));
+    assert!(stdout.contains(&format!("release_approved_asset_manifest_sha256={digest}")));
     assert!(stdout.contains("release_approved_asset_count=23"));
     assert!(stdout.contains("release_approved_assets=passed"));
 }
@@ -3916,8 +3920,7 @@ fn approved_asset_verifier_accepts_exact_23_asset_set() {
 fn approved_asset_verifier_rejects_one_changed_byte() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let temp = tempfile::tempdir().expect("tempdir");
-    let (publication_dir, publication_list, manifest, digest) =
-        approved_asset_fixture(temp.path());
+    let (publication_dir, publication_list, manifest, digest) = approved_asset_fixture(temp.path());
     let changed = publication_dir.join("asset-07.bin");
     let mut bytes = fs::read(&changed).expect("read asset");
     bytes[0] ^= 1;
@@ -3979,8 +3982,7 @@ fn approved_asset_verifier_rejects_missing_and_extra_assets() {
 fn approved_asset_verifier_rejects_changed_manifest_digest() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let temp = tempfile::tempdir().expect("tempdir");
-    let (publication_dir, publication_list, manifest, digest) =
-        approved_asset_fixture(temp.path());
+    let (publication_dir, publication_list, manifest, digest) = approved_asset_fixture(temp.path());
     let mut text = fs::read_to_string(&manifest).expect("read manifest");
     text.push('\n');
     fs::write(&manifest, text).expect("change manifest bytes");
@@ -3993,8 +3995,7 @@ fn approved_asset_verifier_rejects_changed_manifest_digest() {
         &digest,
     );
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr)
-        .contains("approved manifest SHA-256 mismatch"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("approved manifest SHA-256 mismatch"));
 }
 
 #[test]
@@ -4033,8 +4034,7 @@ fn approved_asset_verifier_rejects_duplicate_and_unsafe_manifest_names() {
     let text = fs::read_to_string(&malformed_manifest).expect("read malformed manifest");
     let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
     lines[0].replace_range(..64, &"A".repeat(64));
-    fs::write(&malformed_manifest, lines.join("\n") + "\n")
-        .expect("write malformed manifest hash");
+    fs::write(&malformed_manifest, lines.join("\n") + "\n").expect("write malformed manifest hash");
     let malformed_digest = sha256_file_hex(&malformed_manifest);
     let malformed = run_approved_asset_verifier(
         &root,
@@ -4062,8 +4062,7 @@ fn approved_asset_verifier_rejects_duplicate_and_unsafe_manifest_names() {
         let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
         let hash = lines[0].split_once("  ").expect("manifest separator").0;
         lines[0] = format!("{hash}  {unsafe_name}");
-        fs::write(&unsafe_manifest, lines.join("\n") + "\n")
-            .expect("write unsafe manifest");
+        fs::write(&unsafe_manifest, lines.join("\n") + "\n").expect("write unsafe manifest");
         let unsafe_digest = sha256_file_hex(&unsafe_manifest);
         let output = run_approved_asset_verifier(
             &root,
