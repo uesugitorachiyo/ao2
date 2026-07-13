@@ -43,6 +43,7 @@
     "phase1:evidence-bundle-verify": "node scripts/run-sh-script.js scripts/verify-phase1-evidence-bundle.sh",
     "phase1:promotion-status": "node scripts/run-release-ao2.js release phase1-promotion-status",
     "release:ship": "node scripts/run-sh-script.js scripts/release-ship.sh",
+    "release:publish-approved": "node scripts/run-sh-script.js scripts/release-publish-approved-assets.sh",
     "smoke:three-os": "node scripts/run-sh-script.js scripts/smoke-three-os-release.sh",
     "smoke:workbench-release-comparison-export": "node scripts/run-sh-script.js scripts/smoke-workbench-release-comparison-export.sh",
     "smoke:workbench-provider-pilot-acceptance-export": "node scripts/run-sh-script.js scripts/smoke-workbench-provider-pilot-acceptance-export.sh",

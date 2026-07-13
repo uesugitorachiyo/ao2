@@ -13,6 +13,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m pytest \
   tests/test_ao2_rsi_live_self_change_readback_index.py \
   tests/test_public_stabilization.py \
   tests/test_phase1_promote_wrapper.py \
+  tests/test_release_publish_approved_assets.py \
   tests/test_ao2_native_runtime_platform_evidence.py \
   tests/test_ao2_rsi_claim_readiness.py \
   tests/test_ao2_rsi_governed_self_change_dry_run.py \
@@ -34,7 +35,7 @@ status_code = int(sys.argv[4])
 payload = {
     "schema_version": "ao2.python-guard-ci-artifacts.v1",
     "status": "passed" if status_code == 0 else "failed",
-    "command": "python3 -m pytest tests/test_ao2_rsi_live_self_change_readback_index.py tests/test_public_stabilization.py tests/test_phase1_promote_wrapper.py tests/test_ao2_native_runtime_platform_evidence.py tests/test_ao2_rsi_claim_readiness.py tests/test_ao2_rsi_governed_self_change_dry_run.py tests/test_ao2_rsi_live_self_change_rehearsal.py -q",
+    "command": "python3 -m pytest tests/test_ao2_rsi_live_self_change_readback_index.py tests/test_public_stabilization.py tests/test_phase1_promote_wrapper.py tests/test_release_publish_approved_assets.py tests/test_ao2_native_runtime_platform_evidence.py tests/test_ao2_rsi_claim_readiness.py tests/test_ao2_rsi_governed_self_change_dry_run.py tests/test_ao2_rsi_live_self_change_rehearsal.py -q",
     "log": str(log),
     "log_bytes": log.stat().st_size if log.exists() else 0,
     "artifact_root": str(out_root),
