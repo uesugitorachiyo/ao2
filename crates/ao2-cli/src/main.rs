@@ -69889,11 +69889,11 @@ fn sorted_regular_files(root: &Path) -> Result<Vec<PathBuf>> {
     Ok(files)
 }
 
-fn deterministic_archive_mode(path: &Path, metadata: &fs::Metadata) -> u32 {
+fn deterministic_archive_mode(path: &Path, _metadata: &fs::Metadata) -> u32 {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        if metadata.permissions().mode() & 0o111 != 0 {
+        if _metadata.permissions().mode() & 0o111 != 0 {
             return 0o755;
         }
     }
