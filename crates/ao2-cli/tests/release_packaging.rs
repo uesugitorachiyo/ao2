@@ -3847,6 +3847,7 @@ fn beta_release_notes_include_explicit_uninstall_commands() {
     assert!(notes.contains("Remove-Item -Force -ErrorAction SilentlyContinue"));
 }
 
+#[cfg(not(windows))]
 fn approved_asset_fixture(root: &Path) -> (PathBuf, PathBuf, PathBuf, String) {
     let publication_dir = root.join("publication");
     let publication_list = root.join("publication.assets.txt");
@@ -3868,6 +3869,7 @@ fn approved_asset_fixture(root: &Path) -> (PathBuf, PathBuf, PathBuf, String) {
     (publication_dir, publication_list, manifest, digest)
 }
 
+#[cfg(not(windows))]
 fn run_approved_asset_verifier(
     root: &Path,
     publication_dir: &Path,
