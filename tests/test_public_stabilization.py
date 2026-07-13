@@ -602,6 +602,12 @@ def test_release_asset_publication_readiness_uses_local_artifact_fixture():
     assert "release-artifact-fixture" in verification
 
 
+def test_public_ship_rehearsal_accepts_semver_prerelease_candidate_versions():
+    public_ship_rehearsal = read("scripts/public-ship-rehearsal.sh")
+
+    assert r"(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?" in public_ship_rehearsal
+
+
 def test_public_agent_coordination_rules_stay_in_root_agents_contract():
     agents = read("AGENTS.md")
     assert "public, local-first" in agents
