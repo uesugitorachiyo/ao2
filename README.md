@@ -1,41 +1,5 @@
 # AO2
 
-## Role
-
-AO2 is the governed local execution runtime for bounded agent workflows,
-approval-bound changes, evidence, replay, and evaluator closure. See
-[AO Architecture](https://github.com/uesugitorachiyo/ao-architecture) and the
-[canonical AO2 component page](https://github.com/uesugitorachiyo/ao-architecture/blob/main/components/ao2.md).
-
-## Maturity
-
-Advanced alpha. Runtime, policy, artifact, and adapter paths are `implemented`
-and `executable-tested`; explicit opt-in mutation paths are
-`clean-room-rehearsed` for this preflight.
-
-## Install
-
-```sh
-cargo build --workspace
-```
-
-## Quickstart
-
-```sh
-cargo run -p ao2-cli -- --help
-```
-
-## Safety
-
-AO2 requires explicit policy and exact-digest approval for side effects. This
-preflight does not authorize provider calls, credentials, live mutation,
-release, deployment, publication, upload, or tags.
-
-## External Beta
-
-External beta has not launched. No promotion is requested. RSI remains denied.
-The Month 6 execution packets are dry-run or rehearsal evidence only.
-
 [Watch the AO2 overview video](https://youtu.be/p222b0iCpbg)
 
 [![Latest release](https://img.shields.io/github/v/release/uesugitorachiyo/ao2?label=latest%20stable%20release)](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.81)
