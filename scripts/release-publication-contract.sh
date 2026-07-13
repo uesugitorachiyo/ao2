@@ -10,6 +10,20 @@ AO2_RELEASE_NOTES_FILE="${AO2_RELEASE_NOTES_FILE:-}"
 AO2_RELEASE_PRIVATE_KEY="${AO2_RELEASE_PRIVATE_KEY:-$ROOT/.release-signing/ao2-release-signing-key.pem}"
 AO2_RELEASE_PUBLICATION_DIR="${AO2_RELEASE_PUBLICATION_DIR:-$ROOT/target/release-publication/$AO2_RELEASE_TAG}"
 AO2_RELEASE_CONTRACT_REQUIRE_ASSETS="${AO2_RELEASE_CONTRACT_REQUIRE_ASSETS:-1}"
+AO2_RELEASE_CONTRACT_MODE="build-and-publish"
+
+case "${1:-}" in
+  '') ;;
+  --promote-approved-assets) AO2_RELEASE_CONTRACT_MODE="promote-approved-assets" ;;
+  *)
+    echo "release publication contract failed: unsupported argument: $1" >&2
+    exit 1
+    ;;
+esac
+[ "$#" -le 1 ] || {
+  echo "release publication contract failed: too many arguments" >&2
+  exit 1
+}
 
 fail() {
   echo "release publication contract failed: $*" >&2
@@ -20,7 +34,13 @@ fail() {
 [ -n "$AO2_RELEASE_NOTES_FILE" ] || fail "AO2_RELEASE_NOTES_FILE must be supplied explicitly"
 [ -s "$AO2_RELEASE_NOTES_FILE" ] || fail "release notes file is missing or empty: $AO2_RELEASE_NOTES_FILE"
 [ -n "$AO2_RELEASE_TITLE" ] || fail "AO2_RELEASE_TITLE must be supplied explicitly"
-[ -f "$AO2_RELEASE_PRIVATE_KEY" ] || fail "release signing material is missing: $AO2_RELEASE_PRIVATE_KEY"
+case "$AO2_RELEASE_CONTRACT_MODE" in
+  build-and-publish)
+    [ -f "$AO2_RELEASE_PRIVATE_KEY" ] || fail "release signing material is missing: $AO2_RELEASE_PRIVATE_KEY"
+    ;;
+  promote-approved-assets) ;;
+  *) fail "unsupported release publication contract mode: $AO2_RELEASE_CONTRACT_MODE" ;;
+esac
 
 if printf '%s\n' "$AO2_VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*$'; then
     [ "$AO2_RELEASE_CHANNEL" = "prerelease" ] || fail "prerelease version requires AO2_RELEASE_CHANNEL=prerelease"
