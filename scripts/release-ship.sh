@@ -10,6 +10,8 @@ AO2_RELEASE_TITLE="${AO2_RELEASE_TITLE:-}"
 AO2_RELEASE_NOTES_FILE="${AO2_RELEASE_NOTES_FILE:-}"
 AO2_RELEASE_SHIP_CONFIRM="${AO2_RELEASE_SHIP_CONFIRM:-}"
 AO2_RELEASE_SHIP_DRY_RUN="${AO2_RELEASE_SHIP_DRY_RUN:-0}"
+AO2_RELEASE_EXPECTED_ASSET_MANIFEST="${AO2_RELEASE_EXPECTED_ASSET_MANIFEST:-}"
+AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256="${AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256:-}"
 AO2_RELEASE_TARGET_COMMIT="${AO2_RELEASE_TARGET_COMMIT:-$(git rev-parse HEAD)}"
 AO2_RELEASE_PUBLICATION_DIR="${AO2_RELEASE_PUBLICATION_DIR:-target/release-publication/$AO2_RELEASE_TAG}"
 AO2_RELEASE_PUBLICATION_LIST="${AO2_RELEASE_PUBLICATION_LIST:-target/release-publication/$AO2_RELEASE_TAG.assets.txt}"
@@ -52,6 +54,24 @@ AO2_REQUIRE_NATIVE_WINDOWS_SMOKE="${AO2_REQUIRE_NATIVE_WINDOWS_SMOKE:-1}"
 if [ "$AO2_RELEASE_SHIP_DRY_RUN" != "1" ] && [ "$AO2_RELEASE_SHIP_CONFIRM" != "ship-$AO2_RELEASE_TAG" ]; then
   echo "refusing to publish release; set AO2_RELEASE_SHIP_CONFIRM=ship-$AO2_RELEASE_TAG" >&2
   exit 1
+fi
+
+if [ "$AO2_RELEASE_SHIP_DRY_RUN" != "1" ]; then
+  if [ -z "$AO2_RELEASE_EXPECTED_ASSET_MANIFEST" ] \
+    || [ -z "$AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256" ]; then
+    echo "live publication requires AO2_RELEASE_EXPECTED_ASSET_MANIFEST and AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256" >&2
+    exit 1
+  fi
+  AO2_RELEASE_APPROVAL_BOUND=1
+elif [ -z "$AO2_RELEASE_EXPECTED_ASSET_MANIFEST" ] \
+  && [ -z "$AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256" ]; then
+  AO2_RELEASE_APPROVAL_BOUND=0
+elif [ -z "$AO2_RELEASE_EXPECTED_ASSET_MANIFEST" ] \
+  || [ -z "$AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256" ]; then
+  echo "dry run requires both expected asset manifest variables or neither" >&2
+  exit 1
+else
+  AO2_RELEASE_APPROVAL_BOUND=1
 fi
 
 if [ "$AO2_RELEASE_TARGET_COMMIT" != "$(git rev-parse HEAD)" ]; then
@@ -102,6 +122,17 @@ AO2_RELEASE_CLAUDE_PILOT_ACCEPTANCE="$AO2_RELEASE_CLAUDE_PILOT_ACCEPTANCE" \
 AO2_RELEASE_ANTIGRAVITY_PILOT_ACCEPTANCE="$AO2_RELEASE_ANTIGRAVITY_PILOT_ACCEPTANCE" \
   scripts/release-publication-contract.sh
 
+if [ "$AO2_RELEASE_APPROVAL_BOUND" = "1" ]; then
+  approved_asset_verification=$(
+    python3 scripts/release-verify-approved-assets.py \
+      --manifest "$AO2_RELEASE_EXPECTED_ASSET_MANIFEST" \
+      --manifest-sha256 "$AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256" \
+      --publication-dir "$AO2_RELEASE_PUBLICATION_DIR" \
+      --publication-list "$AO2_RELEASE_PUBLICATION_LIST"
+  )
+  printf '%s\n' "$approved_asset_verification"
+fi
+
 if [ "$AO2_RELEASE_CODEX_PILOT_ACCEPTANCE" = "1" ]; then
   AO2_BIN="$AO2_RELEASE_CODEX_PILOT_BIN" \
   AO2_CODEX_PROVIDER_PILOT_ROOT="$AO2_RELEASE_CODEX_PILOT_ROOT" \
@@ -150,6 +181,13 @@ if gh release view "$AO2_RELEASE_TAG" --repo "$AO2_RELEASE_REPO" >/dev/null 2>&1
 fi
 
 if [ "$AO2_RELEASE_SHIP_DRY_RUN" = "1" ]; then
+  if [ "$AO2_RELEASE_APPROVAL_BOUND" = "1" ]; then
+    printf "release_approval_bound=true\n"
+    printf "release_approved_asset_manifest_sha256=%s\n" "$AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256"
+  else
+    printf "release_approval_bound=false\n"
+    printf "release_approved_asset_manifest_sha256=not_supplied\n"
+  fi
   printf "release_ship_dry_run=passed\n"
   printf "release_ship_mutations=not_executed\n"
   printf "release_ship_target_commit=%s\n" "$AO2_RELEASE_TARGET_COMMIT"
@@ -334,4 +372,6 @@ printf "release_comparison_bundle_dir=%s\n" "$release_comparison_bundle_dir"
 printf "release_comparison_verify=passed\n"
 printf "workbench_release_comparison_export=%s\n" "$AO2_WORKBENCH_RELEASE_COMPARISON_EXPORT_JSON"
 printf "workbench_release_comparison_export=passed\n"
+printf "release_approval_bound=true\n"
+printf "release_approved_asset_manifest_sha256=%s\n" "$AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256"
 printf "release_ship=passed\n"

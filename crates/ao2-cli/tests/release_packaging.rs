@@ -3581,10 +3581,214 @@ fn public_release_publisher_enforces_prerelease_channel_and_immutable_asset_cont
     assert!(ship.contains("scripts/release-publication-contract.sh"));
     assert!(ship.contains("scripts/release-stage-publication-assets.sh"));
     assert!(ship.contains("AO2_RELEASE_SHIP_DRY_RUN"));
+    assert!(ship.contains("AO2_RELEASE_EXPECTED_ASSET_MANIFEST"));
+    assert!(ship.contains("AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256"));
     assert!(ship.contains("--prerelease"));
     assert!(ship.contains("--latest=false"));
+    assert!(ship.contains("release_approval_bound=false"));
+    assert!(ship.contains("release_approval_bound=true"));
+    assert!(ship.contains("release_approved_asset_manifest_sha256=not_supplied"));
     assert!(ship.contains("refusing to overwrite existing release"));
     assert!(ship.contains("refusing to reuse existing release tag"));
+}
+
+#[test]
+#[cfg(unix)]
+fn release_ship_rejects_missing_live_or_partial_dry_run_binding_before_external_commands() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let temp = tempfile::tempdir().expect("tempdir");
+    let bin = temp.path().join("bin");
+    let sentinel = temp.path().join("external-command-called");
+    fs::create_dir_all(&bin).expect("create stub bin");
+    for command in ["git", "npm", "gh"] {
+        let stub = bin.join(command);
+        fs::write(
+            &stub,
+            "#!/bin/sh\nprintf '%s\\n' \"$0\" >> \"$AO2_TEST_EXTERNAL_SENTINEL\"\nexit 99\n",
+        )
+        .expect("write command stub");
+        let mut permissions = fs::metadata(&stub).expect("stub metadata").permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&stub, permissions).expect("make stub executable");
+    }
+    let inherited_path = std::env::var("PATH").expect("PATH");
+    let stub_path = format!("{}:{inherited_path}", bin.display());
+
+    let run_ship = |dry_run: &str, manifest: Option<&Path>, digest: Option<&str>| {
+        let mut command = Command::new("sh");
+        command
+            .arg(root.join("scripts/release-ship.sh"))
+            .current_dir(&root)
+            .env("PATH", &stub_path)
+            .env("AO2_TEST_EXTERNAL_SENTINEL", &sentinel)
+            .env("AO2_VERSION", "0.5.0-beta.1")
+            .env("AO2_RELEASE_TAG", "v0.5.0-beta.1")
+            .env("AO2_RELEASE_TARGET_COMMIT", "test-target")
+            .env("AO2_RELEASE_SHIP_DRY_RUN", dry_run)
+            .env("AO2_RELEASE_SHIP_CONFIRM", "ship-v0.5.0-beta.1")
+            .env_remove("AO2_RELEASE_EXPECTED_ASSET_MANIFEST")
+            .env_remove("AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256");
+        if let Some(value) = manifest {
+            command.env("AO2_RELEASE_EXPECTED_ASSET_MANIFEST", value);
+        }
+        if let Some(value) = digest {
+            command.env("AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256", value);
+        }
+        command.output().expect("run guarded publisher")
+    };
+
+    let missing_live = run_ship("0", None, None);
+    assert!(!missing_live.status.success());
+    assert!(String::from_utf8_lossy(&missing_live.stderr)
+        .contains("live publication requires AO2_RELEASE_EXPECTED_ASSET_MANIFEST"));
+    assert!(
+        !sentinel.exists(),
+        "live failure reached an external command"
+    );
+
+    let partial_manifest = temp.path().join("manifest.sha256");
+    fs::write(&partial_manifest, "fixture\n").expect("write partial manifest");
+    let partial_dry_run = run_ship("1", Some(&partial_manifest), None);
+    assert!(!partial_dry_run.status.success());
+    assert!(String::from_utf8_lossy(&partial_dry_run.stderr)
+        .contains("dry run requires both expected asset manifest variables or neither"));
+    assert!(
+        !sentinel.exists(),
+        "partial dry-run failure reached an external command"
+    );
+}
+
+#[test]
+fn release_ship_places_manifest_verification_before_every_mutation() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let ship = fs::read_to_string(root.join("scripts/release-ship.sh"))
+        .expect("release ship script exists");
+
+    let prebuild_guard = ship
+        .find("live publication requires AO2_RELEASE_EXPECTED_ASSET_MANIFEST")
+        .expect("live manifest guard");
+    let moving_head = ship
+        .find("refusing to publish unreviewed moving head")
+        .expect("moving-head guard");
+    let build = ship.find("npm run verify").expect("build verification");
+    assert!(prebuild_guard < moving_head);
+    assert!(prebuild_guard < build);
+
+    let stage = ship
+        .find("scripts/release-stage-publication-assets.sh")
+        .expect("publication staging");
+    let verify = ship
+        .find("scripts/release-verify-approved-assets.py")
+        .expect("approved asset verification");
+    let local_tag = ship.find("git tag -a").expect("local tag mutation");
+    let tag_push = ship
+        .find("git push origin \"$AO2_RELEASE_TAG\"")
+        .expect("tag push mutation");
+    let release_create = ship
+        .find("gh release create")
+        .expect("GitHub release mutation");
+    let dry_run_exit = ship
+        .find("release_ship_dry_run=passed")
+        .expect("dry-run success output");
+    assert!(stage < verify);
+    assert!(verify < local_tag);
+    assert!(verify < tag_push);
+    assert!(verify < release_create);
+    assert!(dry_run_exit < local_tag);
+    assert!(!ship.contains("gh release upload"));
+    assert!(!ship.contains("--clobber"));
+}
+
+#[test]
+#[cfg(not(windows))]
+fn release_ship_prebuild_binding_logic_accepts_neither_or_both_only_for_dry_run() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let ship = fs::read_to_string(root.join("scripts/release-ship.sh"))
+        .expect("release ship script exists");
+    let boundary = ship
+        .find("if [ \"$AO2_RELEASE_TARGET_COMMIT\" !=")
+        .expect("moving-head boundary");
+    let mut prebuild = ship[..boundary].to_owned();
+    prebuild.push_str("printf 'test_approval_bound=%s\\n' \"$AO2_RELEASE_APPROVAL_BOUND\"\n");
+    let prebuild_script = tempfile::NamedTempFile::new().expect("prebuild script fixture");
+    fs::write(prebuild_script.path(), prebuild).expect("write prebuild script");
+
+    let run = |manifest: Option<&str>, digest: Option<&str>| {
+        let mut command = Command::new("sh");
+        command
+            .arg(prebuild_script.path())
+            .current_dir(&root)
+            .env("AO2_VERSION", "0.5.0-beta.1")
+            .env("AO2_RELEASE_TAG", "v0.5.0-beta.1")
+            .env("AO2_RELEASE_TARGET_COMMIT", "test-target")
+            .env("AO2_RELEASE_SHIP_DRY_RUN", "1")
+            .env_remove("AO2_RELEASE_EXPECTED_ASSET_MANIFEST")
+            .env_remove("AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256");
+        if let Some(value) = manifest {
+            command.env("AO2_RELEASE_EXPECTED_ASSET_MANIFEST", value);
+        }
+        if let Some(value) = digest {
+            command.env("AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256", value);
+        }
+        command.output().expect("run prebuild binding logic")
+    };
+
+    let neither = run(None, None);
+    assert!(neither.status.success());
+    assert!(String::from_utf8_lossy(&neither.stdout).contains("test_approval_bound=0"));
+
+    let digest64 = "a".repeat(64);
+    let both = run(Some("approved.sha256"), Some(&digest64));
+    assert!(both.status.success());
+    assert!(String::from_utf8_lossy(&both.stdout).contains("test_approval_bound=1"));
+
+    for (manifest, digest) in [
+        (Some("approved.sha256"), None),
+        (None, Some(digest64.as_str())),
+    ] {
+        let output = run(manifest, digest);
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr)
+            .contains("dry run requires both expected asset manifest variables or neither"));
+    }
+}
+
+#[test]
+#[cfg(not(windows))]
+fn one_byte_drift_stops_before_mutation_sentinel() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let temp = tempfile::tempdir().expect("tempdir");
+    let (publication_dir, publication_list, manifest, digest) = approved_asset_fixture(temp.path());
+    let changed = publication_dir.join("asset-11.bin");
+    let mut bytes = fs::read(&changed).expect("read staged asset");
+    bytes[0] ^= 1;
+    fs::write(&changed, bytes).expect("change exactly one byte");
+    let sentinel = temp.path().join("mutation-sentinel");
+
+    let output = Command::new("sh")
+        .arg("-c")
+        .arg(
+            "python3 \"$1\" --manifest \"$2\" --manifest-sha256 \"$3\" \
+             --publication-dir \"$4\" --publication-list \"$5\" && : > \"$6\"",
+        )
+        .arg("sh")
+        .arg(root.join("scripts/release-verify-approved-assets.py"))
+        .arg(&manifest)
+        .arg(&digest)
+        .arg(&publication_dir)
+        .arg(&publication_list)
+        .arg(&sentinel)
+        .output()
+        .expect("run drift-before-mutation harness");
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("approved asset hash mismatch: asset-11.bin"));
+    assert!(
+        !sentinel.exists(),
+        "one-byte drift reached mutation sentinel"
+    );
 }
 
 #[test]
@@ -3641,6 +3845,299 @@ fn beta_release_notes_include_explicit_uninstall_commands() {
 
     assert!(notes.contains("rm -f \"$HOME/.local/bin/ao2\""));
     assert!(notes.contains("Remove-Item -Force -ErrorAction SilentlyContinue"));
+}
+
+#[cfg(not(windows))]
+fn approved_asset_fixture(root: &Path) -> (PathBuf, PathBuf, PathBuf, String) {
+    let publication_dir = root.join("publication");
+    let publication_list = root.join("publication.assets.txt");
+    let manifest = root.join("approved-assets.sha256");
+    fs::create_dir_all(&publication_dir).expect("create publication fixture");
+
+    let mut names = Vec::new();
+    let mut manifest_lines = Vec::new();
+    for index in 0..23 {
+        let name = format!("asset-{index:02}.bin");
+        let path = publication_dir.join(&name);
+        fs::write(&path, format!("approved asset {index}\n")).expect("write staged asset");
+        names.push(name.clone());
+        manifest_lines.push(format!("{}  {name}", sha256_file_hex(&path)));
+    }
+    fs::write(&publication_list, names.join("\n") + "\n").expect("write publication list");
+    fs::write(&manifest, manifest_lines.join("\n") + "\n").expect("write approved manifest");
+    let digest = sha256_file_hex(&manifest);
+    (publication_dir, publication_list, manifest, digest)
+}
+
+#[cfg(not(windows))]
+fn run_approved_asset_verifier(
+    root: &Path,
+    publication_dir: &Path,
+    publication_list: &Path,
+    manifest: &Path,
+    digest: &str,
+) -> std::process::Output {
+    Command::new("python3")
+        .arg(root.join("scripts/release-verify-approved-assets.py"))
+        .arg("--manifest")
+        .arg(manifest)
+        .arg("--manifest-sha256")
+        .arg(digest)
+        .arg("--publication-dir")
+        .arg(publication_dir)
+        .arg("--publication-list")
+        .arg(publication_list)
+        .output()
+        .expect("run approved asset verifier")
+}
+
+#[test]
+#[cfg(not(windows))]
+fn approved_asset_verifier_accepts_exact_23_asset_set() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let temp = tempfile::tempdir().expect("tempdir");
+    let (publication_dir, publication_list, manifest, digest) = approved_asset_fixture(temp.path());
+
+    let output = run_approved_asset_verifier(
+        &root,
+        &publication_dir,
+        &publication_list,
+        &manifest,
+        &digest,
+    );
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains(&format!("release_approved_asset_manifest_sha256={digest}")));
+    assert!(stdout.contains("release_approved_asset_count=23"));
+    assert!(stdout.contains("release_approved_assets=passed"));
+}
+
+#[test]
+#[cfg(not(windows))]
+fn approved_asset_verifier_rejects_one_changed_byte() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let temp = tempfile::tempdir().expect("tempdir");
+    let (publication_dir, publication_list, manifest, digest) = approved_asset_fixture(temp.path());
+    let changed = publication_dir.join("asset-07.bin");
+    let mut bytes = fs::read(&changed).expect("read asset");
+    bytes[0] ^= 1;
+    fs::write(&changed, bytes).expect("change one byte");
+
+    let output = run_approved_asset_verifier(
+        &root,
+        &publication_dir,
+        &publication_list,
+        &manifest,
+        &digest,
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("approved asset hash mismatch: asset-07.bin"));
+}
+
+#[test]
+#[cfg(not(windows))]
+fn approved_asset_verifier_rejects_missing_and_extra_assets() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+
+    let missing_temp = tempfile::tempdir().expect("tempdir");
+    let (missing_dir, missing_list, missing_manifest, missing_digest) =
+        approved_asset_fixture(missing_temp.path());
+    fs::remove_file(missing_dir.join("asset-03.bin")).expect("remove staged asset");
+    let missing = run_approved_asset_verifier(
+        &root,
+        &missing_dir,
+        &missing_list,
+        &missing_manifest,
+        &missing_digest,
+    );
+    assert!(!missing.status.success());
+    assert!(String::from_utf8_lossy(&missing.stderr)
+        .contains("approved staged asset is missing: asset-03.bin"));
+
+    let extra_temp = tempfile::tempdir().expect("tempdir");
+    let (extra_dir, extra_list, extra_manifest, extra_digest) =
+        approved_asset_fixture(extra_temp.path());
+    fs::write(extra_dir.join("unapproved.bin"), b"extra\n").expect("write extra asset");
+    let mut list = fs::read_to_string(&extra_list).expect("read publication list");
+    list.push_str("unapproved.bin\n");
+    fs::write(&extra_list, list).expect("append publication list");
+    let extra = run_approved_asset_verifier(
+        &root,
+        &extra_dir,
+        &extra_list,
+        &extra_manifest,
+        &extra_digest,
+    );
+    assert!(!extra.status.success());
+    assert!(String::from_utf8_lossy(&extra.stderr)
+        .contains("staged publication set has extra asset: unapproved.bin"));
+
+    let unlisted_temp = tempfile::tempdir().expect("tempdir");
+    let (unlisted_dir, unlisted_list, unlisted_manifest, unlisted_digest) =
+        approved_asset_fixture(unlisted_temp.path());
+    fs::write(unlisted_dir.join("unlisted.bin"), b"unlisted\n")
+        .expect("write unlisted directory asset");
+    let unlisted = run_approved_asset_verifier(
+        &root,
+        &unlisted_dir,
+        &unlisted_list,
+        &unlisted_manifest,
+        &unlisted_digest,
+    );
+    assert!(!unlisted.status.success());
+    assert!(String::from_utf8_lossy(&unlisted.stderr)
+        .contains("publication directory has unlisted asset: unlisted.bin"));
+}
+
+#[test]
+#[cfg(not(windows))]
+fn approved_asset_verifier_rejects_changed_manifest_digest() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let temp = tempfile::tempdir().expect("tempdir");
+    let (publication_dir, publication_list, manifest, digest) = approved_asset_fixture(temp.path());
+    let mut text = fs::read_to_string(&manifest).expect("read manifest");
+    text.push('\n');
+    fs::write(&manifest, text).expect("change manifest bytes");
+
+    let output = run_approved_asset_verifier(
+        &root,
+        &publication_dir,
+        &publication_list,
+        &manifest,
+        &digest,
+    );
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("approved manifest SHA-256 mismatch"));
+}
+
+#[test]
+#[cfg(not(windows))]
+fn approved_asset_verifier_rejects_duplicate_and_unsafe_manifest_names() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+
+    let duplicate_temp = tempfile::tempdir().expect("tempdir");
+    let (duplicate_dir, duplicate_list, duplicate_manifest, _) =
+        approved_asset_fixture(duplicate_temp.path());
+    let mut duplicate_text =
+        fs::read_to_string(&duplicate_manifest).expect("read duplicate manifest");
+    let first = duplicate_text
+        .lines()
+        .next()
+        .expect("first manifest line")
+        .to_owned();
+    duplicate_text.push_str(&first);
+    duplicate_text.push('\n');
+    fs::write(&duplicate_manifest, duplicate_text).expect("write duplicate manifest");
+    let duplicate_digest = sha256_file_hex(&duplicate_manifest);
+    let duplicate = run_approved_asset_verifier(
+        &root,
+        &duplicate_dir,
+        &duplicate_list,
+        &duplicate_manifest,
+        &duplicate_digest,
+    );
+    assert!(!duplicate.status.success());
+    assert!(String::from_utf8_lossy(&duplicate.stderr)
+        .contains("duplicate approved asset name: asset-00.bin"));
+
+    let malformed_temp = tempfile::tempdir().expect("tempdir");
+    let (malformed_dir, malformed_list, malformed_manifest, _) =
+        approved_asset_fixture(malformed_temp.path());
+    let text = fs::read_to_string(&malformed_manifest).expect("read malformed manifest");
+    let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
+    lines[0].replace_range(..64, &"A".repeat(64));
+    fs::write(&malformed_manifest, lines.join("\n") + "\n").expect("write malformed manifest hash");
+    let malformed_digest = sha256_file_hex(&malformed_manifest);
+    let malformed = run_approved_asset_verifier(
+        &root,
+        &malformed_dir,
+        &malformed_list,
+        &malformed_manifest,
+        &malformed_digest,
+    );
+    assert!(!malformed.status.success());
+    assert!(String::from_utf8_lossy(&malformed.stderr)
+        .contains("approved manifest line 1 is malformed"));
+
+    for unsafe_name in [
+        "/tmp/asset.bin",
+        "../asset.bin",
+        "nested/asset.bin",
+        "nested\\asset.bin",
+        ".",
+        "..",
+    ] {
+        let unsafe_temp = tempfile::tempdir().expect("tempdir");
+        let (unsafe_dir, unsafe_list, unsafe_manifest, _) =
+            approved_asset_fixture(unsafe_temp.path());
+        let text = fs::read_to_string(&unsafe_manifest).expect("read unsafe manifest");
+        let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
+        let hash = lines[0].split_once("  ").expect("manifest separator").0;
+        lines[0] = format!("{hash}  {unsafe_name}");
+        fs::write(&unsafe_manifest, lines.join("\n") + "\n").expect("write unsafe manifest");
+        let unsafe_digest = sha256_file_hex(&unsafe_manifest);
+        let output = run_approved_asset_verifier(
+            &root,
+            &unsafe_dir,
+            &unsafe_list,
+            &unsafe_manifest,
+            &unsafe_digest,
+        );
+        assert!(
+            !output.status.success(),
+            "unsafe manifest name unexpectedly accepted: {unsafe_name}"
+        );
+        assert!(String::from_utf8_lossy(&output.stderr)
+            .contains("approved manifest contains unsafe asset name"));
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn approved_asset_verifier_rejects_manifest_and_asset_symlinks() {
+    use std::os::unix::fs::symlink;
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+
+    let manifest_temp = tempfile::tempdir().expect("tempdir");
+    let (manifest_dir, manifest_list, manifest, digest) =
+        approved_asset_fixture(manifest_temp.path());
+    let manifest_link = manifest_temp.path().join("manifest-link.sha256");
+    symlink(&manifest, &manifest_link).expect("symlink manifest");
+    let manifest_output = run_approved_asset_verifier(
+        &root,
+        &manifest_dir,
+        &manifest_list,
+        &manifest_link,
+        &digest,
+    );
+    assert!(!manifest_output.status.success());
+    assert!(String::from_utf8_lossy(&manifest_output.stderr)
+        .contains("approved manifest must be a regular non-symlink file"));
+
+    let asset_temp = tempfile::tempdir().expect("tempdir");
+    let (asset_dir, asset_list, asset_manifest, asset_digest) =
+        approved_asset_fixture(asset_temp.path());
+    let asset = asset_dir.join("asset-05.bin");
+    let real_asset = asset_dir.join("asset-05-real.bin");
+    fs::rename(&asset, &real_asset).expect("move real asset");
+    symlink(&real_asset, &asset).expect("symlink asset");
+    let asset_output = run_approved_asset_verifier(
+        &root,
+        &asset_dir,
+        &asset_list,
+        &asset_manifest,
+        &asset_digest,
+    );
+    assert!(!asset_output.status.success());
+    assert!(String::from_utf8_lossy(&asset_output.stderr)
+        .contains("approved staged asset must be a regular non-symlink file: asset-05.bin"));
 }
 
 #[test]
