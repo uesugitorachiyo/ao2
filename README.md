@@ -193,6 +193,40 @@ https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.81/ao2-0.4.81-linu
 https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.81/ao2-0.4.81-windows-x86_64.tar.gz
 ```
 
+## Install the v0.5.0-beta.1 External Beta
+
+[`v0.5.0-beta.1`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.0-beta.1)
+is an external beta, not AO2 1.0 or the stable update channel. AO2 `v0.4.81`
+remains the latest stable release. This beta is qualified with
+[AO2 Control Plane v0.1.15](https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.15).
+
+The beta supports these archives:
+
+- [macOS arm64](https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.0-beta.1/ao2-0.5.0-beta.1-macos-aarch64.tar.gz)
+- [Linux arm64](https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.0-beta.1/ao2-0.5.0-beta.1-linux-aarch64.tar.gz)
+- [Linux x86_64](https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.0-beta.1/ao2-0.5.0-beta.1-linux-x86_64.tar.gz)
+- [Windows x86_64](https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.0-beta.1/ao2-0.5.0-beta.1-windows-x86_64.tar.gz)
+
+Download the archive for your platform together with `SHA256SUMS`, its
+signature sidecar, the release provenance files, and
+`ao2-release-signing-public.pem`. Verify the downloaded set before extracting
+and installing it:
+
+```sh
+mkdir -p ao2-beta && cd ao2-beta
+gh release download v0.5.0-beta.1 --repo uesugitorachiyo/ao2
+shasum -a 256 -c SHA256SUMS
+tar -xzf ao2-0.5.0-beta.1-<platform>.tar.gz
+./verify-release.sh
+./install.sh
+ao2 version --json
+ao2 doctor --json
+```
+
+On Windows, run `Verify-Release.ps1` and `install.ps1` from the extracted
+archive. See the [install and update guide](docs/INSTALL.md#install-the-v050-beta1-external-beta)
+for upgrade, rollback, and uninstall commands.
+
 Run the Phase 1 promotion wrapper after starting a local ao2-control-plane
 instance and placing the control-plane bearer token in an environment variable:
 
