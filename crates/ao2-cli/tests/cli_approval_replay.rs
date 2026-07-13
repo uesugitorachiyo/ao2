@@ -22989,7 +22989,23 @@ fn cli_version_json_reports_build_and_release_identity() {
         format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH)
     );
     assert_eq!(json["release_manifest_schema"], "ao2.release-manifest.v1");
-    assert!(json["git_commit"].as_str().unwrap().len() >= 7);
+    let git_commit = json["git_commit"].as_str().unwrap();
+    assert_eq!(git_commit.len(), 40);
+    assert!(git_commit
+        .chars()
+        .all(|character| character.is_ascii_hexdigit()));
+    assert_ne!(json["build_profile"], "unknown");
+
+    let outside_git = tempfile::tempdir().unwrap();
+    let relocated = Command::new(env!("CARGO_BIN_EXE_ao2"))
+        .args(["version", "--json"])
+        .current_dir(outside_git.path())
+        .output()
+        .unwrap();
+    assert!(relocated.status.success(), "{}", stderr(&relocated));
+    let relocated_json: serde_json::Value = serde_json::from_slice(&relocated.stdout).unwrap();
+    assert_eq!(relocated_json["git_commit"], json["git_commit"]);
+    assert_eq!(relocated_json["build_profile"], json["build_profile"]);
 }
 
 #[test]

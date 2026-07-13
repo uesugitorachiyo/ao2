@@ -242,6 +242,37 @@ Use `--install-dir` for non-default installs:
 ao2 install rollback --install-dir /path/to/bin
 ```
 
+## Uninstall
+
+Remove the active binary, rollback copy, and install-verification sidecar from
+the same directory used during installation. For the default Unix location:
+
+```sh
+rm -f "$HOME/.local/bin/ao2" \
+  "$HOME/.local/bin/ao2.rollback" \
+  "$HOME/.local/bin/ao2.install-verification.json"
+```
+
+For the default Windows PowerShell location:
+
+```powershell
+$Ao2Bin = Join-Path $env:LOCALAPPDATA "AO2\bin"
+$Ao2Files = @(
+  (Join-Path $Ao2Bin "ao2.exe")
+  (Join-Path $Ao2Bin "ao2.exe.rollback")
+  (Join-Path $Ao2Bin "ao2.exe.install-verification.json")
+)
+Remove-Item -Force -ErrorAction SilentlyContinue -LiteralPath $Ao2Files
+if ((Test-Path $Ao2Bin) -and -not (Get-ChildItem -Force $Ao2Bin)) {
+  Remove-Item $Ao2Bin
+}
+```
+
+When `AO2_INSTALL_DIR` was set during installation, apply the same removals in
+that directory. Uninstall does not remove per-repository `.ao2/` run evidence,
+configuration, or downloaded release assets. Remove retained state separately
+only after reviewing it.
+
 ## Evidence Cockpit
 
 Generate and open a local evidence cockpit for a completed run:

@@ -34,8 +34,7 @@ use ao2_runtime::{
 use chrono::{SecondsFormat, Utc};
 use clap::{Args, Parser, Subcommand};
 use flate2::read::GzDecoder;
-use flate2::write::GzEncoder;
-use flate2::Compression;
+use flate2::{Compression, GzBuilder};
 use rsa::pkcs1::DecodeRsaPrivateKey;
 use rsa::pkcs1v15::{Signature as RsaPkcs1v15Signature, SigningKey, VerifyingKey};
 use rsa::pkcs8::{
@@ -50891,7 +50890,7 @@ fn control_plane_bundle(
             "producer": {
                 "package": env!("CARGO_PKG_NAME"),
                 "version": env!("CARGO_PKG_VERSION"),
-                "git_commit": option_env!("AO2_GIT_COMMIT").unwrap_or("unknown"),
+                "git_commit": runtime_git_commit(),
                 "target": runtime_target_label()
             },
             "source_fleet_path": fleet,
@@ -51090,7 +51089,7 @@ fn write_workbench_support_metadata(
         "producer": {
             "package": env!("CARGO_PKG_NAME"),
             "version": env!("CARGO_PKG_VERSION"),
-            "git_commit": option_env!("AO2_GIT_COMMIT").unwrap_or("unknown"),
+            "git_commit": runtime_git_commit(),
             "target": runtime_target_label()
         },
         "target": target,
@@ -63631,7 +63630,7 @@ fn version(json: bool) -> Result<()> {
             "version": env!("CARGO_PKG_VERSION"),
             "target": target,
             "git_commit": git_commit,
-            "build_profile": option_env!("PROFILE").unwrap_or("unknown"),
+            "build_profile": option_env!("AO2_BUILD_PROFILE").unwrap_or("unknown"),
             "release_manifest_schema": "ao2.release-manifest.v1",
             "release_provenance_schema": "ao2.release-provenance.v1"
         });
@@ -63645,18 +63644,9 @@ fn version(json: bool) -> Result<()> {
 }
 
 fn runtime_git_commit() -> String {
-    if let Some(commit) = option_env!("AO2_GIT_COMMIT") {
-        return commit.to_string();
-    }
-    ProcessCommand::new("git")
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .ok()
-        .filter(|output| output.status.success())
-        .and_then(|output| String::from_utf8(output.stdout).ok())
-        .map(|commit| commit.trim().to_string())
-        .filter(|commit| !commit.is_empty())
-        .unwrap_or_else(|| "unknown".to_string())
+    option_env!("AO2_GIT_COMMIT")
+        .unwrap_or("unknown")
+        .to_string()
 }
 
 fn install(command: InstallCommand) -> Result<()> {
@@ -64341,9 +64331,87 @@ fn read_url(url: &str) -> Result<String> {
 }
 
 fn compare_versions(left: &str, right: &str) -> std::cmp::Ordering {
-    let left = parse_version_tuple(left);
-    let right = parse_version_tuple(right);
-    left.cmp(&right)
+    match (parse_semver(left), parse_semver(right)) {
+        (Some(left), Some(right)) => left.cmp(&right),
+        _ => parse_version_tuple(left).cmp(&parse_version_tuple(right)),
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ParsedSemver {
+    core: (u64, u64, u64),
+    prerelease: Option<Vec<SemverIdentifier>>,
+}
+
+impl Ord for ParsedSemver {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.core
+            .cmp(&other.core)
+            .then_with(|| match (&self.prerelease, &other.prerelease) {
+                (None, None) => std::cmp::Ordering::Equal,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (Some(left), Some(right)) => left.cmp(right),
+            })
+    }
+}
+
+impl PartialOrd for ParsedSemver {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum SemverIdentifier {
+    Numeric(u64),
+    Text(String),
+}
+
+impl Ord for SemverIdentifier {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        match (self, other) {
+            (Self::Numeric(left), Self::Numeric(right)) => left.cmp(right),
+            (Self::Numeric(_), Self::Text(_)) => std::cmp::Ordering::Less,
+            (Self::Text(_), Self::Numeric(_)) => std::cmp::Ordering::Greater,
+            (Self::Text(left), Self::Text(right)) => left.cmp(right),
+        }
+    }
+}
+
+impl PartialOrd for SemverIdentifier {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+fn parse_semver(version: &str) -> Option<ParsedSemver> {
+    let without_build = version.trim_start_matches('v').split('+').next()?;
+    let (core, prerelease) = without_build
+        .split_once('-')
+        .map_or((without_build, None), |(core, prerelease)| {
+            (core, Some(prerelease))
+        });
+    let mut core_parts = core.split('.');
+    let core = (
+        core_parts.next()?.parse().ok()?,
+        core_parts.next()?.parse().ok()?,
+        core_parts.next()?.parse().ok()?,
+    );
+    if core_parts.next().is_some() {
+        return None;
+    }
+    let prerelease = prerelease.map(|value| {
+        value
+            .split('.')
+            .map(|part| {
+                part.parse::<u64>()
+                    .map(SemverIdentifier::Numeric)
+                    .unwrap_or_else(|_| SemverIdentifier::Text(part.to_string()))
+            })
+            .collect()
+    });
+    Some(ParsedSemver { core, prerelease })
 }
 
 fn parse_version_tuple(version: &str) -> Vec<u64> {
@@ -64352,6 +64420,30 @@ fn parse_version_tuple(version: &str) -> Vec<u64> {
         .filter(|part| !part.is_empty())
         .map(|part| part.parse::<u64>().unwrap_or(0))
         .collect()
+}
+
+#[cfg(test)]
+mod version_ordering_tests {
+    use super::compare_versions;
+    use std::cmp::Ordering;
+
+    #[test]
+    fn semver_prerelease_orders_before_stable() {
+        assert_eq!(compare_versions("0.5.0-beta.1", "0.5.0"), Ordering::Less);
+    }
+
+    #[test]
+    fn semver_prerelease_sequence_orders_numerically() {
+        assert_eq!(
+            compare_versions("0.5.0-beta.1", "0.5.0-beta.2"),
+            Ordering::Less
+        );
+    }
+
+    #[test]
+    fn semver_release_orders_by_core_version() {
+        assert_eq!(compare_versions("0.5.0", "0.4.81"), Ordering::Greater);
+    }
 }
 
 fn default_install_dir() -> PathBuf {
@@ -65682,7 +65774,7 @@ fn sign_release_comparison_metadata(
         "producer": {
             "package": env!("CARGO_PKG_NAME"),
             "version": env!("CARGO_PKG_VERSION"),
-            "git_commit": option_env!("AO2_GIT_COMMIT").unwrap_or("unknown"),
+            "git_commit": runtime_git_commit(),
             "target": runtime_target_label()
         },
         "release_comparison_path": comparison_path,
@@ -69183,6 +69275,19 @@ fn package_release(
         anyhow::bail!("release binary is not a file: {}", source_binary.display());
     }
     let target = target_label.unwrap_or_else(runtime_target_label);
+    let packaged_git_commit =
+        std::env::var("AO2_PACKAGED_GIT_COMMIT").unwrap_or_else(|_| runtime_git_commit());
+    let packaged_build_profile = std::env::var("AO2_PACKAGED_BUILD_PROFILE").unwrap_or_else(|_| {
+        option_env!("AO2_BUILD_PROFILE")
+            .unwrap_or("unknown")
+            .to_string()
+    });
+    if packaged_build_profile == "release" && version != env!("CARGO_PKG_VERSION") {
+        anyhow::bail!(
+            "requested release version {version} does not match compiled binary {}",
+            env!("CARGO_PKG_VERSION")
+        );
+    }
     let binary_name = binary_name_for_target(&target);
     let package_name = format!("ao2-{version}-{target}");
     let stage_dir = out_dir.join(format!(".{package_name}.stage"));
@@ -69208,11 +69313,50 @@ fn package_release(
         .context("copy NOTICE into release stage")?;
     fs::write(stage_dir.join("VERSION"), format!("{version}\n"))?;
     fs::write(
+        stage_dir.join("BUILD-PROVENANCE.json"),
+        serde_json::to_string_pretty(&serde_json::json!({
+            "schema_version": "ao2.build-provenance.v1",
+            "package": "ao2",
+            "version": env!("CARGO_PKG_VERSION"),
+            "git_commit": packaged_git_commit,
+            "build_profile": packaged_build_profile,
+            "target": target
+        }))?,
+    )?;
+    fs::write(
+        stage_dir.join("SBOM.cdx.json"),
+        include_str!(concat!(env!("OUT_DIR"), "/ao2.cdx.json")),
+    )?;
+    fs::write(
+        stage_dir.join("UNINSTALL.txt"),
+        "AO2 uninstall\n\nRemove the installed ao2 binary, its rollback copy, and its install-verification sidecar from the install directory.\n\nUnix default:\n  rm -f \"$HOME/.local/bin/ao2\" \"$HOME/.local/bin/ao2.rollback\" \"$HOME/.local/bin/ao2.install-verification.json\"\n\nWindows PowerShell default:\n  Remove-Item -Force -ErrorAction SilentlyContinue \"$env:LOCALAPPDATA\\AO2\\bin\\ao2.exe\", \"$env:LOCALAPPDATA\\AO2\\bin\\ao2.exe.rollback\", \"$env:LOCALAPPDATA\\AO2\\bin\\ao2.exe.install-verification.json\"\n\nUse the same custom AO2_INSTALL_DIR supplied during installation when applicable. Runtime state is not removed automatically.\n",
+    )?;
+    fs::write(
         stage_dir.join("README.txt"),
         format!(
-            "AO2 {version}\n\nVerify this archive offline before installing:\n  sh verify-release.sh\n\nAdd this package's bin directory to PATH, then run:\n  ao2 --help\n"
+            "AO2 {version}\n\nVerify this archive offline before installing:\n  sh verify-release.sh\n\nAdd this package's bin directory to PATH, then run:\n  ao2 --help\n\nUninstall instructions:\n  See UNINSTALL.txt\n"
         ),
     )?;
+
+    let checksum_paths = vec![
+        format!("bin/{binary_name}"),
+        "BUILD-PROVENANCE.json".to_string(),
+        "LICENSE".to_string(),
+        "NOTICE".to_string(),
+        "README.txt".to_string(),
+        "RELEASE-MANIFEST.json".to_string(),
+        "RELEASE-VERIFICATION.json".to_string(),
+        "SBOM.cdx.json".to_string(),
+        "UNINSTALL.txt".to_string(),
+        "VERSION".to_string(),
+        "Verify-Release.ps1".to_string(),
+        "install.ps1".to_string(),
+        "install.sh".to_string(),
+        "verify-release.sh".to_string(),
+    ];
+    let mut archive_files = checksum_paths.clone();
+    archive_files.push("SHA256SUMS".to_string());
+    archive_files.sort();
 
     let manifest = serde_json::json!({
         "schema_version": "ao2.release-manifest.v1",
@@ -69225,27 +69369,18 @@ fn package_release(
         "installers": ["install.sh", "install.ps1"],
         "verifiers": ["verify-release.sh", "Verify-Release.ps1"],
         "verification_report": "RELEASE-VERIFICATION.json",
+        "build_provenance": "BUILD-PROVENANCE.json",
+        "sbom": "SBOM.cdx.json",
+        "uninstall": "UNINSTALL.txt",
         "checksum_file": "SHA256SUMS",
-        "legal_files": ["LICENSE", "NOTICE"]
+        "legal_files": ["LICENSE", "NOTICE"],
+        "files": archive_files
     });
     fs::write(
         stage_dir.join("RELEASE-MANIFEST.json"),
         serde_json::to_string_pretty(&manifest)?,
     )?;
 
-    let checksum_paths = vec![
-        format!("bin/{binary_name}"),
-        "RELEASE-MANIFEST.json".to_string(),
-        "RELEASE-VERIFICATION.json".to_string(),
-        "install.sh".to_string(),
-        "install.ps1".to_string(),
-        "verify-release.sh".to_string(),
-        "Verify-Release.ps1".to_string(),
-        "README.txt".to_string(),
-        "LICENSE".to_string(),
-        "NOTICE".to_string(),
-        "VERSION".to_string(),
-    ];
     let verification_report = serde_json::json!({
         "schema_version": "ao2.release-archive-offline-verification.v1",
         "status": "packaged",
@@ -69269,19 +69404,7 @@ fn package_release(
     )?;
 
     let mut checksum_text = String::new();
-    for relative_path in [
-        format!("bin/{binary_name}"),
-        "RELEASE-MANIFEST.json".to_string(),
-        "RELEASE-VERIFICATION.json".to_string(),
-        "install.sh".to_string(),
-        "install.ps1".to_string(),
-        "verify-release.sh".to_string(),
-        "Verify-Release.ps1".to_string(),
-        "README.txt".to_string(),
-        "LICENSE".to_string(),
-        "NOTICE".to_string(),
-        "VERSION".to_string(),
-    ] {
+    for relative_path in checksum_paths {
         let digest = sha256_file(&stage_dir.join(&relative_path))?;
         checksum_text.push_str(&format!("{digest}  {relative_path}\n"));
     }
@@ -69712,13 +69835,76 @@ fn binary_name_for_target(target: &str) -> &'static str {
 fn create_tar_gz(stage_dir: &Path, archive_path: &Path) -> Result<()> {
     let archive = fs::File::create(archive_path)
         .with_context(|| format!("create {}", archive_path.display()))?;
-    let encoder = GzEncoder::new(archive, Compression::default());
+    let encoder = GzBuilder::new()
+        .mtime(0)
+        .write(archive, Compression::default());
     let mut tar = Builder::new(encoder);
-    tar.append_dir_all(".", stage_dir)
-        .with_context(|| format!("archive {}", stage_dir.display()))?;
+    for relative_path in sorted_regular_files(stage_dir)? {
+        let source = stage_dir.join(&relative_path);
+        let mut file = fs::File::open(&source)
+            .with_context(|| format!("open archive input {}", source.display()))?;
+        let metadata = file
+            .metadata()
+            .with_context(|| format!("stat archive input {}", source.display()))?;
+        let mut header = tar::Header::new_gnu();
+        header.set_size(metadata.len());
+        header.set_mode(deterministic_archive_mode(&source, &metadata));
+        header.set_uid(0);
+        header.set_gid(0);
+        header.set_mtime(0);
+        header.set_username("")?;
+        header.set_groupname("")?;
+        header.set_cksum();
+        tar.append_data(&mut header, &relative_path, &mut file)
+            .with_context(|| format!("archive {}", source.display()))?;
+    }
     let encoder = tar.into_inner()?;
     encoder.finish()?;
     Ok(())
+}
+
+fn sorted_regular_files(root: &Path) -> Result<Vec<PathBuf>> {
+    fn collect(root: &Path, current: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
+        let mut entries = fs::read_dir(current)
+            .with_context(|| format!("read archive directory {}", current.display()))?
+            .collect::<std::io::Result<Vec<_>>>()?;
+        entries.sort_by_key(|entry| entry.file_name());
+        for entry in entries {
+            let path = entry.path();
+            let file_type = entry.file_type()?;
+            if file_type.is_dir() {
+                collect(root, &path, files)?;
+            } else if file_type.is_file() {
+                files.push(path.strip_prefix(root)?.to_path_buf());
+            } else {
+                anyhow::bail!("unsupported archive entry: {}", path.display());
+            }
+        }
+        Ok(())
+    }
+
+    let mut files = Vec::new();
+    collect(root, root, &mut files)?;
+    files.sort();
+    Ok(files)
+}
+
+fn deterministic_archive_mode(path: &Path, metadata: &fs::Metadata) -> u32 {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        if metadata.permissions().mode() & 0o111 != 0 {
+            return 0o755;
+        }
+    }
+    if matches!(
+        path.extension().and_then(|value| value.to_str()),
+        Some("sh")
+    ) {
+        0o755
+    } else {
+        0o644
+    }
 }
 
 fn sha256_file(path: &Path) -> Result<String> {

@@ -4,14 +4,16 @@ set -eu
 IMAGE="${AO2_WINDOWS_RELEASE_IMAGE:-rust:1.95-bookworm}"
 VERSION="$(cargo pkgid -p ao2-cli | sed -e 's/.*#//' -e 's/.*@//')"
 CROSS_BINARY="${AO2_WINDOWS_X86_64_BINARY:-target/release-cross/x86_64-pc-windows-gnu/ao2.exe}"
+BUILD_COMMIT="${AO2_BUILD_GIT_COMMIT:-$(git rev-parse HEAD)}"
 
 if [ ! -x target/release/ao2 ]; then
-  cargo build --release -p ao2-cli
+  AO2_BUILD_GIT_COMMIT="$BUILD_COMMIT" cargo build --release -p ao2-cli
 fi
 
 docker run --rm \
   -v "$PWD":/workspace \
   -w /workspace \
+  -e AO2_BUILD_GIT_COMMIT="$BUILD_COMMIT" \
   "$IMAGE" \
   sh -lc '
     set -eu
@@ -27,6 +29,7 @@ docker run --rm \
     cp /tmp/ao2-target/x86_64-pc-windows-gnu/release/ao2.exe "'"$CROSS_BINARY"'"
   '
 
+AO2_PACKAGED_GIT_COMMIT="$BUILD_COMMIT" AO2_PACKAGED_BUILD_PROFILE=release \
 target/release/ao2 release package \
   --out-dir dist-windows \
   --binary "$CROSS_BINARY" \

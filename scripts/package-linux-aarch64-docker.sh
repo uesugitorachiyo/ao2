@@ -6,15 +6,17 @@ BUILD_PLATFORM="${AO2_LINUX_AARCH64_BUILD_DOCKER_PLATFORM:-linux/amd64}"
 RUN_PLATFORM="${AO2_LINUX_AARCH64_RUN_DOCKER_PLATFORM:-linux/arm64}"
 VERSION="$(cargo pkgid -p ao2-cli | sed -e 's/.*#//' -e 's/.*@//')"
 CROSS_BINARY="${AO2_LINUX_AARCH64_BINARY:-target/release-cross/aarch64-unknown-linux-gnu/ao2}"
+BUILD_COMMIT="${AO2_BUILD_GIT_COMMIT:-$(git rev-parse HEAD)}"
 
 if [ ! -x target/release/ao2 ]; then
-  cargo build --release -p ao2-cli
+  AO2_BUILD_GIT_COMMIT="$BUILD_COMMIT" cargo build --release -p ao2-cli
 fi
 
 docker run --rm \
   --platform "$BUILD_PLATFORM" \
   -v "$PWD":/workspace \
   -w /workspace \
+  -e AO2_BUILD_GIT_COMMIT="$BUILD_COMMIT" \
   "$IMAGE" \
   sh -lc '
     set -eu
@@ -35,6 +37,7 @@ docker run --rm \
     cp /tmp/ao2-target/aarch64-unknown-linux-gnu/release/ao2 "'"$CROSS_BINARY"'"
   '
 
+AO2_PACKAGED_GIT_COMMIT="$BUILD_COMMIT" AO2_PACKAGED_BUILD_PROFILE=release \
 target/release/ao2 release package \
   --out-dir dist-linux \
   --binary "$CROSS_BINARY" \
