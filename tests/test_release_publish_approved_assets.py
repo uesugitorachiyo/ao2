@@ -348,9 +348,26 @@ case "$1" in
     esac
     ;;
   ls-remote)
+    count_file="$AO2_TEST_FAKE_STATE/tag-lookup-count"
+    count=0
+    [ ! -f "$count_file" ] || count=$(cat "$count_file")
+    count=$((count + 1))
+    printf '%s\n' "$count" > "$count_file"
     [ "${FAKE_GIT_TAG_LOOKUP_ERROR:-0}" = "0" ] || exit 128
+    [ "${FAKE_GIT_TAG_LOOKUP_ERROR_ON_CALL:-0}" != "$count" ] || exit 128
     [ "${FAKE_GIT_TAG_EXISTS:-0}" = "1" ] && echo "tag-object refs/tags/v0.5.0-beta.1" && exit 0
     exit 2
+    ;;
+  show)
+    case "$2" in
+      *:scripts/release-verify-approved-assets.py)
+        cat "$AO2_TEST_REPO_ROOT/scripts/release-verify-approved-assets.py"
+        ;;
+      *:scripts/release-publication-contract.sh)
+        cat "$AO2_TEST_REPO_ROOT/scripts/release-publication-contract.sh"
+        ;;
+      *) exit 98 ;;
+    esac
     ;;
   tag)
     printf 'MUTATION git-tag %s\n' "$*" >> "$AO2_TEST_COMMAND_LOG"
@@ -373,8 +390,17 @@ case "$1 $2" in
     exit 1
     ;;
   'api --include')
+    count_file="$AO2_TEST_FAKE_STATE/release-lookup-count"
+    count=0
+    [ ! -f "$count_file" ] || count=$(cat "$count_file")
+    count=$((count + 1))
+    printf '%s\n' "$count" > "$count_file"
     [ "${FAKE_GH_RELEASE_LOOKUP_ERROR:-0}" = "0" ] || {
-      printf 'network unavailable\n' >&2
+      printf '%s\n' "${FAKE_GH_RELEASE_LOOKUP_ERROR_TEXT:-network unavailable}" >&2
+      exit 92
+    }
+    [ "${FAKE_GH_RELEASE_LOOKUP_ERROR_ON_CALL:-0}" != "$count" ] || {
+      printf '%s\n' "${FAKE_GH_RELEASE_LOOKUP_ERROR_TEXT:-network unavailable}" >&2
       exit 92
     }
     if [ "${FAKE_GH_RELEASE_EXISTS:-0}" = "1" ]; then
@@ -385,7 +411,13 @@ case "$1 $2" in
     exit 1
     ;;
   'api repos/uesugitorachiyo/ao2/releases/latest')
+    count_file="$AO2_TEST_FAKE_STATE/latest-count"
+    count=0
+    [ ! -f "$count_file" ] || count=$(cat "$count_file")
+    count=$((count + 1))
+    printf '%s\n' "$count" > "$count_file"
     [ "${FAKE_GH_LATEST_ERROR:-0}" = "0" ] || exit 93
+    [ "${FAKE_GH_LATEST_ERROR_ON_CALL:-0}" != "$count" ] || exit 93
     if [ -f "$AO2_TEST_FAKE_STATE/release-created" ]; then
       printf '%s\n' "${FAKE_GH_LATEST_AFTER_CREATE:-v0.4.81}"
     else
@@ -409,6 +441,7 @@ esac
         f"""#!{sys.executable}
 import os
 from pathlib import Path
+import subprocess
 import sys
 
 args = sys.argv[1:]
@@ -417,11 +450,23 @@ if args and args[0].endswith("release-verify-approved-assets.py"):
     count_file = state / "verifier-count"
     count = int(count_file.read_text()) + 1 if count_file.exists() else 1
     count_file.write_text(str(count))
-    if count == int(os.environ.get("FAKE_VERIFIER_FAIL_ON_CALL", "0")):
+    should_fail = count == int(os.environ.get("FAKE_VERIFIER_FAIL_ON_CALL", "0"))
+    if should_fail:
         publication = Path(args[args.index("--publication-dir") + 1])
         target = publication / "ao2-0.5.0-beta.1-linux-aarch64.tar.gz"
         target.chmod(0o600)
         target.write_bytes(target.read_bytes() + b"stage drift")
+    result = subprocess.run([{sys.executable!r}, *args])
+    if (
+        result.returncode == 0
+        and count == int(os.environ.get("FAKE_MUTATE_SOURCE_AFTER_VERIFIER_CALL", "0"))
+    ):
+        source_publication = Path(os.environ["AO2_TEST_SOURCE_PUBLICATION"])
+        source_asset = source_publication / "ao2-0.5.0-beta.1-linux-aarch64.tar.gz"
+        source_asset.write_bytes(source_asset.read_bytes() + b"source drift after snapshot")
+        Path(os.environ["AO2_TEST_SOURCE_NOTES"]).write_text("changed original notes\\n")
+        Path(os.environ["AO2_TEST_SOURCE_LIST"]).write_text("changed-original-list\\n")
+    raise SystemExit(result.returncode)
 os.execv({sys.executable!r}, [{sys.executable!r}, *args])
 """,
     )
@@ -433,6 +478,10 @@ os.execv({sys.executable!r}, [{sys.executable!r}, *args])
                 "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
                 "AO2_TEST_COMMAND_LOG": str(command_log),
                 "AO2_TEST_FAKE_STATE": str(fake_state),
+                "AO2_TEST_REPO_ROOT": str(Path(__file__).resolve().parents[1]),
+                "AO2_TEST_SOURCE_PUBLICATION": metadata["publication"],
+                "AO2_TEST_SOURCE_NOTES": metadata["notes"],
+                "AO2_TEST_SOURCE_LIST": metadata["publication_list"],
                 "AO2_VERSION": VERSION,
                 "AO2_RELEASE_REPO": "uesugitorachiyo/ao2",
                 "AO2_RELEASE_TAG": TAG,
@@ -688,6 +737,84 @@ def test_post_publication_latest_stable_drift_is_reported(
     assert "latest stable release mismatch" in result.stderr
     log = Path(promotion_case["command_log"]).read_text()
     assert "MUTATION gh-release-create" in log
+
+
+def test_publisher_executes_helpers_from_the_bound_commit(
+    promotion_case: dict[str, object],
+) -> None:
+    result = run_publisher(promotion_case)
+    assert result.returncode == 0, result.stderr
+    log = Path(promotion_case["command_log"]).read_text()
+    assert "git show implementation-head:scripts/release-verify-approved-assets.py" in log
+    assert "git show implementation-head:scripts/release-publication-contract.sh" in log
+    assert_no_mutation(promotion_case)
+
+
+def test_original_inputs_can_drift_after_snapshot_without_changing_published_bytes(
+    promotion_case: dict[str, object],
+) -> None:
+    result = run_publisher(
+        promotion_case,
+        env_changes={
+            "AO2_RELEASE_PUBLISH_APPROVED_MODE": "live",
+            "FAKE_MUTATE_SOURCE_AFTER_VERIFIER_CALL": "2",
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    assert Path(promotion_case["notes"]).read_text() == "changed original notes\n"
+    assert Path(promotion_case["publication_list"]).read_text() == "changed-original-list\n"
+    log = Path(promotion_case["command_log"]).read_text()
+    assert "MUTATION gh-release-create" in log
+    assert str(promotion_case["publication"]) not in next(
+        line for line in log.splitlines() if line.startswith("MUTATION gh-release-create")
+    )
+
+
+@pytest.mark.parametrize(
+    ("change", "expected_error", "expect_tag_push"),
+    [
+        ({"FAKE_GIT_TAG_LOOKUP_ERROR_ON_CALL": "2"}, "remote tag lookup failed", False),
+        ({"FAKE_GH_RELEASE_LOOKUP_ERROR_ON_CALL": "2"}, "GitHub release lookup failed", False),
+        ({"FAKE_GH_LATEST_ERROR_ON_CALL": "2"}, "latest stable release lookup failed", False),
+        ({"FAKE_GH_RELEASE_LOOKUP_ERROR_ON_CALL": "3"}, "GitHub release lookup failed", True),
+        ({"FAKE_GH_LATEST_ERROR_ON_CALL": "3"}, "latest stable release lookup failed", True),
+        ({"FAKE_GIT_STATUS_ERROR_ON_CALL": "4"}, "git status failed", True),
+        ({"FAKE_GIT_HEAD_MOVES_ON_CALL": "4"}, "publisher implementation HEAD changed", True),
+        ({"FAKE_GIT_STATUS_ERROR_ON_CALL": "5"}, "git status failed", True),
+        ({"FAKE_VERIFIER_FAIL_ON_CALL": "4"}, "approved asset hash mismatch", True),
+    ],
+)
+def test_stage_specific_failure_never_reaches_next_mutation(
+    promotion_case: dict[str, object],
+    change: dict[str, str],
+    expected_error: str,
+    expect_tag_push: bool,
+) -> None:
+    result = run_publisher(
+        promotion_case,
+        env_changes={**change, "AO2_RELEASE_PUBLISH_APPROVED_MODE": "live"},
+    )
+    assert result.returncode != 0
+    assert expected_error in result.stderr
+    log = Path(promotion_case["command_log"]).read_text()
+    assert ("MUTATION git-push" in log) is expect_tag_push
+    assert "MUTATION gh-release-create" not in log
+
+
+def test_non_http_error_text_containing_404_does_not_fail_open(
+    promotion_case: dict[str, object],
+) -> None:
+    result = run_publisher(
+        promotion_case,
+        env_changes={
+            "AO2_RELEASE_PUBLISH_APPROVED_MODE": "live",
+            "FAKE_GH_RELEASE_LOOKUP_ERROR_ON_CALL": "1",
+            "FAKE_GH_RELEASE_LOOKUP_ERROR_TEXT": "proxy failed with 404 from an unrelated upstream",
+        },
+    )
+    assert result.returncode != 0
+    assert "GitHub release lookup failed" in result.stderr
+    assert_no_mutation(promotion_case)
 
 
 def test_publisher_contains_no_build_sign_package_provider_or_overwrite_path() -> None:

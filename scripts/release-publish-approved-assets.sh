@@ -88,7 +88,7 @@ verify_tag_absent() {
 }
 
 verify_release_absent() {
-  local lookup_output lookup_status
+  local lookup_output lookup_status status_line
   set +e
   lookup_output="$(gh api --include "repos/$AO2_RELEASE_REPO/releases/tags/$AO2_RELEASE_TAG" 2>&1)"
   lookup_status=$?
@@ -96,8 +96,9 @@ verify_release_absent() {
   case "$lookup_status" in
     0) fail "refusing to overwrite existing release: $AO2_RELEASE_TAG" ;;
     1)
-      case "$lookup_output" in
-        *' 404 '*) ;;
+      status_line="${lookup_output%%$'\n'*}"
+      case "$status_line" in
+        HTTP/*' 404 '*) ;;
         *) fail "GitHub release lookup failed: $AO2_RELEASE_TAG" ;;
       esac
       ;;
@@ -204,12 +205,32 @@ esac
 publisher_bound_head=""
 publisher_bound_origin_main=""
 verify_publisher_repository_state
+
+snapshot_root="$(mktemp -d "${TMPDIR:-/tmp}/ao2-approved-promotion.XXXXXX")"
+cleanup_snapshot() {
+  chmod -R u+w "$snapshot_root" 2>/dev/null || true
+  rm -rf "$snapshot_root"
+}
+trap cleanup_snapshot EXIT
+
+snapshot_helpers="$snapshot_root/helpers"
+mkdir "$snapshot_helpers"
+if ! git show "$publisher_bound_head:scripts/release-verify-approved-assets.py" \
+  > "$snapshot_helpers/release-verify-approved-assets.py"; then
+  fail "cannot bind approved asset verifier to publisher implementation commit"
+fi
+if ! git show "$publisher_bound_head:scripts/release-publication-contract.sh" \
+  > "$snapshot_helpers/release-publication-contract.sh"; then
+  fail "cannot bind publication contract to publisher implementation commit"
+fi
+chmod 500 "$snapshot_helpers/release-publication-contract.sh"
+
 verify_tag_absent
 verify_release_absent
 verify_latest_stable
 
 verify_approved_assets() {
-  python3 "$ROOT/scripts/release-verify-approved-assets.py" \
+  python3 "$snapshot_helpers/release-verify-approved-assets.py" \
     --manifest "$AO2_RELEASE_EXPECTED_ASSET_MANIFEST" \
     --manifest-sha256 "$AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256" \
     --publication-dir "$AO2_RELEASE_PUBLICATION_DIR" \
@@ -222,12 +243,6 @@ source_publication_dir="$AO2_RELEASE_PUBLICATION_DIR"
 source_publication_list="$AO2_RELEASE_PUBLICATION_LIST"
 source_manifest="$AO2_RELEASE_EXPECTED_ASSET_MANIFEST"
 source_notes="$AO2_RELEASE_NOTES_FILE"
-snapshot_root="$(mktemp -d "${TMPDIR:-/tmp}/ao2-approved-promotion.XXXXXX")"
-cleanup_snapshot() {
-  chmod -R u+w "$snapshot_root" 2>/dev/null || true
-  rm -rf "$snapshot_root"
-}
-trap cleanup_snapshot EXIT
 
 snapshot_publication="$snapshot_root/publication"
 mkdir "$snapshot_publication"
@@ -257,7 +272,7 @@ AO2_RELEASE_CHANNEL="$AO2_RELEASE_CHANNEL" \
 AO2_RELEASE_TITLE="$AO2_RELEASE_TITLE" \
 AO2_RELEASE_NOTES_FILE="$AO2_RELEASE_NOTES_FILE" \
 AO2_RELEASE_PUBLICATION_DIR="$AO2_RELEASE_PUBLICATION_DIR" \
-  "$ROOT/scripts/release-publication-contract.sh" --promote-approved-assets
+  bash "$snapshot_helpers/release-publication-contract.sh" --promote-approved-assets
 
 public_key="$AO2_RELEASE_PUBLICATION_DIR/ao2-release-signing-public.pem"
 for target in macos-aarch64 linux-aarch64 linux-x86_64 windows-x86_64; do
@@ -502,12 +517,13 @@ PY
 
 chmod -R a-w "$snapshot_root"
 
-verify_publisher_repository_state
 verify_tag_absent
 verify_release_absent
 verify_latest_stable
 verify_release_notes
+verify_publisher_repository_state
 verify_approved_assets
+verify_publisher_repository_state
 
 if [ "$AO2_RELEASE_PUBLISH_APPROVED_MODE" = "dry-run" ]; then
   printf 'release_approval_bound=true\n'
@@ -523,8 +539,8 @@ git push origin "$AO2_RELEASE_TAG"
 
 verify_release_absent
 verify_latest_stable
-verify_publisher_repository_state
 verify_release_notes
+verify_publisher_repository_state
 verify_approved_assets
 
 assets=()
@@ -533,6 +549,7 @@ while IFS= read -r asset; do
   assets+=("$AO2_RELEASE_PUBLICATION_DIR/$asset")
 done < "$AO2_RELEASE_PUBLICATION_LIST"
 [ "${#assets[@]}" -eq 23 ] || fail "approved publication list must contain exactly 23 assets"
+verify_publisher_repository_state
 
 release_url="$(gh release create "$AO2_RELEASE_TAG" "${assets[@]}" \
   --repo "$AO2_RELEASE_REPO" \
