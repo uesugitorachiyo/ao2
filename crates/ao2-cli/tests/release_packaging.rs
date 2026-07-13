@@ -3975,6 +3975,22 @@ fn approved_asset_verifier_rejects_missing_and_extra_assets() {
     assert!(!extra.status.success());
     assert!(String::from_utf8_lossy(&extra.stderr)
         .contains("staged publication set has extra asset: unapproved.bin"));
+
+    let unlisted_temp = tempfile::tempdir().expect("tempdir");
+    let (unlisted_dir, unlisted_list, unlisted_manifest, unlisted_digest) =
+        approved_asset_fixture(unlisted_temp.path());
+    fs::write(unlisted_dir.join("unlisted.bin"), b"unlisted\n")
+        .expect("write unlisted directory asset");
+    let unlisted = run_approved_asset_verifier(
+        &root,
+        &unlisted_dir,
+        &unlisted_list,
+        &unlisted_manifest,
+        &unlisted_digest,
+    );
+    assert!(!unlisted.status.success());
+    assert!(String::from_utf8_lossy(&unlisted.stderr)
+        .contains("publication directory has unlisted asset: unlisted.bin"));
 }
 
 #[test]

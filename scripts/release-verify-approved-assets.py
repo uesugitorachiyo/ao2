@@ -148,12 +148,32 @@ def verify(args: argparse.Namespace) -> str:
     staged = set(staged_names)
     approved_names = set(approved)
 
+    directory_names: set[str] = set()
+    try:
+        directory_entries = list(os.scandir(publication_dir))
+    except OSError:
+        fail(f"staged publication directory cannot be read: {publication_dir}")
+    for entry in directory_entries:
+        name = entry.name
+        require_basename(name, "staged publication directory")
+        if entry.is_symlink() or not entry.is_file(follow_symlinks=False):
+            if name in staged:
+                fail(
+                    "approved staged asset must be a regular non-symlink file: "
+                    f"{name}"
+                )
+            fail(f"publication directory contains non-regular entry: {name}")
+        directory_names.add(name)
+
     missing = sorted(approved_names - staged)
     if missing:
         fail(f"staged publication set is missing approved asset: {missing[0]}")
     extra = sorted(staged - approved_names)
     if extra:
         fail(f"staged publication set has extra asset: {extra[0]}")
+    unlisted = sorted(directory_names - staged)
+    if unlisted:
+        fail(f"publication directory has unlisted asset: {unlisted[0]}")
     if len(approved) != REQUIRED_ASSET_COUNT:
         fail(
             "approved manifest asset count mismatch: "
