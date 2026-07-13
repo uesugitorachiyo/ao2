@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 import stat
 import subprocess
+import sys
 import tarfile
 
 import pytest
@@ -290,6 +291,8 @@ def promotion_case(tmp_path: Path, approved_fixture: Path) -> dict[str, object]:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
     command_log = tmp_path / "commands.log"
+    fake_state = tmp_path / "fake-state"
+    fake_state.mkdir()
     make_executable(
         fake_bin / "git",
         """#!/bin/sh
@@ -300,6 +303,13 @@ case "$1" in
     [ "${FAKE_GIT_TARGET_MISSING:-0}" = "0" ]
     ;;
   status)
+    count_file="$AO2_TEST_FAKE_STATE/status-count"
+    count=0
+    [ ! -f "$count_file" ] || count=$(cat "$count_file")
+    count=$((count + 1))
+    printf '%s\n' "$count" > "$count_file"
+    [ "${FAKE_GIT_STATUS_ERROR_ON_CALL:-0}" != "$count" ] || exit 91
+    [ "${FAKE_GIT_DIRTY_ON_STATUS_CALL:-0}" != "$count" ] || printf ' M changed-after-verification\n'
     exit 0
     ;;
   remote)
@@ -311,11 +321,34 @@ case "$1" in
         [ "${FAKE_GIT_TAG_EXISTS:-0}" = "1" ] && echo tag-object && exit 0
         exit 1
         ;;
-      *origin/main*) echo implementation-head ;;
-      *) echo implementation-head ;;
+      *origin/main*)
+        count_file="$AO2_TEST_FAKE_STATE/origin-count"
+        count=0
+        [ ! -f "$count_file" ] || count=$(cat "$count_file")
+        count=$((count + 1))
+        printf '%s\n' "$count" > "$count_file"
+        if [ "${FAKE_GIT_ORIGIN_MOVES_ON_CALL:-0}" = "$count" ]; then
+          echo moved-origin-head
+        else
+          echo implementation-head
+        fi
+        ;;
+      *)
+        count_file="$AO2_TEST_FAKE_STATE/head-count"
+        count=0
+        [ ! -f "$count_file" ] || count=$(cat "$count_file")
+        count=$((count + 1))
+        printf '%s\n' "$count" > "$count_file"
+        if [ "${FAKE_GIT_HEAD_MOVES_ON_CALL:-0}" = "$count" ]; then
+          echo moved-publisher-head
+        else
+          echo implementation-head
+        fi
+        ;;
     esac
     ;;
   ls-remote)
+    [ "${FAKE_GIT_TAG_LOOKUP_ERROR:-0}" = "0" ] || exit 128
     [ "${FAKE_GIT_TAG_EXISTS:-0}" = "1" ] && echo "tag-object refs/tags/v0.5.0-beta.1" && exit 0
     exit 2
     ;;
@@ -335,14 +368,33 @@ set -eu
 printf 'gh %s\n' "$*" >> "$AO2_TEST_COMMAND_LOG"
 case "$1 $2" in
   'release view')
+    [ "${FAKE_GH_RELEASE_LOOKUP_ERROR:-0}" = "0" ] || exit 92
     [ "${FAKE_GH_RELEASE_EXISTS:-0}" = "1" ] && exit 0
     exit 1
     ;;
+  'api --include')
+    [ "${FAKE_GH_RELEASE_LOOKUP_ERROR:-0}" = "0" ] || {
+      printf 'network unavailable\n' >&2
+      exit 92
+    }
+    if [ "${FAKE_GH_RELEASE_EXISTS:-0}" = "1" ]; then
+      printf 'HTTP/2.0 200 OK\n\n{}\n'
+      exit 0
+    fi
+    printf 'HTTP/2.0 404 Not Found\n\n{}\n' >&2
+    exit 1
+    ;;
   'api repos/uesugitorachiyo/ao2/releases/latest')
-    printf 'v0.4.81\n'
+    [ "${FAKE_GH_LATEST_ERROR:-0}" = "0" ] || exit 93
+    if [ -f "$AO2_TEST_FAKE_STATE/release-created" ]; then
+      printf '%s\n' "${FAKE_GH_LATEST_AFTER_CREATE:-v0.4.81}"
+    else
+      printf '%s\n' "${FAKE_GH_LATEST_TAG:-v0.4.81}"
+    fi
     ;;
   'release create')
     printf 'MUTATION gh-release-create %s\n' "$*" >> "$AO2_TEST_COMMAND_LOG"
+    : > "$AO2_TEST_FAKE_STATE/release-created"
     printf 'https://example.invalid/release\n'
     ;;
   *)
@@ -352,6 +404,27 @@ case "$1 $2" in
 esac
 """,
     )
+    make_executable(
+        fake_bin / "python3",
+        f"""#!{sys.executable}
+import os
+from pathlib import Path
+import sys
+
+args = sys.argv[1:]
+if args and args[0].endswith("release-verify-approved-assets.py"):
+    state = Path(os.environ["AO2_TEST_FAKE_STATE"])
+    count_file = state / "verifier-count"
+    count = int(count_file.read_text()) + 1 if count_file.exists() else 1
+    count_file.write_text(str(count))
+    if count == int(os.environ.get("FAKE_VERIFIER_FAIL_ON_CALL", "0")):
+        publication = Path(args[args.index("--publication-dir") + 1])
+        target = publication / "ao2-0.5.0-beta.1-linux-aarch64.tar.gz"
+        target.chmod(0o600)
+        target.write_bytes(target.read_bytes() + b"stage drift")
+os.execv({sys.executable!r}, [{sys.executable!r}, *args])
+""",
+    )
     metadata.update(
         {
             "fake_bin": fake_bin,
@@ -359,6 +432,7 @@ esac
             "env": {
                 "PATH": f"{fake_bin}{os.pathsep}{os.environ['PATH']}",
                 "AO2_TEST_COMMAND_LOG": str(command_log),
+                "AO2_TEST_FAKE_STATE": str(fake_state),
                 "AO2_VERSION": VERSION,
                 "AO2_RELEASE_REPO": "uesugitorachiyo/ao2",
                 "AO2_RELEASE_TAG": TAG,
@@ -448,10 +522,12 @@ def test_exact_approved_live_promotion_uses_prerelease_and_exact_assets(
     observed_assets = {
         Path(token).name
         for token in release.split()
-        if token.startswith(str(promotion_case["publication"]))
+        if Path(token).name in set(ASSET_NAMES)
     }
     assert observed_assets == set(ASSET_NAMES)
     assert len(observed_assets) == 23
+    assert str(promotion_case["publication"]) not in release
+    assert f"--notes-file {promotion_case['notes']}" not in release
 
 
 @pytest.mark.parametrize(
@@ -493,6 +569,38 @@ def test_exact_approved_live_promotion_uses_prerelease_and_exact_assets(
         (
             {"FAKE_GIT_REMOTE_URL": "https://github.com/example/not-ao2.git"},
             "origin remote does not match release repository",
+        ),
+        (
+            {"FAKE_GIT_TAG_LOOKUP_ERROR": "1"},
+            "remote tag lookup failed",
+        ),
+        (
+            {"FAKE_GH_RELEASE_LOOKUP_ERROR": "1"},
+            "GitHub release lookup failed",
+        ),
+        (
+            {"FAKE_GH_LATEST_TAG": "v0.4.80"},
+            "latest stable release mismatch",
+        ),
+        (
+            {"FAKE_GH_LATEST_ERROR": "1"},
+            "latest stable release lookup failed",
+        ),
+        (
+            {"FAKE_GIT_STATUS_ERROR_ON_CALL": "1"},
+            "git status failed",
+        ),
+        (
+            {"FAKE_GIT_DIRTY_ON_STATUS_CALL": "2"},
+            "dirty worktree",
+        ),
+        (
+            {"FAKE_GIT_HEAD_MOVES_ON_CALL": "2"},
+            "publisher implementation HEAD changed",
+        ),
+        (
+            {"FAKE_GIT_ORIGIN_MOVES_ON_CALL": "2"},
+            "origin/main changed",
         ),
     ],
 )
@@ -551,6 +659,37 @@ def test_changed_release_notes_file_fails_before_mutation(
     assert_no_mutation(promotion_case)
 
 
+def test_pre_tag_verifier_failure_never_reaches_mutation(
+    promotion_case: dict[str, object],
+) -> None:
+    result = run_publisher(
+        promotion_case,
+        env_changes={
+            "AO2_RELEASE_PUBLISH_APPROVED_MODE": "live",
+            "FAKE_VERIFIER_FAIL_ON_CALL": "3",
+        },
+    )
+    assert result.returncode != 0
+    assert "approved asset hash mismatch" in result.stderr
+    assert_no_mutation(promotion_case)
+
+
+def test_post_publication_latest_stable_drift_is_reported(
+    promotion_case: dict[str, object],
+) -> None:
+    result = run_publisher(
+        promotion_case,
+        env_changes={
+            "AO2_RELEASE_PUBLISH_APPROVED_MODE": "live",
+            "FAKE_GH_LATEST_AFTER_CREATE": TAG,
+        },
+    )
+    assert result.returncode != 0
+    assert "latest stable release mismatch" in result.stderr
+    log = Path(promotion_case["command_log"]).read_text()
+    assert "MUTATION gh-release-create" in log
+
+
 def test_publisher_contains_no_build_sign_package_provider_or_overwrite_path() -> None:
     root = Path(__file__).resolve().parents[1]
     script = (root / "scripts/release-publish-approved-assets.sh").read_text().lower()
@@ -583,3 +722,44 @@ def test_existing_publication_contract_keeps_signing_material_required_by_defaul
     assert 'AO2_RELEASE_PRIVATE_KEY' in contract
     publisher = (root / "scripts/release-publish-approved-assets.sh").read_text()
     assert 'release-publication-contract.sh" --promote-approved-assets' in publisher
+
+
+def test_existing_publication_contract_rejects_missing_key_in_default_mode(
+    tmp_path: Path,
+) -> None:
+    root = Path(__file__).resolve().parents[1]
+    notes = tmp_path / "notes.md"
+    notes.write_text("# External Beta\n\nThis is an external beta.\n")
+    env = os.environ.copy()
+    env.update(
+        {
+            "AO2_VERSION": VERSION,
+            "AO2_RELEASE_TAG": TAG,
+            "AO2_RELEASE_CHANNEL": "prerelease",
+            "AO2_RELEASE_TITLE": f"AO2 {TAG} External Beta",
+            "AO2_RELEASE_NOTES_FILE": str(notes),
+            "AO2_RELEASE_PRIVATE_KEY": str(tmp_path / "missing.pem"),
+            "AO2_RELEASE_CONTRACT_REQUIRE_ASSETS": "0",
+        }
+    )
+    default = subprocess.run(
+        ["bash", str(root / "scripts/release-publication-contract.sh")],
+        cwd=root,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+    assert default.returncode != 0
+    assert "release signing material is missing" in default.stderr
+    promotion = subprocess.run(
+        [
+            "bash",
+            str(root / "scripts/release-publication-contract.sh"),
+            "--promote-approved-assets",
+        ],
+        cwd=root,
+        env=env,
+        text=True,
+        capture_output=True,
+    )
+    assert promotion.returncode == 0, promotion.stderr

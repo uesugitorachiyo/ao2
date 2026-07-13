@@ -27,6 +27,93 @@ sha256_file() {
   fi
 }
 
+verify_release_notes() {
+  [ -f "$AO2_RELEASE_NOTES_FILE" ] && [ ! -L "$AO2_RELEASE_NOTES_FILE" ] || \
+    fail "release notes must be a regular non-symlink file"
+  observed_notes_sha256="$(sha256_file "$AO2_RELEASE_NOTES_FILE")"
+  [ "$observed_notes_sha256" = "$AO2_RELEASE_NOTES_SHA256" ] || \
+    fail "release notes SHA-256 mismatch: expected $AO2_RELEASE_NOTES_SHA256, observed $observed_notes_sha256"
+  grep -Eiq 'external beta' "$AO2_RELEASE_NOTES_FILE" || \
+    fail "release notes must identify the release as an external beta"
+  grep -Fq 'ao2 install rollback' "$AO2_RELEASE_NOTES_FILE" || \
+    fail "release notes must include the approved rollback command"
+}
+
+verify_publisher_repository_state() {
+  local status_output current_head current_origin_main
+  if ! status_output="$(git status --porcelain 2>/dev/null)"; then
+    fail "git status failed"
+  fi
+  [ -z "$status_output" ] || fail "refusing approved asset publication from a dirty worktree"
+  if ! current_head="$(git rev-parse HEAD 2>/dev/null)"; then
+    fail "publisher implementation HEAD lookup failed"
+  fi
+  if ! current_origin_main="$(git rev-parse origin/main 2>/dev/null)"; then
+    fail "publisher implementation origin/main lookup failed"
+  fi
+  if [ -z "$publisher_bound_head" ]; then
+    [ "$current_head" = "$current_origin_main" ] || \
+      fail "publisher implementation HEAD does not match origin/main"
+    publisher_bound_head="$current_head"
+    publisher_bound_origin_main="$current_origin_main"
+    return
+  fi
+  [ "$current_head" = "$publisher_bound_head" ] || \
+    fail "publisher implementation HEAD changed after verification"
+  [ "$current_origin_main" = "$publisher_bound_origin_main" ] || \
+    fail "publisher implementation origin/main changed after verification"
+}
+
+verify_tag_absent() {
+  local lookup_status
+  set +e
+  git rev-parse -q --verify "refs/tags/$AO2_RELEASE_TAG" >/dev/null 2>&1
+  lookup_status=$?
+  set -e
+  case "$lookup_status" in
+    0) fail "refusing to reuse existing release tag: $AO2_RELEASE_TAG" ;;
+    1) ;;
+    *) fail "local tag lookup failed: $AO2_RELEASE_TAG" ;;
+  esac
+
+  set +e
+  git ls-remote --exit-code --tags origin "refs/tags/$AO2_RELEASE_TAG" >/dev/null 2>&1
+  lookup_status=$?
+  set -e
+  case "$lookup_status" in
+    0) fail "refusing to reuse existing release tag: $AO2_RELEASE_TAG" ;;
+    2) ;;
+    *) fail "remote tag lookup failed: $AO2_RELEASE_TAG" ;;
+  esac
+}
+
+verify_release_absent() {
+  local lookup_output lookup_status
+  set +e
+  lookup_output="$(gh api --include "repos/$AO2_RELEASE_REPO/releases/tags/$AO2_RELEASE_TAG" 2>&1)"
+  lookup_status=$?
+  set -e
+  case "$lookup_status" in
+    0) fail "refusing to overwrite existing release: $AO2_RELEASE_TAG" ;;
+    1)
+      case "$lookup_output" in
+        *' 404 '*) ;;
+        *) fail "GitHub release lookup failed: $AO2_RELEASE_TAG" ;;
+      esac
+      ;;
+    *) fail "GitHub release lookup failed: $AO2_RELEASE_TAG" ;;
+  esac
+}
+
+verify_latest_stable() {
+  local latest
+  if ! latest="$(gh api "repos/$AO2_RELEASE_REPO/releases/latest" --jq .tag_name)"; then
+    fail "latest stable release lookup failed"
+  fi
+  [ "$latest" = "$AO2_RELEASE_EXPECTED_LATEST_STABLE_TAG" ] || \
+    fail "latest stable release mismatch: expected $AO2_RELEASE_EXPECTED_LATEST_STABLE_TAG, observed $latest"
+}
+
 AO2_VERSION="${AO2_VERSION:-}"
 AO2_RELEASE_REPO="${AO2_RELEASE_REPO:-}"
 AO2_RELEASE_TAG="${AO2_RELEASE_TAG:-}"
@@ -101,39 +188,25 @@ expected_confirmation="publish-approved-$AO2_RELEASE_TAG-$AO2_RELEASE_EXPECTED_A
 [ "$AO2_RELEASE_PUBLISH_APPROVED_CONFIRM" = "$expected_confirmation" ] || \
   fail "exact approved promotion confirmation is required: $expected_confirmation"
 
-[ -f "$AO2_RELEASE_NOTES_FILE" ] && [ ! -L "$AO2_RELEASE_NOTES_FILE" ] || \
-  fail "release notes must be a regular non-symlink file"
-observed_notes_sha256="$(sha256_file "$AO2_RELEASE_NOTES_FILE")"
-[ "$observed_notes_sha256" = "$AO2_RELEASE_NOTES_SHA256" ] || \
-  fail "release notes SHA-256 mismatch: expected $AO2_RELEASE_NOTES_SHA256, observed $observed_notes_sha256"
-grep -Eiq 'external beta' "$AO2_RELEASE_NOTES_FILE" || fail "release notes must identify the release as an external beta"
-grep -Fq 'ao2 install rollback' "$AO2_RELEASE_NOTES_FILE" || fail "release notes must include the approved rollback command"
+verify_release_notes
 
 git cat-file -e "$AO2_RELEASE_TARGET_COMMIT^{commit}" 2>/dev/null || \
   fail "runtime target commit does not exist: $AO2_RELEASE_TARGET_COMMIT"
-origin_url="$(git remote get-url origin)"
+if ! origin_url="$(git remote get-url origin 2>/dev/null)"; then
+  fail "origin remote lookup failed"
+fi
 case "$origin_url" in
   "https://github.com/$AO2_RELEASE_REPO"|"https://github.com/$AO2_RELEASE_REPO.git"|\
   "git@github.com:$AO2_RELEASE_REPO"|"git@github.com:$AO2_RELEASE_REPO.git"|\
   "ssh://git@github.com/$AO2_RELEASE_REPO"|"ssh://git@github.com/$AO2_RELEASE_REPO.git") ;;
   *) fail "origin remote does not match release repository" ;;
 esac
-[ -z "$(git status --porcelain)" ] || fail "refusing approved asset publication from a dirty worktree"
-publisher_head="$(git rev-parse HEAD)"
-publisher_origin_main="$(git rev-parse origin/main)"
-[ "$publisher_head" = "$publisher_origin_main" ] || \
-  fail "publisher implementation HEAD does not match origin/main"
-
-if git rev-parse -q --verify "refs/tags/$AO2_RELEASE_TAG" >/dev/null 2>&1 \
-  || git ls-remote --exit-code --tags origin "refs/tags/$AO2_RELEASE_TAG" >/dev/null 2>&1; then
-  fail "refusing to reuse existing release tag: $AO2_RELEASE_TAG"
-fi
-if gh release view "$AO2_RELEASE_TAG" --repo "$AO2_RELEASE_REPO" >/dev/null 2>&1; then
-  fail "refusing to overwrite existing release: $AO2_RELEASE_TAG"
-fi
-observed_latest_stable="$(gh api "repos/$AO2_RELEASE_REPO/releases/latest" --jq .tag_name)"
-[ "$observed_latest_stable" = "$AO2_RELEASE_EXPECTED_LATEST_STABLE_TAG" ] || \
-  fail "latest stable release mismatch: expected $AO2_RELEASE_EXPECTED_LATEST_STABLE_TAG, observed $observed_latest_stable"
+publisher_bound_head=""
+publisher_bound_origin_main=""
+verify_publisher_repository_state
+verify_tag_absent
+verify_release_absent
+verify_latest_stable
 
 verify_approved_assets() {
   python3 "$ROOT/scripts/release-verify-approved-assets.py" \
@@ -144,6 +217,41 @@ verify_approved_assets() {
 }
 
 verify_approved_assets
+
+source_publication_dir="$AO2_RELEASE_PUBLICATION_DIR"
+source_publication_list="$AO2_RELEASE_PUBLICATION_LIST"
+source_manifest="$AO2_RELEASE_EXPECTED_ASSET_MANIFEST"
+source_notes="$AO2_RELEASE_NOTES_FILE"
+snapshot_root="$(mktemp -d "${TMPDIR:-/tmp}/ao2-approved-promotion.XXXXXX")"
+cleanup_snapshot() {
+  chmod -R u+w "$snapshot_root" 2>/dev/null || true
+  rm -rf "$snapshot_root"
+}
+trap cleanup_snapshot EXIT
+
+snapshot_publication="$snapshot_root/publication"
+mkdir "$snapshot_publication"
+cp -- "$source_manifest" "$snapshot_root/approved-assets.sha256"
+cp -- "$source_publication_list" "$snapshot_root/publication-assets.txt"
+cp -- "$source_notes" "$snapshot_root/release-notes.md"
+snapshot_asset_count=0
+while IFS= read -r asset || [ -n "$asset" ]; do
+  [ -n "$asset" ] || fail "staged publication list contains an empty asset name"
+  case "$asset" in
+    */*|*\\*|.|..) fail "staged publication list contains an unsafe asset name" ;;
+  esac
+  cp -- "$source_publication_dir/$asset" "$snapshot_publication/$asset"
+  snapshot_asset_count=$((snapshot_asset_count + 1))
+done < "$source_publication_list"
+[ "$snapshot_asset_count" -eq 23 ] || fail "approved publication list must contain exactly 23 assets"
+
+AO2_RELEASE_PUBLICATION_DIR="$snapshot_publication"
+AO2_RELEASE_PUBLICATION_LIST="$snapshot_root/publication-assets.txt"
+AO2_RELEASE_EXPECTED_ASSET_MANIFEST="$snapshot_root/approved-assets.sha256"
+AO2_RELEASE_NOTES_FILE="$snapshot_root/release-notes.md"
+
+verify_approved_assets
+verify_release_notes
 
 AO2_RELEASE_CHANNEL="$AO2_RELEASE_CHANNEL" \
 AO2_RELEASE_TITLE="$AO2_RELEASE_TITLE" \
@@ -392,6 +500,13 @@ print("release_approved_provenance_binding=passed")
 print("release_approved_sboms=passed")
 PY
 
+chmod -R a-w "$snapshot_root"
+
+verify_publisher_repository_state
+verify_tag_absent
+verify_release_absent
+verify_latest_stable
+verify_release_notes
 verify_approved_assets
 
 if [ "$AO2_RELEASE_PUBLISH_APPROVED_MODE" = "dry-run" ]; then
@@ -406,6 +521,10 @@ fi
 git tag -a "$AO2_RELEASE_TAG" "$AO2_RELEASE_TARGET_COMMIT" -m "$AO2_RELEASE_TITLE"
 git push origin "$AO2_RELEASE_TAG"
 
+verify_release_absent
+verify_latest_stable
+verify_publisher_repository_state
+verify_release_notes
 verify_approved_assets
 
 assets=()
@@ -422,6 +541,8 @@ release_url="$(gh release create "$AO2_RELEASE_TAG" "${assets[@]}" \
   --notes-file "$AO2_RELEASE_NOTES_FILE" \
   --prerelease \
   --latest=false)"
+
+verify_latest_stable
 
 printf 'release_approval_bound=true\n'
 printf 'release_approved_asset_manifest_sha256=%s\n' "$AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256"
