@@ -3581,10 +3581,207 @@ fn public_release_publisher_enforces_prerelease_channel_and_immutable_asset_cont
     assert!(ship.contains("scripts/release-publication-contract.sh"));
     assert!(ship.contains("scripts/release-stage-publication-assets.sh"));
     assert!(ship.contains("AO2_RELEASE_SHIP_DRY_RUN"));
+    assert!(ship.contains("AO2_RELEASE_EXPECTED_ASSET_MANIFEST"));
+    assert!(ship.contains("AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256"));
     assert!(ship.contains("--prerelease"));
     assert!(ship.contains("--latest=false"));
+    assert!(ship.contains("release_approval_bound=false"));
+    assert!(ship.contains("release_approval_bound=true"));
+    assert!(ship.contains("release_approved_asset_manifest_sha256=not_supplied"));
     assert!(ship.contains("refusing to overwrite existing release"));
     assert!(ship.contains("refusing to reuse existing release tag"));
+}
+
+#[test]
+#[cfg(unix)]
+fn release_ship_rejects_missing_live_or_partial_dry_run_binding_before_external_commands() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let temp = tempfile::tempdir().expect("tempdir");
+    let bin = temp.path().join("bin");
+    let sentinel = temp.path().join("external-command-called");
+    fs::create_dir_all(&bin).expect("create stub bin");
+    for command in ["git", "npm", "gh"] {
+        let stub = bin.join(command);
+        fs::write(
+            &stub,
+            "#!/bin/sh\nprintf '%s\\n' \"$0\" >> \"$AO2_TEST_EXTERNAL_SENTINEL\"\nexit 99\n",
+        )
+        .expect("write command stub");
+        let mut permissions = fs::metadata(&stub).expect("stub metadata").permissions();
+        permissions.set_mode(0o755);
+        fs::set_permissions(&stub, permissions).expect("make stub executable");
+    }
+    let inherited_path = std::env::var("PATH").expect("PATH");
+    let stub_path = format!("{}:{inherited_path}", bin.display());
+
+    let run_ship = |dry_run: &str, manifest: Option<&Path>, digest: Option<&str>| {
+        let mut command = Command::new("sh");
+        command
+            .arg(root.join("scripts/release-ship.sh"))
+            .current_dir(&root)
+            .env("PATH", &stub_path)
+            .env("AO2_TEST_EXTERNAL_SENTINEL", &sentinel)
+            .env("AO2_VERSION", "0.5.0-beta.1")
+            .env("AO2_RELEASE_TAG", "v0.5.0-beta.1")
+            .env("AO2_RELEASE_TARGET_COMMIT", "test-target")
+            .env("AO2_RELEASE_SHIP_DRY_RUN", dry_run)
+            .env("AO2_RELEASE_SHIP_CONFIRM", "ship-v0.5.0-beta.1")
+            .env_remove("AO2_RELEASE_EXPECTED_ASSET_MANIFEST")
+            .env_remove("AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256");
+        if let Some(value) = manifest {
+            command.env("AO2_RELEASE_EXPECTED_ASSET_MANIFEST", value);
+        }
+        if let Some(value) = digest {
+            command.env("AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256", value);
+        }
+        command.output().expect("run guarded publisher")
+    };
+
+    let missing_live = run_ship("0", None, None);
+    assert!(!missing_live.status.success());
+    assert!(String::from_utf8_lossy(&missing_live.stderr)
+        .contains("live publication requires AO2_RELEASE_EXPECTED_ASSET_MANIFEST"));
+    assert!(!sentinel.exists(), "live failure reached an external command");
+
+    let partial_manifest = temp.path().join("manifest.sha256");
+    fs::write(&partial_manifest, "fixture\n").expect("write partial manifest");
+    let partial_dry_run = run_ship("1", Some(&partial_manifest), None);
+    assert!(!partial_dry_run.status.success());
+    assert!(String::from_utf8_lossy(&partial_dry_run.stderr)
+        .contains("dry run requires both expected asset manifest variables or neither"));
+    assert!(
+        !sentinel.exists(),
+        "partial dry-run failure reached an external command"
+    );
+}
+
+#[test]
+fn release_ship_places_manifest_verification_before_every_mutation() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let ship = fs::read_to_string(root.join("scripts/release-ship.sh"))
+        .expect("release ship script exists");
+
+    let prebuild_guard = ship
+        .find("live publication requires AO2_RELEASE_EXPECTED_ASSET_MANIFEST")
+        .expect("live manifest guard");
+    let moving_head = ship
+        .find("refusing to publish unreviewed moving head")
+        .expect("moving-head guard");
+    let build = ship.find("npm run verify").expect("build verification");
+    assert!(prebuild_guard < moving_head);
+    assert!(prebuild_guard < build);
+
+    let stage = ship
+        .find("scripts/release-stage-publication-assets.sh")
+        .expect("publication staging");
+    let verify = ship
+        .find("scripts/release-verify-approved-assets.py")
+        .expect("approved asset verification");
+    let local_tag = ship.find("git tag -a").expect("local tag mutation");
+    let tag_push = ship
+        .find("git push origin \"$AO2_RELEASE_TAG\"")
+        .expect("tag push mutation");
+    let release_create = ship.find("gh release create").expect("GitHub release mutation");
+    let dry_run_exit = ship
+        .find("release_ship_dry_run=passed")
+        .expect("dry-run success output");
+    assert!(stage < verify);
+    assert!(verify < local_tag);
+    assert!(verify < tag_push);
+    assert!(verify < release_create);
+    assert!(dry_run_exit < local_tag);
+    assert!(!ship.contains("gh release upload"));
+    assert!(!ship.contains("--clobber"));
+}
+
+#[test]
+#[cfg(not(windows))]
+fn release_ship_prebuild_binding_logic_accepts_neither_or_both_only_for_dry_run() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let ship = fs::read_to_string(root.join("scripts/release-ship.sh"))
+        .expect("release ship script exists");
+    let boundary = ship
+        .find("if [ \"$AO2_RELEASE_TARGET_COMMIT\" !=")
+        .expect("moving-head boundary");
+    let mut prebuild = ship[..boundary].to_owned();
+    prebuild.push_str("printf 'test_approval_bound=%s\\n' \"$AO2_RELEASE_APPROVAL_BOUND\"\n");
+    let prebuild_script = tempfile::NamedTempFile::new().expect("prebuild script fixture");
+    fs::write(prebuild_script.path(), prebuild).expect("write prebuild script");
+
+    let run = |manifest: Option<&str>, digest: Option<&str>| {
+        let mut command = Command::new("sh");
+        command
+            .arg(prebuild_script.path())
+            .current_dir(&root)
+            .env("AO2_VERSION", "0.5.0-beta.1")
+            .env("AO2_RELEASE_TAG", "v0.5.0-beta.1")
+            .env("AO2_RELEASE_TARGET_COMMIT", "test-target")
+            .env("AO2_RELEASE_SHIP_DRY_RUN", "1")
+            .env_remove("AO2_RELEASE_EXPECTED_ASSET_MANIFEST")
+            .env_remove("AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256");
+        if let Some(value) = manifest {
+            command.env("AO2_RELEASE_EXPECTED_ASSET_MANIFEST", value);
+        }
+        if let Some(value) = digest {
+            command.env("AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256", value);
+        }
+        command.output().expect("run prebuild binding logic")
+    };
+
+    let neither = run(None, None);
+    assert!(neither.status.success());
+    assert!(String::from_utf8_lossy(&neither.stdout).contains("test_approval_bound=0"));
+
+    let digest64 = "a".repeat(64);
+    let both = run(Some("approved.sha256"), Some(&digest64));
+    assert!(both.status.success());
+    assert!(String::from_utf8_lossy(&both.stdout).contains("test_approval_bound=1"));
+
+    for (manifest, digest) in [
+        (Some("approved.sha256"), None),
+        (None, Some(digest64.as_str())),
+    ] {
+        let output = run(manifest, digest);
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr)
+            .contains("dry run requires both expected asset manifest variables or neither"));
+    }
+}
+
+#[test]
+#[cfg(not(windows))]
+fn one_byte_drift_stops_before_mutation_sentinel() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let temp = tempfile::tempdir().expect("tempdir");
+    let (publication_dir, publication_list, manifest, digest) =
+        approved_asset_fixture(temp.path());
+    let changed = publication_dir.join("asset-11.bin");
+    let mut bytes = fs::read(&changed).expect("read staged asset");
+    bytes[0] ^= 1;
+    fs::write(&changed, bytes).expect("change exactly one byte");
+    let sentinel = temp.path().join("mutation-sentinel");
+
+    let output = Command::new("sh")
+        .arg("-c")
+        .arg(
+            "python3 \"$1\" --manifest \"$2\" --manifest-sha256 \"$3\" \
+             --publication-dir \"$4\" --publication-list \"$5\" && : > \"$6\"",
+        )
+        .arg("sh")
+        .arg(root.join("scripts/release-verify-approved-assets.py"))
+        .arg(&manifest)
+        .arg(&digest)
+        .arg(&publication_dir)
+        .arg(&publication_list)
+        .arg(&sentinel)
+        .output()
+        .expect("run drift-before-mutation harness");
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr)
+        .contains("approved asset hash mismatch: asset-11.bin"));
+    assert!(!sentinel.exists(), "one-byte drift reached mutation sentinel");
 }
 
 #[test]
@@ -3829,6 +4026,26 @@ fn approved_asset_verifier_rejects_duplicate_and_unsafe_manifest_names() {
     assert!(!duplicate.status.success());
     assert!(String::from_utf8_lossy(&duplicate.stderr)
         .contains("duplicate approved asset name: asset-00.bin"));
+
+    let malformed_temp = tempfile::tempdir().expect("tempdir");
+    let (malformed_dir, malformed_list, malformed_manifest, _) =
+        approved_asset_fixture(malformed_temp.path());
+    let text = fs::read_to_string(&malformed_manifest).expect("read malformed manifest");
+    let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
+    lines[0].replace_range(..64, &"A".repeat(64));
+    fs::write(&malformed_manifest, lines.join("\n") + "\n")
+        .expect("write malformed manifest hash");
+    let malformed_digest = sha256_file_hex(&malformed_manifest);
+    let malformed = run_approved_asset_verifier(
+        &root,
+        &malformed_dir,
+        &malformed_list,
+        &malformed_manifest,
+        &malformed_digest,
+    );
+    assert!(!malformed.status.success());
+    assert!(String::from_utf8_lossy(&malformed.stderr)
+        .contains("approved manifest line 1 is malformed"));
 
     for unsafe_name in [
         "/tmp/asset.bin",
