@@ -56,6 +56,12 @@ fi
 
 rm -rf -- "$repo"
 cp -R fixtures/discount-service "$repo"
+git init -q "$repo"
+git -C "$repo" config user.name "AO2 Canary"
+git -C "$repo" config user.email "ao2-canary@example.invalid"
+git -C "$repo" add -A
+git -C "$repo" commit -q -m fixture
+git -C "$repo" rev-parse --git-common-dir >/dev/null
 cat > "$prompt" <<'PROMPT'
 Fix the discount validation bug in this Python project.
 

@@ -3429,6 +3429,84 @@ fn antigravity_provider_pilot_acceptance_script_is_guarded_and_evidence_driven()
 }
 
 #[test]
+#[cfg(not(windows))]
+fn provider_pilot_scripts_initialize_copied_fixture_as_isolated_git_repo() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let temp = tempfile::tempdir().expect("tempdir outside checkout");
+    assert!(
+        !temp.path().starts_with(&root),
+        "regression fixture must live outside the AO2 checkout"
+    );
+
+    for script_name in [
+        "smoke-codex-provider-pilot.sh",
+        "smoke-claude-provider-pilot.sh",
+        "smoke-antigravity-provider-pilot.sh",
+    ] {
+        let script_path = root.join("scripts").join(script_name);
+        let script = fs::read_to_string(&script_path).expect("provider pilot script exists");
+        let copy_start = script
+            .find("rm -rf -- \"$repo\"")
+            .unwrap_or_else(|| panic!("{script_name} missing fixture reset"));
+        let prompt_start = script[copy_start..]
+            .find("cat > \"$prompt\" <<'PROMPT'")
+            .map(|offset| copy_start + offset)
+            .unwrap_or_else(|| panic!("{script_name} missing prompt boundary"));
+        let smoke_start = script
+            .find("provider smoke-all")
+            .unwrap_or_else(|| panic!("{script_name} missing provider smoke-all"));
+        let fixture_block = &script[copy_start..prompt_start];
+
+        assert!(
+            prompt_start < smoke_start,
+            "{script_name} must prepare the fixture before provider smoke-all"
+        );
+        assert!(
+            fixture_block.contains("git init -q \"$repo\""),
+            "{script_name} must initialize the copied fixture as a Git repository"
+        );
+        assert!(
+            fixture_block.contains("git -C \"$repo\" commit -q -m fixture"),
+            "{script_name} must commit the isolated fixture baseline"
+        );
+        assert!(
+            fixture_block.contains("git -C \"$repo\" rev-parse --git-common-dir"),
+            "{script_name} must verify the isolated Git repository before provider execution"
+        );
+
+        let provider_root = temp.path().join(script_name.replace(".sh", ""));
+        fs::create_dir_all(&provider_root).expect("create provider root");
+        let repo = provider_root.join("discount-service");
+        let harness = temp.path().join(format!("{script_name}.fixture-init.sh"));
+        fs::write(
+            &harness,
+            format!(
+                "set -eu\nrepo=\"$1\"\n{fixture_block}\ngit -C \"$repo\" rev-parse --git-common-dir\n",
+            ),
+        )
+        .expect("write fixture init harness");
+
+        let output = Command::new(sh_command())
+            .arg(&harness)
+            .arg(&repo)
+            .current_dir(&root)
+            .output()
+            .expect("run provider pilot fixture init harness");
+        assert!(
+            output.status.success(),
+            "{script_name} failed to initialize copied fixture as Git repo\nstdout:\n{}\nstderr:\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            String::from_utf8_lossy(&output.stdout).trim(),
+            ".git",
+            "{script_name} must create a local .git common dir"
+        );
+    }
+}
+
+#[test]
 fn hosted_release_archive_smoke_ci_uploads_three_os_install_sidecar_artifacts() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let ci = fs::read_to_string(root.join(".github/workflows/ci.yml"))
