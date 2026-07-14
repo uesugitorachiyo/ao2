@@ -1220,6 +1220,18 @@ For Rust crate bug fixes during the beta, choose the Cargo-aware template so
 the verifier evidence is `cargo test`:
 
 ```sh
+ao2 run examples/task-templates/rust-cargo-bug-fix.yaml \
+  --target /path/to/rust-crate \
+  --provider scripted \
+  --provider-prompt-file ./repair.sh
+```
+
+That path works with the published `v0.5.0-beta.1` binary when run from an AO2
+checkout at commit `87c4cbe9706ea7d1721eaadcdb50e816cc96e91f` or newer.
+Binaries built from that commit or newer can also use the embedded-template
+shortcut:
+
+```sh
 ao2 run --template rust-cargo-bug-fix \
   --target /path/to/rust-crate \
   --provider scripted \
@@ -1230,6 +1242,9 @@ The default `bug-fix` template verifies with `python -m pytest`. Do not use it
 for Rust beta runs unless the project really is driven by pytest. This guidance
 only selects the workflow template and verifier; it does not require a new
 binary release, tag, upload, deployment, or publication step.
+
+The beta canary evidence for the published binary is indexed in
+[`docs/beta/v0.5.0-beta.1-canary-closeout.md`](beta/v0.5.0-beta.1-canary-closeout.md).
 
 For live providers, replace `scripted` with `codex` or `claude` after local CLI
 OAuth login is working.

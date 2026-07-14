@@ -21,6 +21,17 @@ ao2 template show bug-fix > bug-fix.yaml
 ao2 run bug-fix.yaml --target /path/to/repo --provider codex --provider-prompt-file prompt.txt
 ```
 
+The published `v0.5.0-beta.1` binary was built before the Rust/Cargo template
+was embedded in `ao2 template list`. That binary can still run this workflow by
+file path from an AO2 checkout:
+
+```sh
+ao2 run examples/task-templates/rust-cargo-bug-fix.yaml \
+  --target /path/to/rust-crate \
+  --provider codex \
+  --provider-prompt-file prompt.txt
+```
+
 The initial template set covers:
 
 - `bug-fix`
