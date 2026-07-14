@@ -1,0 +1,34 @@
+id: rust-cargo-bug-fix
+version: 0.1.0
+template_kind: real_project
+objective: Fix a Rust crate bug with the smallest safe code change and Cargo regression coverage.
+roles:
+  - planner
+  - implementer
+  - reviewer
+  - test-engineer
+  - evaluator-closer
+verifier:
+  command: cargo test
+policy:
+  deny_by_default: true
+  approval_mode: exact_action_digest
+  risky_actions:
+    - git_push
+    - destructive_delete
+    - package_install
+    - network_egress
+    - secret_read
+evidence:
+  evidence_cockpit: required
+  replay: required
+  required_artifacts:
+    - plan
+    - patch_summary
+    - test_log
+    - closure_report
+acceptance:
+  - The patch is scoped to the requested Rust behavior.
+  - Cargo regression tests fail before the fix and pass after the fix.
+  - The final verifier is cargo test.
+  - Replay has zero digest failures.

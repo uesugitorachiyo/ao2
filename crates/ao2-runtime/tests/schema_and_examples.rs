@@ -15,6 +15,10 @@ const REQUIRED_TEMPLATES: &[(&str, &str)] = &[
         "test-generation",
         "examples/task-templates/test-generation.yaml",
     ),
+    (
+        "rust-cargo-bug-fix",
+        "examples/task-templates/rust-cargo-bug-fix.yaml",
+    ),
 ];
 
 const REQUIRED_SCHEMAS: &[&str] = &[
@@ -92,6 +96,12 @@ fn task_templates_exist_and_keep_governance_contract() {
         assert!(content.contains("objective:"), "{rel_path} objective");
         assert!(content.contains("verifier:"), "{rel_path} verifier");
         assert!(content.contains("command:"), "{rel_path} verifier command");
+        if *id == "rust-cargo-bug-fix" {
+            assert!(
+                content.contains("command: cargo test"),
+                "{rel_path} must use cargo test as verifier"
+            );
+        }
         assert!(
             content.contains("approval_mode: exact_action_digest"),
             "{rel_path} exact approval"

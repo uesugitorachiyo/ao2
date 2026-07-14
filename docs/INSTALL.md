@@ -1216,6 +1216,21 @@ ao2 run --template bug-fix \
   --provider-prompt-file ./repair.sh
 ```
 
+For Rust crate bug fixes during the beta, choose the Cargo-aware template so
+the verifier evidence is `cargo test`:
+
+```sh
+ao2 run --template rust-cargo-bug-fix \
+  --target /path/to/rust-crate \
+  --provider scripted \
+  --provider-prompt-file ./repair.sh
+```
+
+The default `bug-fix` template verifies with `python -m pytest`. Do not use it
+for Rust beta runs unless the project really is driven by pytest. This guidance
+only selects the workflow template and verifier; it does not require a new
+binary release, tag, upload, deployment, or publication step.
+
 For live providers, replace `scripted` with `codex` or `claude` after local CLI
 OAuth login is working.
 
