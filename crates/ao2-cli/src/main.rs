@@ -32789,6 +32789,11 @@ const TASK_TEMPLATES: &[TemplateSpec] = &[
         description: "High-value tests for existing behavior.",
         content: include_str!("../../../examples/task-templates/test-generation.yaml"),
     },
+    TemplateSpec {
+        name: "rust-cargo-bug-fix",
+        description: "Rust crate bug fix with cargo test verifier evidence.",
+        content: include_str!("../../../examples/task-templates/rust-cargo-bug-fix.yaml"),
+    },
 ];
 
 fn template(command: TemplateCommand) -> Result<()> {

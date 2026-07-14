@@ -1589,10 +1589,14 @@ Workspace test coverage:
   `antho@10.0.0.96`, performs a scripted repair, and replays with zero digest
   failures;
 - real-project templates exist for bug fixes, small refactors, dependency
-  upgrades, and test generation;
+  upgrades, test generation, and Rust/Cargo bug fixes;
 - installed CLI can list and print embedded task templates;
 - workflow metadata from template files drives run workflow id, objective, and
   verifier command;
+- Rust/Cargo beta runs use `rust-cargo-bug-fix` with `cargo test` verifier
+  evidence instead of the default Python `bug-fix` template;
+- Rust/Cargo template guidance is a workflow/template update only, not a new
+  binary release, tag, upload, deployment, or publication requirement;
 - provider-backed real-project templates use a generic verifier-first closure
   path instead of discount-service fixture assumptions;
 - provider-backed real-project templates can rerun the provider prompt after a

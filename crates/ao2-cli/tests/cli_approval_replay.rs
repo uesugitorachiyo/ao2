@@ -22906,6 +22906,7 @@ fn cli_template_list_and_show_exposes_real_project_templates() {
     assert!(output.contains("small-refactor"));
     assert!(output.contains("dependency-upgrade"));
     assert!(output.contains("test-generation"));
+    assert!(output.contains("rust-cargo-bug-fix"));
 
     let show = ao2(["template", "show", "bug-fix"]);
     assert!(show.status.success(), "{}", stderr(&show));
@@ -22913,6 +22914,13 @@ fn cli_template_list_and_show_exposes_real_project_templates() {
     assert!(yaml.contains("id: bug-fix"));
     assert!(yaml.contains("approval_mode: exact_action_digest"));
     assert!(yaml.contains("evidence_cockpit: required"));
+
+    let rust_show = ao2(["template", "show", "rust-cargo-bug-fix"]);
+    assert!(rust_show.status.success(), "{}", stderr(&rust_show));
+    let rust_yaml = stdout(&rust_show);
+    assert!(rust_yaml.contains("id: rust-cargo-bug-fix"));
+    assert!(rust_yaml.contains("command: cargo test"));
+    assert!(rust_yaml.contains("Replay has zero digest failures."));
 
     let missing = ao2(["template", "show", "missing-template"]);
     assert!(!missing.status.success());
