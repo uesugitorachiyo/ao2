@@ -227,6 +227,21 @@ On Windows, run `Verify-Release.ps1` and `install.ps1` from the extracted
 archive. See the [install and update guide](docs/INSTALL.md#install-the-v050-beta1-external-beta)
 for upgrade, rollback, and uninstall commands.
 
+For Rust/Cargo beta work with the published `v0.5.0-beta.1` binary, run the
+Cargo workflow file by path from an AO2 checkout at commit
+`87c4cbe9706ea7d1721eaadcdb50e816cc96e91f` or newer:
+
+```sh
+ao2 run examples/task-templates/rust-cargo-bug-fix.yaml \
+  --target /path/to/rust-crate \
+  --provider codex \
+  --provider-prompt-file prompt.txt
+```
+
+Use `cargo test` as the verifier for Rust projects. See the
+[beta canary closeout](docs/beta/v0.5.0-beta.1-canary-closeout.md) for the
+public-binary confirmation evidence.
+
 Run the Phase 1 promotion wrapper after starting a local ao2-control-plane
 instance and placing the control-plane bearer token in an environment variable:
 

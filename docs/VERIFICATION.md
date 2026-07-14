@@ -1595,6 +1595,10 @@ Workspace test coverage:
   verifier command;
 - Rust/Cargo beta runs use `rust-cargo-bug-fix` with `cargo test` verifier
   evidence instead of the default Python `bug-fix` template;
+- published AO2 `v0.5.0-beta.1` can run the repo-hosted
+  `examples/task-templates/rust-cargo-bug-fix.yaml` workflow by path; the
+  canary evidence is indexed in
+  `docs/beta/v0.5.0-beta.1-canary-closeout.md`;
 - Rust/Cargo template guidance is a workflow/template update only, not a new
   binary release, tag, upload, deployment, or publication requirement;
 - provider-backed real-project templates use a generic verifier-first closure
