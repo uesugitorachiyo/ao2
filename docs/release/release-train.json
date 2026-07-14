@@ -5,11 +5,11 @@
       "version": "0.4.81"
     },
     "ao2_control_plane": {
-      "tag": "v0.1.14",
-      "version": "0.1.14"
+      "tag": "v0.1.15",
+      "version": "0.1.15"
     },
-    "promotion_confirm": "promote-stable-v0.4.81-v0.1.14",
-    "public_operator_confirm": "public-release-reviewed-v0.4.81-v0.1.14"
+    "promotion_confirm": "promote-stable-v0.4.81-v0.1.15",
+    "public_operator_confirm": "public-release-reviewed-v0.4.81-v0.1.15"
   },
   "schema_version": "ao2.release-train-manifest.v1",
   "stable": {
@@ -18,10 +18,10 @@
       "version": "0.4.81"
     },
     "ao2_control_plane": {
-      "tag": "v0.1.14",
-      "version": "0.1.14"
+      "tag": "v0.1.15",
+      "version": "0.1.15"
     },
-    "promotion_confirm": "promote-stable-v0.4.81-v0.1.14",
-    "public_operator_confirm": "public-release-reviewed-v0.4.81-v0.1.14"
+    "promotion_confirm": "promote-stable-v0.4.81-v0.1.15",
+    "public_operator_confirm": "public-release-reviewed-v0.4.81-v0.1.15"
   }
 }
