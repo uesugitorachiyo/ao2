@@ -4537,11 +4537,20 @@ fn cross_target_release_builds_pin_source_commit_and_hosted_smoke_checks_identit
     }
     let hosted = fs::read_to_string(root.join("scripts/release-archive-hosted-smoke.sh"))
         .expect("hosted smoke exists");
+    let hosted_windows = fs::read_to_string(root.join("scripts/release-archive-hosted-smoke.ps1"))
+        .expect("Windows hosted smoke exists");
     assert!(hosted.contains("BUILD-PROVENANCE.json"));
     assert!(hosted.contains("SBOM.cdx.json"));
     assert!(hosted.contains("UNINSTALL.txt"));
     assert!(hosted.contains("build_profile"));
     assert!(hosted.contains("git_commit"));
+    assert!(hosted_windows.contains("$ExpectedCommit"));
+    assert!(hosted_windows.contains("AO2_PACKAGED_GIT_COMMIT"));
+    assert!(hosted_windows.contains("AO2_PACKAGED_BUILD_PROFILE"));
+    assert!(hosted_windows.contains("BUILD-PROVENANCE.json"));
+    assert!(hosted_windows.contains("build_profile"));
+    assert!(hosted_windows.contains("git_commit"));
+    assert!(hosted_windows.contains("release"));
 }
 
 #[test]
