@@ -5,6 +5,7 @@ $Version = if ($env:AO2_RELEASE_HOSTED_VERSION) { $env:AO2_RELEASE_HOSTED_VERSIO
 $Root = if ($env:AO2_RELEASE_HOSTED_SMOKE_ROOT) { $env:AO2_RELEASE_HOSTED_SMOKE_ROOT } else { Join-Path "target/release-archive-hosted-smoke" $TargetLabel }
 $SummaryJson = if ($env:AO2_RELEASE_HOSTED_SMOKE_JSON) { $env:AO2_RELEASE_HOSTED_SMOKE_JSON } else { Join-Path $Root "summary.json" }
 $Binary = if ($env:AO2_RELEASE_HOSTED_BINARY) { $env:AO2_RELEASE_HOSTED_BINARY } else { "target/release/ao2.exe" }
+$ExpectedCommit = if ($env:AO2_BUILD_GIT_COMMIT) { $env:AO2_BUILD_GIT_COMMIT } elseif ($env:GITHUB_SHA) { $env:GITHUB_SHA } else { (git rev-parse HEAD) }
 $Dist = Join-Path $Root "dist"
 $Extract = Join-Path $Root "extract"
 $InstallDir = Join-Path $Root "bin"
@@ -19,6 +20,8 @@ if (!(Test-Path -LiteralPath $Binary -PathType Leaf)) {
     throw "missing hosted release binary: $Binary"
 }
 
+$env:AO2_PACKAGED_GIT_COMMIT = $ExpectedCommit
+$env:AO2_PACKAGED_BUILD_PROFILE = "release"
 cargo run -p ao2-cli -- release package `
     --out-dir $Dist `
     --version $Version `
@@ -38,6 +41,12 @@ $Manifest = Get-Content -Raw -LiteralPath $ManifestPath | ConvertFrom-Json
 if ($Manifest.schema_version -ne "ao2.release-manifest.v1") { throw "unexpected manifest schema: $($Manifest.schema_version)" }
 if ($Manifest.target -ne $TargetLabel) { throw "unexpected manifest target: $($Manifest.target)" }
 if ($Manifest.binary -ne "ao2.exe") { throw "unexpected manifest binary: $($Manifest.binary)" }
+
+$ProvenancePath = Join-Path $Extract "BUILD-PROVENANCE.json"
+$Provenance = Get-Content -Raw -LiteralPath $ProvenancePath | ConvertFrom-Json
+if ($Provenance.version -ne $Version) { throw "unexpected provenance version: $($Provenance.version)" }
+if ($Provenance.git_commit -ne $ExpectedCommit) { throw "unexpected provenance git_commit: $($Provenance.git_commit)" }
+if ($Provenance.build_profile -ne "release") { throw "unexpected provenance build_profile: $($Provenance.build_profile)" }
 
 $env:AO2_INSTALL_DIR = $InstallDir
 & (Join-Path $Extract "install.ps1") | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $Root "install.txt")
