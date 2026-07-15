@@ -3,6 +3,10 @@
 This guide covers public AO2 stable release install, update, rollback, offline
 verification, and uninstall workflows.
 
+For a first AO2 install, use the sections through [Uninstall](#uninstall). Later
+sections describe advanced local operation surfaces and are not required for the
+first 30 minutes.
+
 AO2 now has a stable public release:
 [`v0.5.0`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.0).
 The overview video is available at
@@ -39,6 +43,19 @@ gh release download v0.5.0 --repo uesugitorachiyo/ao2
 shasum -a 256 -c SHA256SUMS
 ```
 
+If `gh release download` asks for GitHub CLI authentication, download the
+selected archive directly from the public release and verify only that selected
+archive line:
+
+```sh
+mkdir -p ao2-stable && cd ao2-stable
+base_url="https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.0"
+curl -fLO "$base_url/SHA256SUMS"
+curl -fLO "$base_url/ao2-0.5.0-macos-aarch64.tar.gz"
+grep '  ao2-0.5.0-macos-aarch64.tar.gz$' SHA256SUMS > SHA256SUMS.selected
+shasum -a 256 -c SHA256SUMS.selected
+```
+
 On macOS and Linux, extract the archive for the host and run its offline
 verification before installation:
 
@@ -46,9 +63,13 @@ verification before installation:
 tar -xzf ao2-0.5.0-<platform>.tar.gz
 ./verify-release.sh
 AO2_INSTALL_DIR="$HOME/.local/bin" ./install.sh
+export PATH="$HOME/.local/bin:$PATH"
 ao2 version --json
 ao2 doctor --json
 ```
+
+If you install into a different directory, add that directory to `PATH` or run
+the installed binary by full path for the first `version` and `doctor` checks.
 
 On Windows, extract the archive, run `Verify-Release.ps1`, then run
 `install.ps1` and confirm the installed identity with

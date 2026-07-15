@@ -32,6 +32,20 @@ scripts, verifier scripts, and provenance files. If verification fails:
 
 Do not mix files from different release tags.
 
+## Command Not Found After Install
+
+The archive installer prints the install directory. For the default Unix
+location, add it to the current shell before running the first checks:
+
+```sh
+export PATH="$HOME/.local/bin:$PATH"
+ao2 version --json
+ao2 doctor --json
+```
+
+If you installed with a custom `AO2_INSTALL_DIR`, add that directory to `PATH`
+or run `/path/to/bin/ao2 version --json` directly.
+
 ## Local Pilots
 
 AO2 can run local scripted workflows without provider credentials. For a first
