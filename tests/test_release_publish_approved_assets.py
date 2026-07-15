@@ -704,7 +704,9 @@ def test_changed_asset_fails_before_mutation(promotion_case: dict[str, object]) 
         ("hash", "manifest mismatch: hash mismatch"),
         ("duplicate_basename", "manifest mismatch: duplicate basename"),
         ("malformed_hash", "manifest mismatch: malformed hash"),
+        ("absolute_path", "manifest mismatch: disallowed path"),
         ("traversal", "manifest mismatch: disallowed path"),
+        ("manifest_digest", "manifest mismatch: manifest digest mismatch"),
     ],
 )
 def test_approved_asset_verifier_classifies_manifest_mismatches(
@@ -734,6 +736,17 @@ def test_approved_asset_verifier_classifies_manifest_mismatches(
             encoding="utf-8",
         )
         promotion_case["manifest_sha256"] = sha256(manifest)
+    elif kind == "absolute_path":
+        manifest.write_text(
+            manifest.read_text(encoding="utf-8")
+            + f"{'0' * 64}  /tmp/escape.tar.gz\n",
+            encoding="utf-8",
+        )
+        promotion_case["manifest_sha256"] = sha256(manifest)
+        publication_list.write_text(
+            publication_list.read_text(encoding="utf-8") + "/tmp/escape.tar.gz\n",
+            encoding="utf-8",
+        )
     elif kind == "traversal":
         manifest.write_text(
             manifest.read_text(encoding="utf-8")
@@ -745,10 +758,16 @@ def test_approved_asset_verifier_classifies_manifest_mismatches(
             publication_list.read_text(encoding="utf-8") + "../escape.tar.gz\n",
             encoding="utf-8",
         )
+    elif kind == "manifest_digest":
+        manifest.write_text(
+            manifest.read_text(encoding="utf-8") + "\n",
+            encoding="utf-8",
+        )
 
     result = run_approved_asset_verifier(promotion_case)
     assert result.returncode != 0
     assert expected_error in result.stderr
+    assert "approved asset verification failed:" in result.stderr
 
 
 @pytest.mark.parametrize("kind", ["missing", "extra"])

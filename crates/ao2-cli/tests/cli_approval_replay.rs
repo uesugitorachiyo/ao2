@@ -348,6 +348,135 @@ fn cli_can_pause_approve_resume_and_replay() {
 }
 
 #[test]
+fn cli_reports_recovery_context_for_unapproved_resume_and_tampered_approval() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("discount-service");
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
+
+    let run = ao2([
+        "run",
+        "../../examples/risky-pr-run/risky-pr.yaml",
+        "--target",
+        repo.to_str().unwrap(),
+        "--run-id",
+        "recovery-fixture-run",
+        "--pause-for-approval",
+    ]);
+    assert!(run.status.success(), "{}", stderr(&run));
+    let run_stdout = stdout(&run);
+    let ticket_id = value_for(&run_stdout, "approval_ticket_id=").to_string();
+    let action_digest = value_for(&run_stdout, "action_digest=").to_string();
+
+    let blocked_resume = ao2([
+        "run",
+        "--resume",
+        "recovery-fixture-run",
+        "--target",
+        repo.to_str().unwrap(),
+    ]);
+    assert!(!blocked_resume.status.success());
+    let blocked_stderr = stderr(&blocked_resume);
+    assert!(blocked_stderr.contains("approval_status=pending"));
+    assert!(blocked_stderr.contains("required_digest_field=action_digest"));
+    assert!(blocked_stderr.contains(&format!("action_digest={action_digest}")));
+    assert!(blocked_stderr.contains("replay_state=waiting_for_approval"));
+    assert!(blocked_stderr.contains("evidence_dir="));
+    assert!(blocked_stderr.contains("next_step=ao2 approve "));
+    assert!(!blocked_stderr.contains("provider"));
+
+    let approval_path = repo.join(format!(
+        ".ao2/runs/recovery-fixture-run/approvals/{ticket_id}.json"
+    ));
+    let mut stored: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&approval_path).unwrap()).unwrap();
+    stored["request"]["args"]
+        .as_array_mut()
+        .unwrap()
+        .push(serde_json::json!("--force"));
+    fs::write(
+        &approval_path,
+        serde_json::to_string_pretty(&stored).unwrap(),
+    )
+    .unwrap();
+
+    let bad_approval = ao2([
+        "approve",
+        &ticket_id,
+        "--target",
+        repo.to_str().unwrap(),
+        "--approver",
+        "human:cli-test",
+    ]);
+    assert!(!bad_approval.status.success());
+    let bad_approval_stderr = stderr(&bad_approval);
+    assert!(bad_approval_stderr.contains("approval_status=rejected"));
+    assert!(bad_approval_stderr.contains("required_digest_field=action_digest"));
+    assert!(bad_approval_stderr.contains(&format!("action_digest={action_digest}")));
+    assert!(bad_approval_stderr.contains("digest_failure=approval digest mismatch"));
+    assert!(bad_approval_stderr.contains("evidence_dir="));
+    assert!(bad_approval_stderr.contains("recovery=preserve the failing state"));
+    assert!(!bad_approval_stderr.contains("provider"));
+}
+
+#[test]
+fn cli_reports_repeated_resume_as_accepted_replay_state() {
+    let temp = tempfile::tempdir().unwrap();
+    let repo = temp.path().join("discount-service");
+    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
+
+    let run = ao2([
+        "run",
+        "../../examples/risky-pr-run/risky-pr.yaml",
+        "--target",
+        repo.to_str().unwrap(),
+        "--run-id",
+        "repeated-resume-run",
+        "--pause-for-approval",
+    ]);
+    assert!(run.status.success(), "{}", stderr(&run));
+    let run_stdout = stdout(&run);
+    let ticket_id = value_for(&run_stdout, "approval_ticket_id=");
+
+    let approve = ao2([
+        "approve",
+        ticket_id,
+        "--target",
+        repo.to_str().unwrap(),
+        "--approver",
+        "human:cli-test",
+    ]);
+    assert!(approve.status.success(), "{}", stderr(&approve));
+
+    let first_resume = ao2([
+        "run",
+        "--resume",
+        "repeated-resume-run",
+        "--target",
+        repo.to_str().unwrap(),
+    ]);
+    assert!(first_resume.status.success(), "{}", stderr(&first_resume));
+
+    let repeated_resume = ao2([
+        "run",
+        "--resume",
+        "repeated-resume-run",
+        "--target",
+        repo.to_str().unwrap(),
+    ]);
+    assert!(
+        repeated_resume.status.success(),
+        "{}",
+        stderr(&repeated_resume)
+    );
+    let repeated_stdout = stdout(&repeated_resume);
+    assert!(repeated_stdout.contains("status=Accepted"));
+    assert!(repeated_stdout.contains("replay_state=accepted"));
+    assert!(repeated_stdout.contains("evidence_dir="));
+    assert!(!repeated_stdout.contains("bypass"));
+    assert!(!repeated_stdout.contains("provider"));
+}
+
+#[test]
 fn cli_report_writes_static_report_index_sidecar() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");

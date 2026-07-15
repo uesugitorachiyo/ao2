@@ -21,7 +21,9 @@ approval is rejected or the run waits longer than expected:
 
 Approval failures are expected when the approved input no longer matches the
 target state. Do not override a digest mismatch without understanding what
-changed.
+changed. When filing a support issue, include the approval status, required
+digest field, action digest, replay state, evidence path, digest failure
+summary, and sanitized logs.
 
 ## Manifests
 
@@ -35,6 +37,11 @@ scripts, verifier scripts, and provenance files. If verification fails:
    Windows before installing.
 
 Do not mix files from different release tags.
+
+When filing a manifest support issue, include the manifest SHA-256, release or
+staging directory, asset filename, observed failure category, exact verifier
+command, and sanitized logs. Include expected and observed hashes only when they
+are public-safe.
 
 ## Command Not Found After Install
 
