@@ -633,18 +633,18 @@ def test_public_release_links_and_install_guide_track_current_stable():
     install = read("docs/INSTALL.md")
 
     for needle in [
-        "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.0",
-        "https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.0",
+        "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.1",
+        "https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.1",
         "img.shields.io/github/v/release/uesugitorachiyo/ao2",
-        "gh release download v0.5.0 --repo uesugitorachiyo/ao2",
-        "ao2-0.5.0-macos-aarch64.tar.gz",
-        "ao2-0.5.0-linux-x86_64.tar.gz",
-        "ao2-0.5.0-windows-x86_64.tar.gz",
+        "gh release download v0.5.1 --repo uesugitorachiyo/ao2",
+        "ao2-0.5.1-macos-aarch64.tar.gz",
+        "ao2-0.5.1-linux-x86_64.tar.gz",
+        "ao2-0.5.1-windows-x86_64.tar.gz",
         "SHA256SUMS",
     ]:
         assert needle in readme
 
-    assert "The current stable public release line is `v0.5.0`." in install
+    assert "The current stable public release line is `v0.5.1`." in install
     assert "v0.4.79" not in install
 
 
@@ -757,7 +757,7 @@ def test_public_release_download_verify_is_checksum_first_and_post_merge_canarie
         "verifies every\nasset listed in `SHA256SUMS`",
         "verifies signed\nprovenance",
         "public release download checksum verification",
-        "stable public release archives at v0.5.0",
+        "stable public release archives at v0.5.1",
     ]:
         assert needle in install + "\n" + verification
 
@@ -5455,7 +5455,7 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "Stable Promotion Evidence Index",
         "ao2-stable-promotion-evidence-index",
         "ao2.stable-promotion-evidence-index.v1",
-        "ao2-0.5.0-linux-aarch64.tar.gz",
+        "ao2-0.5.1-linux-aarch64.tar.gz",
         "ao2-control-plane-0.1.15-windows-x86_64.tar.gz",
     ]:
         assert needle in verification
@@ -7475,7 +7475,7 @@ def test_dual_public_release_smoke_workflow_and_docs_contract():
         assert needle in workflow
 
     for needle in [
-        "AO2 stable release: `v0.5.0`",
+        "AO2 stable release: `v0.5.1`",
         "AO2 control-plane stable release: `v0.1.15`",
         "ao2-dual-public-release-smoke",
         "ao2.dual-public-release-smoke.v1",
@@ -15760,7 +15760,7 @@ def test_dual_repo_public_release_verification_index_is_documented():
         "# Public Release Verification",
         "uesugitorachiyo/ao2",
         "uesugitorachiyo/ao2-control-plane",
-        "v0.5.0",
+        "v0.5.1",
         "v0.1.15",
         "Post Stable Release Verification",
         ".github/workflows/post-stable-release-verification.yml",
@@ -15837,8 +15837,8 @@ def test_release_immutability_audit_composes_stable_asset_and_download_checks():
     assert "npm run release:immutability-audit" in verification
     assert "ao2.release-immutability-audit.v1" in verification
     assert "stable public release" in readme
-    assert "v0.5.0" in readme
-    assert "ao2-0.5.0-linux-aarch64.tar.gz" in readme
+    assert "v0.5.1" in readme
+    assert "ao2-0.5.1-linux-aarch64.tar.gz" in readme
     assert "https://youtu.be/p222b0iCpbg" in readme
     assert "stable public release" in install
     assert "v0.4.81" in next_patch
