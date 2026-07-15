@@ -54,14 +54,14 @@ jobs:
         shell: pwsh
         run: |
           $archive = "ao2-$env:AO2_RELEASE_VERSION-windows-x86_64.tar.gz"
-          $expected = Select-String -Path dist-windows/SHA256SUMS -Pattern $archive |
-            ForEach-Object { ($_ -split "\s+")[0] } |
+          $manifestLine = Select-String -Path dist-windows/SHA256SUMS -Pattern "  $([Regex]::Escape($archive))$" |
             Select-Object -First 1
-          if (-not $expected) {
+          if (-not $manifestLine) {
             throw "Missing checksum entry for $archive"
           }
+          $expected = ($manifestLine.Line -split "\s+")[0].ToLowerInvariant()
           $actual = (Get-FileHash -Algorithm SHA256 -Path "dist-windows/$archive").Hash.ToLowerInvariant()
-          if ($actual -ne $expected.ToLowerInvariant()) {
+          if ($actual -ne $expected) {
             throw "Archive checksum mismatch for $archive"
           }
 
