@@ -1,17 +1,40 @@
 // Emits VERGEN_GIT_SHA so orchestrator.rs can stamp the real git SHA into
-// Provenance.engine_sha via env!/option_env!. When the crate is built outside
-// a git checkout (e.g. from a packaged crate or shallow tarball) vergen-git2
-// will fail to resolve a SHA; in that case we swallow the error and let the
-// consumer fall back to CARGO_PKG_VERSION at compile time.
-use vergen_git2::{Emitter, Git2Builder};
+// Provenance.engine_sha via option_env!. Release packaging passes
+// AO2_BUILD_GIT_COMMIT explicitly, which avoids a build-time libgit2
+// dependency in cross-platform package builders.
+use std::env;
+use std::process::Command;
 
 fn main() {
-    let git2 = match Git2Builder::default().sha(false).build() {
-        Ok(g) => g,
-        Err(_) => return,
-    };
-    let _ = Emitter::default()
-        .fail_on_error()
-        .add_instructions(&git2)
-        .and_then(|e| e.emit());
+    println!("cargo:rerun-if-env-changed=AO2_BUILD_GIT_COMMIT");
+    println!("cargo:rerun-if-env-changed=GITHUB_SHA");
+
+    if let Some(sha) = env::var("AO2_BUILD_GIT_COMMIT")
+        .ok()
+        .or_else(|| env::var("GITHUB_SHA").ok())
+        .or_else(git_head)
+        .filter(|value| is_sha1(value))
+    {
+        println!("cargo:rustc-env=VERGEN_GIT_SHA={sha}");
+    }
+}
+
+fn git_head() -> Option<String> {
+    let output = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8(output.stdout).ok())
+        .flatten()
+        .map(|value| value.trim().to_ascii_lowercase())
+}
+
+fn is_sha1(value: &str) -> bool {
+    value.len() == 40
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
