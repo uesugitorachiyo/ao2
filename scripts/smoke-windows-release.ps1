@@ -66,6 +66,13 @@ if (!(Test-Path $Ao2)) {
 if (!(Test-Path $RollbackRunner)) {
     throw "rollback runner ao2.exe was not found: $RollbackRunner"
 }
+if ((Resolve-Path $RollbackRunner).Path -eq (Resolve-Path $Ao2).Path) {
+    throw "Windows-safe rollback runner must be separate from installed ao2.exe"
+}
+# If this script ever uses the installed $Ao2 for rollback, Windows can block
+# the active executable replacement with rollback_status=blocked_active_executable.
+Write-Output "Windows-safe rollback runner=$RollbackRunner"
+Write-Output "rollback_runner=$RollbackRunner"
 
 & $Ao2 --help | Out-Null
 & $Ao2 version --json | Out-Null

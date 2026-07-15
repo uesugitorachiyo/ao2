@@ -4491,6 +4491,27 @@ fn install_guide_documents_update_verify_and_provider_fast_start() {
 }
 
 #[test]
+fn install_guide_documents_windows_safe_rollback_runner() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let install = fs::read_to_string(root.join("docs/INSTALL.md")).expect("install guide exists");
+    let troubleshooting =
+        fs::read_to_string(root.join("docs/TROUBLESHOOTING.md")).expect("troubleshooting exists");
+    let support = fs::read_to_string(root.join("docs/SUPPORT-REPRODUCTION.md"))
+        .expect("support reproduction exists");
+
+    for text in [&install, &troubleshooting] {
+        assert!(text.contains("Windows-safe rollback"));
+        assert!(text.contains("Use an extracted or alternate"));
+        assert!(text.contains("ao2.exe install rollback --install-dir"));
+        assert!(text.contains("rollback_status=blocked_active_executable"));
+    }
+
+    assert!(support.contains("Windows rollback runner"));
+    assert!(support.contains("rollback_status=blocked_active_executable"));
+    assert!(support.contains("Do not paste private Windows user paths"));
+}
+
+#[test]
 fn native_windows_smoke_assets_are_manual_and_exercise_installed_binary() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let script = fs::read_to_string(root.join("scripts/smoke-windows-release.ps1"))
@@ -4509,7 +4530,12 @@ fn native_windows_smoke_assets_are_manual_and_exercise_installed_binary() {
     assert!(script.contains("provider matrix --json"));
     assert!(script.contains("install rollback"));
     assert!(script.contains("$RollbackRunner"));
+    assert!(script.contains("$RollbackRunner install rollback"));
+    assert!(!script.contains("$Ao2 install rollback"));
+    assert!(script.contains("rollback_status=blocked_active_executable"));
+    assert!(script.contains("Windows-safe rollback runner"));
     assert!(script.contains("windows_install_rollback=passed"));
+    assert!(script.contains("rollback_runner=$RollbackRunner"));
     assert!(script.contains("git -C $RepoDir init"));
     assert!(script.contains("git -C $RepoDir config user.email"));
     assert!(script.contains("git -C $RepoDir config user.name"));
@@ -4529,6 +4555,41 @@ fn native_windows_smoke_assets_are_manual_and_exercise_installed_binary() {
     assert!(workflow.contains("scripts/smoke-windows-release.ps1"));
     assert!(workflow.contains("$manifestLine = Select-String"));
     assert!(workflow.contains("$manifestLine.Line -split"));
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_installed_binary_self_rollback_reports_safe_runner_diagnostic() {
+    let ao2 = Path::new(env!("CARGO_BIN_EXE_ao2"));
+    let install_dir = tempfile::tempdir().expect("install dir");
+    let installed = install_dir.path().join("ao2.exe");
+    let rollback = install_dir.path().join("ao2.exe.rollback");
+    fs::copy(ao2, &installed).expect("seed installed ao2.exe");
+    fs::copy(ao2, &rollback).expect("seed rollback ao2.exe");
+
+    let output = Command::new(&installed)
+        .args([
+            "install",
+            "rollback",
+            "--install-dir",
+            install_dir.path().to_str().expect("utf8 install dir"),
+            "--target-label",
+            "windows-x86_64",
+        ])
+        .output()
+        .expect("run installed rollback");
+
+    assert!(
+        !output.status.success(),
+        "self rollback should fail with a diagnostic on Windows"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("rollback_status=blocked_active_executable"));
+    assert!(stderr.contains("Windows cannot replace the running ao2.exe"));
+    assert!(stderr.contains("Use an extracted or alternate ao2.exe runner"));
+    assert!(stderr.contains("ao2.exe install rollback --install-dir"));
+    assert!(stderr.contains(installed.to_str().expect("utf8 installed path")));
+    assert!(stderr.contains(rollback.to_str().expect("utf8 rollback path")));
 }
 
 #[test]
