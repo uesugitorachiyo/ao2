@@ -55,7 +55,7 @@ components = [
         "component": "ao2-control-plane",
         "repo": "uesugitorachiyo/ao2-control-plane",
         "tag": cp_tag,
-        "expected_release_name": f"ao2-control-plane {cp_tag}",
+        "expected_release_name": f"AO2 Control Plane {cp_tag}",
         "release_view_env": "AO2_PUBLIC_PAIR_DIGEST_AUDIT_CONTROL_PLANE_RELEASE_VIEW_JSON",
         "archive_prefix": "ao2-control-plane-",
         "required_archive_names": [

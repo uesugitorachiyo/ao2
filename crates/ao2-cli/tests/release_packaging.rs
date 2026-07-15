@@ -4519,6 +4519,8 @@ fn native_windows_smoke_assets_are_manual_and_exercise_installed_binary() {
     assert!(!workflow.contains("\n  push:"));
     assert!(workflow.contains("windows-latest"));
     assert!(workflow.contains("scripts/smoke-windows-release.ps1"));
+    assert!(workflow.contains("$manifestLine = Select-String"));
+    assert!(workflow.contains("$manifestLine.Line -split"));
 }
 
 #[test]
