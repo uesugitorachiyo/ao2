@@ -5,6 +5,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VECTOR_PATH = ROOT / "tests" / "fixtures" / "compatibility" / "ao2-execution-receipt-v0.5.1.json"
+COVENANT_AO2_VECTOR_PATH = (
+    ROOT
+    / "tests"
+    / "fixtures"
+    / "compatibility"
+    / "covenant-approval-ticket-to-ao2-approved-execution-v0.1.json"
+)
 
 AO2_TAG_TARGET = "80ec5321f42d4bab17d5e64fdae6aa099ba59d4a"
 CP_TAG_TARGET = "f1702b387607566cac457458af9adb5871a5c412"
@@ -13,6 +20,11 @@ MANIFEST_DIGEST = "bd8103e7a038f47e1b4fef1a2a19ae65cc221675ea11149d39cfb679ae2a0
 
 def load_vector() -> dict:
     with VECTOR_PATH.open("r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def load_covenant_ao2_vector() -> dict:
+    with COVENANT_AO2_VECTOR_PATH.open("r", encoding="utf-8") as handle:
         return json.load(handle)
 
 
@@ -98,6 +110,61 @@ def test_ao2_execution_receipt_vector_is_public_safe_and_non_authorizing():
     assert event["authority"]["control_plane_approves_execution"] is False
     assert event["authority"]["mutates_ao2_artifacts"] is False
     assert event["authority"]["permits_release"] is False
+
+    for text in walk_strings(vector):
+        assert "/Users/" not in text
+        assert "Documents/canary-test" not in text
+        assert "tt" not in text.lower().split("/")
+        assert "module" not in text.lower()
+        assert not re.search(r"(token|secret|password|credential)", text, re.IGNORECASE)
+
+
+def test_covenant_approval_ticket_vector_maps_to_ao2_approved_execution_request():
+    vector = load_covenant_ao2_vector()
+
+    assert (
+        vector["schema_version"]
+        == "ao.compatibility.covenant-approval-ticket-to-ao2-approved-execution-vector.v1"
+    )
+    assert vector["vector_id"] == "ao-covenant-approval-ticket-to-ao2-approved-execution-v1"
+    assert vector["edge"] == "ao-covenant.approval_ticket -> ao2.approved_execution_request"
+    assert vector["producer"]["repository"] == "ao-covenant"
+    assert vector["consumer"]["repository"] == "ao2"
+    assert vector["consumer"]["version"] == "v0.5.1"
+    assert vector["consumer"]["tag_target"] == AO2_TAG_TARGET
+
+    ticket = vector["covenant_approval_ticket"]
+    request = vector["expected_ao2_approved_execution_request"]
+    assert ticket["schema_version"] == "ao.covenant.approval-ticket.v1"
+    assert ticket["approval_state"] == "approved"
+    assert request["schema_version"] == "ao2.approved-execution-request.v1"
+    assert request["approval_ticket_id"] == ticket["ticket_id"]
+    assert request["action_digest"] == ticket["action_digest"]
+    assert request["required_digest_field"] == "action_digest"
+    assert request["provider_execution_required"] is False
+    assert request["release_or_publish_allowed"] is False
+    assert request["status"] == "accepted_for_provider_free_execution"
+
+
+def test_covenant_approval_ticket_vector_is_public_safe_and_non_authorizing():
+    vector = load_covenant_ao2_vector()
+
+    assert vector["boundaries"] == {
+        "release_or_publish": False,
+        "creates_tag": False,
+        "uploads_assets": False,
+        "deploys": False,
+        "contacts_external_users": False,
+        "provider_pilot": False,
+        "promotion_requested": False,
+        "promotion_granted": False,
+        "executes_work": False,
+        "approves_work": False,
+        "mutates_repositories": False,
+        "calls_providers": False,
+        "rsi_work": False,
+        "rsi_remains_denied": True,
+    }
 
     for text in walk_strings(vector):
         assert "/Users/" not in text
