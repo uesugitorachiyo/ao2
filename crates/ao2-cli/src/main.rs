@@ -64187,6 +64187,12 @@ fn rollback_install(install_dir: Option<PathBuf>, target_label: Option<String>) 
     if !rollback_binary.is_file() {
         anyhow::bail!("rollback binary not found: {}", rollback_binary.display());
     }
+    block_windows_active_executable_rollback(
+        &installed_binary,
+        &rollback_binary,
+        &install_dir,
+        &target,
+    )?;
     fs::copy(&rollback_binary, &installed_binary).with_context(|| {
         format!(
             "copy rollback {} to {}",
@@ -64203,6 +64209,52 @@ fn rollback_install(install_dir: Option<PathBuf>, target_label: Option<String>) 
     });
     println!("{}", serde_json::to_string_pretty(&result)?);
     Ok(())
+}
+
+#[cfg(windows)]
+fn block_windows_active_executable_rollback(
+    installed_binary: &Path,
+    rollback_binary: &Path,
+    install_dir: &Path,
+    target: &str,
+) -> Result<()> {
+    let current_exe = std::env::current_exe().context("resolve current ao2 executable")?;
+    let current_exe = canonicalize_for_comparison(&current_exe);
+    let installed_binary = canonicalize_for_comparison(installed_binary);
+    if current_exe != installed_binary {
+        return Ok(());
+    }
+
+    eprintln!("Windows-safe rollback runner required");
+    eprintln!("rollback_status=blocked_active_executable");
+    eprintln!("installed_binary={}", installed_binary.display());
+    eprintln!("rollback_binary={}", rollback_binary.display());
+    eprintln!(
+        "safe_command=Use an extracted or alternate ao2.exe runner: <extracted-or-alternate>\\bin\\ao2.exe install rollback --install-dir \"{}\" --target-label {}",
+        install_dir.display(),
+        target
+    );
+    eprintln!(
+        "recovery=Windows cannot replace the running ao2.exe. Use an extracted or alternate ao2.exe runner from the verified archive."
+    );
+    anyhow::bail!(
+        "Windows cannot replace the running ao2.exe; rollback_status=blocked_active_executable"
+    );
+}
+
+#[cfg(not(windows))]
+fn block_windows_active_executable_rollback(
+    _installed_binary: &Path,
+    _rollback_binary: &Path,
+    _install_dir: &Path,
+    _target: &str,
+) -> Result<()> {
+    Ok(())
+}
+
+#[cfg(windows)]
+fn canonicalize_for_comparison(path: &Path) -> PathBuf {
+    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
 }
 
 struct UpgradeApplyOptions {

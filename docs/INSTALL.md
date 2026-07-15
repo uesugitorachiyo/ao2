@@ -329,6 +329,25 @@ Use `--install-dir` for non-default installs:
 ao2 install rollback --install-dir /path/to/bin
 ```
 
+### Windows-safe rollback
+
+On Windows, do not run rollback from the same installed `ao2.exe` that is being
+restored. Windows can keep the running executable locked, and AO2 will stop with
+`rollback_status=blocked_active_executable` instead of overwriting the active
+process.
+
+Use an extracted or alternate `ao2.exe` runner from the verified archive:
+
+```powershell
+$Ao2Bin = Join-Path $env:LOCALAPPDATA "AO2\bin"
+.\bin\ao2.exe install rollback --install-dir $Ao2Bin --target-label windows-x86_64
+& (Join-Path $Ao2Bin "ao2.exe") version --json
+& (Join-Path $Ao2Bin "ao2.exe") doctor --json
+```
+
+For a custom install directory, replace `$Ao2Bin` with the same directory used
+for install or update.
+
 ## Uninstall
 
 Remove the active binary, rollback copy, and install-verification sidecar from

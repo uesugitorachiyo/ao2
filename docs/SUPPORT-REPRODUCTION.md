@@ -60,3 +60,20 @@ Include these fields when the issue involves a manifest or checksum mismatch:
 
 Do not paste full private directory listings. Include asset basenames and the
 command output category.
+
+## Windows Rollback Cases
+
+Include these fields when the issue involves Windows rollback:
+
+- Windows rollback runner: installed `ao2.exe`, extracted archive `ao2.exe`, or
+  another alternate runner.
+- rollback status, including `rollback_status=blocked_active_executable` when
+  AO2 reports the active executable is locked.
+- exact rollback command.
+- install directory with private path segments redacted.
+- rollback binary basename, normally `ao2.exe.rollback`.
+- sanitized stderr and `ao2.exe doctor --json` output after recovery, if
+  recovery completed.
+
+Do not paste private Windows user paths, access tokens, provider secrets, or
+private repository contents.

@@ -80,6 +80,26 @@ ao2 doctor --json
 Use `--install-dir /path/to/bin` when AO2 was installed outside the default
 location.
 
+### Windows-safe rollback
+
+On Windows, run rollback from an extracted or alternate `ao2.exe`, not from the
+installed `ao2.exe` that is being restored. If AO2 reports
+`rollback_status=blocked_active_executable`, the installed executable is active
+and Windows is preventing replacement.
+
+Use an extracted or alternate runner from the verified archive:
+
+```powershell
+$Ao2Bin = Join-Path $env:LOCALAPPDATA "AO2\bin"
+.\bin\ao2.exe install rollback --install-dir $Ao2Bin --target-label windows-x86_64
+& (Join-Path $Ao2Bin "ao2.exe") version --json
+& (Join-Path $Ao2Bin "ao2.exe") doctor --json
+```
+
+Include the rollback command, `rollback_status=blocked_active_executable`, the
+install directory with private path segments redacted, and sanitized stderr when
+filing a support issue.
+
 ## Offline Verification
 
 For already-downloaded public assets:
