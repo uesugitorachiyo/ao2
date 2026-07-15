@@ -4227,6 +4227,17 @@ fn linux_x86_64_docker_packaging_constrains_emulated_build_parallelism() {
 }
 
 #[test]
+fn linux_aarch64_docker_packaging_constrains_emulated_build_parallelism() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let script = fs::read_to_string(root.join("scripts/package-linux-aarch64-docker.sh"))
+        .expect("linux aarch64 docker packaging script exists");
+
+    assert!(script.contains("AO2_LINUX_AARCH64_CARGO_BUILD_JOBS"));
+    assert!(script.contains("CARGO_BUILD_JOBS=\"$AO2_LINUX_AARCH64_CARGO_BUILD_JOBS\""));
+    assert!(script.contains("CARGO_INCREMENTAL=0"));
+}
+
+#[test]
 fn archive_heavy_test_resource_guard_is_wired_for_ci_and_local_use() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let guard = fs::read_to_string(root.join("scripts/ci/archive-heavy-resource-guard.py"))

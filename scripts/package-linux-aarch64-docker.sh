@@ -4,6 +4,7 @@ set -eu
 IMAGE="${AO2_LINUX_RELEASE_IMAGE:-rust:1.95-bookworm}"
 BUILD_PLATFORM="${AO2_LINUX_AARCH64_BUILD_DOCKER_PLATFORM:-linux/amd64}"
 RUN_PLATFORM="${AO2_LINUX_AARCH64_RUN_DOCKER_PLATFORM:-linux/arm64}"
+AO2_LINUX_AARCH64_CARGO_BUILD_JOBS="${AO2_LINUX_AARCH64_CARGO_BUILD_JOBS:-1}"
 VERSION="$(cargo pkgid -p ao2-cli | sed -e 's/.*#//' -e 's/.*@//')"
 CROSS_BINARY="${AO2_LINUX_AARCH64_BINARY:-target/release-cross/aarch64-unknown-linux-gnu/ao2}"
 BUILD_COMMIT="${AO2_BUILD_GIT_COMMIT:-$(git rev-parse HEAD)}"
@@ -16,6 +17,8 @@ docker run --rm \
   --platform "$BUILD_PLATFORM" \
   -v "$PWD":/workspace \
   -w /workspace \
+  -e CARGO_BUILD_JOBS="$AO2_LINUX_AARCH64_CARGO_BUILD_JOBS" \
+  -e CARGO_INCREMENTAL=0 \
   -e AO2_BUILD_GIT_COMMIT="$BUILD_COMMIT" \
   "$IMAGE" \
   sh -lc '

@@ -24,6 +24,3 @@ tiktoken-rs.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
-
-[build-dependencies]
-vergen-git2.workspace = true

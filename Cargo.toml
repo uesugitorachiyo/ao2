@@ -41,7 +41,6 @@ uuid = { version = "1", features = ["v4", "serde"] }
 walkdir = "2"
 tempfile = "3"
 tiktoken-rs = "0.7"
-vergen-git2 = "1.0.7"
 sdd-planner = { path = "crates/sdd-planner" }
 
 # Workspace-wide lint policy. Crates opt in with `[lints] workspace = true`.
