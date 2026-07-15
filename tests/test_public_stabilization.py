@@ -628,23 +628,23 @@ def test_public_ci_docs_do_not_claim_manual_only_private_ci():
     assert "release-gate.yml" in readme
 
 
-def test_public_release_links_and_install_guide_track_current_prerelease():
+def test_public_release_links_and_install_guide_track_current_stable():
     readme = read("README.md")
     install = read("docs/INSTALL.md")
 
     for needle in [
-        "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.81",
-        "https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.81",
+        "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.0",
+        "https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.0",
         "img.shields.io/github/v/release/uesugitorachiyo/ao2",
-        "gh release download v0.4.81 --repo uesugitorachiyo/ao2",
-        "ao2-0.4.81-macos-aarch64.tar.gz",
-        "ao2-0.4.81-linux-x86_64.tar.gz",
-        "ao2-0.4.81-windows-x86_64.tar.gz",
+        "gh release download v0.5.0 --repo uesugitorachiyo/ao2",
+        "ao2-0.5.0-macos-aarch64.tar.gz",
+        "ao2-0.5.0-linux-x86_64.tar.gz",
+        "ao2-0.5.0-windows-x86_64.tar.gz",
         "SHA256SUMS",
     ]:
         assert needle in readme
 
-    assert "The current stable public release line is `v0.4.81`." in install
+    assert "The current stable public release line is `v0.5.0`." in install
     assert "v0.4.79" not in install
 
 
@@ -701,7 +701,7 @@ def test_public_release_download_verify_is_checksum_first_and_post_merge_canarie
         "verifies every\nasset listed in `SHA256SUMS`",
         "verifies signed\nprovenance",
         "public release download checksum verification",
-        "stable public release archives at v0.4.81",
+        "stable public release archives at v0.5.0",
     ]:
         assert needle in install + "\n" + verification
 
@@ -838,7 +838,7 @@ def test_release_metadata_drift_audit_is_exposed_and_documented():
     assert "ao2.release-metadata-drift-audit.v1" in verification
 
     public_release_index = read("docs/release/PUBLIC-RELEASE-VERIFICATION.md")
-    assert "AO2 control-plane stable release: `v0.1.14`" in public_release_index
+    assert "AO2 control-plane stable release: `v0.1.15`" in public_release_index
     assert "AO2 control-plane prerelease" not in public_release_index
 
 
@@ -5399,8 +5399,8 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "Stable Promotion Evidence Index",
         "ao2-stable-promotion-evidence-index",
         "ao2.stable-promotion-evidence-index.v1",
-        "ao2-0.4.81-linux-aarch64.tar.gz",
-        "ao2-control-plane-0.1.14-windows-x86_64.tar.gz",
+        "ao2-0.5.0-linux-aarch64.tar.gz",
+        "ao2-control-plane-0.1.15-windows-x86_64.tar.gz",
     ]:
         assert needle in verification
 
@@ -7419,8 +7419,8 @@ def test_dual_public_release_smoke_workflow_and_docs_contract():
         assert needle in workflow
 
     for needle in [
-        "AO2 stable release: `v0.4.81`",
-        "AO2 control-plane stable release: `v0.1.14`",
+        "AO2 stable release: `v0.5.0`",
+        "AO2 control-plane stable release: `v0.1.15`",
         "ao2-dual-public-release-smoke",
         "ao2.dual-public-release-smoke.v1",
         "published AO2 Linux x86_64 archive",
@@ -14130,8 +14130,8 @@ def test_candidate_patch_release_rehearsal_workflow_produces_single_bundle():
         "ao2.candidate-patch-release-rehearsal-audit.v1",
         "ao2.public-release-train-drill.v1",
         '"selected_train"] == "next_patch"',
-        '"v0.4.81"',
-        '"v0.1.14"',
+        '"v0.5.0"',
+        '"v0.1.15"',
         "ao2-candidate-patch-release-rehearsal",
         "target/candidate-patch-release-rehearsal/report",
         "uses: actions/upload-artifact@v7.0.1",
@@ -14153,8 +14153,8 @@ def test_candidate_patch_release_rehearsal_audit_contract(tmp_path):
         "release_train_manifest",
         "release_targets",
         "next_patch",
-        "v0.4.81",
-        "v0.1.14",
+        "v0.5.0",
+        "v0.1.15",
         "refuses_publish_side_effects_by_default",
         "OPENAI_API_KEY",
         "ANTHROPIC_API_KEY",
@@ -14189,10 +14189,10 @@ def test_candidate_patch_release_rehearsal_audit_contract(tmp_path):
                 },
                 "release_targets": {
                     "selected_train": "next_patch",
-                    "ao2": {"tag": "v0.4.81", "version": "0.4.81"},
-                    "ao2_control_plane": {"tag": "v0.1.14", "version": "0.1.14"},
-                    "promotion_confirm": "promote-stable-v0.4.81-v0.1.14",
-                    "public_operator_confirm": "public-release-reviewed-v0.4.81-v0.1.14",
+                    "ao2": {"tag": "v0.5.0", "version": "0.5.0"},
+                    "ao2_control_plane": {"tag": "v0.1.15", "version": "0.1.15"},
+                    "promotion_confirm": "promote-stable-v0.5.0-v0.1.15",
+                    "public_operator_confirm": "public-release-reviewed-v0.5.0-v0.1.15",
                 },
                 "checks": [{"name": "fixture", "status": "passed", "exit_code": 0}],
                 "publish_guards": {
@@ -14220,8 +14220,8 @@ def test_candidate_patch_release_rehearsal_audit_contract(tmp_path):
     audit = json.loads((bundle / "candidate-patch-release-rehearsal-audit.json").read_text())
     assert audit["schema_version"] == "ao2.candidate-patch-release-rehearsal-audit.v1"
     assert audit["status"] == "passed"
-    assert audit["release_targets"]["ao2"]["tag"] == "v0.4.81"
-    assert audit["release_targets"]["ao2_control_plane"]["tag"] == "v0.1.14"
+    assert audit["release_targets"]["ao2"]["tag"] == "v0.5.0"
+    assert audit["release_targets"]["ao2_control_plane"]["tag"] == "v0.1.15"
     assert audit["token_scan"]["credential_material_included"] is False
     assert audit["trust_boundary"]["mutates_github_releases"] is False
 
@@ -14476,10 +14476,10 @@ def test_candidate_readiness_packet_contract(tmp_path):
     (candidate / "closure.html").write_text("<!doctype html><title>candidate</title>\n")
     release_targets = {
         "selected_train": "next_patch",
-        "ao2": {"tag": "v0.4.81", "version": "0.4.81"},
-        "ao2_control_plane": {"tag": "v0.1.14", "version": "0.1.14"},
-        "promotion_confirm": "promote-stable-v0.4.81-v0.1.14",
-        "public_operator_confirm": "public-release-reviewed-v0.4.81-v0.1.14",
+        "ao2": {"tag": "v0.5.0", "version": "0.5.0"},
+        "ao2_control_plane": {"tag": "v0.1.15", "version": "0.1.15"},
+        "promotion_confirm": "promote-stable-v0.5.0-v0.1.15",
+        "public_operator_confirm": "public-release-reviewed-v0.5.0-v0.1.15",
     }
     (candidate / "summary.json").write_text(
         json.dumps(
@@ -14539,14 +14539,14 @@ def test_candidate_readiness_packet_contract(tmp_path):
                 "schema_aligned": True,
                 "target_aligned": True,
                 "stable": {
-                    "ao2": {"tag": "v0.4.81", "version": "0.4.81"},
-                    "ao2_control_plane": {"tag": "v0.1.14", "version": "0.1.14"},
+                    "ao2": {"tag": "v0.5.0", "version": "0.5.0"},
+                    "ao2_control_plane": {"tag": "v0.1.15", "version": "0.1.15"},
                 },
                 "next_patch": {
-                    "ao2": {"tag": "v0.4.81", "version": "0.4.81"},
-                    "ao2_control_plane": {"tag": "v0.1.14", "version": "0.1.14"},
-                    "promotion_confirm": "promote-stable-v0.4.81-v0.1.14",
-                    "public_operator_confirm": "public-release-reviewed-v0.4.81-v0.1.14",
+                    "ao2": {"tag": "v0.5.0", "version": "0.5.0"},
+                    "ao2_control_plane": {"tag": "v0.1.15", "version": "0.1.15"},
+                    "promotion_confirm": "promote-stable-v0.5.0-v0.1.15",
+                    "public_operator_confirm": "public-release-reviewed-v0.5.0-v0.1.15",
                 },
                 "trust_boundary": {
                     "local_only": True,
@@ -14647,8 +14647,8 @@ def test_candidate_readiness_packet_contract(tmp_path):
     assert summary["schema_version"] == "ao2.candidate-readiness-packet.v1"
     assert summary["status"] == "passed"
     assert summary["candidate_readiness_ready"] is True
-    assert summary["release_targets"]["ao2"]["tag"] == "v0.4.81"
-    assert summary["release_targets"]["ao2_control_plane"]["tag"] == "v0.1.14"
+    assert summary["release_targets"]["ao2"]["tag"] == "v0.5.0"
+    assert summary["release_targets"]["ao2_control_plane"]["tag"] == "v0.1.15"
     assert summary["components"]["candidate_rehearsal"]["status"] == "passed"
     assert summary["components"]["manifest_parity"]["status"] == "passed"
     assert summary["components"]["control_plane_bridge"]["status"] == "passed"
@@ -15704,8 +15704,8 @@ def test_dual_repo_public_release_verification_index_is_documented():
         "# Public Release Verification",
         "uesugitorachiyo/ao2",
         "uesugitorachiyo/ao2-control-plane",
-        "v0.4.81",
-        "v0.1.14",
+        "v0.5.0",
+        "v0.1.15",
         "Post Stable Release Verification",
         ".github/workflows/post-stable-release-verification.yml",
         "post-stable-release-smoke-${{ runner.os }}",
@@ -15781,8 +15781,8 @@ def test_release_immutability_audit_composes_stable_asset_and_download_checks():
     assert "npm run release:immutability-audit" in verification
     assert "ao2.release-immutability-audit.v1" in verification
     assert "stable public release" in readme
-    assert "v0.4.81" in readme
-    assert "ao2-0.4.81-linux-aarch64.tar.gz" in readme
+    assert "v0.5.0" in readme
+    assert "ao2-0.5.0-linux-aarch64.tar.gz" in readme
     assert "https://youtu.be/p222b0iCpbg" in readme
     assert "stable public release" in install
     assert "v0.4.81" in next_patch

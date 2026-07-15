@@ -2,7 +2,7 @@
 
 [Watch the AO2 overview video](https://youtu.be/p222b0iCpbg)
 
-[![Latest release](https://img.shields.io/github/v/release/uesugitorachiyo/ao2?label=latest%20stable%20release)](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.81)
+[![Latest release](https://img.shields.io/github/v/release/uesugitorachiyo/ao2?label=latest%20stable%20release)](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.0)
 
 AO2 is the governed execution runtime for local agent work. It compiles and runs scoped workflows, enforces policy and exact-digest approvals, invokes execution adapters, evaluates results, and emits replayable evidence. Use AO2 when an authorized plan is ready to execute and the run must remain reviewable, reproducible, and bound to its approved inputs.
 
@@ -123,7 +123,7 @@ published to a read-only control plane.
 
 ## Status
 
-This public export is prepared from AO2 `0.4.81`. It is intentionally
+This public export is prepared from AO2 `0.5.0`. It is intentionally
 local-first:
 
 - no provider API-key authentication paths;
@@ -156,7 +156,7 @@ Build a local release archive:
 ```sh
 npm run package:local
 tmpdir=$(mktemp -d /tmp/ao2-release.XXXXXX)
-archive=$(ls dist/ao2-0.4.81-*.tar.gz | head -1)
+archive=$(ls dist/ao2-0.5.0-*.tar.gz | head -1)
 tar -xzf "$archive" -C "$tmpdir"
 sh "$tmpdir/verify-release.sh"
 ```
@@ -167,10 +167,11 @@ checksum verification before install.
 ## Install From Stable Public Release
 
 The current stable public release is
-[`v0.4.81`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.81).
+[`v0.5.0`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.0).
 It publishes release archives for macOS, Ubuntu/Linux x86_64,
 Ubuntu/Linux aarch64, and Windows, plus `SHA256SUMS`, signed provenance, and
-release-readiness JSON evidence.
+release-readiness JSON evidence. The expected compatible stable companion is
+[AO2 Control Plane v0.1.15](https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.15).
 The overview video is available at
 [https://youtu.be/p222b0iCpbg](https://youtu.be/p222b0iCpbg).
 
@@ -178,58 +179,31 @@ Download and verify a macOS archive:
 
 ```sh
 mkdir -p dist-release
-gh release download v0.4.81 --repo uesugitorachiyo/ao2 \
-  --pattern ao2-0.4.81-macos-aarch64.tar.gz \
+gh release download v0.5.0 --repo uesugitorachiyo/ao2 \
+  --pattern ao2-0.5.0-macos-aarch64.tar.gz \
   --pattern SHA256SUMS \
   --dir dist-release
-(cd dist-release && grep 'ao2-0.4.81-macos-aarch64.tar.gz' SHA256SUMS | shasum -a 256 -c -)
+(cd dist-release && grep 'ao2-0.5.0-macos-aarch64.tar.gz' SHA256SUMS | shasum -a 256 -c -)
 ```
 
 Use the same release base URL for Linux and Windows archives:
 
 ```text
-https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.81/ao2-0.4.81-linux-x86_64.tar.gz
-https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.81/ao2-0.4.81-linux-aarch64.tar.gz
-https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.81/ao2-0.4.81-windows-x86_64.tar.gz
+https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.0/ao2-0.5.0-linux-x86_64.tar.gz
+https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.0/ao2-0.5.0-linux-aarch64.tar.gz
+https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.0/ao2-0.5.0-windows-x86_64.tar.gz
 ```
 
-## Install the v0.5.0-beta.1 External Beta
+## First 30 Minutes With AO2
 
-[`v0.5.0-beta.1`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.0-beta.1)
-is an external beta, not AO2 1.0 or the stable update channel. AO2 `v0.4.81`
-remains the latest stable release. This beta is qualified with
-[AO2 Control Plane v0.1.15](https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.15).
+Use the [first 30 minutes guide](docs/FIRST-30-MINUTES.md) to verify the
+public archive, install AO2, run `ao2 doctor`, and execute the governed demo.
+For install, rollback, and uninstall details, see [Install](docs/INSTALL.md).
+For common support cases, see [Troubleshooting](docs/TROUBLESHOOTING.md).
 
-The beta supports these archives:
-
-- [macOS arm64](https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.0-beta.1/ao2-0.5.0-beta.1-macos-aarch64.tar.gz)
-- [Linux arm64](https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.0-beta.1/ao2-0.5.0-beta.1-linux-aarch64.tar.gz)
-- [Linux x86_64](https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.0-beta.1/ao2-0.5.0-beta.1-linux-x86_64.tar.gz)
-- [Windows x86_64](https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.0-beta.1/ao2-0.5.0-beta.1-windows-x86_64.tar.gz)
-
-Download the archive for your platform together with `SHA256SUMS`, its
-signature sidecar, the release provenance files, and
-`ao2-release-signing-public.pem`. Verify the downloaded set before extracting
-and installing it:
-
-```sh
-mkdir -p ao2-beta && cd ao2-beta
-gh release download v0.5.0-beta.1 --repo uesugitorachiyo/ao2
-shasum -a 256 -c SHA256SUMS
-tar -xzf ao2-0.5.0-beta.1-<platform>.tar.gz
-./verify-release.sh
-./install.sh
-ao2 version --json
-ao2 doctor --json
-```
-
-On Windows, run `Verify-Release.ps1` and `install.ps1` from the extracted
-archive. See the [install and update guide](docs/INSTALL.md#install-the-v050-beta1-external-beta)
-for upgrade, rollback, and uninstall commands.
-
-For Rust/Cargo beta work with the published `v0.5.0-beta.1` binary, run the
-Cargo workflow file by path from an AO2 checkout at commit
-`87c4cbe9706ea7d1721eaadcdb50e816cc96e91f` or newer:
+For Rust/Cargo work with the published `v0.5.0` binary, run the Cargo workflow
+file by path from an AO2 checkout at commit
+`a1e82b0adb723dd5ae2be6d93355ffdc2caa549d` or newer:
 
 ```sh
 ao2 run examples/task-templates/rust-cargo-bug-fix.yaml \
@@ -238,9 +212,7 @@ ao2 run examples/task-templates/rust-cargo-bug-fix.yaml \
   --provider-prompt-file prompt.txt
 ```
 
-Use `cargo test` as the verifier for Rust projects. See the
-[beta canary closeout](docs/beta/v0.5.0-beta.1-canary-closeout.md) for the
-public-binary confirmation evidence.
+Use `cargo test` as the verifier for Rust projects.
 
 Run the Phase 1 promotion wrapper after starting a local ao2-control-plane
 instance and placing the control-plane bearer token in an environment variable:
@@ -267,7 +239,7 @@ downloading the current archive:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke-windows-release.ps1 `
-  -Archive .\dist-windows\ao2-0.4.81-windows-x86_64.tar.gz
+  -Archive .\dist-windows\ao2-0.5.0-windows-x86_64.tar.gz
 ```
 
 The main CI workflow in `.github/workflows/ci.yml` runs on pull request and
@@ -347,6 +319,8 @@ ao2 pulse run-loop \
 ## Documentation
 
 - [Install](docs/INSTALL.md)
+- [First 30 Minutes With AO2](docs/FIRST-30-MINUTES.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Product requirements](docs/PRD.md)
 - [Risky PR Run SDD](docs/SDD-risky-pr-run.md)
@@ -355,6 +329,7 @@ ao2 pulse run-loop \
 - [Security](docs/SECURITY.md)
 - [Verification](docs/VERIFICATION.md)
 - [Public release verification](docs/release/PUBLIC-RELEASE-VERIFICATION.md)
+- [AO2 v0.5.0 stable release notes](docs/release/v0.5.0-stable.md)
 
 ## License
 

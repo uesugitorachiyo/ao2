@@ -1,0 +1,43 @@
+name: Support question
+description: Ask for help using AO2 v0.5.0.
+title: "[Support]: "
+labels: ["support", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Public issues are not a place for secrets, provider credentials, or private pilot evidence.
+  - type: dropdown
+    id: topic
+    attributes:
+      label: Topic
+      options:
+        - First 30 minutes guide
+        - Install or update
+        - Rollback or uninstall
+        - Approval behavior
+        - Manifest or checksum verification
+        - Offline verification
+        - Control Plane compatibility
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: AO2 version
+      placeholder: "0.5.0"
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: Describe what you are trying to do and where you are stuck.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Redacted context
+      description: Include OS, command, and redacted output when relevant.
