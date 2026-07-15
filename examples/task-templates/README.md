@@ -21,9 +21,8 @@ ao2 template show bug-fix > bug-fix.yaml
 ao2 run bug-fix.yaml --target /path/to/repo --provider codex --provider-prompt-file prompt.txt
 ```
 
-The published `v0.5.0-beta.1` binary was built before the Rust/Cargo template
-was embedded in `ao2 template list`. That binary can still run this workflow by
-file path from an AO2 checkout:
+The stable `v0.5.0` binary includes the Rust/Cargo template in
+`ao2 template list` and `ao2 template show`.
 
 ```sh
 ao2 run examples/task-templates/rust-cargo-bug-fix.yaml \
@@ -40,9 +39,9 @@ The initial template set covers:
 - `test-generation`
 - `rust-cargo-bug-fix`
 
-## Rust/Cargo Beta Runs
+## Rust/Cargo Runs
 
-Use `rust-cargo-bug-fix` for Rust crate repair work during the beta:
+Use `rust-cargo-bug-fix` for Rust crate repair work:
 
 ```sh
 ao2 template show rust-cargo-bug-fix > rust-cargo-bug-fix.yaml
@@ -52,13 +51,12 @@ ao2 run rust-cargo-bug-fix.yaml \
   --provider-prompt-file prompt.txt
 ```
 
-The generic `bug-fix` template uses `python -m pytest` as its verifier. For
-Rust beta runs, use `cargo test` through `rust-cargo-bug-fix` so AO2 asks the
-test-engineer and evaluator-closer to judge the ecosystem's native verifier
-instead of nudging the run toward a Python pytest wrapper.
+The generic `bug-fix` template uses `python -m pytest` as its verifier. It is
+the Python/default template. For Rust runs, use `rust-cargo-bug-fix` so AO2 asks
+the test-engineer and evaluator-closer to judge the ecosystem's native
+`cargo test` verifier instead of nudging the run toward a Python pytest wrapper.
 
-This is beta workflow/template guidance only. It does not require a new binary
-release, tag, upload, deployment, or publication step.
+This workflow/template guidance does not start a new release train by default.
 
 ## C++ To Rust Stretch Case
 

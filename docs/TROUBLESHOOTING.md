@@ -4,6 +4,10 @@ Use this page for first-pass support on AO2 `v0.5.0` installs and local runs.
 Keep logs redacted before opening an issue. Do not include tokens, API keys,
 private repository names, or unreleased evidence values.
 
+For public issue reports, start from
+[AO2 Support Reproduction Checklist](SUPPORT-REPRODUCTION.md). The same file is
+available at `docs/SUPPORT-REPRODUCTION.md` in the repository.
+
 ## Approvals
 
 AO2 approval prompts bind the proposed change to exact content digests. If an

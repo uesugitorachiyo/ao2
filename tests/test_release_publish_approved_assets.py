@@ -526,6 +526,27 @@ def run_publisher(
     )
 
 
+def run_approved_asset_verifier(case: dict[str, object]) -> subprocess.CompletedProcess[str]:
+    root = Path(__file__).resolve().parents[1]
+    return subprocess.run(
+        [
+            sys.executable,
+            str(root / "scripts/release-verify-approved-assets.py"),
+            "--manifest",
+            str(case["manifest"]),
+            "--manifest-sha256",
+            str(case["manifest_sha256"]),
+            "--publication-dir",
+            str(case["publication"]),
+            "--publication-list",
+            str(case["publication_list"]),
+        ],
+        cwd=root,
+        text=True,
+        capture_output=True,
+    )
+
+
 def assert_no_mutation(case: dict[str, object]) -> None:
     log = Path(case["command_log"])
     if log.exists():
@@ -673,6 +694,61 @@ def test_changed_asset_fails_before_mutation(promotion_case: dict[str, object]) 
     assert result.returncode != 0
     assert "approved asset hash mismatch" in result.stderr
     assert_no_mutation(promotion_case)
+
+
+@pytest.mark.parametrize(
+    ("kind", "expected_error"),
+    [
+        ("missing", "manifest mismatch: missing asset"),
+        ("unexpected", "manifest mismatch: unexpected asset"),
+        ("hash", "manifest mismatch: hash mismatch"),
+        ("duplicate_basename", "manifest mismatch: duplicate basename"),
+        ("malformed_hash", "manifest mismatch: malformed hash"),
+        ("traversal", "manifest mismatch: disallowed path"),
+    ],
+)
+def test_approved_asset_verifier_classifies_manifest_mismatches(
+    promotion_case: dict[str, object], kind: str, expected_error: str
+) -> None:
+    publication = Path(promotion_case["publication"])
+    publication_list = Path(promotion_case["publication_list"])
+    manifest = Path(promotion_case["manifest"])
+
+    if kind == "missing":
+        (publication / ASSET_NAMES[1]).unlink()
+    elif kind == "unexpected":
+        (publication / "unexpected.bin").write_bytes(b"extra")
+    elif kind == "hash":
+        (publication / ASSET_NAMES[1]).write_bytes(b"changed asset bytes")
+    elif kind == "duplicate_basename":
+        manifest.write_text(
+            manifest.read_text(encoding="utf-8")
+            + f"{'0' * 64}  {ASSET_NAMES[1]}\n",
+            encoding="utf-8",
+        )
+        promotion_case["manifest_sha256"] = sha256(manifest)
+    elif kind == "malformed_hash":
+        first = manifest.read_text(encoding="utf-8").splitlines()[0]
+        manifest.write_text(
+            "z" * 64 + first[64:] + "\n",
+            encoding="utf-8",
+        )
+        promotion_case["manifest_sha256"] = sha256(manifest)
+    elif kind == "traversal":
+        manifest.write_text(
+            manifest.read_text(encoding="utf-8")
+            + f"{'0' * 64}  ../escape.tar.gz\n",
+            encoding="utf-8",
+        )
+        promotion_case["manifest_sha256"] = sha256(manifest)
+        publication_list.write_text(
+            publication_list.read_text(encoding="utf-8") + "../escape.tar.gz\n",
+            encoding="utf-8",
+        )
+
+    result = run_approved_asset_verifier(promotion_case)
+    assert result.returncode != 0
+    assert expected_error in result.stderr
 
 
 @pytest.mark.parametrize("kind", ["missing", "extra"])
