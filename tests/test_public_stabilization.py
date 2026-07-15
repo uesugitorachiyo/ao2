@@ -877,10 +877,10 @@ def test_public_release_pair_digest_audit_rejects_closure_release_asset_drift(tm
     ao2_release = tmp_path / "ao2-release.json"
     control_plane_release = tmp_path / "control-plane-release.json"
     ao2_assets = [
-        ("ao2-0.4.81-linux-aarch64.tar.gz", "c" * 64, 3345601),
-        ("ao2-0.4.81-linux-x86_64.tar.gz", "d" * 64, 3345603),
-        ("ao2-0.4.81-macos-aarch64.tar.gz", "e" * 64, 3345605),
-        ("ao2-0.4.81-windows-x86_64.tar.gz", "f" * 64, 3345607),
+        ("ao2-0.5.0-linux-aarch64.tar.gz", "c" * 64, 3345601),
+        ("ao2-0.5.0-linux-x86_64.tar.gz", "d" * 64, 3345603),
+        ("ao2-0.5.0-macos-aarch64.tar.gz", "e" * 64, 3345605),
+        ("ao2-0.5.0-windows-x86_64.tar.gz", "f" * 64, 3345607),
     ]
     control_plane_assets = [
         ("ao2-control-plane-0.1.15-linux-x86_64.tar.gz", "b" * 64, 4236805),
@@ -922,11 +922,11 @@ def test_public_release_pair_digest_audit_rejects_closure_release_asset_drift(tm
     ao2_release.write_text(
         json.dumps(
             {
-                "tagName": "v0.4.81",
-                "name": "AO2 v0.4.81 stable",
+                "tagName": "v0.5.0",
+                "name": "AO2 v0.5.0 stable",
                 "isPrerelease": False,
                 "publishedAt": "2026-06-10T18:45:16Z",
-                "url": "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.81",
+                "url": "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.0",
                 "assets": [
                     {"name": name, "digest": "sha256:" + digest, "size": size}
                     for name, digest, size in ao2_assets
@@ -942,7 +942,7 @@ def test_public_release_pair_digest_audit_rejects_closure_release_asset_drift(tm
         json.dumps(
             {
                 "tagName": "v0.1.15",
-                "name": "ao2-control-plane v0.1.15",
+                "name": "AO2 Control Plane v0.1.15",
                 "isPrerelease": False,
                 "publishedAt": "2026-06-12T05:53:59Z",
                 "url": (
@@ -1062,10 +1062,10 @@ def test_public_release_pair_digest_audit_rejects_missing_or_mismatched_full_arc
         assert needle in script
 
     ao2_archives = {
-        "ao2-0.4.81-linux-aarch64.tar.gz": ("a" * 64, 101),
-        "ao2-0.4.81-linux-x86_64.tar.gz": ("b" * 64, 102),
-        "ao2-0.4.81-macos-aarch64.tar.gz": ("c" * 64, 103),
-        "ao2-0.4.81-windows-x86_64.tar.gz": ("d" * 64, 104),
+        "ao2-0.5.0-linux-aarch64.tar.gz": ("a" * 64, 101),
+        "ao2-0.5.0-linux-x86_64.tar.gz": ("b" * 64, 102),
+        "ao2-0.5.0-macos-aarch64.tar.gz": ("c" * 64, 103),
+        "ao2-0.5.0-windows-x86_64.tar.gz": ("d" * 64, 104),
     }
     cp_archives = {
         "ao2-control-plane-0.1.15-linux-x86_64.tar.gz": ("e" * 64, 201),
@@ -1077,11 +1077,11 @@ def test_public_release_pair_digest_audit_rejects_missing_or_mismatched_full_arc
         path.write_text(
             json.dumps(
                 {
-                    "tagName": "v0.4.81" if component == "ao2" else "v0.1.15",
+                    "tagName": "v0.5.0" if component == "ao2" else "v0.1.15",
                     "name": (
-                        "AO2 v0.4.81 stable"
+                        "AO2 v0.5.0 stable"
                         if component == "ao2"
-                        else "ao2-control-plane v0.1.15"
+                        else "AO2 Control Plane v0.1.15"
                     ),
                     "isPrerelease": False,
                     "publishedAt": "2026-06-12T00:00:00Z",
@@ -1167,7 +1167,7 @@ def test_public_release_pair_digest_audit_rejects_missing_or_mismatched_full_arc
     assert any(
         item["component"] == "ao2"
         and item["code"] == "required_archive_presence"
-        and "ao2-0.4.81-windows-x86_64.tar.gz" in item["missing_assets"]
+        and "ao2-0.5.0-windows-x86_64.tar.gz" in item["missing_assets"]
         for item in missing_failed
     )
 
@@ -13657,23 +13657,23 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
     assert manifest["schema_version"] == "ao2.release-train-manifest.v1"
-    assert manifest["stable"]["ao2"] == {"tag": "v0.4.81", "version": "0.4.81"}
+    assert manifest["stable"]["ao2"] == {"tag": "v0.5.0", "version": "0.5.0"}
     assert manifest["stable"]["ao2_control_plane"] == {
         "tag": "v0.1.15",
         "version": "0.1.15",
     }
-    assert manifest["next_patch"]["ao2"] == {"tag": "v0.4.81", "version": "0.4.81"}
+    assert manifest["next_patch"]["ao2"] == {"tag": "v0.5.0", "version": "0.5.0"}
     assert manifest["next_patch"]["ao2_control_plane"] == {
         "tag": "v0.1.15",
         "version": "0.1.15",
     }
     assert (
         manifest["stable"]["promotion_confirm"]
-        == "promote-stable-v0.4.81-v0.1.15"
+        == "promote-stable-v0.5.0-v0.1.15"
     )
     assert (
         manifest["next_patch"]["promotion_confirm"]
-        == "promote-stable-v0.4.81-v0.1.15"
+        == "promote-stable-v0.5.0-v0.1.15"
     )
 
     helper = REPO_ROOT / "scripts" / "release-train-env.sh"
@@ -13689,15 +13689,15 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
     assert result.returncode == 0, result.stderr + result.stdout
     exported = dict(line.split("=", 1) for line in result.stdout.splitlines())
     assert exported["AO2_RELEASE_TRAIN_NAME"] == "next_patch"
-    assert exported["AO2_RELEASE_TRAIN_AO2_TAG"] == "v0.4.81"
-    assert exported["AO2_RELEASE_TRAIN_AO2_VERSION"] == "0.4.81"
+    assert exported["AO2_RELEASE_TRAIN_AO2_TAG"] == "v0.5.0"
+    assert exported["AO2_RELEASE_TRAIN_AO2_VERSION"] == "0.5.0"
     assert exported["AO2_RELEASE_TRAIN_CP_TAG"] == "v0.1.15"
     assert exported["AO2_RELEASE_TRAIN_CP_VERSION"] == "0.1.15"
     assert exported["AO2_RELEASE_TRAIN_PROMOTION_CONFIRM"] == (
-        "promote-stable-v0.4.81-v0.1.15"
+        "promote-stable-v0.5.0-v0.1.15"
     )
     assert exported["AO2_RELEASE_TRAIN_PUBLIC_OPERATOR_CONFIRM"] == (
-        "public-release-reviewed-v0.4.81-v0.1.15"
+        "public-release-reviewed-v0.5.0-v0.1.15"
     )
 
     for workflow_path in [
@@ -13707,7 +13707,7 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
     ]:
         workflow = read(workflow_path)
         assert "stable release-train manifest" in workflow
-        assert "default: v0.4.81" not in workflow
+        assert "default: v0.5.0" not in workflow
         assert "default: v0.1.15" not in workflow
     post_stable = read(".github/workflows/post-stable-release-verification.yml")
     windows_smoke = read(".github/workflows/windows-release-smoke.yml")
@@ -13717,8 +13717,8 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
     assert "Resolve stable release train defaults" in windows_smoke
     assert "scripts/release-train-env.sh stable" in windows_smoke
     assert "AO2_RELEASE_TRAIN_AO2_VERSION" in windows_smoke
-    assert "default: 0.4.81" not in post_stable
-    assert "default: 0.4.81" not in windows_smoke
+    assert "default: 0.5.0" not in post_stable
+    assert "default: 0.5.0" not in windows_smoke
 
 
 def test_public_release_consumer_smoke_defaults_to_release_train_manifest(tmp_path):
@@ -14280,8 +14280,8 @@ def test_release_train_manifest_parity_audit_contract(tmp_path):
     assert summary["byte_identical"] is True
     assert summary["schema_aligned"] is True
     assert summary["target_aligned"] is True
-    assert summary["stable"]["ao2"]["tag"] == "v0.4.81"
-    assert summary["next_patch"]["ao2"]["tag"] == "v0.4.81"
+    assert summary["stable"]["ao2"]["tag"] == "v0.5.0"
+    assert summary["next_patch"]["ao2"]["tag"] == "v0.5.0"
 
     for needle in [
         "release-train-manifest-parity:",
@@ -15889,7 +15889,7 @@ def test_public_release_consumer_smoke_runs_against_offline_fixture(tmp_path):
     fixture = tmp_path / "fixture"
     out_root = tmp_path / "out"
     target_label = "linux-x86_64"
-    ao2_version = "0.4.81"
+    ao2_version = "0.5.0"
     cp_version = "0.1.15"
 
     def write_executable(path: Path, body: str) -> None:
@@ -15926,7 +15926,7 @@ def test_public_release_consumer_smoke_runs_against_offline_fixture(tmp_path):
         """#!/usr/bin/env sh
 set -eu
 if [ "${1:-}" = "version" ] && [ "${2:-}" = "--json" ]; then
-  printf '{"package":"ao2","version":"0.4.81","target":"linux-x86_64","release_manifest_schema":"ao2.release-manifest.v1"}\n'
+  printf '{"package":"ao2","version":"0.5.0","target":"linux-x86_64","release_manifest_schema":"ao2.release-manifest.v1"}\n'
   exit 0
 fi
 if [ "${1:-}" = "--help" ]; then
@@ -15987,7 +15987,7 @@ exit 2
     assert summary["schema_version"] == "ao2.public-release-consumer-smoke.v1"
     assert summary["status"] == "passed"
     assert summary["target_label"] == target_label
-    assert summary["release_pair"]["ao2"]["tag"] == "v0.4.81"
+    assert summary["release_pair"]["ao2"]["tag"] == "v0.5.0"
     assert summary["release_pair"]["ao2_control_plane"]["tag"] == "v0.1.15"
     assert summary["archives"]["ao2"]["manifest_schema"] == "ao2.release-manifest.v1"
     assert (
