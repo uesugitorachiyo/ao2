@@ -1,14 +1,10 @@
 # AO2 Install And Update Guide
 
-Codex/Claude plugin shipment operators should also follow
-[`PLUGIN-SHIPMENT-RUNBOOK.md`](PLUGIN-SHIPMENT-RUNBOOK.md) for digest-pinned
-plugin packaging, adapter, final install transcript, shipment-readiness, and
-read-only control-plane observer proof. The plugin flow is local OAuth
-CLI-only, token-safe, and keeps C85 hosted GitHub Actions proof deferred until
-GitHub billing/spending-limit access is fixed.
+This guide covers public AO2 stable release install, update, rollback, offline
+verification, and uninstall workflows.
 
 AO2 now has a stable public release:
-[`v0.4.81`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.81).
+[`v0.5.0`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.0).
 The overview video is available at
 [https://youtu.be/p222b0iCpbg](https://youtu.be/p222b0iCpbg). Release
 archives are private-first in trust boundary and public-stable in distribution;
@@ -21,26 +17,25 @@ the normal flow is:
 5. Run `ao2 doctor` to confirm install, PATH, release provenance, local tools,
    and provider health.
 
-## Install the v0.5.0-beta.1 External Beta
+## Install AO2 v0.5.0 Stable
 
-[`v0.5.0-beta.1`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.0-beta.1)
-is an external beta, not AO2 1.0 or the stable update channel. AO2 `v0.4.81`
-remains the latest stable release. The beta is qualified with
+[`v0.5.0`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.0)
+is the current stable public AO2 release. It is qualified with
 [AO2 Control Plane v0.1.15](https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.15).
 
 Choose one supported archive:
 
-- `ao2-0.5.0-beta.1-macos-aarch64.tar.gz`
-- `ao2-0.5.0-beta.1-linux-aarch64.tar.gz`
-- `ao2-0.5.0-beta.1-linux-x86_64.tar.gz`
-- `ao2-0.5.0-beta.1-windows-x86_64.tar.gz`
+- `ao2-0.5.0-macos-aarch64.tar.gz`
+- `ao2-0.5.0-linux-aarch64.tar.gz`
+- `ao2-0.5.0-linux-x86_64.tar.gz`
+- `ao2-0.5.0-windows-x86_64.tar.gz`
 
 Download the complete public asset set, then verify its checksums before using
 an archive:
 
 ```sh
-mkdir -p ao2-beta && cd ao2-beta
-gh release download v0.5.0-beta.1 --repo uesugitorachiyo/ao2
+mkdir -p ao2-stable && cd ao2-stable
+gh release download v0.5.0 --repo uesugitorachiyo/ao2
 shasum -a 256 -c SHA256SUMS
 ```
 
@@ -48,21 +43,22 @@ On macOS and Linux, extract the archive for the host and run its offline
 verification before installation:
 
 ```sh
-tar -xzf ao2-0.5.0-beta.1-<platform>.tar.gz
+tar -xzf ao2-0.5.0-<platform>.tar.gz
 ./verify-release.sh
 AO2_INSTALL_DIR="$HOME/.local/bin" ./install.sh
 ao2 version --json
 ao2 doctor --json
 ```
 
-On Windows, run the archive's `Verify-Release.ps1` before `install.ps1`, then
-confirm the installed identity with `ao2.exe version --json`.
+On Windows, extract the archive, run `Verify-Release.ps1`, then run
+`install.ps1` and confirm the installed identity with
+`ao2.exe version --json`.
 
-To upgrade an existing v0.4.81 installation after verifying the beta archive:
+To upgrade an existing installation after verifying the stable archive:
 
 ```sh
 ao2 install update \
-  --archive ao2-0.5.0-beta.1-<platform>.tar.gz \
+  --archive ao2-0.5.0-<platform>.tar.gz \
   --provenance-dir .
 ao2 version --json
 ```
@@ -74,10 +70,10 @@ ao2 install rollback
 ao2 version --json
 ```
 
-To return explicitly to v0.4.81 without a rollback copy, download and verify
-the matching archive from the
-[`v0.4.81` release](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.4.81)
-and run its installer. The beta is not selected by stable update checks.
+To reinstall explicitly without a rollback copy, download and verify the
+matching archive from the
+[`v0.5.0` release](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.0)
+and run its installer.
 
 Uninstall from the default Unix location with:
 
@@ -110,13 +106,13 @@ npm run release:verify-provenance
 npm run release:gate
 ```
 
-The current stable public release line is `v0.4.81`.
+The current stable public release line is `v0.5.0`.
 
 To publish the complete private release from a clean checkout, use the guarded
 shipper:
 
 ```sh
-AO2_RELEASE_SHIP_CONFIRM=ship-v0.4.81 \
+AO2_RELEASE_SHIP_CONFIRM=ship-v0.5.0 \
 AO2_UBUNTU_SSH_TARGET=ao2-ubuntu-nucx \
 AO2_WINDOWS_SSH_TARGET=win-hp255-via-ubuntu \
 npm run release:ship
@@ -161,7 +157,7 @@ Install or update from a verified local archive:
 
 ```sh
 ao2 install update \
-  --archive dist/ao2-0.4.81-macos-aarch64.tar.gz \
+  --archive dist/ao2-0.5.0-macos-aarch64.tar.gz \
   --provenance-dir dist-provenance
 ao2 version --json
 ao2 doctor --json
@@ -181,7 +177,7 @@ normal Intel/AMD Ubuntu hosts:
 
 ```sh
 ao2 install update \
-  --archive dist-linux-x86_64/ao2-0.4.81-linux-x86_64.tar.gz \
+  --archive dist-linux-x86_64/ao2-0.5.0-linux-x86_64.tar.gz \
   --provenance-dir dist-provenance
 ao2 version --json
 ao2 doctor --json
@@ -192,7 +188,7 @@ Use the aarch64 archive for ARM Ubuntu hosts:
 
 ```sh
 ao2 install update \
-  --archive dist-linux/ao2-0.4.81-linux-aarch64.tar.gz \
+  --archive dist-linux/ao2-0.5.0-linux-aarch64.tar.gz \
   --provenance-dir dist-provenance
 ao2 version --json
 ao2 doctor --json
@@ -211,7 +207,7 @@ Install or update from PowerShell:
 
 ```powershell
 ao2.exe install update `
-  --archive dist-windows\ao2-0.4.81-windows-x86_64.tar.gz `
+  --archive dist-windows\ao2-0.5.0-windows-x86_64.tar.gz `
   --provenance-dir dist-provenance
 ao2.exe version --json
 ao2.exe doctor --json
@@ -230,7 +226,7 @@ When release assets are available at a base URL:
 
 ```sh
 ao2 install update \
-  --release-base-url https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.81
+  --release-base-url https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.0
 ```
 
 The updater downloads the target archive, checksum, signature, provenance JSON,
@@ -267,7 +263,7 @@ assets:
 ```sh
 ao2 upgrade apply \
   --release-file release.json \
-  --asset-dir target/release-download/v0.4.81
+  --asset-dir target/release-download/v0.5.0
 ```
 
 For a directly reachable release asset base URL:
@@ -275,7 +271,7 @@ For a directly reachable release asset base URL:
 ```sh
 ao2 upgrade apply \
   --release-file release.json \
-  --release-base-url https://github.com/uesugitorachiyo/ao2/releases/download/v0.4.81
+  --release-base-url https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.0
 ```
 
 `upgrade apply` selects the archive for the current target, copies or downloads
@@ -288,7 +284,7 @@ For private GitHub releases where `gh` is authenticated:
 
 ```sh
 ao2 upgrade apply \
-  --github-release v0.4.81 \
+  --github-release v0.5.0 \
   --repo uesugitorachiyo/ao2
 ```
 
@@ -931,9 +927,9 @@ health under `release.rollback`:
 
 ```sh
 ao2 doctor --json \
-  --release v0.4.81 \
-  --release-asset-dir target/release-download/v0.4.81 \
-  --provenance-dir target/release-download/v0.4.81
+  --release v0.5.0 \
+  --release-asset-dir target/release-download/v0.5.0 \
+  --provenance-dir target/release-download/v0.5.0
 ```
 
 Run native Windows verification against downloaded private release assets:
@@ -1216,7 +1212,7 @@ ao2 run --template bug-fix \
   --provider-prompt-file ./repair.sh
 ```
 
-For Rust crate bug fixes during the beta, choose the Cargo-aware template so
+For Rust crate bug fixes, choose the Cargo-aware template so
 the verifier evidence is `cargo test`:
 
 ```sh
@@ -1226,8 +1222,8 @@ ao2 run examples/task-templates/rust-cargo-bug-fix.yaml \
   --provider-prompt-file ./repair.sh
 ```
 
-That path works with the published `v0.5.0-beta.1` binary when run from an AO2
-checkout at commit `87c4cbe9706ea7d1721eaadcdb50e816cc96e91f` or newer.
+That path works with the published `v0.5.0` binary when run from an AO2
+checkout at commit `a1e82b0adb723dd5ae2be6d93355ffdc2caa549d` or newer.
 Binaries built from that commit or newer can also use the embedded-template
 shortcut:
 
@@ -1239,11 +1235,11 @@ ao2 run --template rust-cargo-bug-fix \
 ```
 
 The default `bug-fix` template verifies with `python -m pytest`. Do not use it
-for Rust beta runs unless the project really is driven by pytest. This guidance
+for Rust runs unless the project really is driven by pytest. This guidance
 only selects the workflow template and verifier; it does not require a new
 binary release, tag, upload, deployment, or publication step.
 
-The beta canary evidence for the published binary is indexed in
+Historical beta evidence for the v0.5.0 release train is indexed in
 [`docs/beta/v0.5.0-beta.1-canary-closeout.md`](beta/v0.5.0-beta.1-canary-closeout.md).
 
 For live providers, replace `scripted` with `codex` or `claude` after local CLI
@@ -1451,7 +1447,7 @@ when running release ship:
 ```sh
 AO2_RELEASE_CODEX_PILOT_ACCEPTANCE=1 \
 AO2_RELEASE_PROVIDER_PILOT_MAX_BUDGET_USD=1.00 \
-AO2_RELEASE_SHIP_CONFIRM=ship-v0.4.81 \
+AO2_RELEASE_SHIP_CONFIRM=ship-v0.5.0 \
 npm run release:ship
 ```
 
@@ -1498,7 +1494,7 @@ with the matching release flag:
 ```sh
 AO2_RELEASE_CLAUDE_PILOT_ACCEPTANCE=1 \
 AO2_RELEASE_PROVIDER_PILOT_MAX_BUDGET_USD=1.00 \
-AO2_RELEASE_SHIP_CONFIRM=ship-v0.4.81 \
+AO2_RELEASE_SHIP_CONFIRM=ship-v0.5.0 \
 npm run release:ship
 ```
 
@@ -1530,7 +1526,7 @@ in with the matching release flag:
 ```sh
 AO2_RELEASE_ANTIGRAVITY_PILOT_ACCEPTANCE=1 \
 AO2_RELEASE_PROVIDER_PILOT_MAX_BUDGET_USD=1.00 \
-AO2_RELEASE_SHIP_CONFIRM=ship-v0.4.81 \
+AO2_RELEASE_SHIP_CONFIRM=ship-v0.5.0 \
 npm run release:ship
 ```
 

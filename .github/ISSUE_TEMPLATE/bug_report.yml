@@ -1,0 +1,67 @@
+name: Bug report
+description: Report an AO2 install, verification, or local workflow problem.
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include tokens, API keys, private repository names, or private evidence values.
+  - type: input
+    id: version
+    attributes:
+      label: AO2 version
+      description: Paste the version from `ao2 version --json`.
+      placeholder: "0.5.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Install or update
+        - Release asset verification
+        - Approval or manifest digest
+        - Local workflow run
+        - Rollback or uninstall
+        - Offline verification
+        - Documentation
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: "macOS 15, Ubuntu 24.04, Windows 11"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include commands and redacted output.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+      description: Paste redacted error output or evidence paths only.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Preflight checks
+      options:
+        - label: I verified the release checksum or noted why verification could not run.
+        - label: I removed private values from logs and paths.
+        - label: I checked the troubleshooting guide.

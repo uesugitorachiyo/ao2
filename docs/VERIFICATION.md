@@ -538,7 +538,7 @@ Result:
   `npm run release:train-drill` with `AO2_RELEASE_TRAIN=next_patch`,
   `AO2_PUBLIC_RELEASE_TRAIN_CI_SAFE=1`, and
   `AO2_PUBLIC_RELEASE_TRAIN_DRILL_ROOT=target/candidate-patch-release-rehearsal/report`.
-  It validates the manifest-backed `v0.4.81` / `v0.1.14` candidate targets in
+  It validates the manifest-backed `v0.5.0` / `v0.1.15` candidate targets in
   the `ao2.public-release-train-drill.v1` summary and uploads one read-only
   `ao2-candidate-patch-release-rehearsal` evidence bundle. The workflow also
   runs `npm run release:candidate-rehearsal-audit`, emits
@@ -683,12 +683,12 @@ Result:
   `AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON`, and emits
   `ao2.public-release-pair-digest-audit.v1`. It checks each published archive
   has digest and size metadata, requires full archive parity for AO2
-  `ao2-0.4.81-linux-aarch64.tar.gz`, `ao2-0.4.81-linux-x86_64.tar.gz`,
-  `ao2-0.4.81-macos-aarch64.tar.gz`, and
-  `ao2-0.4.81-windows-x86_64.tar.gz`, plus control-plane
-  `ao2-control-plane-0.1.14-linux-x86_64.tar.gz`,
-  `ao2-control-plane-0.1.14-macos-aarch64.tar.gz`, and
-  `ao2-control-plane-0.1.14-windows-x86_64.tar.gz`, and compares every closure
+  `ao2-0.5.0-linux-aarch64.tar.gz`, `ao2-0.5.0-linux-x86_64.tar.gz`,
+  `ao2-0.5.0-macos-aarch64.tar.gz`, and
+  `ao2-0.5.0-windows-x86_64.tar.gz`, plus control-plane
+  `ao2-control-plane-0.1.15-linux-x86_64.tar.gz`,
+  `ao2-control-plane-0.1.15-macos-aarch64.tar.gz`, and
+  `ao2-control-plane-0.1.15-windows-x86_64.tar.gz`, and compares every closure
   archive record's `sha256`/`size_bytes` evidence with the corresponding
   published release asset. The summary includes `required_archive_names`,
   `required_archive_presence`, and `archive_parity` evidence. Fixture inputs
@@ -852,7 +852,7 @@ Result:
   drill reads `docs/release/release-train.json` through
   `scripts/release-train-env.sh`, defaults to the `stable` train, and records
   `release_train_manifest` plus `release_targets` in the summary. Setting
-  `AO2_RELEASE_TRAIN=next_patch` rehearses the `v0.4.81` / `v0.1.14` candidate
+  `AO2_RELEASE_TRAIN=next_patch` rehearses the `v0.5.0` / `v0.1.15` candidate
   train without publishing.
   The release readiness
   static summary must include the
@@ -1090,7 +1090,7 @@ Result:
   hosted `ao2-stable-release-evidence-packet` artifact before running
   `npm run release:stable-promotion-workflow`. Leave
   `promotion_confirm` empty for a dry-run, or set it to the exact
-  `promote-stable-v0.4.81-v0.1.14` confirmation string to allow the underlying
+  `promote-stable-v0.5.0-v0.1.15` confirmation string to allow the underlying
   script to flip AO2 and ao2-control-plane releases after all packet,
   post-release evidence, archive parity, provenance, and trust-boundary checks
   pass. The optional `stable_release_evidence_run_id` input pins the packet to a
@@ -1127,7 +1127,7 @@ Result:
   workflow-hardening evidence without treating it as authority to publish the
   full autonomous RSI claim.
   The checklist records the exact
-  `promote-stable-v0.4.81-v0.1.14` confirmation string, but does not enter it.
+  `promote-stable-v0.5.0-v0.1.15` confirmation string, but does not enter it.
   The manual `Stable Promotion Operator Checklist` workflow downloads the
   dry-run audit by `stable_promotion_dry_run_audit_run_id` and uploads only the
   generated report directory as `ao2-stable-promotion-operator-checklist`.
@@ -1254,7 +1254,7 @@ Result:
   preflights, publishes to ao2-control-plane when
   `AO2_PHASE1_CONTROL_PLANE_URL` is set, and may capture a dashboard snapshot
   with `AO2_PHASE1_DASHBOARD_SNAPSHOT=1`
-- stable public release archives at v0.4.81 (macOS aarch64, Linux aarch64,
+- stable public release archives at v0.5.0 (macOS aarch64, Linux aarch64,
   Linux x86_64, Windows x86_64) are SHA256 verified from the published
   `SHA256SUMS`; signed provenance sidecars are required before stable-promotion
   readiness can pass
