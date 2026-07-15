@@ -32,6 +32,12 @@ function Write-Utf8NoBom {
 }
 
 New-Item -ItemType Directory -Force -Path $ExtractDir, $InstallDir, (Join-Path $RepoDir "src") | Out-Null
+Write-Utf8NoBom -Path (Join-Path $RepoDir "README.md") -Value "AO2 Windows release smoke target`n"
+git -C $RepoDir init | Out-Null
+git -C $RepoDir config user.email "ao2-release-smoke@example.invalid"
+git -C $RepoDir config user.name "AO2 Release Smoke"
+git -C $RepoDir add README.md
+git -C $RepoDir commit -m "Initialize AO2 Windows release smoke target" | Out-Null
 tar -xzf $ArchivePath -C $ExtractDir
 
 $ManifestPath = Join-Path $ExtractDir "RELEASE-MANIFEST.json"

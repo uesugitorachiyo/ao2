@@ -4510,6 +4510,10 @@ fn native_windows_smoke_assets_are_manual_and_exercise_installed_binary() {
     assert!(script.contains("install rollback"));
     assert!(script.contains("$RollbackRunner"));
     assert!(script.contains("windows_install_rollback=passed"));
+    assert!(script.contains("git -C $RepoDir init"));
+    assert!(script.contains("git -C $RepoDir config user.email"));
+    assert!(script.contains("git -C $RepoDir config user.name"));
+    assert!(script.contains("git -C $RepoDir commit"));
     assert!(script.contains("command: powershell -NoProfile -Command if"));
     assert!(script.contains("run $WorkflowPath"));
     assert!(script.contains("replay windows-install-smoke-repair"));
