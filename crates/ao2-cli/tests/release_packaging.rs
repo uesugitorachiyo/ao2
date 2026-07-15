@@ -3871,16 +3871,13 @@ fn one_byte_drift_stops_before_mutation_sentinel() {
 
 #[test]
 #[cfg(not(windows))]
-fn publication_contract_rejects_stable_channel_and_provider_pilots_for_beta() {
+fn publication_contract_accepts_stable_channel_and_rejects_provider_pilots() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let temp = tempfile::tempdir().expect("tempdir");
     let notes = temp.path().join("notes.md");
     let signing_key = temp.path().join("test-only-signing-key.pem");
-    fs::write(
-        &notes,
-        "# AO2 External Beta\n\nThis external beta is not stable.\n",
-    )
-    .expect("write notes fixture");
+    fs::write(&notes, "# AO2 v0.5.0 Stable\n\nStable release notes.\n")
+        .expect("write notes fixture");
     fs::write(&signing_key, "test-only fixture\n").expect("write key-presence fixture");
 
     let run_contract = |channel: &str, pilot: &str| {
@@ -3889,7 +3886,7 @@ fn publication_contract_rejects_stable_channel_and_provider_pilots_for_beta() {
             .current_dir(&root)
             .env("AO2_RELEASE_CONTRACT_REQUIRE_ASSETS", "0")
             .env("AO2_RELEASE_CHANNEL", channel)
-            .env("AO2_RELEASE_TITLE", "AO2 v0.5.0-beta.1 External Beta")
+            .env("AO2_RELEASE_TITLE", "AO2 v0.5.0 stable")
             .env("AO2_RELEASE_NOTES_FILE", &notes)
             .env("AO2_RELEASE_PRIVATE_KEY", &signing_key)
             .env("AO2_RELEASE_CODEX_PILOT_ACCEPTANCE", pilot)
@@ -3897,19 +3894,19 @@ fn publication_contract_rejects_stable_channel_and_provider_pilots_for_beta() {
             .expect("run release publication contract")
     };
 
-    let accepted = run_contract("prerelease", "0");
+    let accepted = run_contract("stable", "0");
     assert!(
         accepted.status.success(),
         "{}",
         String::from_utf8_lossy(&accepted.stderr)
     );
 
-    let stable_channel = run_contract("stable", "0");
-    assert!(!stable_channel.status.success());
-    assert!(String::from_utf8_lossy(&stable_channel.stderr)
-        .contains("prerelease version requires AO2_RELEASE_CHANNEL=prerelease"));
+    let prerelease_channel = run_contract("prerelease", "0");
+    assert!(!prerelease_channel.status.success());
+    assert!(String::from_utf8_lossy(&prerelease_channel.stderr)
+        .contains("stable version requires AO2_RELEASE_CHANNEL=stable"));
 
-    let provider_pilot = run_contract("prerelease", "1");
+    let provider_pilot = run_contract("stable", "1");
     assert!(!provider_pilot.status.success());
     assert!(String::from_utf8_lossy(&provider_pilot.stderr)
         .contains("AO2_RELEASE_CODEX_PILOT_ACCEPTANCE must remain disabled"));
