@@ -50,8 +50,14 @@ body:
       label: Verification state
       description: Note whether checksum, manifest, or offline verification passed, failed, or was not run.
       placeholder: "SHA256SUMS passed; verify-release.sh passed"
+  - type: input
+    id: failure_category
+    attributes:
+      label: Failure category
+      description: For approval/replay or manifest issues, include the AO2 category if shown.
+      placeholder: "approval_status=pending; replay_state=waiting_for_approval; manifest mismatch: hash mismatch"
   - type: textarea
     id: context
     attributes:
       label: Redacted context
-      description: Include command, expected result, actual result, relevant evidence path, and redacted output when relevant. Do not paste secrets, provider secrets, private repository contents, private logs, or private credentials.
+      description: Include command, expected result, actual result, relevant evidence path, action digest or manifest SHA-256 when public-safe, verifier command, and sanitized logs when relevant. Do not paste secrets, provider secrets, private repository contents, private logs, or private credentials.

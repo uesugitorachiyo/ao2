@@ -130,7 +130,7 @@ def verify(args: argparse.Namespace) -> str:
     observed_manifest_digest = hashlib.sha256(manifest_data).hexdigest()
     if observed_manifest_digest != expected_manifest_digest:
         fail(
-            "approved manifest SHA-256 mismatch: "
+            "manifest mismatch: manifest digest mismatch: approved manifest SHA-256 mismatch: "
             f"expected {expected_manifest_digest}, observed {observed_manifest_digest}"
         )
     approved = parse_manifest(manifest_data)

@@ -669,6 +669,21 @@ def test_support_reproduction_fixture_is_public_safe_and_linked():
     ]:
         assert needle in support_doc
 
+    for needle in [
+        "approval status",
+        "required digest field name",
+        "action digest",
+        "replay state",
+        "digest failure summary",
+        "manifest SHA-256",
+        "release or staging directory",
+        "asset filename",
+        "observed failure category",
+        "exact verifier command",
+        "sanitized logs",
+    ]:
+        assert needle in support_doc
+
     assert "docs/SUPPORT-REPRODUCTION.md" in troubleshooting
     assert "docs/SUPPORT-REPRODUCTION.md" in issue_template
 

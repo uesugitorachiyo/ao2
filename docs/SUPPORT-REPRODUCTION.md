@@ -26,11 +26,12 @@ issue.
 
 Include these fields when the issue involves approval or replay behavior:
 
-- approval status
-- required digest field name
+- approval status, for example `pending`, `approved`, or `rejected`
+- required digest field name, usually `action_digest`
 - action digest shown by AO2
 - resume or approval command shown by AO2
-- replay state
+- replay state, for example `waiting_for_approval`, `accepted`, or `rejected`
+- digest failure summary, if AO2 prints one
 - evidence path where AO2 wrote the run record
 
 Do not approve a digest mismatch just to continue a reproduction. Preserve the
@@ -38,7 +39,16 @@ failing state and report the mismatch category.
 
 ## Manifest Or Checksum Cases
 
-Include the mismatch category from AO2 output:
+Include these fields when the issue involves a manifest or checksum mismatch:
+
+- manifest SHA-256
+- release or staging directory, with private path segments redacted
+- asset filename or basename
+- observed failure category
+- expected hash, when it is already public-safe
+- observed hash, when it is already public-safe
+- exact verifier command
+- sanitized logs
 
 - missing asset
 - unexpected asset
@@ -46,6 +56,7 @@ Include the mismatch category from AO2 output:
 - duplicate basename
 - malformed hash
 - disallowed path or traversal
+- manifest digest mismatch
 
 Do not paste full private directory listings. Include asset basenames and the
 command output category.
