@@ -4518,6 +4518,10 @@ fn native_windows_smoke_assets_are_manual_and_exercise_installed_binary() {
     assert!(script.contains("run $WorkflowPath"));
     assert!(script.contains("replay windows-install-smoke-repair"));
     assert!(script.contains("expected ok after repair"));
+    assert!(script.contains("status=WaitingForApproval"));
+    assert!(script.contains("approve $PendingApproval.ticket_id"));
+    assert!(script.contains("status=approved"));
+    assert!(script.contains("run --resume windows-install-smoke-repair"));
     assert!(workflow.contains("workflow_dispatch:"));
     assert!(!workflow.contains("pull_request:"));
     assert!(!workflow.contains("\n  push:"));

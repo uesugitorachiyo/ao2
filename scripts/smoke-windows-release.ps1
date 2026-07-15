@@ -115,6 +115,34 @@ $RunOutput = & $Ao2 run $WorkflowPath `
     --provider-prompt-file $PromptPath `
     --max-repair-attempts 1
 
+$ApprovalCount = 0
+while (($RunOutput -join "`n") -match "status=WaitingForApproval") {
+    $EvidencePackPath = Join-Path $RepoDir ".ao2/runs/windows-install-smoke-repair/evidence-pack/evidence-pack.json"
+    $EvidencePack = Get-Content $EvidencePackPath -Raw | ConvertFrom-Json
+    $PendingApproval = $EvidencePack.approvals |
+        Where-Object { $_.requested_action -eq "sandbox:apply" -and $_.status -eq "pending" } |
+        Select-Object -First 1
+    if (!$PendingApproval -or !$PendingApproval.ticket_id) {
+        throw "windows smoke run requested approval but no pending sandbox:apply ticket was found"
+    }
+    $ApproveOutput = & $Ao2 approve $PendingApproval.ticket_id `
+        --target $RepoDir `
+        --approver human:release-smoke
+    if (($ApproveOutput -join "`n") -notmatch "status=approved") {
+        throw "windows smoke approval did not approve:`n$($ApproveOutput -join "`n")"
+    }
+    $ApprovalCount += 1
+    if ($ApprovalCount -gt 2) {
+        throw "windows smoke requested too many approvals"
+    }
+    $RunOutput = & $Ao2 run --resume windows-install-smoke-repair `
+        --target $RepoDir
+}
+
+if ($ApprovalCount -ne 2) {
+    throw "windows smoke expected 2 approvals, got $ApprovalCount"
+}
+
 if (($RunOutput -join "`n") -notmatch "status=Accepted") {
     throw "windows smoke run did not accept:`n$($RunOutput -join "`n")"
 }
