@@ -1305,7 +1305,7 @@ jobs:
           assert summary["byte_identical"] is True, summary
           assert summary["schema_aligned"] is True, summary
           assert summary["target_aligned"] is True, summary
-          assert summary["next_patch"]["ao2"]["tag"] == "v0.4.81", summary
+          assert summary["next_patch"]["ao2"]["tag"] == "v0.5.0", summary
           assert summary["trust_boundary"]["mutates_github_releases"] is False, summary
           PY
       - name: Upload release train manifest parity
