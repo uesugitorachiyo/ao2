@@ -1,0 +1,59 @@
+{
+  "schema_version": "ao.compatibility.covenant-approval-ticket-to-ao2-approved-execution-vector.v1",
+  "vector_id": "ao-covenant-approval-ticket-to-ao2-approved-execution-v1",
+  "edge": "ao-covenant.approval_ticket -> ao2.approved_execution_request",
+  "producer": {
+    "repository": "ao-covenant",
+    "contract": "ao.covenant.approval-ticket.v1"
+  },
+  "consumer": {
+    "repository": "ao2",
+    "version": "v0.5.1",
+    "tag_target": "80ec5321f42d4bab17d5e64fdae6aa099ba59d4a",
+    "contract": "ao2.approved-execution-request.v1"
+  },
+  "covenant_approval_ticket": {
+    "schema_version": "ao.covenant.approval-ticket.v1",
+    "ticket_id": "approval-ao2-month3-compatibility-wave-c",
+    "approval_state": "approved",
+    "goal_id": "ao2-month3-compatibility-wave-c",
+    "required_digest_field": "action_digest",
+    "action_digest": "2222222222222222222222222222222222222222222222222222222222222222",
+    "scope": [
+      "provider-free compatibility fixture consumption",
+      "no release publication",
+      "no provider execution"
+    ],
+    "expires_at": "2026-07-16T23:19:37Z"
+  },
+  "expected_ao2_approved_execution_request": {
+    "schema_version": "ao2.approved-execution-request.v1",
+    "status": "accepted_for_provider_free_execution",
+    "approval_ticket_id": "approval-ao2-month3-compatibility-wave-c",
+    "required_digest_field": "action_digest",
+    "action_digest": "2222222222222222222222222222222222222222222222222222222222222222",
+    "provider_execution_required": false,
+    "release_or_publish_allowed": false,
+    "evidence_path": "tests/fixtures/compatibility/covenant-approval-ticket-to-ao2-approved-execution-v0.1.json"
+  },
+  "compatibility": {
+    "matrix_status": "proposed",
+    "full_stack_compatibility_complete": false
+  },
+  "boundaries": {
+    "release_or_publish": false,
+    "creates_tag": false,
+    "uploads_assets": false,
+    "deploys": false,
+    "contacts_external_users": false,
+    "provider_pilot": false,
+    "promotion_requested": false,
+    "promotion_granted": false,
+    "executes_work": false,
+    "approves_work": false,
+    "mutates_repositories": false,
+    "calls_providers": false,
+    "rsi_work": false,
+    "rsi_remains_denied": true
+  }
+}
