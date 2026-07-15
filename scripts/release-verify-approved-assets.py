@@ -74,7 +74,7 @@ def require_basename(name: str, source: str) -> None:
         or Path(name).is_absolute()
         or Path(name).name != name
     ):
-        fail(f"{source} contains unsafe asset name: {name}")
+        fail(f"manifest mismatch: disallowed path: {source} contains unsafe asset name: {name}")
 
 
 def parse_manifest(data: bytes) -> dict[str, str]:
@@ -84,13 +84,16 @@ def parse_manifest(data: bytes) -> dict[str, str]:
         fail("approved manifest must be valid UTF-8")
     entries: dict[str, str] = {}
     for line_number, line in enumerate(text.splitlines(), start=1):
-        match = MANIFEST_LINE_RE.fullmatch(line)
-        if match is None:
-            fail(f"approved manifest line {line_number} is malformed")
-        digest, name = match.groups()
+        if "  " not in line:
+            fail(f"manifest mismatch: malformed line: approved manifest line {line_number} is malformed")
+        digest, name = line.split("  ", 1)
+        if SHA256_RE.fullmatch(digest) is None:
+            fail(f"manifest mismatch: malformed hash: approved manifest line {line_number} is malformed: hash is malformed")
+        if not name:
+            fail(f"manifest mismatch: malformed line: approved manifest line {line_number} is missing an asset name")
         require_basename(name, "approved manifest")
         if name in entries:
-            fail(f"duplicate approved asset name: {name}")
+            fail(f"manifest mismatch: duplicate basename: duplicate approved asset name: {name}")
         entries[name] = digest
     if not entries:
         fail("approved manifest is empty")
@@ -109,7 +112,7 @@ def parse_publication_list(data: bytes) -> list[str]:
             fail(f"staged publication list line {line_number} is empty")
         require_basename(name, "staged publication list")
         if name in seen:
-            fail(f"duplicate staged publication asset name: {name}")
+            fail(f"manifest mismatch: duplicate basename: duplicate staged publication asset name: {name}")
         seen.add(name)
         names.append(name)
     if not names:
@@ -159,21 +162,21 @@ def verify(args: argparse.Namespace) -> str:
         if entry.is_symlink() or not entry.is_file(follow_symlinks=False):
             if name in staged:
                 fail(
-                    "approved staged asset must be a regular non-symlink file: "
+                    "manifest mismatch: unexpected asset: approved staged asset must be a regular non-symlink file: "
                     f"{name}"
                 )
-            fail(f"publication directory contains non-regular entry: {name}")
+            fail(f"manifest mismatch: unexpected asset: publication directory contains non-regular entry: {name}")
         directory_names.add(name)
 
     missing = sorted(approved_names - staged)
     if missing:
-        fail(f"staged publication set is missing approved asset: {missing[0]}")
+        fail(f"manifest mismatch: missing asset: staged publication set is missing approved asset: {missing[0]}")
     extra = sorted(staged - approved_names)
     if extra:
-        fail(f"staged publication set has extra asset: {extra[0]}")
+        fail(f"manifest mismatch: unexpected asset: staged publication set has extra asset: {extra[0]}")
     unlisted = sorted(directory_names - staged)
     if unlisted:
-        fail(f"publication directory has unlisted asset: {unlisted[0]}")
+        fail(f"manifest mismatch: unexpected asset: publication directory has unlisted asset: {unlisted[0]}")
     if len(approved) != REQUIRED_ASSET_COUNT:
         fail(
             "approved manifest asset count mismatch: "
@@ -190,17 +193,17 @@ def verify(args: argparse.Namespace) -> str:
         try:
             asset_mode = os.lstat(asset_path).st_mode
         except OSError:
-            fail(f"approved staged asset is missing: {name}")
+            fail(f"manifest mismatch: missing asset: approved staged asset is missing: {name}")
         if stat.S_ISLNK(asset_mode) or not stat.S_ISREG(asset_mode):
             fail(
-                "approved staged asset must be a regular non-symlink file: "
+                "manifest mismatch: unexpected asset: approved staged asset must be a regular non-symlink file: "
                 f"{name}"
             )
         observed_asset_digest = hash_regular_non_symlink(
             asset_path, "approved staged asset"
         )
         if observed_asset_digest != expected_asset_digest:
-            fail(f"approved asset hash mismatch: {name}")
+            fail(f"manifest mismatch: hash mismatch: approved asset hash mismatch: {name}")
 
     return observed_manifest_digest
 

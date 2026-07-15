@@ -307,6 +307,12 @@ fn cli_can_pause_approve_resume_and_replay() {
     assert!(run.status.success(), "{}", stderr(&run));
     let run_stdout = stdout(&run);
     assert!(run_stdout.contains("status=WaitingForApproval"));
+    assert!(run_stdout.contains("approval_required=true"));
+    assert!(run_stdout.contains("required_digest_field=action_digest"));
+    assert!(run_stdout.contains("action_digest="));
+    assert!(run_stdout.contains("replay_state=waiting_for_approval"));
+    assert!(run_stdout.contains("evidence_dir="));
+    assert!(run_stdout.contains("next_step=ao2 approve "));
     let ticket_id = value_for(&run_stdout, "approval_ticket_id=");
 
     let approve = ao2([
@@ -328,7 +334,11 @@ fn cli_can_pause_approve_resume_and_replay() {
         repo.to_str().unwrap(),
     ]);
     assert!(resume.status.success(), "{}", stderr(&resume));
-    assert!(stdout(&resume).contains("status=Accepted"));
+    let resume_stdout = stdout(&resume);
+    assert!(resume_stdout.contains("status=Accepted"));
+    assert!(resume_stdout.contains("run_record="));
+    assert!(resume_stdout.contains("replay_state=accepted"));
+    assert!(resume_stdout.contains("evidence_dir="));
 
     let replay = ao2(["replay", "cli-run", "--target", repo.to_str().unwrap()]);
     assert!(replay.status.success(), "{}", stderr(&replay));

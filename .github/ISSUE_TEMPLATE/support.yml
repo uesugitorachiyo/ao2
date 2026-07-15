@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Public issues are not a place for secrets, provider credentials, or private evidence.
+        Public issues are not a place for secrets, provider credentials, or private evidence. Use `docs/SUPPORT-REPRODUCTION.md` as the public-safe checklist before filing.
   - type: dropdown
     id: topic
     attributes:
@@ -54,4 +54,4 @@ body:
     id: context
     attributes:
       label: Redacted context
-      description: Include command, expected result, actual result, and redacted output when relevant. Do not paste secrets or private credentials.
+      description: Include command, expected result, actual result, relevant evidence path, and redacted output when relevant. Do not paste secrets, provider secrets, private repository contents, private logs, or private credentials.

@@ -30002,15 +30002,27 @@ fn run(options: CliRunOptions) -> Result<()> {
 
     if options.pause_for_approval {
         let summary = start_risky_pr_provider_free(RunOptions {
-            target_repo: target,
+            target_repo: target.clone(),
             workflow_path: workflow,
             run_id: options.run_id,
         })?;
         println!("run_id={}", summary.run_id);
         println!("status={:?}", summary.status);
+        println!("approval_required=true");
         println!("run_record={}", summary.run_record_path.display());
+        println!("evidence_dir={}", summary.run_dir.display());
         println!("approval_ticket_id={}", summary.approval_ticket.ticket_id);
         println!("approval_status={}", summary.approval_ticket.status);
+        println!("required_digest_field=action_digest");
+        println!("action_digest={}", summary.approval_ticket.action_digest);
+        println!("replay_state=waiting_for_approval");
+        println!(
+            "next_step=ao2 approve {} --target {} --approver <operator>; ao2 run --resume {} --target {}",
+            summary.approval_ticket.ticket_id,
+            target.display(),
+            summary.run_id,
+            target.display()
+        );
         return Ok(());
     }
 
@@ -30785,8 +30797,28 @@ fn ao2_run_spec_acceptance(
 fn print_run_summary(summary: &ao2_runtime::RunSummary) {
     println!("run_id={}", summary.run_id);
     println!("status={:?}", summary.status);
+    println!("run_record={}", summary.run_record_path.display());
+    println!("evidence_dir={}", summary.run_dir.display());
+    println!("replay_state={}", run_status_replay_state(summary.status));
     println!("evidence_pack={}", summary.evidence_pack_path.display());
     println!("report={}", summary.report_path.display());
+}
+
+fn run_status_replay_state(status: ao2_runtime::RunStatus) -> &'static str {
+    match status {
+        ao2_runtime::RunStatus::Accepted => "accepted",
+        ao2_runtime::RunStatus::AcceptedWithConcerns => "accepted_with_concerns",
+        ao2_runtime::RunStatus::Rejected => "rejected",
+        ao2_runtime::RunStatus::Failed => "failed",
+        ao2_runtime::RunStatus::Blocked => "blocked",
+        ao2_runtime::RunStatus::WaitingForApproval => "waiting_for_approval",
+        ao2_runtime::RunStatus::Canceled => "canceled",
+        ao2_runtime::RunStatus::Replaying => "replaying",
+        ao2_runtime::RunStatus::Created
+        | ao2_runtime::RunStatus::Compiled
+        | ao2_runtime::RunStatus::Queued
+        | ao2_runtime::RunStatus::Running => "not_finished",
+    }
 }
 
 fn approve_and_resume_persisted_sandbox_patches(

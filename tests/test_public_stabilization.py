@@ -648,6 +648,47 @@ def test_public_release_links_and_install_guide_track_current_stable():
     assert "v0.4.79" not in install
 
 
+def test_support_reproduction_fixture_is_public_safe_and_linked():
+    support_doc = read("docs/SUPPORT-REPRODUCTION.md")
+    troubleshooting = read("docs/TROUBLESHOOTING.md")
+    issue_template = read(".github/ISSUE_TEMPLATE/support.yml")
+
+    for needle in [
+        "AO2 version",
+        "platform",
+        "command",
+        "expected result",
+        "actual result",
+        "evidence path",
+        "checksum",
+        "manifest",
+        "Do not paste credentials",
+        "provider secrets",
+        "private repository contents",
+        "private logs",
+    ]:
+        assert needle in support_doc
+
+    assert "docs/SUPPORT-REPRODUCTION.md" in troubleshooting
+    assert "docs/SUPPORT-REPRODUCTION.md" in issue_template
+
+
+def test_task_template_docs_keep_rust_and_python_verifiers_explicit_for_stable():
+    template_readme = read("examples/task-templates/README.md")
+    bug_fix = read("examples/task-templates/bug-fix.yaml")
+    rust_fix = read("examples/task-templates/rust-cargo-bug-fix.yaml")
+
+    assert "Rust/Cargo Runs" in template_readme
+    assert "Python/default" in template_readme
+    assert "stable" in template_readme
+    assert "beta" not in template_readme.lower()
+    assert "published `v0.5.0-beta.1` binary" not in template_readme
+    assert "command: python -m pytest" in bug_fix
+    assert "command: cargo test" in rust_fix
+    assert "The generic `bug-fix` template uses `python -m pytest`" in template_readme
+    assert "use `rust-cargo-bug-fix`" in template_readme
+
+
 def test_windows_release_smoke_verifies_public_archive_checksum():
     workflow = read(".github/workflows/windows-release-smoke.yml")
 
