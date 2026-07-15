@@ -12,7 +12,7 @@ body:
     attributes:
       label: AO2 version
       description: Paste the version from `ao2 version --json`.
-      placeholder: "0.5.0"
+      placeholder: "0.5.1"
     validations:
       required: true
   - type: dropdown

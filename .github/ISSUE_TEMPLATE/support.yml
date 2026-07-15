@@ -1,5 +1,5 @@
 name: Support question
-description: Ask for help using AO2 v0.5.0.
+description: Ask for help using AO2 v0.5.1.
 title: "[Support]: "
 labels: ["support", "needs-triage"]
 body:
@@ -26,7 +26,7 @@ body:
     id: version
     attributes:
       label: AO2 version
-      placeholder: "0.5.0"
+      placeholder: "0.5.1"
     validations:
       required: true
   - type: input
