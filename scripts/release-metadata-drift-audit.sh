@@ -36,7 +36,7 @@ components = [
         "component": "ao2",
         "repo": "uesugitorachiyo/ao2",
         "tag": ao2_tag,
-        "expected_release_name": f"AO2 {ao2_tag} stable",
+        "expected_release_name": f"AO2 {ao2_tag}",
         "expected_channel": "stable",
         "doc_expectations": {
             "docs/release/PUBLIC-RELEASE-VERIFICATION.md": [

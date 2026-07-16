@@ -6,7 +6,7 @@ This is the operator index for verifying public release evidence across
 The current public release pair is:
 
 - AO2 stable release: `v0.5.1`
-- AO2 control-plane stable release: `v0.1.15`
+- AO2 control-plane stable release: `v0.1.16`
 
 All checks below are read-only. They download release assets or GitHub Actions
 artifacts, verify checksums and summaries, and do not approve AO2 runs, mutate
@@ -58,7 +58,7 @@ release approval authority.
 
 The control-plane uses `Post Release Verification` in
 `.github/workflows/post-release-verification.yml`. It can be dispatched
-manually and runs on schedule. It downloads all public `v0.1.15` release
+manually and runs on schedule. It downloads all public `v0.1.16` release
 assets, verifies `SHA256SUMS`, and writes a release publication closure summary
 on Ubuntu, macOS, and Windows.
 
@@ -215,7 +215,7 @@ closed unless `stable_release_evidence_ready=true`,
 The manual `Stable Release Promotion` GitHub Actions workflow consumes that
 hosted packet before it runs the stable-promotion workflow. Leave
 `promotion_confirm` empty for a dry-run. To allow release mutation, set
-`promotion_confirm=promote-stable-v0.5.1-v0.1.15`; any other non-empty value
+`promotion_confirm=promote-stable-v0.5.1-v0.1.16`; any other non-empty value
 is rejected before `npm run release:stable-promotion-workflow` runs. The
 optional `stable_release_evidence_run_id` input pins promotion review to a
 specific successful CI run; otherwise the workflow downloads the latest
@@ -235,7 +235,7 @@ artifact proves `dry_run=true`, `confirmed=false`,
 `ao2.stable-release-evidence-packet.v1`, ready operator evidence, and
 `mutates_releases=false` / `stores_credentials=false`. Treat this audit as the
 last review gate before entering the real
-`promotion_confirm=promote-stable-v0.5.1-v0.1.15` value.
+`promotion_confirm=promote-stable-v0.5.1-v0.1.16` value.
 It preserves RSI improvement evidence for the downstream checklist while
 keeping `claim_publish_decision=deny`.
 
@@ -249,7 +249,7 @@ the manual `Stable Promotion Operator Checklist` workflow with
 emits `ao2.stable-promotion-operator-checklist.v1`, `summary.json`, and
 `checklist.md`, then fails closed unless the dry-run audit is ready, unconfirmed,
 non-mutating, and backed by passed post-release evidence. The artifact records
-the exact `promotion_confirm=promote-stable-v0.5.1-v0.1.15` value for the
+the exact `promotion_confirm=promote-stable-v0.5.1-v0.1.16` value for the
 operator, but it does not enter the confirmation string or mutate releases. No
 provider API keys are required or accepted. The checklist includes
 RSI improvement trend metrics for operator review while preserving the

@@ -171,7 +171,7 @@ The current stable public release is
 It publishes release archives for macOS, Ubuntu/Linux x86_64,
 Ubuntu/Linux aarch64, and Windows, plus `SHA256SUMS`, signed provenance, and
 release-readiness JSON evidence. The expected compatible stable companion is
-[AO2 Control Plane v0.1.15](https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.15).
+[AO2 Control Plane v0.1.16](https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.16).
 The overview video is available at
 [https://youtu.be/p222b0iCpbg](https://youtu.be/p222b0iCpbg).
 
