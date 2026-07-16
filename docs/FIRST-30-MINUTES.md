@@ -1,6 +1,6 @@
 # First 30 Minutes With AO2
 
-This guide starts from the public AO2 `v0.5.1` release and ends with a local
+This guide starts from the public AO2 `v0.5.2` release and ends with a local
 governed demo run. It does not require provider API keys, a control-plane
 server, release access, or contact with other users.
 
@@ -12,7 +12,7 @@ is already authenticated, this is the shortest path:
 ```sh
 mkdir -p ao2-stable
 cd ao2-stable
-gh release download v0.5.1 --repo uesugitorachiyo/ao2
+gh release download v0.5.2 --repo uesugitorachiyo/ao2
 shasum -a 256 -c SHA256SUMS
 ```
 
@@ -23,30 +23,30 @@ release URLs instead. Choose one archive for your host and download
 ```sh
 mkdir -p ao2-stable
 cd ao2-stable
-base_url="https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.1"
+base_url="https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.2"
 curl -fLO "$base_url/SHA256SUMS"
-curl -fLO "$base_url/ao2-0.5.1-macos-aarch64.tar.gz"
-grep '  ao2-0.5.1-macos-aarch64.tar.gz$' SHA256SUMS > SHA256SUMS.selected
+curl -fLO "$base_url/ao2-0.5.2-macos-aarch64.tar.gz"
+grep '  ao2-0.5.2-macos-aarch64.tar.gz$' SHA256SUMS > SHA256SUMS.selected
 shasum -a 256 -c SHA256SUMS.selected
 ```
 
 Choose the archive for your host:
 
-- `ao2-0.5.1-macos-aarch64.tar.gz`
-- `ao2-0.5.1-linux-x86_64.tar.gz`
-- `ao2-0.5.1-linux-aarch64.tar.gz`
-- `ao2-0.5.1-windows-x86_64.tar.gz`
+- `ao2-0.5.2-macos-aarch64.tar.gz`
+- `ao2-0.5.2-linux-x86_64.tar.gz`
+- `ao2-0.5.2-linux-aarch64.tar.gz`
+- `ao2-0.5.2-windows-x86_64.tar.gz`
 
 On macOS or Linux:
 
 ```sh
-tar -xzf ao2-0.5.1-<platform>.tar.gz
+tar -xzf ao2-0.5.2-<platform>.tar.gz
 ./verify-release.sh
 AO2_INSTALL_DIR="$HOME/.local/bin" ./install.sh
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-On Windows PowerShell, extract `ao2-0.5.1-windows-x86_64.tar.gz`, then run:
+On Windows PowerShell, extract `ao2-0.5.2-windows-x86_64.tar.gz`, then run:
 
 ```powershell
 .\Verify-Release.ps1
@@ -60,7 +60,7 @@ ao2 version --json
 ao2 doctor --json
 ```
 
-The installed version should report `0.5.1`. `ao2 doctor --json` should include
+The installed version should report `0.5.2`. `ao2 doctor --json` should include
 install verification evidence when the binary came from the signed public
 archive.
 

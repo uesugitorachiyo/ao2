@@ -2,7 +2,7 @@
 
 [Watch the AO2 overview video](https://youtu.be/p222b0iCpbg)
 
-[![Latest release](https://img.shields.io/github/v/release/uesugitorachiyo/ao2?label=latest%20stable%20release)](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.1)
+[![Latest release](https://img.shields.io/github/v/release/uesugitorachiyo/ao2?label=latest%20stable%20release)](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.2)
 
 AO2 is the governed execution runtime for local agent work. It compiles and runs scoped workflows, enforces policy and exact-digest approvals, invokes execution adapters, evaluates results, and emits replayable evidence. Use AO2 when an authorized plan is ready to execute and the run must remain reviewable, reproducible, and bound to its approved inputs.
 
@@ -123,7 +123,7 @@ published to a read-only control plane.
 
 ## Status
 
-This public export is prepared from AO2 `0.5.1`. It is intentionally
+This public export is prepared from AO2 `0.5.2`. It is intentionally
 local-first:
 
 - no provider API-key authentication paths;
@@ -156,7 +156,7 @@ Build a local release archive:
 ```sh
 npm run package:local
 tmpdir=$(mktemp -d /tmp/ao2-release.XXXXXX)
-archive=$(ls dist/ao2-0.5.1-*.tar.gz | head -1)
+archive=$(ls dist/ao2-0.5.2-*.tar.gz | head -1)
 tar -xzf "$archive" -C "$tmpdir"
 sh "$tmpdir/verify-release.sh"
 ```
@@ -167,7 +167,7 @@ checksum verification before install.
 ## Install From Stable Public Release
 
 The current stable public release is
-[`v0.5.1`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.1).
+[`v0.5.2`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.2).
 It publishes release archives for macOS, Ubuntu/Linux x86_64,
 Ubuntu/Linux aarch64, and Windows, plus `SHA256SUMS`, signed provenance, and
 release-readiness JSON evidence. The expected compatible stable companion is
@@ -179,19 +179,19 @@ Download and verify a macOS archive:
 
 ```sh
 mkdir -p dist-release
-gh release download v0.5.1 --repo uesugitorachiyo/ao2 \
-  --pattern ao2-0.5.1-macos-aarch64.tar.gz \
+gh release download v0.5.2 --repo uesugitorachiyo/ao2 \
+  --pattern ao2-0.5.2-macos-aarch64.tar.gz \
   --pattern SHA256SUMS \
   --dir dist-release
-(cd dist-release && grep 'ao2-0.5.1-macos-aarch64.tar.gz' SHA256SUMS | shasum -a 256 -c -)
+(cd dist-release && grep 'ao2-0.5.2-macos-aarch64.tar.gz' SHA256SUMS | shasum -a 256 -c -)
 ```
 
 Use the same release base URL for Linux and Windows archives:
 
 ```text
-https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.1/ao2-0.5.1-linux-x86_64.tar.gz
-https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.1/ao2-0.5.1-linux-aarch64.tar.gz
-https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.1/ao2-0.5.1-windows-x86_64.tar.gz
+https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.2/ao2-0.5.2-linux-x86_64.tar.gz
+https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.2/ao2-0.5.2-linux-aarch64.tar.gz
+https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.2/ao2-0.5.2-windows-x86_64.tar.gz
 ```
 
 ## First 30 Minutes With AO2
@@ -201,8 +201,8 @@ public archive, install AO2, run `ao2 doctor`, and execute the governed demo.
 For install, rollback, and uninstall details, see [Install](docs/INSTALL.md).
 For common support cases, see [Troubleshooting](docs/TROUBLESHOOTING.md).
 
-For Rust/Cargo work with the published `v0.5.1` binary, run the Cargo workflow
-file by path from an AO2 checkout at the `v0.5.1` tag or newer:
+For Rust/Cargo work with the published `v0.5.2` binary, run the Cargo workflow
+file by path from an AO2 checkout at the `v0.5.2` tag or newer:
 
 ```sh
 ao2 run examples/task-templates/rust-cargo-bug-fix.yaml \
@@ -238,7 +238,7 @@ downloading the current archive:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke-windows-release.ps1 `
-  -Archive .\dist-windows\ao2-0.5.1-windows-x86_64.tar.gz
+  -Archive .\dist-windows\ao2-0.5.2-windows-x86_64.tar.gz
 ```
 
 The main CI workflow in `.github/workflows/ci.yml` runs on pull request and
@@ -328,7 +328,7 @@ ao2 pulse run-loop \
 - [Security](docs/SECURITY.md)
 - [Verification](docs/VERIFICATION.md)
 - [Public release verification](docs/release/PUBLIC-RELEASE-VERIFICATION.md)
-- [AO2 v0.5.1 stable release notes](docs/release/v0.5.1-stable.md)
+- [AO2 v0.5.2 stable release notes](docs/release/v0.5.2-stable.md)
 
 ## License
 

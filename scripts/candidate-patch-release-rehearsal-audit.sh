@@ -90,10 +90,10 @@ if release_targets.get("selected_train") != "next_patch":
     failures.append(f"unexpected release target selected_train: {release_targets.get('selected_train')!r}")
 
 expected_targets = {
-    "ao2": {"tag": "v0.5.1", "version": "0.5.1"},
+    "ao2": {"tag": "v0.5.2", "version": "0.5.2"},
     "ao2_control_plane": {"tag": "v0.1.16", "version": "0.1.16"},
-    "promotion_confirm": "promote-stable-v0.5.1-v0.1.16",
-    "public_operator_confirm": "public-release-reviewed-v0.5.1-v0.1.16",
+    "promotion_confirm": "promote-stable-v0.5.2-v0.1.16",
+    "public_operator_confirm": "public-release-reviewed-v0.5.2-v0.1.16",
 }
 for key, expected in expected_targets.items():
     if release_targets.get(key) != expected:

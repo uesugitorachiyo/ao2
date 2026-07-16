@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-VECTOR_PATH = ROOT / "tests" / "fixtures" / "compatibility" / "ao2-execution-receipt-v0.5.1.json"
+VECTOR_PATH = ROOT / "tests" / "fixtures" / "compatibility" / "ao2-execution-receipt-v0.5.2.json"
 COVENANT_AO2_VECTOR_PATH = (
     ROOT
     / "tests"
@@ -13,9 +13,9 @@ COVENANT_AO2_VECTOR_PATH = (
     / "covenant-approval-ticket-to-ao2-approved-execution-v0.1.json"
 )
 
-AO2_TAG_TARGET = "80ec5321f42d4bab17d5e64fdae6aa099ba59d4a"
+AO2_TAG_TARGET = "pending-v0.5.2-release-prep-merge"
 CP_TAG_TARGET = "f4f5fea9fefa1081cebcbabac550b0e08b9f0e3d"
-MANIFEST_DIGEST = "bd8103e7a038f47e1b4fef1a2a19ae65cc221675ea11149d39cfb679ae2a08fc"
+MANIFEST_DIGEST = "pending-v0.5.2-approved-manifest-digest"
 
 
 def load_vector() -> dict:
@@ -43,14 +43,14 @@ def test_ao2_execution_receipt_vector_matches_current_public_pair():
     vector = load_vector()
 
     assert vector["schema_version"] == "ao.compatibility.execution-receipt-vector.v1"
-    assert vector["vector_id"] == "ao2-v0.5.1-execution-receipt-to-control-plane-evidence-event"
+    assert vector["vector_id"] == "ao2-v0.5.2-execution-receipt-to-control-plane-evidence-event"
     assert vector["edge"] == "ao2.execution_receipt -> ao2-control-plane.evidence_event"
 
     producer = vector["producer"]
     assert producer == {
         "repository": "ao2",
-        "version": "v0.5.1",
-        "release_url": "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.1",
+        "version": "v0.5.2",
+        "release_url": "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.2",
         "tag_target": AO2_TAG_TARGET,
         "approved_manifest_digest": MANIFEST_DIGEST,
     }
@@ -70,12 +70,12 @@ def test_ao2_execution_receipt_vector_derives_expected_control_plane_event():
     event = vector["expected_control_plane_event"]
 
     assert receipt["schema_version"] == "ao2.execution-receipt.v1"
-    assert receipt["receipt_id"] == "ao2-v0.5.1-provider-free-doctor-smoke"
+    assert receipt["receipt_id"] == "ao2-v0.5.2-provider-free-doctor-smoke"
     assert receipt["status"] == "passed"
     assert receipt["provider_execution_required"] is False
     assert receipt["workflow"] == "provider_free_doctor_smoke"
     assert receipt["command"] == "ao2 doctor --json"
-    assert receipt["release"]["version"] == "v0.5.1"
+    assert receipt["release"]["version"] == "v0.5.2"
     assert receipt["release"]["tag_target"] == AO2_TAG_TARGET
 
     assert event["schema_version"] == "ao2-control-plane.evidence-event.v1"
@@ -130,7 +130,7 @@ def test_covenant_approval_ticket_vector_maps_to_ao2_approved_execution_request(
     assert vector["edge"] == "ao-covenant.approval_ticket -> ao2.approved_execution_request"
     assert vector["producer"]["repository"] == "ao-covenant"
     assert vector["consumer"]["repository"] == "ao2"
-    assert vector["consumer"]["version"] == "v0.5.1"
+    assert vector["consumer"]["version"] == "v0.5.2"
     assert vector["consumer"]["tag_target"] == AO2_TAG_TARGET
 
     ticket = vector["covenant_approval_ticket"]
