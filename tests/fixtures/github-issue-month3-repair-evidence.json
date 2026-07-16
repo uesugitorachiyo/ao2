@@ -1,0 +1,55 @@
+{
+  "schema_version": "ao2.github-issue-month3-repair-evidence.v0.1",
+  "status": "verified",
+  "source_fixture": "deterministic_authentic_bug",
+  "base_commit": "80ec5321f42d4bab17d5e64fdae6aa099ba59d4a",
+  "pre_patch": {
+    "regression_test_written_before_fix": true,
+    "expected_failure_observed": true,
+    "negative_control_passed": true
+  },
+  "post_patch": {
+    "regression_test_passed": true,
+    "existing_tests_passed": true,
+    "format_and_lint_passed": true,
+    "artifact_guard_passed": true,
+    "private_info_scan_passed": true
+  },
+  "approval": {
+    "status": "accepted",
+    "required_digest_field": "action_digest",
+    "action_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "bypass_suggested": false
+  },
+  "replay": {
+    "status": "accepted",
+    "evidence_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "replay_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "digest_failures": []
+  },
+  "archive": {
+    "evidence_pack_written": true,
+    "checkpoint_written": true,
+    "resume_state_written": true,
+    "public_safe": true
+  },
+  "rollback": {
+    "before_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "after_repair_digest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "after_rollback_digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "exact_state_restored": true
+  },
+  "resume": {
+    "resumed_after_interruption": true,
+    "duplicate_edits": false,
+    "stale_resume_rejected": true
+  },
+  "denied_actions": {
+    "feature_generated_draft_pr_opened": false,
+    "issue_write_performed": false,
+    "upstream_push_performed": false,
+    "provider_call_performed": false,
+    "release_selected": false,
+    "rsi_authorized": false
+  }
+}
