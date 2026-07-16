@@ -1254,7 +1254,7 @@ Result:
   preflights, publishes to ao2-control-plane when
   `AO2_PHASE1_CONTROL_PLANE_URL` is set, and may capture a dashboard snapshot
   with `AO2_PHASE1_DASHBOARD_SNAPSHOT=1`
-- stable public release archives at v0.5.2 (macOS aarch64, Linux aarch64,
+- stable public release archives at v0.5.1 (macOS aarch64, Linux aarch64,
   Linux x86_64, Windows x86_64) are SHA256 verified from the published
   `SHA256SUMS`; signed provenance sidecars are required before stable-promotion
   readiness can pass

@@ -666,14 +666,20 @@ def test_current_public_pair_tracks_control_plane_v0_1_16():
         assert "v0.1.15" not in text, path
 
     manifest = json.loads(read("docs/release/release-train.json"))
-    expected_target = {
+    expected_stable = {
+        "ao2": {"tag": "v0.5.1", "version": "0.5.1"},
+        "ao2_control_plane": {"tag": "v0.1.16", "version": "0.1.16"},
+        "promotion_confirm": "promote-stable-v0.5.1-v0.1.16",
+        "public_operator_confirm": "public-release-reviewed-v0.5.1-v0.1.16",
+    }
+    expected_next_patch = {
         "ao2": {"tag": "v0.5.2", "version": "0.5.2"},
         "ao2_control_plane": {"tag": "v0.1.16", "version": "0.1.16"},
         "promotion_confirm": "promote-stable-v0.5.2-v0.1.16",
         "public_operator_confirm": "public-release-reviewed-v0.5.2-v0.1.16",
     }
-    assert manifest["stable"] == expected_target
-    assert manifest["next_patch"] == expected_target
+    assert manifest["stable"] == expected_stable
+    assert manifest["next_patch"] == expected_next_patch
 
     vector = json.loads(
         read("tests/fixtures/compatibility/ao2-execution-receipt-v0.5.2.json")
@@ -801,7 +807,7 @@ def test_public_release_download_verify_is_checksum_first_and_post_merge_canarie
         "verifies every\nasset listed in `SHA256SUMS`",
         "verifies signed\nprovenance",
         "public release download checksum verification",
-        "stable public release archives at v0.5.2",
+        "stable public release archives at v0.5.1",
     ]:
         assert needle in install + "\n" + verification
 
@@ -1069,6 +1075,7 @@ def test_public_release_pair_digest_audit_rejects_closure_release_asset_drift(tm
         capture_output=True,
         env={
             **os.environ,
+            "AO2_RELEASE_TRAIN": "next_patch",
             "AO2_PUBLIC_PAIR_DIGEST_AUDIT_ROOT": str(out_root),
             "AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON": str(
                 closure_index
@@ -1125,6 +1132,7 @@ def test_public_release_pair_digest_audit_rejects_closure_release_asset_drift(tm
         capture_output=True,
         env={
             **os.environ,
+            "AO2_RELEASE_TRAIN": "next_patch",
             "AO2_PUBLIC_PAIR_DIGEST_AUDIT_ROOT": str(passed_root),
             "AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON": str(
                 closure_index
@@ -1246,6 +1254,7 @@ def test_public_release_pair_digest_audit_rejects_missing_or_mismatched_full_arc
         capture_output=True,
         env={
             **os.environ,
+            "AO2_RELEASE_TRAIN": "next_patch",
             "AO2_PUBLIC_PAIR_DIGEST_AUDIT_ROOT": str(tmp_path / "missing-audit"),
             "AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON": str(
                 missing_closure
@@ -1282,6 +1291,7 @@ def test_public_release_pair_digest_audit_rejects_missing_or_mismatched_full_arc
         capture_output=True,
         env={
             **os.environ,
+            "AO2_RELEASE_TRAIN": "next_patch",
             "AO2_PUBLIC_PAIR_DIGEST_AUDIT_ROOT": str(tmp_path / "drift-audit"),
             "AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON": str(
                 drift_closure
@@ -1318,6 +1328,7 @@ def test_public_release_pair_digest_audit_rejects_missing_or_mismatched_full_arc
         capture_output=True,
         env={
             **os.environ,
+            "AO2_RELEASE_TRAIN": "next_patch",
             "AO2_PUBLIC_PAIR_DIGEST_AUDIT_ROOT": str(tmp_path / "extra-public-audit"),
             "AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON": str(
                 extra_public_closure
@@ -1360,6 +1371,7 @@ def test_public_release_pair_digest_audit_rejects_missing_or_mismatched_full_arc
         capture_output=True,
         env={
             **os.environ,
+            "AO2_RELEASE_TRAIN": "next_patch",
             "AO2_PUBLIC_PAIR_DIGEST_AUDIT_ROOT": str(tmp_path / "passed-audit"),
             "AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON": str(
                 passed_closure
@@ -13757,7 +13769,7 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
     assert manifest["schema_version"] == "ao2.release-train-manifest.v1"
-    assert manifest["stable"]["ao2"] == {"tag": "v0.5.2", "version": "0.5.2"}
+    assert manifest["stable"]["ao2"] == {"tag": "v0.5.1", "version": "0.5.1"}
     assert manifest["stable"]["ao2_control_plane"] == {
         "tag": "v0.1.16",
         "version": "0.1.16",
@@ -13769,7 +13781,7 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
     }
     assert (
         manifest["stable"]["promotion_confirm"]
-        == "promote-stable-v0.5.2-v0.1.16"
+        == "promote-stable-v0.5.1-v0.1.16"
     )
     assert (
         manifest["next_patch"]["promotion_confirm"]
@@ -13784,6 +13796,7 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
         cwd=REPO_ROOT,
         text=True,
         capture_output=True,
+        env={**os.environ, "AO2_RELEASE_TRAIN": "next_patch"},
         check=False,
     )
     assert result.returncode == 0, result.stderr + result.stdout
@@ -14313,6 +14326,7 @@ def test_candidate_patch_release_rehearsal_audit_contract(tmp_path):
         cwd=REPO_ROOT,
         text=True,
         capture_output=True,
+        env={**os.environ, "AO2_RELEASE_TRAIN": "next_patch"},
         check=False,
     )
     assert result.returncode == 0, result.stderr + result.stdout
@@ -14370,6 +14384,7 @@ def test_release_train_manifest_parity_audit_contract(tmp_path):
         cwd=REPO_ROOT,
         text=True,
         capture_output=True,
+        env={**os.environ, "AO2_RELEASE_TRAIN": "next_patch"},
         check=False,
     )
     assert result.returncode == 0, result.stderr + result.stdout
@@ -14380,7 +14395,7 @@ def test_release_train_manifest_parity_audit_contract(tmp_path):
     assert summary["byte_identical"] is True
     assert summary["schema_aligned"] is True
     assert summary["target_aligned"] is True
-    assert summary["stable"]["ao2"]["tag"] == "v0.5.2"
+    assert summary["stable"]["ao2"]["tag"] == "v0.5.1"
     assert summary["next_patch"]["ao2"]["tag"] == "v0.5.2"
 
     for needle in [
@@ -14738,6 +14753,7 @@ def test_candidate_readiness_packet_contract(tmp_path):
         cwd=REPO_ROOT,
         text=True,
         capture_output=True,
+        env={**os.environ, "AO2_RELEASE_TRAIN": "next_patch"},
         check=False,
     )
     assert result.returncode == 0, result.stderr + result.stdout
@@ -16079,6 +16095,7 @@ exit 2
         cwd=REPO_ROOT,
         text=True,
         capture_output=True,
+        env={**os.environ, "AO2_RELEASE_TRAIN": "next_patch"},
         check=False,
     )
     assert result.returncode == 0, result.stderr + result.stdout
