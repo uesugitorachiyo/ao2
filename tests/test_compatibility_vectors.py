@@ -14,7 +14,7 @@ COVENANT_AO2_VECTOR_PATH = (
 )
 
 AO2_TAG_TARGET = "80ec5321f42d4bab17d5e64fdae6aa099ba59d4a"
-CP_TAG_TARGET = "f1702b387607566cac457458af9adb5871a5c412"
+CP_TAG_TARGET = "f4f5fea9fefa1081cebcbabac550b0e08b9f0e3d"
 MANIFEST_DIGEST = "bd8103e7a038f47e1b4fef1a2a19ae65cc221675ea11149d39cfb679ae2a08fc"
 
 
@@ -58,8 +58,8 @@ def test_ao2_execution_receipt_vector_matches_current_public_pair():
     consumer = vector["consumer"]
     assert consumer == {
         "repository": "ao2-control-plane",
-        "version": "v0.1.15",
-        "release_url": "https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.15",
+        "version": "v0.1.16",
+        "release_url": "https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.16",
         "tag_target": CP_TAG_TARGET,
     }
 
