@@ -8,8 +8,8 @@
   },
   "consumer": {
     "repository": "ao2",
-    "version": "v0.5.1",
-    "tag_target": "80ec5321f42d4bab17d5e64fdae6aa099ba59d4a",
+    "version": "v0.5.2",
+    "tag_target": "pending-v0.5.2-release-prep-merge",
     "contract": "ao2.approved-execution-request.v1"
   },
   "covenant_approval_ticket": {

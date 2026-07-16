@@ -1,15 +1,15 @@
 {
   "next_patch": {
     "ao2": {
-      "tag": "v0.5.1",
-      "version": "0.5.1"
+      "tag": "v0.5.2",
+      "version": "0.5.2"
     },
     "ao2_control_plane": {
       "tag": "v0.1.16",
       "version": "0.1.16"
     },
-    "promotion_confirm": "promote-stable-v0.5.1-v0.1.16",
-    "public_operator_confirm": "public-release-reviewed-v0.5.1-v0.1.16"
+    "promotion_confirm": "promote-stable-v0.5.2-v0.1.16",
+    "public_operator_confirm": "public-release-reviewed-v0.5.2-v0.1.16"
   },
   "schema_version": "ao2.release-train-manifest.v1",
   "stable": {
