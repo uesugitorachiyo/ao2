@@ -1,0 +1,57 @@
+{
+  "schema_version": "ao2.controlled-self-improvement-dry-run-evidence-pack.v0.1",
+  "status": "dry_run_passed",
+  "proposal": {
+    "proposal_id": "month4-fixture-only-self-change-proposal",
+    "summary": "Simulate a bounded documentation wording improvement inside a fixture workspace.",
+    "change_class": "fixture_only_dry_run",
+    "human_approval_required": true
+  },
+  "policy": {
+    "source": "ao-covenant/examples/controlled-self-improvement/policy-gate.json",
+    "approval_state": "required",
+    "execution_scope": "temporary_fixture_workspace",
+    "rollback_required": true
+  },
+  "authority": {
+    "dry_run_only": true,
+    "live_self_modification_authorized": false,
+    "provider_execution_required": false,
+    "provider_execution_performed": false,
+    "live_repository_mutation_performed": false,
+    "rsi_authorized": false,
+    "promotion_requested": false
+  },
+  "approval_replay": {
+    "required_digest_field": "action_digest",
+    "action_digest": "sha256:4af7a387a8d35e5da9947e446517d3a377021db802a2750fc93e0efb2a54e2ef",
+    "wrong_digest_rejected": true,
+    "correct_digest_accepted_for_dry_run": true,
+    "correct_digest_grants_live_authority": false
+  },
+  "fixture_workspace": {
+    "before_path": "workspace-before/README.md",
+    "before_sha256": "46695f3836136909e88e7c66970e8d65431cc95c716f1e7c9da31d0afafa7116",
+    "during_path": "workspace-during/README.md",
+    "during_sha256": "b9b7f14028e5a6909b22f004e18136492cfc9436193ef86230d8fae0df954856",
+    "after_path": "workspace-after/README.md",
+    "after_sha256": "46695f3836136909e88e7c66970e8d65431cc95c716f1e7c9da31d0afafa7116"
+  },
+  "rollback": {
+    "rollback_verified": true,
+    "scope": "temporary_fixture_workspace",
+    "restored_sha256": "46695f3836136909e88e7c66970e8d65431cc95c716f1e7c9da31d0afafa7116",
+    "live_repo_restored": "not_applicable_no_live_repo_mutation"
+  },
+  "evidence": {
+    "commands": [
+      "fixture: propose",
+      "fixture: policy-classify",
+      "fixture: dry-run",
+      "fixture: rollback",
+      "fixture: observe"
+    ],
+    "evidence_pack_digest": "sha256:d2f5a26a935b23db1c2029477f43a2d55508702e077e747bda5ed2cbb22c1260",
+    "public_safe": true
+  }
+}
