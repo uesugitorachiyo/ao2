@@ -1230,6 +1230,19 @@ enum IssueCommand {
         #[arg(long)]
         json: bool,
     },
+    /// Plan isolated repository acquisition for one validated GitHub issue.
+    Acquire {
+        #[arg(long)]
+        url: String,
+        #[arg(long = "upstream-url")]
+        upstream_url: String,
+        #[arg(long = "default-branch", default_value = "main")]
+        default_branch: String,
+        #[arg(long = "target-commit")]
+        target_commit: String,
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -4086,6 +4099,13 @@ struct GitHubIssueIntakeReadback {
 fn issue(command: IssueCommand) -> Result<()> {
     match command {
         IssueCommand::Intake { url, json } => issue_intake(&url, json),
+        IssueCommand::Acquire {
+            url,
+            upstream_url,
+            default_branch,
+            target_commit,
+            json,
+        } => issue_acquire(&url, &upstream_url, &default_branch, &target_commit, json),
     }
 }
 
@@ -4186,6 +4206,149 @@ fn canonicalize_github_issue_url(input: &str) -> GitHubIssueIntakeReadback {
         "https://github.com/{owner}/{repo}/issues/{issue_number}"
     ));
     readback
+}
+
+#[derive(Debug, Serialize)]
+struct GitHubIssueAcquisitionReadback {
+    schema_version: &'static str,
+    state: String,
+    issue: GitHubIssueIntakeReadback,
+    repository_identity: GitHubIssueRepositoryIdentity,
+    acquisition: GitHubIssueAcquisitionPolicy,
+    denied_actions: GitHubIssueAcquisitionDeniedActions,
+    operator_next_action: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+struct GitHubIssueRepositoryIdentity {
+    upstream_url: String,
+    default_branch: String,
+    target_commit: String,
+    target_commit_valid: bool,
+    upstream_matches_issue_repository: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct GitHubIssueAcquisitionPolicy {
+    hooks_disabled: bool,
+    safe_git_config: bool,
+    controlled_remotes: bool,
+    dependency_network_policy: &'static str,
+    sanitized_environment: bool,
+    log_capture: bool,
+    size_policy: &'static str,
+    archive_policy: &'static str,
+    path_policy: &'static str,
+    symlink_policy: &'static str,
+    binary_policy: &'static str,
+    lfs_policy: &'static str,
+    submodule_policy: &'static str,
+    mutation_policy: &'static str,
+}
+
+#[derive(Debug, Serialize)]
+struct GitHubIssueAcquisitionDeniedActions {
+    github_write_performed: bool,
+    feature_generated_pr_opened: bool,
+    issue_write_performed: bool,
+    maintainer_contacted: bool,
+    provider_call_performed: bool,
+    repository_mutated: bool,
+}
+
+fn issue_acquire(
+    url: &str,
+    upstream_url: &str,
+    default_branch: &str,
+    target_commit: &str,
+    json: bool,
+) -> Result<()> {
+    let readback = plan_github_issue_acquisition(url, upstream_url, default_branch, target_commit);
+    if json {
+        println!("{}", serde_json::to_string_pretty(&readback)?);
+    } else {
+        println!("state={}", readback.state);
+        println!(
+            "target_commit={}",
+            readback.repository_identity.target_commit
+        );
+        println!(
+            "upstream_matches_issue_repository={}",
+            readback
+                .repository_identity
+                .upstream_matches_issue_repository
+        );
+        println!("mutation_policy={}", readback.acquisition.mutation_policy);
+    }
+    Ok(())
+}
+
+fn plan_github_issue_acquisition(
+    url: &str,
+    upstream_url: &str,
+    default_branch: &str,
+    target_commit: &str,
+) -> GitHubIssueAcquisitionReadback {
+    let issue = canonicalize_github_issue_url(url);
+    let expected_upstream = issue
+        .owner
+        .as_ref()
+        .zip(issue.repo.as_ref())
+        .map(|(owner, repo)| format!("https://github.com/{owner}/{repo}.git"));
+    let target_commit_valid = is_full_hex_sha(target_commit);
+    let upstream_matches_issue_repository =
+        expected_upstream.as_deref() == Some(upstream_url.trim());
+    let state = if issue.state == "intake_validated"
+        && target_commit_valid
+        && upstream_matches_issue_repository
+        && !default_branch.trim().is_empty()
+    {
+        "acquisition_planned"
+    } else {
+        "policy_blocked"
+    };
+    GitHubIssueAcquisitionReadback {
+        schema_version: "ao2.github-issue-acquisition-plan.v0.1",
+        state: state.to_string(),
+        issue,
+        repository_identity: GitHubIssueRepositoryIdentity {
+            upstream_url: upstream_url.to_string(),
+            default_branch: default_branch.to_string(),
+            target_commit: target_commit.to_string(),
+            target_commit_valid,
+            upstream_matches_issue_repository,
+        },
+        acquisition: GitHubIssueAcquisitionPolicy {
+            hooks_disabled: true,
+            safe_git_config: true,
+            controlled_remotes: true,
+            dependency_network_policy: "deny_by_default_operator_approved_allowlist_only",
+            sanitized_environment: true,
+            log_capture: true,
+            size_policy: "bounded_before_checkout",
+            archive_policy: "no_untrusted_archive_extraction_without_manifest",
+            path_policy: "reject_absolute_parent_traversal_and_control_paths",
+            symlink_policy: "inspect_before_following",
+            binary_policy: "do_not_execute_untrusted_binary",
+            lfs_policy: "disabled_until_operator_allows",
+            submodule_policy: "disabled_until_operator_allows",
+            mutation_policy: "read_only_acquisition_plan_no_clone_or_checkout_performed_by_this_readback",
+        },
+        denied_actions: GitHubIssueAcquisitionDeniedActions {
+            github_write_performed: false,
+            feature_generated_pr_opened: false,
+            issue_write_performed: false,
+            maintainer_contacted: false,
+            provider_call_performed: false,
+            repository_mutated: false,
+        },
+        operator_next_action:
+            "review acquisition policy, then run reproduction only in an isolated workspace with hooks disabled",
+    }
+}
+
+fn is_full_hex_sha(value: &str) -> bool {
+    value.len() == 40 && value.chars().all(|c| c.is_ascii_hexdigit())
 }
 
 fn pulse(command: PulseCommand) -> Result<()> {
