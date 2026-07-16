@@ -207,6 +207,10 @@ enum Command {
         #[command(subcommand)]
         command: sdd_cmd::SddCommand,
     },
+    Issue {
+        #[command(subcommand)]
+        command: IssueCommand,
+    },
     Export {
         run_id: String,
         #[arg(long, default_value = ".")]
@@ -1212,6 +1216,17 @@ enum GitCommand {
         approve_action_digest: Option<String>,
         #[arg(long, default_value = "human:local-operator")]
         approver: String,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum IssueCommand {
+    /// Canonicalize and classify one GitHub issue URL without network or GitHub writes.
+    Intake {
+        #[arg(long)]
+        url: String,
         #[arg(long)]
         json: bool,
     },
@@ -4024,6 +4039,7 @@ fn real_main() -> Result<()> {
         Command::Factory { command } => factory(command),
         Command::Greenfield { command } => greenfield(command),
         Command::Sdd { command } => sdd_cmd::run(command),
+        Command::Issue { command } => issue(command),
         Command::Export { run_id, target } => export(target, run_id),
         Command::Version { json } => version(json),
         Command::Doctor {
@@ -4046,6 +4062,130 @@ fn real_main() -> Result<()> {
         Command::Release { command } => release(command),
         Command::Cp { command } => cp(command),
     }
+}
+
+#[derive(Debug, Serialize)]
+struct GitHubIssueIntakeReadback {
+    schema_version: &'static str,
+    state: String,
+    input_url: String,
+    canonical_url: Option<String>,
+    host: Option<String>,
+    owner: Option<String>,
+    repo: Option<String>,
+    issue_number: Option<u64>,
+    rejection: Option<String>,
+    command_policy_class: &'static str,
+    github_read_performed: bool,
+    github_write_performed: bool,
+    feature_generated_pr_opened: bool,
+    issue_write_performed: bool,
+    maintainer_contacted: bool,
+}
+
+fn issue(command: IssueCommand) -> Result<()> {
+    match command {
+        IssueCommand::Intake { url, json } => issue_intake(&url, json),
+    }
+}
+
+fn issue_intake(url: &str, json: bool) -> Result<()> {
+    let readback = canonicalize_github_issue_url(url);
+    if json {
+        println!("{}", serde_json::to_string_pretty(&readback)?);
+    } else if let Some(canonical_url) = &readback.canonical_url {
+        println!("state={}", readback.state);
+        println!("canonical_url={canonical_url}");
+    } else {
+        println!("state={}", readback.state);
+        if let Some(rejection) = &readback.rejection {
+            println!("rejection={rejection}");
+        }
+    }
+    Ok(())
+}
+
+fn canonicalize_github_issue_url(input: &str) -> GitHubIssueIntakeReadback {
+    let mut readback = GitHubIssueIntakeReadback {
+        schema_version: "ao2.github-issue-intake.v0.1",
+        state: "invalid_url".to_string(),
+        input_url: input.to_string(),
+        canonical_url: None,
+        host: None,
+        owner: None,
+        repo: None,
+        issue_number: None,
+        rejection: None,
+        command_policy_class: "safe_read_only_discovery",
+        github_read_performed: false,
+        github_write_performed: false,
+        feature_generated_pr_opened: false,
+        issue_write_performed: false,
+        maintainer_contacted: false,
+    };
+    let trimmed = input.trim();
+    let without_fragment = trimmed.split_once('#').map_or(trimmed, |(base, _)| base);
+    let without_query = without_fragment
+        .split_once('?')
+        .map_or(without_fragment, |(base, _)| base);
+    let Some(after_scheme) = without_query
+        .strip_prefix("https://")
+        .or_else(|| without_query.strip_prefix("http://"))
+    else {
+        readback.rejection = Some("missing_or_unsupported_scheme".to_string());
+        return readback;
+    };
+    let (host, path) = match after_scheme.split_once('/') {
+        Some((host, path)) => (host.to_ascii_lowercase(), path),
+        None => (after_scheme.to_ascii_lowercase(), ""),
+    };
+    readback.host = Some(host.clone());
+    if host != "github.com" {
+        readback.state = "unsupported_host".to_string();
+        readback.rejection = Some("unsupported_host".to_string());
+        return readback;
+    }
+    let segments: Vec<&str> = path
+        .split('/')
+        .filter(|segment| !segment.is_empty())
+        .collect();
+    if segments
+        .iter()
+        .any(|segment| *segment == "." || *segment == "..")
+    {
+        readback.rejection = Some("traversal".to_string());
+        return readback;
+    }
+    if segments.len() != 4 || segments[2] != "issues" {
+        readback.rejection = Some(
+            match segments.get(2).copied() {
+                Some("pull") => "pull_request_url",
+                Some("discussions") => "discussion_url",
+                Some("actions") => "actions_url",
+                _ => "not_a_github_issue_url",
+            }
+            .to_string(),
+        );
+        return readback;
+    }
+    let Ok(issue_number) = segments[3].parse::<u64>() else {
+        readback.rejection = Some("malformed_number".to_string());
+        return readback;
+    };
+    if issue_number == 0 {
+        readback.rejection = Some("malformed_number".to_string());
+        return readback;
+    }
+    let owner = segments[0].to_string();
+    let repo = segments[1].to_string();
+    readback.state = "intake_validated".to_string();
+    readback.owner = Some(owner.clone());
+    readback.repo = Some(repo.clone());
+    readback.issue_number = Some(issue_number);
+    readback.canonical_url = Some(format!(
+        "https://github.com/{owner}/{repo}/issues/{issue_number}"
+    ));
+    readback
 }
 
 fn pulse(command: PulseCommand) -> Result<()> {
