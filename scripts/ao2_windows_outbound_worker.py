@@ -1085,11 +1085,14 @@ def ao2_doctor_command(parameters: dict[str, Any], *, factory_root: Path = DEFAU
     if manifest.exists():
         cargo = resolve_fixed_tool("cargo")
         cargo_path = str(cargo.get("path") or "cargo")
+        target_dir = factory_root / ".ao2-worker-target" / "ao2-doctor"
         return [
             cargo_path,
             "run",
             "--manifest-path",
             str(manifest),
+            "--target-dir",
+            str(target_dir),
             "-p",
             "ao2-cli",
             "--bin",

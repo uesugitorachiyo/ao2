@@ -283,6 +283,7 @@ def test_ao2_doctor_uses_factory_cargo_fallback_when_binary_is_not_installed(
     result = runtime.run_action("ao2_doctor", {"timeout_seconds": 300}, request_id="doctor")
 
     assert result["status"] == "accepted"
+    doctor_target_dir = factory / ".ao2-worker-target" / "ao2-doctor"
     assert recorded_commands == [
         (
             [
@@ -290,6 +291,8 @@ def test_ao2_doctor_uses_factory_cargo_fallback_when_binary_is_not_installed(
                 "run",
                 "--manifest-path",
                 str(manifest),
+                "--target-dir",
+                str(doctor_target_dir),
                 "-p",
                 "ao2-cli",
                 "--bin",
