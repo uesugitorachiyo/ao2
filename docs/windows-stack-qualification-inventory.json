@@ -1,0 +1,44 @@
+{
+  "schema_version": "ao2.windows-stack-qualification-inventory.v1",
+  "profile_version": "ao2.windows-stack-qualification.profiles.v1",
+  "action": "windows_stack_qualification",
+  "canonical_repositories": [
+    "ao-architecture",
+    "ao-mission",
+    "ao-blueprint",
+    "ao-atlas",
+    "ao-foundry",
+    "ao-forge",
+    "ao-covenant",
+    "ao2",
+    "ao2-control-plane",
+    "ao-command",
+    "ao-arena",
+    "ao-crucible",
+    "ao-sentinel",
+    "ao-promoter"
+  ],
+  "archived_repositories_rejected": ["agy-swarms"],
+  "modes": ["diagnostic", "targeted", "full"],
+  "allowed_parameters": ["mode", "repositories", "repos", "timeout_seconds"],
+  "timeout_bounds_seconds": {
+    "minimum": 30,
+    "default": 600,
+    "maximum": 3600
+  },
+  "command_mapping_owner": "scripts/ao2_windows_outbound_worker.py::WINDOWS_REPOSITORY_PROFILES",
+  "payload_must_not_supply": [
+    "command",
+    "commands",
+    "args",
+    "argv",
+    "cwd",
+    "working_directory",
+    "executable",
+    "executable_path",
+    "env",
+    "environment",
+    "powershell",
+    "shell"
+  ]
+}
