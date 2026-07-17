@@ -231,6 +231,80 @@ def test_allowlist_rejects_arbitrary_command_text(tmp_path: Path) -> None:
     assert "whoami" not in json.dumps(result)
 
 
+def test_ao2_doctor_uses_factory_cargo_fallback_when_binary_is_not_installed(
+    tmp_path: Path, monkeypatch
+) -> None:
+    worker = load_worker_module()
+    factory = tmp_path / "factory"
+    ao2_repo = factory / "ao2"
+    manifest = ao2_repo / "Cargo.toml"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text("[workspace]\n", encoding="utf-8")
+    cargo = tmp_path / "tools" / "cargo.exe"
+    cargo.parent.mkdir(parents=True)
+    cargo.write_text("placeholder", encoding="utf-8")
+    recorded_commands = []
+
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local-app-data"))
+
+    def fake_resolve(tool_name):
+        assert tool_name == "cargo"
+        return {
+            "tool": "cargo",
+            "status": "resolved",
+            "path": str(cargo),
+            "resolution_source": "test",
+        }
+
+    def fake_run(command, *, cwd, timeout_seconds, output_limit_bytes=worker.DEFAULT_OUTPUT_LIMIT_BYTES):
+        recorded_commands.append((list(command), Path(cwd), timeout_seconds, output_limit_bytes))
+        return {
+            "status": "accepted",
+            "exit_code": 0,
+            "timed_out": False,
+            "duration_seconds": 0.01,
+            "output": '{"status":"ok"}',
+            "output_truncated": False,
+            "sanitized_stderr_category": "none",
+            "command_name": Path(command[0]).name,
+        }
+
+    monkeypatch.setattr(worker, "resolve_fixed_tool", fake_resolve)
+    monkeypatch.setattr(worker, "run_bounded_child", fake_run)
+    runtime = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=factory,
+        state=worker.WorkerState(tmp_path / "state"),
+        transport=worker.MemoryTransport(),
+        poll_interval_seconds=0.01,
+    )
+
+    result = runtime.run_action("ao2_doctor", {"timeout_seconds": 300}, request_id="doctor")
+
+    assert result["status"] == "accepted"
+    assert recorded_commands == [
+        (
+            [
+                str(cargo),
+                "run",
+                "--manifest-path",
+                str(manifest),
+                "-p",
+                "ao2-cli",
+                "--bin",
+                "ao2",
+                "--",
+                "doctor",
+                "--json",
+            ],
+            factory,
+            300,
+            worker.DEFAULT_OUTPUT_LIMIT_BYTES,
+        )
+    ]
+
+
 def test_poll_once_ignores_worker_result_and_non_target_control_tasks(tmp_path: Path) -> None:
     worker = load_worker_module()
 
