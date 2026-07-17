@@ -38,6 +38,9 @@ DEFAULT_STATE_ROOT = (
 DEFAULT_POLL_INTERVAL_SECONDS = 5.0
 DEFAULT_DOCTOR_TIMEOUT_SECONDS = 120.0
 DEFAULT_ACTION_TIMEOUT_SECONDS = 300.0
+DEFAULT_STACK_QUALIFICATION_TIMEOUT_SECONDS = 600.0
+MIN_STACK_QUALIFICATION_TIMEOUT_SECONDS = 30.0
+MAX_STACK_QUALIFICATION_TIMEOUT_SECONDS = 3600.0
 DEFAULT_OUTPUT_LIMIT_BYTES = 64 * 1024
 ALLOWLISTED_ACTIONS = (
     "status",
@@ -45,7 +48,129 @@ ALLOWLISTED_ACTIONS = (
     "sync_ao_stack",
     "ao2_doctor",
     "timeout_fixture",
+    "windows_stack_qualification",
 )
+CANONICAL_REPOSITORIES = (
+    "ao-architecture",
+    "ao-mission",
+    "ao-blueprint",
+    "ao-atlas",
+    "ao-foundry",
+    "ao-forge",
+    "ao-covenant",
+    "ao2",
+    "ao2-control-plane",
+    "ao-command",
+    "ao-arena",
+    "ao-crucible",
+    "ao-sentinel",
+    "ao-promoter",
+)
+ARCHIVED_REPOSITORIES = ("agy-swarms",)
+STACK_QUALIFICATION_MODES = ("diagnostic", "targeted", "full")
+STACK_QUALIFICATION_ALLOWED_PARAMETERS = {"mode", "repositories", "repos", "timeout_seconds"}
+STACK_QUALIFICATION_FORBIDDEN_PARAMETERS = {
+    "command",
+    "commands",
+    "args",
+    "argv",
+    "cwd",
+    "working_directory",
+    "executable",
+    "executable_path",
+    "env",
+    "environment",
+    "powershell",
+    "shell",
+}
+STACK_PROFILE_VERSION = "ao2.windows-stack-qualification.profiles.v1"
+DIAGNOSTIC_PROFILE = (
+    {"name": "git-head-readback", "argv": ("git", "rev-parse", "HEAD")},
+    {"name": "git-clean-readback", "argv": ("git", "status", "--porcelain=v1")},
+)
+WINDOWS_REPOSITORY_PROFILES: dict[str, dict[str, tuple[dict[str, tuple[str, ...]], ...]]] = {
+    "ao-architecture": {
+        "targeted": (
+            {"name": "architecture-stack-lock", "argv": ("{python}", "scripts/verify_stack_lock.py")},
+            {"name": "architecture-current-release", "argv": ("{python}", "scripts/verify_current_release_manifest.py")},
+        ),
+        "full": (
+            {"name": "architecture-pytest", "argv": ("{python}", "-m", "pytest", "scripts", "-q")},
+        ),
+    },
+    "ao-mission": {
+        "targeted": ({"name": "go-test", "argv": ("go", "test", "./...")},),
+        "full": ({"name": "go-test", "argv": ("go", "test", "./...")},),
+    },
+    "ao-blueprint": {
+        "targeted": ({"name": "blueprint-production-readiness", "argv": ("{powershell}", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/production-readiness.ps1")},),
+        "full": (
+            {"name": "go-test", "argv": ("go", "test", "./...")},
+            {"name": "blueprint-production-readiness", "argv": ("{powershell}", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/production-readiness.ps1")},
+        ),
+    },
+    "ao-atlas": {
+        "targeted": ({"name": "atlas-production-readiness", "argv": ("{powershell}", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/production-readiness.ps1")},),
+        "full": (
+            {"name": "go-test", "argv": ("go", "test", "./...")},
+            {"name": "atlas-production-readiness", "argv": ("{powershell}", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/production-readiness.ps1")},
+            {"name": "atlas-targeted-regressions", "argv": ("{powershell}", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/recommendation-targeted-regressions.ps1")},
+        ),
+    },
+    "ao-foundry": {
+        "targeted": ({"name": "go-test", "argv": ("go", "test", "./...")},),
+        "full": ({"name": "go-test", "argv": ("go", "test", "./...")},),
+    },
+    "ao-forge": {
+        "targeted": ({"name": "go-test", "argv": ("go", "test", "./...")},),
+        "full": ({"name": "go-test", "argv": ("go", "test", "./...")},),
+    },
+    "ao-covenant": {
+        "targeted": ({"name": "go-test", "argv": ("go", "test", "./...")},),
+        "full": (
+            {"name": "go-test", "argv": ("go", "test", "./...")},
+            {"name": "covenant-release-readiness", "argv": ("{powershell}", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/release-readiness.ps1")},
+        ),
+    },
+    "ao2": {
+        "targeted": ({"name": "windows-worker-pytest", "argv": ("{python}", "-m", "pytest", "tests/test_windows_outbound_worker.py", "-q")},),
+        "full": (
+            {"name": "windows-worker-pytest", "argv": ("{python}", "-m", "pytest", "tests/test_windows_outbound_worker.py", "-q")},
+            {"name": "cargo-test-workspace", "argv": ("cargo", "test", "--workspace")},
+            {"name": "cargo-fmt-check", "argv": ("cargo", "fmt", "--all", "--", "--check")},
+            {"name": "cargo-clippy", "argv": ("cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings")},
+            {"name": "npm-verify", "argv": ("npm", "run", "verify")},
+        ),
+    },
+    "ao2-control-plane": {
+        "targeted": ({"name": "cargo-test-workspace", "argv": ("cargo", "test", "--workspace")},),
+        "full": (
+            {"name": "cargo-test-workspace", "argv": ("cargo", "test", "--workspace")},
+            {"name": "cargo-fmt-check", "argv": ("cargo", "fmt", "--all", "--", "--check")},
+            {"name": "cargo-clippy", "argv": ("cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings")},
+        ),
+    },
+    "ao-command": {
+        "targeted": ({"name": "go-test", "argv": ("go", "test", "./...")},),
+        "full": ({"name": "go-test", "argv": ("go", "test", "./...")},),
+    },
+    "ao-arena": {
+        "targeted": ({"name": "go-test", "argv": ("go", "test", "./...")},),
+        "full": ({"name": "go-test", "argv": ("go", "test", "./...")},),
+    },
+    "ao-crucible": {
+        "targeted": ({"name": "go-test", "argv": ("go", "test", "./...")},),
+        "full": ({"name": "go-test", "argv": ("go", "test", "./...")},),
+    },
+    "ao-sentinel": {
+        "targeted": ({"name": "go-test", "argv": ("go", "test", "./...")},),
+        "full": ({"name": "go-test", "argv": ("go", "test", "./...")},),
+    },
+    "ao-promoter": {
+        "targeted": ({"name": "go-test", "argv": ("go", "test", "./...")},),
+        "full": ({"name": "go-test", "argv": ("go", "test", "./...")},),
+    },
+}
 SECRET_PATTERNS = (
     re.compile(r"(?i)(authorization:\s*bearer\s+)[A-Za-z0-9._~+\-/=]+"),
     re.compile(r"(?i)(AO2_CP_API_TOKEN=)[^\s]+"),
@@ -319,6 +444,8 @@ class WindowsOutboundWorker:
             "factory_root": str(self.factory_root),
             "state_root": str(self.state.state_root),
             "allowed_actions": list(ALLOWLISTED_ACTIONS),
+            "worker_source_commit": repository_head(self.factory_root / "ao2"),
+            "stack_qualification_profile_version": STACK_PROFILE_VERSION,
             "mac_should_probe_windows": False,
             "windows_http_endpoint": None,
             "windows_inbound_ports_opened": False,
@@ -371,7 +498,7 @@ class WindowsOutboundWorker:
 
     def _run_action_thread(self, request_id: str, action: str, parameters: dict[str, Any]) -> None:
         try:
-            result = self.run_action(action, parameters)
+            result = self.run_action(action, parameters, request_id=request_id)
             self.post_result(request_id, action, result)
             self.state.complete(request_id, str(result.get("status", "failed")))
         except Exception as exc:  # pragma: no cover - fail closed guard
@@ -382,7 +509,7 @@ class WindowsOutboundWorker:
             })
             self.state.complete(request_id, "failed")
 
-    def run_action(self, action: str, parameters: dict[str, Any]) -> dict[str, Any]:
+    def run_action(self, action: str, parameters: dict[str, Any], request_id: str = "") -> dict[str, Any]:
         if action == "timeout_fixture":
             sleep_seconds = float(parameters.get("sleep_seconds", 5))
             timeout_seconds = float(parameters.get("timeout_seconds", 0.2))
@@ -403,7 +530,118 @@ class WindowsOutboundWorker:
             )
         if action == "sync_ao_stack":
             return self.sync_ao_stack(parameters)
+        if action == "windows_stack_qualification":
+            return self.windows_stack_qualification(parameters, request_id=request_id)
         return {"status": "failed", "error_category": "unimplemented_action"}
+
+    def windows_stack_qualification(self, parameters: dict[str, Any], *, request_id: str) -> dict[str, Any]:
+        invalid_keys = sorted(set(parameters) - STACK_QUALIFICATION_ALLOWED_PARAMETERS)
+        forbidden_keys = sorted(set(parameters) & STACK_QUALIFICATION_FORBIDDEN_PARAMETERS)
+        if invalid_keys or forbidden_keys:
+            return {
+                "status": "failed",
+                "error_category": "unsupported_parameter",
+                "unsupported_parameters": sorted(set(invalid_keys + forbidden_keys)),
+            }
+
+        mode = str(parameters.get("mode", "diagnostic"))
+        if mode not in STACK_QUALIFICATION_MODES:
+            return {"status": "failed", "error_category": "invalid_mode", "allowed_modes": list(STACK_QUALIFICATION_MODES)}
+
+        timeout_value = parameters.get("timeout_seconds", DEFAULT_STACK_QUALIFICATION_TIMEOUT_SECONDS)
+        try:
+            timeout_seconds = float(timeout_value)
+        except (TypeError, ValueError):
+            return {"status": "failed", "error_category": "invalid_timeout"}
+        if timeout_seconds < MIN_STACK_QUALIFICATION_TIMEOUT_SECONDS or timeout_seconds > MAX_STACK_QUALIFICATION_TIMEOUT_SECONDS:
+            return {
+                "status": "failed",
+                "error_category": "timeout_out_of_bounds",
+                "min_timeout_seconds": MIN_STACK_QUALIFICATION_TIMEOUT_SECONDS,
+                "max_timeout_seconds": MAX_STACK_QUALIFICATION_TIMEOUT_SECONDS,
+            }
+
+        repos_value = parameters.get("repositories", parameters.get("repos", list(CANONICAL_REPOSITORIES)))
+        if not isinstance(repos_value, list) or not repos_value:
+            return {"status": "failed", "error_category": "invalid_repository_list"}
+
+        repositories: list[str] = []
+        seen: set[str] = set()
+        for item in repos_value:
+            if not isinstance(item, str):
+                return {"status": "failed", "error_category": "invalid_repository_name"}
+            repo_name = item.strip()
+            validation_error = validate_canonical_repository_name(repo_name)
+            if validation_error:
+                return {"status": "failed", "error_category": validation_error, "repository": repo_name}
+            if repo_name in seen:
+                return {"status": "failed", "error_category": "duplicate_repository", "repository": repo_name}
+            seen.add(repo_name)
+            repositories.append(repo_name)
+
+        worker_source_commit = repository_head(self.factory_root / "ao2")
+        results: list[dict[str, Any]] = []
+        for repo_name in repositories:
+            repo_path = self.factory_root / repo_name
+            if not repository_is_beneath_factory(self.factory_root, repo_path):
+                return {"status": "failed", "error_category": "repository_escape", "repository": repo_name}
+
+            repo_head = repository_head(repo_path)
+            profile = qualification_profile(repo_name, mode)
+            if not (repo_path / ".git").exists():
+                results.append(stack_qualification_row(
+                    node_id=self.node_id,
+                    worker_source_commit=worker_source_commit,
+                    request_id=request_id,
+                    repo_name=repo_name,
+                    repo_head=repo_head,
+                    profile_name=mode,
+                    command_name="repository-present",
+                    child={
+                        "status": "failed",
+                        "exit_code": None,
+                        "timed_out": False,
+                        "duration_seconds": 0,
+                        "output": "",
+                        "output_truncated": False,
+                        "sanitized_stderr_category": "missing_repo",
+                    },
+                    output_limit_bytes=self.output_limit_bytes,
+                ))
+                continue
+
+            for command_spec in profile:
+                command = resolve_profile_command(command_spec["argv"])
+                child = run_bounded_child(
+                    command,
+                    cwd=repo_path,
+                    timeout_seconds=timeout_seconds,
+                    output_limit_bytes=self.output_limit_bytes,
+                )
+                results.append(stack_qualification_row(
+                    node_id=self.node_id,
+                    worker_source_commit=worker_source_commit,
+                    request_id=request_id,
+                    repo_name=repo_name,
+                    repo_head=repo_head,
+                    profile_name=mode,
+                    command_name=command_spec["name"],
+                    child=child,
+                    output_limit_bytes=self.output_limit_bytes,
+                ))
+                if child.get("status") != "accepted":
+                    break
+
+        status = "accepted" if results and all(item.get("status") == "accepted" for item in results) else "failed"
+        return {
+            "schema_version": "ao2.windows-stack-qualification-result.v1",
+            "status": status,
+            "mode": mode,
+            "profile_version": STACK_PROFILE_VERSION,
+            "repositories": repositories,
+            "results": results,
+            "completed_at": utc_now(),
+        }
 
     def sync_ao_stack(self, parameters: dict[str, Any]) -> dict[str, Any]:
         repos = parameters.get("repos")
@@ -506,6 +744,104 @@ def local_hostname() -> str:
     if hasattr(os, "uname"):
         return os.uname().nodename
     return ""
+
+
+def validate_canonical_repository_name(repo_name: str) -> str | None:
+    if (
+        not repo_name
+        or repo_name != repo_name.strip()
+        or repo_name in {".", ".."}
+        or "/" in repo_name
+        or "\\" in repo_name
+        or ".." in repo_name
+        or Path(repo_name).is_absolute()
+        or re.match(r"^[A-Za-z]:", repo_name)
+    ):
+        return "invalid_repository_name"
+    if repo_name in ARCHIVED_REPOSITORIES:
+        return "archived_repository"
+    if repo_name not in CANONICAL_REPOSITORIES:
+        return "unknown_repository"
+    return None
+
+
+def repository_is_beneath_factory(factory_root: Path, repo_path: Path) -> bool:
+    try:
+        repo_path.resolve().relative_to(factory_root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def repository_head(repo_path: Path) -> str:
+    if not (repo_path / ".git").exists():
+        return "unknown"
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=repo_path,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+            check=False,
+        )
+    except Exception:
+        return "unknown"
+    head = result.stdout.strip()
+    if result.returncode == 0 and re.fullmatch(r"[0-9a-fA-F]{40}", head):
+        return head.lower()
+    return "unknown"
+
+
+def qualification_profile(repo_name: str, mode: str) -> tuple[dict[str, tuple[str, ...]], ...]:
+    if mode == "diagnostic":
+        return DIAGNOSTIC_PROFILE
+    return WINDOWS_REPOSITORY_PROFILES[repo_name][mode]
+
+
+def resolve_profile_command(argv: tuple[str, ...]) -> list[str]:
+    powershell = shutil.which("pwsh") or shutil.which("powershell") or shutil.which("powershell.exe") or "powershell.exe"
+    replacements = {
+        "{python}": sys.executable,
+        "{powershell}": powershell,
+    }
+    return [replacements.get(part, part) for part in argv]
+
+
+def stack_qualification_row(
+    *,
+    node_id: str,
+    worker_source_commit: str,
+    request_id: str,
+    repo_name: str,
+    repo_head: str,
+    profile_name: str,
+    command_name: str,
+    child: dict[str, Any],
+    output_limit_bytes: int,
+) -> dict[str, Any]:
+    output, truncated = sanitize_output(str(child.get("output") or ""), "", output_limit_bytes)
+    timed_out = bool(child.get("timed_out"))
+    status = str(child.get("status") or "failed")
+    return {
+        "node_id": node_id,
+        "worker_source_commit": worker_source_commit,
+        "request_id": request_id,
+        "canonical_repository": repo_name,
+        "repository_head": repo_head,
+        "verification_profile": profile_name,
+        "sanitized_command_name": command_name,
+        "status": status,
+        "exit_code": child.get("exit_code"),
+        "timeout_state": "timed_out" if timed_out else "completed",
+        "timed_out": timed_out,
+        "duration_seconds": child.get("duration_seconds", 0),
+        "error_category": str(child.get("sanitized_stderr_category") or ("timeout" if timed_out else "none")),
+        "bounded_sanitized_output": output,
+        "output_truncated": bool(child.get("output_truncated")) or truncated,
+        "completed_timestamp": utc_now(),
+    }
 
 
 def ao2_doctor_command(parameters: dict[str, Any]) -> list[str]:
