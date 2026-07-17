@@ -55,6 +55,45 @@ def test_bounded_child_timeout_kills_process_tree(tmp_path: Path) -> None:
     assert marker.exists() is False
 
 
+def test_bounded_child_timeout_collection_timeout_is_structured(tmp_path: Path, monkeypatch) -> None:
+    worker = load_worker_module()
+    killed: list[int] = []
+
+    class StubbornProcess:
+        pid = 1234
+        returncode = None
+
+        def poll(self):
+            return None
+
+        def communicate(self, timeout=None):
+            raise worker.subprocess.TimeoutExpired(
+                ["cargo", "test", "--workspace"],
+                timeout,
+                output="partial stdout",
+                stderr="partial stderr",
+            )
+
+    process = StubbornProcess()
+    monkeypatch.setattr(worker.subprocess, "Popen", lambda command, **kwargs: process)
+    monkeypatch.setattr(worker, "terminate_process_tree", lambda child: killed.append(child.pid))
+
+    result = worker.run_bounded_child(
+        ["cargo", "test", "--workspace"],
+        cwd=tmp_path,
+        timeout_seconds=0.01,
+        output_limit_bytes=4096,
+    )
+
+    assert killed == [1234]
+    assert result["status"] == "timed_out"
+    assert result["timed_out"] is True
+    assert result["exit_code"] is None
+    assert result["sanitized_stderr_category"] == "timeout"
+    assert result["command_name"] == "cargo"
+    assert "partial stdout" in result["output"]
+
+
 def test_child_output_is_redacted_and_size_bounded(tmp_path: Path) -> None:
     worker = load_worker_module()
     script = tmp_path / "leaky.py"
