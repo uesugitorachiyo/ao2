@@ -584,7 +584,7 @@ class WindowsOutboundWorker:
                 output_limit_bytes=self.output_limit_bytes,
             )
         if action == "ao2_doctor":
-            command = ao2_doctor_command(parameters)
+            command = ao2_doctor_command(parameters, factory_root=self.factory_root)
             timeout_seconds = float(parameters.get("timeout_seconds", DEFAULT_DOCTOR_TIMEOUT_SECONDS))
             return run_bounded_child(
                 command,
@@ -1067,7 +1067,7 @@ def stack_qualification_row(
     }
 
 
-def ao2_doctor_command(parameters: dict[str, Any]) -> list[str]:
+def ao2_doctor_command(parameters: dict[str, Any], *, factory_root: Path = DEFAULT_FACTORY_ROOT) -> list[str]:
     explicit = parameters.get("ao2_path")
     candidates = []
     if isinstance(explicit, str) and explicit.strip():
@@ -1081,6 +1081,23 @@ def ao2_doctor_command(parameters: dict[str, Any]) -> list[str]:
     for candidate in candidates:
         if candidate and Path(candidate).exists():
             return [candidate, "doctor", "--json"]
+    manifest = factory_root / "ao2" / "Cargo.toml"
+    if manifest.exists():
+        cargo = resolve_fixed_tool("cargo")
+        cargo_path = str(cargo.get("path") or "cargo")
+        return [
+            cargo_path,
+            "run",
+            "--manifest-path",
+            str(manifest),
+            "-p",
+            "ao2-cli",
+            "--bin",
+            "ao2",
+            "--",
+            "doctor",
+            "--json",
+        ]
     return ["ao2", "doctor", "--json"]
 
 
