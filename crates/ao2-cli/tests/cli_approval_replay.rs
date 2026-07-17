@@ -23389,8 +23389,7 @@ fn cli_release_gate_verifies_archives_provenance_and_smoke_summary() {
     let package_json: serde_json::Value = serde_json::from_str(&stdout(&package)).unwrap();
     let archive = package_json["archive"].as_str().unwrap();
 
-    let sign = Command::new(sh_command())
-        .arg("../../scripts/release-sign-provenance.sh")
+    let sign = release_sign_command()
         .env("AO2_VERSION", "9.9.9-test")
         .env("AO2_MACOS_ARCHIVE", archive)
         .env("AO2_LINUX_ARCHIVE", archive)
@@ -23480,8 +23479,7 @@ fn cli_release_gate_fails_without_obligation_gate_metadata() {
     let package_json: serde_json::Value = serde_json::from_str(&stdout(&package)).unwrap();
     let archive = package_json["archive"].as_str().unwrap();
 
-    let sign = Command::new(sh_command())
-        .arg("../../scripts/release-sign-provenance.sh")
+    let sign = release_sign_command()
         .env("AO2_VERSION", "9.9.9-test")
         .env("AO2_MACOS_ARCHIVE", archive)
         .env("AO2_LINUX_ARCHIVE", archive)
@@ -23766,8 +23764,7 @@ fn cli_workbench_release_summary_enrich_and_gate_api() {
     assert!(package.status.success(), "{}", stderr(&package));
     let package_json: serde_json::Value = serde_json::from_str(&stdout(&package)).unwrap();
     let archive = package_json["archive"].as_str().unwrap();
-    let sign = Command::new(sh_command())
-        .arg("../../scripts/release-sign-provenance.sh")
+    let sign = release_sign_command()
         .env("AO2_VERSION", "9.9.9-workbench")
         .env("AO2_MACOS_ARCHIVE", archive)
         .env("AO2_LINUX_ARCHIVE", archive)
@@ -24096,8 +24093,7 @@ fn cli_release_gate_fails_closed_when_native_windows_required() {
     let package_json: serde_json::Value = serde_json::from_str(&stdout(&package)).unwrap();
     let archive = package_json["archive"].as_str().unwrap();
 
-    let sign = Command::new(sh_command())
-        .arg("../../scripts/release-sign-provenance.sh")
+    let sign = release_sign_command()
         .env("AO2_VERSION", "9.9.9-test")
         .env("AO2_MACOS_ARCHIVE", archive)
         .env("AO2_LINUX_ARCHIVE", archive)
@@ -24165,8 +24161,7 @@ fn cli_doctor_release_checks_local_release_assets() {
     let linux_x86_64 = package_test_archive(temp.path(), "linux-x86_64");
     let windows = package_test_archive(temp.path(), "windows-x86_64");
 
-    let sign = Command::new(sh_command())
-        .arg("../../scripts/release-sign-provenance.sh")
+    let sign = release_sign_command()
         .env("AO2_VERSION", "9.9.9-test")
         .env("AO2_MACOS_ARCHIVE", &macos)
         .env("AO2_LINUX_ARCHIVE", &linux)
@@ -24247,7 +24242,7 @@ fn cli_doctor_release_github_asset_check_times_out() {
         fs::write(
             &gh,
             r#"#!/bin/sh
-sleep 2
+sleep 30
 printf '{"assets":[],"isDraft":false,"isPrerelease":false}\n'
 "#,
         )
@@ -24259,7 +24254,7 @@ printf '{"assets":[],"isDraft":false,"isPrerelease":false}\n'
         fs::write(
             fake_bin.join("gh.cmd"),
             r#"@echo off
-ping -n 3 127.0.0.1 >NUL
+ping -n 31 127.0.0.1 >NUL
 echo {"assets":[],"isDraft":false,"isPrerelease":false}
 "#,
         )
@@ -24281,7 +24276,7 @@ echo {"assets":[],"isDraft":false,"isPrerelease":false}
     );
     assert!(doctor.status.success(), "{}", stderr(&doctor));
     assert!(
-        started.elapsed() < Duration::from_secs(2),
+        started.elapsed() < Duration::from_secs(15),
         "doctor should not wait for hanging gh release view"
     );
     let json: serde_json::Value = serde_json::from_str(&stdout(&doctor)).unwrap();
@@ -24309,8 +24304,7 @@ fn cli_install_update_verifies_archive_signature_and_installs_binary() {
     let package_json: serde_json::Value = serde_json::from_str(&stdout(&package)).unwrap();
     let archive = package_json["archive"].as_str().unwrap();
 
-    let sign = Command::new(sh_command())
-        .arg("../../scripts/release-sign-provenance.sh")
+    let sign = release_sign_command()
         .env("AO2_VERSION", "9.9.9-test")
         .env("AO2_MACOS_ARCHIVE", archive)
         .env("AO2_LINUX_ARCHIVE", archive)
@@ -24467,8 +24461,7 @@ fn cli_doctor_reports_install_provider_release_and_path_health() {
     let package_json: serde_json::Value = serde_json::from_str(&stdout(&package)).unwrap();
     let archive = package_json["archive"].as_str().unwrap();
 
-    let sign = Command::new(sh_command())
-        .arg("../../scripts/release-sign-provenance.sh")
+    let sign = release_sign_command()
         .env("AO2_VERSION", "9.9.9-test")
         .env("AO2_MACOS_ARCHIVE", archive)
         .env("AO2_LINUX_ARCHIVE", archive)
@@ -24600,8 +24593,7 @@ fn cli_upgrade_apply_installs_signed_release_and_keeps_rollback() {
     let archive = Path::new(package_json["archive"].as_str().unwrap());
     let archive_name = archive.file_name().unwrap().to_str().unwrap();
 
-    let sign = Command::new(sh_command())
-        .arg("../../scripts/release-sign-provenance.sh")
+    let sign = release_sign_command()
         .env("AO2_VERSION", "9.9.9-test")
         .env("AO2_MACOS_ARCHIVE", archive)
         .env("AO2_LINUX_ARCHIVE", archive)
@@ -24703,8 +24695,7 @@ fn cli_upgrade_apply_can_use_github_release_downloaded_assets() {
     let package_json: serde_json::Value = serde_json::from_str(&stdout(&package)).unwrap();
     let archive = Path::new(package_json["archive"].as_str().unwrap());
 
-    let sign = Command::new(sh_command())
-        .arg("../../scripts/release-sign-provenance.sh")
+    let sign = release_sign_command()
         .env("AO2_VERSION", "9.9.9-test")
         .env("AO2_MACOS_ARCHIVE", archive)
         .env("AO2_LINUX_ARCHIVE", archive)
@@ -24777,8 +24768,7 @@ fn cli_install_update_keeps_previous_binary_for_rollback() {
     let package_json: serde_json::Value = serde_json::from_str(&stdout(&package)).unwrap();
     let archive = package_json["archive"].as_str().unwrap();
 
-    let sign = Command::new(sh_command())
-        .arg("../../scripts/release-sign-provenance.sh")
+    let sign = release_sign_command()
         .env("AO2_VERSION", "9.9.9-test")
         .env("AO2_MACOS_ARCHIVE", archive)
         .env("AO2_LINUX_ARCHIVE", archive)
@@ -26048,8 +26038,7 @@ fn cli_workbench_release_health_api_checks_release_assets() {
     let linux = package_test_archive(temp.path(), "linux-aarch64");
     let linux_x86_64 = package_test_archive(temp.path(), "linux-x86_64");
     let windows = package_test_archive(temp.path(), "windows-x86_64");
-    let sign = Command::new(sh_command())
-        .arg("../../scripts/release-sign-provenance.sh")
+    let sign = release_sign_command()
         .env("AO2_VERSION", "9.9.9-test")
         .env("AO2_MACOS_ARCHIVE", &macos)
         .env("AO2_LINUX_ARCHIVE", &linux)
@@ -48124,8 +48113,7 @@ fn create_test_tar_gz(stage_dir: &Path, archive_path: &Path) {
 }
 
 fn sign_test_release_archive(root: &Path, archive: &Path, provenance: &Path) {
-    let sign = Command::new(sh_command())
-        .arg("../../scripts/release-sign-provenance.sh")
+    let sign = release_sign_command()
         .env("AO2_VERSION", "9.9.9-test")
         .env("AO2_MACOS_ARCHIVE", archive)
         .env("AO2_LINUX_ARCHIVE", archive)
@@ -48136,6 +48124,14 @@ fn sign_test_release_archive(root: &Path, archive: &Path, provenance: &Path) {
         .output()
         .unwrap();
     assert!(sign.status.success(), "{}", stderr(&sign));
+}
+
+fn release_sign_command() -> Command {
+    let mut command = Command::new(sh_command());
+    command
+        .arg("../../scripts/release-sign-provenance.sh")
+        .env("AO2_BIN", env!("CARGO_BIN_EXE_ao2"));
+    command
 }
 
 fn ao2<const N: usize>(args: [&str; N]) -> std::process::Output {

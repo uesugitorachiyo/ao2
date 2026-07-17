@@ -27,13 +27,16 @@ def test_bounded_child_timeout_kills_process_tree(tmp_path: Path) -> None:
     script = tmp_path / "spawn_grandchild.py"
     script.write_text(
         "\n".join(
-            [
-                "import subprocess, sys, time",
-                "subprocess.Popen([sys.executable, '-c', \"import pathlib,time; time.sleep(1.2); pathlib.Path(r'%s').write_text('survived')\"])",
-                "time.sleep(5)",
-            ]
-        )
-        % str(marker),
+                [
+                    "import subprocess, sys, time",
+                    "subprocess.Popen([sys.executable, '-c', %r])"
+                    % (
+                        "import pathlib,time; time.sleep(1.2); "
+                        f"pathlib.Path({str(marker)!r}).write_text('survived')"
+                    ),
+                    "time.sleep(5)",
+                ]
+            ),
         encoding="utf-8",
     )
 
