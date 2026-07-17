@@ -67,7 +67,7 @@ CANONICAL_REPOSITORIES = (
     "ao-promoter",
 )
 ARCHIVED_REPOSITORIES = ("agy-swarms",)
-STACK_QUALIFICATION_MODES = ("diagnostic", "targeted", "full")
+STACK_QUALIFICATION_MODES = ("diagnostic", "targeted", "full", "toolchain")
 STACK_QUALIFICATION_ALLOWED_PARAMETERS = {"mode", "repositories", "repos", "timeout_seconds"}
 STACK_QUALIFICATION_FORBIDDEN_PARAMETERS = {
     "command",
@@ -84,6 +84,27 @@ STACK_QUALIFICATION_FORBIDDEN_PARAMETERS = {
     "shell",
 }
 STACK_PROFILE_VERSION = "ao2.windows-stack-qualification.profiles.v1"
+TOOLCHAIN_CAPABILITY_TOOLS = ("git", "go", "python", "cargo", "rustc", "node", "npm", "powershell")
+FIXED_TOOL_PATH_COMMANDS = {
+    "git": ("git", "git.exe"),
+    "go": ("go", "go.exe"),
+    "python": (sys.executable,),
+    "cargo": ("cargo", "cargo.exe"),
+    "rustc": ("rustc", "rustc.exe"),
+    "node": ("node", "node.exe"),
+    "npm": ("npm", "npm.cmd", "npm.exe"),
+    "powershell": ("pwsh", "pwsh.exe", "powershell", "powershell.exe"),
+}
+FIXED_TOOL_VERSION_ARGS = {
+    "git": ("--version",),
+    "go": ("version",),
+    "python": ("--version",),
+    "cargo": ("--version",),
+    "rustc": ("--version",),
+    "node": ("--version",),
+    "npm": ("--version",),
+    "powershell": ("-NoProfile", "-Command", "$PSVersionTable.PSVersion.ToString()"),
+}
 DIAGNOSTIC_PROFILE = (
     {"name": "git-head-readback", "argv": ("git", "rev-parse", "HEAD")},
     {"name": "git-clean-readback", "argv": ("git", "status", "--porcelain=v1")},
@@ -577,6 +598,16 @@ class WindowsOutboundWorker:
                 "max_timeout_seconds": MAX_STACK_QUALIFICATION_TIMEOUT_SECONDS,
             }
 
+        if mode == "toolchain":
+            return windows_toolchain_capability_report(
+                node_id=self.node_id,
+                worker_source_commit=repository_head(self.factory_root / "ao2"),
+                request_id=request_id,
+                factory_root=self.factory_root,
+                timeout_seconds=min(timeout_seconds, 30.0),
+                output_limit_bytes=self.output_limit_bytes,
+            )
+
         repos_value = parameters.get("repositories", parameters.get("repos", list(CANONICAL_REPOSITORIES)))
         if not isinstance(repos_value, list) or not repos_value:
             return {"status": "failed", "error_category": "invalid_repository_list"}
@@ -816,13 +847,162 @@ def qualification_profile(repo_name: str, mode: str) -> tuple[dict[str, tuple[st
     return WINDOWS_REPOSITORY_PROFILES[repo_name][mode]
 
 
+def existing_path(path: Path) -> str | None:
+    try:
+        if path.is_file():
+            return str(path)
+    except OSError:
+        return None
+    return None
+
+
+def standard_tool_candidates(tool_name: str) -> list[Path]:
+    program_files = [os.environ.get("ProgramFiles"), os.environ.get("ProgramFiles(x86)")]
+    system_drive = os.environ.get("SystemDrive", "C:") if os.name == "nt" else os.environ.get("SystemDrive")
+    user_profile = os.environ.get("USERPROFILE") or os.environ.get("HOME")
+    system_root = os.environ.get("SystemRoot")
+    candidates: list[Path] = []
+
+    if tool_name == "git":
+        for root in program_files:
+            if root:
+                candidates.extend([Path(root) / "Git" / "cmd" / "git.exe", Path(root) / "Git" / "bin" / "git.exe"])
+    elif tool_name == "go":
+        for root in program_files:
+            if root:
+                candidates.append(Path(root) / "Go" / "bin" / "go.exe")
+        if system_drive:
+            candidates.append(Path(system_drive) / "Go" / "bin" / "go.exe")
+    elif tool_name in {"cargo", "rustc"}:
+        if user_profile:
+            candidates.append(Path(user_profile) / ".cargo" / "bin" / f"{tool_name}.exe")
+    elif tool_name == "node":
+        for root in program_files:
+            if root:
+                candidates.append(Path(root) / "nodejs" / "node.exe")
+    elif tool_name == "npm":
+        for root in program_files:
+            if root:
+                candidates.extend([Path(root) / "nodejs" / "npm.cmd", Path(root) / "nodejs" / "npm.exe"])
+    elif tool_name == "powershell":
+        for root in program_files:
+            if root:
+                candidates.append(Path(root) / "PowerShell" / "7" / "pwsh.exe")
+        if system_root:
+            candidates.append(Path(system_root) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe")
+
+    return candidates
+
+
+def resolve_fixed_tool(tool_name: str) -> dict[str, Any]:
+    if tool_name not in TOOLCHAIN_CAPABILITY_TOOLS:
+        return {"tool": tool_name, "status": "failed", "path": None, "resolution_source": "unsupported_tool"}
+
+    for command_name in FIXED_TOOL_PATH_COMMANDS[tool_name]:
+        resolved = command_name if Path(command_name).is_absolute() and Path(command_name).is_file() else shutil.which(command_name)
+        if resolved:
+            return {
+                "tool": tool_name,
+                "status": "resolved",
+                "path": str(Path(resolved)),
+                "resolution_source": "current_python" if command_name == sys.executable else "path",
+            }
+
+    for candidate in standard_tool_candidates(tool_name):
+        path = existing_path(candidate)
+        if path:
+            return {
+                "tool": tool_name,
+                "status": "resolved",
+                "path": path,
+                "resolution_source": "standard_location",
+            }
+
+    return {"tool": tool_name, "status": "failed", "path": None, "resolution_source": "missing"}
+
+
+def fixed_tool_version_command(tool_name: str, resolved: dict[str, Any]) -> list[str]:
+    executable = str(resolved.get("path") or FIXED_TOOL_PATH_COMMANDS[tool_name][0])
+    return [executable, *FIXED_TOOL_VERSION_ARGS[tool_name]]
+
+
+def safe_worker_environment_metadata() -> dict[str, Any]:
+    path_value = os.environ.get("PATH", "")
+    path_separator = ";" if os.name == "nt" else ":"
+    return {
+        "os_name": os.name,
+        "path_entry_count": len([entry for entry in path_value.split(path_separator) if entry]),
+        "has_program_files": bool(os.environ.get("ProgramFiles")),
+        "has_program_files_x86": bool(os.environ.get("ProgramFiles(x86)")),
+        "has_user_profile": bool(os.environ.get("USERPROFILE") or os.environ.get("HOME")),
+        "has_system_root": bool(os.environ.get("SystemRoot")),
+    }
+
+
+def windows_toolchain_capability_report(
+    *,
+    node_id: str,
+    worker_source_commit: str,
+    request_id: str,
+    factory_root: Path,
+    timeout_seconds: float,
+    output_limit_bytes: int,
+) -> dict[str, Any]:
+    cwd = factory_root if factory_root.exists() else Path.cwd()
+    capabilities = []
+    for tool_name in TOOLCHAIN_CAPABILITY_TOOLS:
+        resolved = resolve_fixed_tool(tool_name)
+        child = run_bounded_child(
+            fixed_tool_version_command(tool_name, resolved),
+            cwd=cwd,
+            timeout_seconds=timeout_seconds,
+            output_limit_bytes=min(output_limit_bytes, 4096),
+        )
+        capabilities.append({
+            "tool": tool_name,
+            "status": child.get("status"),
+            "resolution_status": resolved.get("status"),
+            "resolution_source": resolved.get("resolution_source"),
+            "resolved_executable_path": resolved.get("path"),
+            "version_command_name": tool_name,
+            "exit_code": child.get("exit_code"),
+            "timed_out": child.get("timed_out"),
+            "duration_seconds": child.get("duration_seconds"),
+            "error_category": child.get("sanitized_stderr_category"),
+            "bounded_sanitized_output": child.get("output"),
+            "output_truncated": child.get("output_truncated"),
+        })
+
+    return {
+        "schema_version": "ao2.windows-toolchain-capability-result.v1",
+        "status": "accepted",
+        "mode": "toolchain",
+        "profile_version": STACK_PROFILE_VERSION,
+        "node_id": node_id,
+        "worker_source_commit": worker_source_commit,
+        "request_id": request_id,
+        "toolchain_status": "ready" if all(item.get("status") == "accepted" for item in capabilities) else "attention",
+        "safe_worker_environment": safe_worker_environment_metadata(),
+        "toolchain_capabilities": capabilities,
+        "completed_at": utc_now(),
+    }
+
+
 def resolve_profile_command(argv: tuple[str, ...]) -> list[str]:
-    powershell = shutil.which("pwsh") or shutil.which("powershell") or shutil.which("powershell.exe") or "powershell.exe"
+    powershell = resolve_fixed_tool("powershell")
     replacements = {
         "{python}": sys.executable,
-        "{powershell}": powershell,
+        "{powershell}": str(powershell.get("path") or "powershell.exe"),
     }
-    return [replacements.get(part, part) for part in argv]
+    command = [replacements.get(part, part) for part in argv]
+    if command:
+        executable_name = Path(command[0]).name.lower()
+        tool_name = executable_name.removesuffix(".exe").removesuffix(".cmd")
+        if tool_name in TOOLCHAIN_CAPABILITY_TOOLS:
+            resolved = resolve_fixed_tool(tool_name)
+            if resolved.get("status") == "resolved" and resolved.get("path"):
+                command[0] = str(resolved["path"])
+    return command
 
 
 def stack_qualification_row(
