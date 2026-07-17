@@ -1,0 +1,567 @@
+#!/usr/bin/env python3
+"""AO2 Windows outbound task-board worker.
+
+The worker polls a Mac-hosted AO2 Control Plane and executes only explicit,
+allowlisted local actions. It never opens a Windows HTTP listener and never
+executes command text supplied by a task payload.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shutil
+import signal
+import subprocess
+import sys
+import threading
+import time
+import urllib.error
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+
+CONTROL_TASK_SCHEMA = "ao2.cross-host.control-task.v1"
+WORKER_RESULT_SCHEMA = "ao2.cross-host.windows-worker-result.v1"
+TASK_BOARD_SCHEMA = "ao2.ai-task-board.v1"
+DEFAULT_NODE_ID = "windows-hp255_g10"
+DEFAULT_FACTORY_ROOT = Path(r"C:\ao\factory") if os.name == "nt" else Path.cwd()
+DEFAULT_STATE_ROOT = (
+    Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "AO2" / "windows-outbound-worker"
+    if os.name == "nt"
+    else Path.cwd() / "target" / "windows-outbound-worker"
+)
+DEFAULT_POLL_INTERVAL_SECONDS = 5.0
+DEFAULT_DOCTOR_TIMEOUT_SECONDS = 120.0
+DEFAULT_ACTION_TIMEOUT_SECONDS = 300.0
+DEFAULT_OUTPUT_LIMIT_BYTES = 64 * 1024
+ALLOWLISTED_ACTIONS = (
+    "status",
+    "publish_capability",
+    "sync_ao_stack",
+    "ao2_doctor",
+    "timeout_fixture",
+)
+SECRET_PATTERNS = (
+    re.compile(r"(?i)(authorization:\s*bearer\s+)[A-Za-z0-9._~+\-/=]+"),
+    re.compile(r"(?i)(AO2_CP_API_TOKEN=)[^\s]+"),
+    re.compile(r"(?i)(api[_-]?token['\"]?\s*[:=]\s*['\"]?)[^'\"\s,}]+"),
+    re.compile(r"(?i)(password['\"]?\s*[:=]\s*['\"]?)[^'\"\s,}]+"),
+)
+
+
+def utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def redact_text(value: str) -> str:
+    redacted = value
+    for pattern in SECRET_PATTERNS:
+        redacted = pattern.sub(lambda match: match.group(1) + "<redacted>", redacted)
+    return redacted
+
+
+def bound_text(value: str, limit_bytes: int) -> tuple[str, bool]:
+    encoded = value.encode("utf-8", errors="replace")
+    if len(encoded) <= limit_bytes:
+        return value, False
+    suffix = "\n...<truncated>"
+    suffix_bytes = suffix.encode("utf-8")
+    keep = max(limit_bytes - len(suffix_bytes), 0)
+    bounded = encoded[:keep].decode("utf-8", errors="ignore") + suffix
+    return bounded, True
+
+
+def sanitize_output(stdout: str, stderr: str, limit_bytes: int) -> tuple[str, bool]:
+    combined = "\n".join(part for part in (stdout, stderr) if part)
+    return bound_text(redact_text(combined), limit_bytes)
+
+
+def stderr_category(status: str, stderr: str) -> str:
+    if status == "timed_out":
+        return "timeout"
+    if not stderr.strip():
+        return "none"
+    lowered = stderr.lower()
+    if "permission" in lowered or "access is denied" in lowered:
+        return "permission"
+    if "not recognized" in lowered or "not found" in lowered or "no such file" in lowered:
+        return "missing_dependency"
+    return "nonzero_exit"
+
+
+def terminate_process_tree(process: subprocess.Popen[str]) -> None:
+    if process.poll() is not None:
+        return
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        return
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+
+
+def run_bounded_child(
+    command: list[str],
+    *,
+    cwd: Path,
+    timeout_seconds: float,
+    output_limit_bytes: int = DEFAULT_OUTPUT_LIMIT_BYTES,
+) -> dict[str, Any]:
+    started = time.monotonic()
+    popen_kwargs: dict[str, Any] = {
+        "cwd": str(cwd),
+        "text": True,
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.PIPE,
+    }
+    if os.name == "nt":
+        popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+    else:
+        popen_kwargs["start_new_session"] = True
+
+    process = subprocess.Popen(command, **popen_kwargs)
+    timed_out = False
+    try:
+        stdout, stderr = process.communicate(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        timed_out = True
+        terminate_process_tree(process)
+        stdout, stderr = process.communicate(timeout=5)
+
+    duration = round(time.monotonic() - started, 3)
+    output, truncated = sanitize_output(stdout or "", stderr or "", output_limit_bytes)
+    if timed_out:
+        status = "timed_out"
+        exit_code = None
+    else:
+        exit_code = process.returncode
+        status = "accepted" if exit_code == 0 else "failed"
+    return {
+        "status": status,
+        "exit_code": exit_code,
+        "timed_out": timed_out,
+        "duration_seconds": duration,
+        "output": output,
+        "output_truncated": truncated,
+        "sanitized_stderr_category": stderr_category(status, stderr or ""),
+        "command_name": Path(command[0]).name if command else "",
+    }
+
+
+class WorkerState:
+    def __init__(self, state_root: Path):
+        self.state_root = state_root
+        self.state_root.mkdir(parents=True, exist_ok=True)
+        self.ledger_path = self.state_root / "task-ledger.json"
+        self._lock = threading.Lock()
+        self._ledger = self._load()
+
+    def _load(self) -> dict[str, Any]:
+        if not self.ledger_path.is_file():
+            return {"schema_version": "ao2.windows-outbound-worker-ledger.v1", "tasks": {}}
+        try:
+            return json.loads(self.ledger_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return {"schema_version": "ao2.windows-outbound-worker-ledger.v1", "tasks": {}}
+
+    def _save(self) -> None:
+        tmp = self.ledger_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(self._ledger, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        tmp.replace(self.ledger_path)
+
+    def claim(self, request_id: str, action: str) -> bool:
+        with self._lock:
+            tasks = self._ledger.setdefault("tasks", {})
+            if request_id in tasks:
+                return False
+            tasks[request_id] = {"action": action, "status": "in_progress", "started_at": utc_now()}
+            self._save()
+            return True
+
+    def complete(self, request_id: str, status: str) -> None:
+        with self._lock:
+            tasks = self._ledger.setdefault("tasks", {})
+            item = tasks.setdefault(request_id, {})
+            item["status"] = status
+            item["completed_at"] = utc_now()
+            self._save()
+
+
+class MemoryTransport:
+    def __init__(self) -> None:
+        self.posted: list[dict[str, Any]] = []
+
+    def latest_board(self) -> dict[str, Any] | None:
+        return None
+
+    def post_board(self, board: dict[str, Any]) -> None:
+        self.posted.append(board)
+
+    def posted_results_by_request_id(self) -> dict[str, dict[str, Any]]:
+        results: dict[str, dict[str, Any]] = {}
+        for board in self.posted:
+            for task in board.get("tasks", []):
+                cross_host = task.get("ao2_cross_host") if isinstance(task, dict) else None
+                if isinstance(cross_host, dict) and cross_host.get("request_id"):
+                    results[str(cross_host["request_id"])] = task
+        return results
+
+
+class HttpTaskBoardTransport:
+    def __init__(self, base_url: str, api_token: str) -> None:
+        self.base_url = base_url.rstrip("/")
+        self.api_token = api_token
+
+    def _request(self, method: str, path: str, body: bytes | None = None) -> Any:
+        request = urllib.request.Request(
+            self.base_url + path,
+            data=body,
+            method=method,
+            headers={
+                "Authorization": "Bearer " + self.api_token,
+                "Content-Type": "application/json",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=15) as response:
+            return json.load(response)
+
+    def latest_board(self) -> dict[str, Any] | None:
+        try:
+            return self._request("GET", "/api/v1/ai/task-board/latest")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return None
+            raise
+
+    def post_board(self, board: dict[str, Any]) -> None:
+        raw = json.dumps(board, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        self._request("POST", "/api/v1/ai/task-board", raw)
+
+
+def control_task(
+    *,
+    request_id: str,
+    action: str,
+    parameters: dict[str, Any] | None = None,
+    arbitrary_command_execution: bool = False,
+    target_node: str = DEFAULT_NODE_ID,
+) -> dict[str, Any]:
+    return {
+        "task_id": f"windows-control-{action}-{request_id}",
+        "kind": "cross-host-control",
+        "status": "proposed",
+        "ao2_cross_host": {
+            "schema_version": CONTROL_TASK_SCHEMA,
+            "target_node": target_node,
+            "request_id": request_id,
+            "action": action,
+            "parameters": parameters or {},
+            "arbitrary_command_execution": arbitrary_command_execution,
+            "created_at": utc_now(),
+        },
+    }
+
+
+class WindowsOutboundWorker:
+    def __init__(
+        self,
+        *,
+        node_id: str,
+        factory_root: Path,
+        state: WorkerState,
+        transport: MemoryTransport | HttpTaskBoardTransport,
+        poll_interval_seconds: float = DEFAULT_POLL_INTERVAL_SECONDS,
+        output_limit_bytes: int = DEFAULT_OUTPUT_LIMIT_BYTES,
+    ) -> None:
+        self.node_id = node_id
+        self.factory_root = factory_root
+        self.state = state
+        self.transport = transport
+        self.poll_interval_seconds = poll_interval_seconds
+        self.output_limit_bytes = output_limit_bytes
+        self._threads: list[threading.Thread] = []
+        self._stopped = False
+        self._thread_lock = threading.Lock()
+
+    def is_stopped(self) -> bool:
+        return self._stopped
+
+    def running_action_count(self) -> int:
+        with self._thread_lock:
+            self._threads = [thread for thread in self._threads if thread.is_alive()]
+            return len(self._threads)
+
+    def wait_for_idle(self, timeout_seconds: float) -> bool:
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            if self.running_action_count() == 0:
+                return True
+            time.sleep(0.02)
+        return self.running_action_count() == 0
+
+    def status_result(self) -> dict[str, Any]:
+        return {
+            "node_id": self.node_id,
+            "hostname": local_hostname(),
+            "os_caption": "Microsoft Windows" if os.name == "nt" else sys.platform,
+            "os_version": platform_version(),
+            "factory_root": str(self.factory_root),
+            "state_root": str(self.state.state_root),
+            "allowed_actions": list(ALLOWLISTED_ACTIONS),
+            "mac_should_probe_windows": False,
+            "windows_http_endpoint": None,
+            "windows_inbound_ports_opened": False,
+            "running_actions": self.running_action_count(),
+        }
+
+    def accept_control_task(self, task: dict[str, Any]) -> str:
+        cross_host = task.get("ao2_cross_host") if isinstance(task, dict) else None
+        if not isinstance(cross_host, dict):
+            return "ignored"
+        if cross_host.get("schema_version") != CONTROL_TASK_SCHEMA:
+            return "ignored"
+        if cross_host.get("target_node") != self.node_id:
+            return "ignored"
+
+        request_id = str(cross_host.get("request_id") or "")
+        action = str(cross_host.get("action") or "")
+        parameters = cross_host.get("parameters") if isinstance(cross_host.get("parameters"), dict) else {}
+        arbitrary = bool(cross_host.get("arbitrary_command_execution"))
+        if not request_id:
+            return "ignored"
+
+        if arbitrary or action not in ALLOWLISTED_ACTIONS:
+            self.post_result(request_id, action or "unknown", {
+                "status": "failed",
+                "error_category": "action_not_allowlisted",
+                "arbitrary_command_execution": False,
+                "allowed_actions": list(ALLOWLISTED_ACTIONS),
+            })
+            return "rejected"
+
+        if not self.state.claim(request_id, action):
+            return "duplicate"
+
+        if action in {"status", "publish_capability"}:
+            self.post_result(request_id, action, self.status_result())
+            self.state.complete(request_id, "accepted")
+            return "completed"
+
+        thread = threading.Thread(
+            target=self._run_action_thread,
+            args=(request_id, action, parameters),
+            name=f"ao2-worker-{request_id}",
+            daemon=True,
+        )
+        with self._thread_lock:
+            self._threads.append(thread)
+        thread.start()
+        return "started"
+
+    def _run_action_thread(self, request_id: str, action: str, parameters: dict[str, Any]) -> None:
+        try:
+            result = self.run_action(action, parameters)
+            self.post_result(request_id, action, result)
+            self.state.complete(request_id, str(result.get("status", "failed")))
+        except Exception as exc:  # pragma: no cover - fail closed guard
+            self.post_result(request_id, action, {
+                "status": "failed",
+                "error_category": "worker_exception",
+                "message": redact_text(str(exc))[:500],
+            })
+            self.state.complete(request_id, "failed")
+
+    def run_action(self, action: str, parameters: dict[str, Any]) -> dict[str, Any]:
+        if action == "timeout_fixture":
+            sleep_seconds = float(parameters.get("sleep_seconds", 5))
+            timeout_seconds = float(parameters.get("timeout_seconds", 0.2))
+            return run_bounded_child(
+                [sys.executable, "-c", f"import time; time.sleep({sleep_seconds!r})"],
+                cwd=self.factory_root if self.factory_root.exists() else Path.cwd(),
+                timeout_seconds=timeout_seconds,
+                output_limit_bytes=self.output_limit_bytes,
+            )
+        if action == "ao2_doctor":
+            command = ao2_doctor_command(parameters)
+            timeout_seconds = float(parameters.get("timeout_seconds", DEFAULT_DOCTOR_TIMEOUT_SECONDS))
+            return run_bounded_child(
+                command,
+                cwd=self.factory_root if self.factory_root.exists() else Path.cwd(),
+                timeout_seconds=timeout_seconds,
+                output_limit_bytes=self.output_limit_bytes,
+            )
+        if action == "sync_ao_stack":
+            return self.sync_ao_stack(parameters)
+        return {"status": "failed", "error_category": "unimplemented_action"}
+
+    def sync_ao_stack(self, parameters: dict[str, Any]) -> dict[str, Any]:
+        repos = parameters.get("repos")
+        if not isinstance(repos, list):
+            repos = []
+        results = []
+        for repo_name in repos[:32]:
+            if not isinstance(repo_name, str) or any(part in repo_name for part in ("/", "\\", "..")):
+                results.append({"repo": str(repo_name), "status": "failed", "error_category": "invalid_repo_name"})
+                continue
+            repo = self.factory_root / repo_name
+            if not (repo / ".git").exists():
+                results.append({"repo": repo_name, "status": "failed", "error_category": "missing_repo"})
+                continue
+            child = run_bounded_child(
+                ["git", "pull", "--ff-only", "origin", "main"],
+                cwd=repo,
+                timeout_seconds=float(parameters.get("timeout_seconds", DEFAULT_ACTION_TIMEOUT_SECONDS)),
+                output_limit_bytes=8192,
+            )
+            results.append({"repo": repo_name, **child})
+        status = "accepted" if all(item.get("status") == "accepted" for item in results) else "failed"
+        return {"status": status, "repos": results}
+
+    def post_result(self, request_id: str, action: str, result: dict[str, Any]) -> None:
+        board = {
+            "schema_version": TASK_BOARD_SCHEMA,
+            "status": "accepted" if result.get("status") != "failed" else "ready",
+            "release_objective": "Report AO2 cross-host Windows worker result back to the Mac host.",
+            "source_recommendation": "Windows worker executed or blocked an allowlisted Mac-hosted AO2 task-board action.",
+            "release_train": {"version": "local-cross-host", "theme": "windows-worker-result"},
+            "tasks": [{
+                "task_id": f"windows-worker-result-{action.replace('_', '-')}-{request_id}",
+                "title": f"Windows worker result: {action}",
+                "kind": "cross-host-worker-result",
+                "status": "accepted" if result.get("status") != "failed" else "blocked",
+                "objective": f"Return the result for request {request_id}.",
+                "confidence": "high",
+                "rationale": "The Windows worker posts results as task-board evidence so the Mac host can read them without SSH.",
+                "required_evidence": [TASK_BOARD_SCHEMA, CONTROL_TASK_SCHEMA, WORKER_RESULT_SCHEMA],
+                "stop_conditions": [
+                    "Stop if the result cannot be posted to the Mac control plane.",
+                    "Stop if action output contains secret material.",
+                    "Stop rather than execute arbitrary command text from a task payload.",
+                ],
+                "ao2_cross_host": {
+                    "schema_version": WORKER_RESULT_SCHEMA,
+                    "status": "accepted" if result.get("status") != "failed" else "failed",
+                    "node_id": self.node_id,
+                    "request_id": request_id,
+                    "action": action,
+                    "arbitrary_command_execution": False,
+                    "result": result,
+                    "completed_at": utc_now(),
+                },
+            }],
+            "control_plane_readback": {
+                "role": "read_only_observer",
+                "requires_credentials": False,
+                "can_mutate_ao2_artifacts": False,
+                "can_mutate_release_metadata": False,
+            },
+            "trust_boundary": {"local_only": False, "stores_credentials": False, "mutates_releases": False},
+        }
+        self.transport.post_board(board)
+
+    def poll_once(self) -> str:
+        board = self.transport.latest_board()
+        if not board:
+            return "no_board"
+        accepted = "no_control_task"
+        for task in board.get("tasks", []):
+            status = self.accept_control_task(task)
+            if status != "ignored":
+                accepted = status
+        return accepted
+
+    def run_forever(self) -> None:
+        while not self._stopped:
+            try:
+                self.poll_once()
+            except Exception as exc:
+                sys.stderr.write(f"poll_error={type(exc).__name__}: {redact_text(str(exc))[:300]}\n")
+            time.sleep(self.poll_interval_seconds)
+
+
+def platform_version() -> str:
+    if os.name == "nt":
+        try:
+            return subprocess.check_output(["cmd", "/c", "ver"], text=True, stderr=subprocess.DEVNULL).strip()
+        except Exception:
+            return "windows"
+    return sys.platform
+
+
+def local_hostname() -> str:
+    hostname = os.environ.get("COMPUTERNAME") or os.environ.get("HOSTNAME")
+    if hostname:
+        return hostname
+    if hasattr(os, "uname"):
+        return os.uname().nodename
+    return ""
+
+
+def ao2_doctor_command(parameters: dict[str, Any]) -> list[str]:
+    explicit = parameters.get("ao2_path")
+    candidates = []
+    if isinstance(explicit, str) and explicit.strip():
+        candidates.append(explicit.strip())
+    found = shutil.which("ao2.exe") or shutil.which("ao2")
+    if found:
+        candidates.append(found)
+    if os.name == "nt":
+        local = Path(os.environ.get("LOCALAPPDATA", "")) / "AO2" / "bin" / "ao2.exe"
+        candidates.append(str(local))
+    for candidate in candidates:
+        if candidate and Path(candidate).exists():
+            return [candidate, "doctor", "--json"]
+    return ["ao2", "doctor", "--json"]
+
+
+def token_from_args(args: argparse.Namespace) -> str:
+    if args.api_token_env and os.environ.get(args.api_token_env):
+        return os.environ[args.api_token_env]
+    if args.api_token_file:
+        return Path(args.api_token_file).read_text(encoding="utf-8").strip()
+    raise SystemExit("set --api-token-file or --api-token-env")
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--control-plane-url", required=True)
+    parser.add_argument("--api-token-file")
+    parser.add_argument("--api-token-env", default="AO2_CP_API_TOKEN")
+    parser.add_argument("--node-id", default=os.environ.get("AO2_WINDOWS_WORKER_NODE_ID", DEFAULT_NODE_ID))
+    parser.add_argument("--factory-root", type=Path, default=Path(os.environ.get("AO2_WINDOWS_FACTORY_ROOT", str(DEFAULT_FACTORY_ROOT))))
+    parser.add_argument("--state-root", type=Path, default=Path(os.environ.get("AO2_WINDOWS_WORKER_STATE_ROOT", str(DEFAULT_STATE_ROOT))))
+    parser.add_argument("--poll-interval", type=float, default=DEFAULT_POLL_INTERVAL_SECONDS)
+    parser.add_argument("--once", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    transport = HttpTaskBoardTransport(args.control_plane_url, token_from_args(args))
+    worker = WindowsOutboundWorker(
+        node_id=args.node_id,
+        factory_root=args.factory_root,
+        state=WorkerState(args.state_root),
+        transport=transport,
+        poll_interval_seconds=args.poll_interval,
+    )
+    if args.once:
+        print(f"poll_once={worker.poll_once()}")
+        return 0
+    worker.run_forever()
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

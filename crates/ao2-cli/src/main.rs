@@ -63982,17 +63982,7 @@ fn doctor_release_report_json(
         report["assets_available"] = serde_json::json!(false);
         return report;
     };
-    let output = ProcessCommand::new("gh")
-        .args([
-            "release",
-            "view",
-            tag,
-            "--repo",
-            repo,
-            "--json",
-            "assets,isDraft,isPrerelease",
-        ])
-        .output();
+    let output = run_gh_release_view_for_doctor(tag, repo);
     match output {
         Ok(output) if output.status.success() => {
             let json = serde_json::from_slice::<serde_json::Value>(&output.stdout)
@@ -64033,6 +64023,42 @@ fn doctor_release_report_json(
         }
     }
     report
+}
+
+fn run_gh_release_view_for_doctor(tag: &str, repo: &str) -> std::io::Result<std::process::Output> {
+    let mut child = ProcessCommand::new("gh")
+        .args([
+            "release",
+            "view",
+            tag,
+            "--repo",
+            repo,
+            "--json",
+            "assets,isDraft,isPrerelease",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let timeout = std::env::var("AO2_DOCTOR_GH_TIMEOUT_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .map(Duration::from_millis)
+        .unwrap_or_else(|| Duration::from_secs(30));
+    let started = std::time::Instant::now();
+    loop {
+        if child.try_wait()?.is_some() {
+            return child.wait_with_output();
+        }
+        if started.elapsed() >= timeout {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "gh_timed_out",
+            ));
+        }
+        thread::sleep(Duration::from_millis(25));
+    }
 }
 
 fn release_rollback_summary_json(asset_dir: &Path) -> serde_json::Value {

@@ -4,6 +4,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::Duration;
 
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
@@ -24229,6 +24230,64 @@ fn cli_doctor_release_checks_local_release_assets() {
     assert_eq!(json["release"]["provenance_verified"], true);
     assert_eq!(json["release"]["rollback"]["checked"], true);
     assert_eq!(json["release"]["rollback"]["status"], "verified");
+}
+
+#[test]
+fn cli_doctor_release_github_asset_check_times_out() {
+    let temp = tempfile::tempdir().unwrap();
+    let provenance = temp.path().join("provenance");
+    let fake_bin = temp.path().join("fake-bin");
+    fs::create_dir_all(&provenance).unwrap();
+    fs::create_dir_all(&fake_bin).unwrap();
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let gh = fake_bin.join("gh");
+        fs::write(
+            &gh,
+            r#"#!/bin/sh
+sleep 2
+printf '{"assets":[],"isDraft":false,"isPrerelease":false}\n'
+"#,
+        )
+        .unwrap();
+        fs::set_permissions(&gh, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    #[cfg(windows)]
+    {
+        fs::write(
+            fake_bin.join("gh.cmd"),
+            r#"@echo off
+ping -n 3 127.0.0.1 >NUL
+echo {"assets":[],"isDraft":false,"isPrerelease":false}
+"#,
+        )
+        .unwrap();
+    }
+
+    let path = prepend_path(&fake_bin);
+    let started = std::time::Instant::now();
+    let doctor = ao2_with_env(
+        [
+            "doctor",
+            "--json",
+            "--release",
+            "v9.9.9-test",
+            "--provenance-dir",
+            provenance.to_str().unwrap(),
+        ],
+        [("PATH", path.as_str()), ("AO2_DOCTOR_GH_TIMEOUT_MS", "100")],
+    );
+    assert!(doctor.status.success(), "{}", stderr(&doctor));
+    assert!(
+        started.elapsed() < Duration::from_secs(2),
+        "doctor should not wait for hanging gh release view"
+    );
+    let json: serde_json::Value = serde_json::from_str(&stdout(&doctor)).unwrap();
+    assert_eq!(json["release"]["asset_source"], "github");
+    assert_eq!(json["release"]["assets_available"], false);
+    assert_eq!(json["release"]["error"], "gh_timed_out");
 }
 
 #[test]
