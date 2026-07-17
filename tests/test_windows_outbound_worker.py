@@ -306,6 +306,90 @@ def test_windows_stack_qualification_inventory_matches_worker_contract() -> None
     assert inventory["timeout_bounds_seconds"]["maximum"] == worker.MAX_STACK_QUALIFICATION_TIMEOUT_SECONDS
 
 
+def test_fixed_tool_resolver_uses_standard_go_location_when_path_lacks_go(tmp_path: Path, monkeypatch) -> None:
+    worker = load_worker_module()
+    go_exe = tmp_path / "ProgramFiles" / "Go" / "bin" / "go.exe"
+    go_exe.parent.mkdir(parents=True)
+    go_exe.write_text("placeholder", encoding="utf-8")
+
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.setenv("ProgramFiles", str(tmp_path / "ProgramFiles"))
+
+    resolved = worker.resolve_fixed_tool("go")
+
+    assert resolved["status"] == "resolved"
+    assert resolved["tool"] == "go"
+    assert resolved["resolution_source"] == "standard_location"
+    assert Path(resolved["path"]) == go_exe
+
+
+def test_fixed_profile_commands_resolve_standard_go_without_payload(tmp_path: Path, monkeypatch) -> None:
+    worker = load_worker_module()
+    go_exe = tmp_path / "ProgramFiles" / "Go" / "bin" / "go.exe"
+    go_exe.parent.mkdir(parents=True)
+    go_exe.write_text("placeholder", encoding="utf-8")
+
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.setenv("ProgramFiles", str(tmp_path / "ProgramFiles"))
+
+    command = worker.resolve_profile_command(("go", "test", "./..."))
+
+    assert command == [str(go_exe), "test", "./..."]
+
+
+def test_windows_stack_qualification_toolchain_mode_reports_fixed_tools(tmp_path: Path, monkeypatch) -> None:
+    worker = load_worker_module()
+    recorded_commands = []
+
+    def fake_resolve(tool_name):
+        return {
+            "tool": tool_name,
+            "status": "resolved",
+            "path": f"C:/fixed-tools/{tool_name}.exe",
+            "resolution_source": "test",
+        }
+
+    def fake_run(command, *, cwd, timeout_seconds, output_limit_bytes=worker.DEFAULT_OUTPUT_LIMIT_BYTES):
+        recorded_commands.append(list(command))
+        return {
+            "status": "accepted",
+            "exit_code": 0,
+            "timed_out": False,
+            "duration_seconds": 0.01,
+            "output": f"{Path(command[0]).name} version 1.0",
+            "output_truncated": False,
+            "sanitized_stderr_category": "none",
+            "command_name": Path(command[0]).name,
+        }
+
+    monkeypatch.setattr(worker, "resolve_fixed_tool", fake_resolve)
+    monkeypatch.setattr(worker, "run_bounded_child", fake_run)
+    runtime = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path / "factory",
+        state=worker.WorkerState(tmp_path / "state"),
+        transport=worker.MemoryTransport(),
+        poll_interval_seconds=0.01,
+    )
+
+    result = runtime.run_action(
+        "windows_stack_qualification",
+        {"mode": "toolchain", "timeout_seconds": 30},
+        request_id="toolchain",
+    )
+
+    tools = {item["tool"]: item for item in result["toolchain_capabilities"]}
+    assert result["status"] == "accepted"
+    assert result["mode"] == "toolchain"
+    assert result["schema_version"] == "ao2.windows-toolchain-capability-result.v1"
+    assert "go" in tools
+    assert "git" in tools
+    assert "python" in tools
+    assert tools["go"]["resolution_source"] == "test"
+    assert "version" in tools["go"]["bounded_sanitized_output"]
+    assert all("payload" not in " ".join(command) for command in recorded_commands)
+
+
 def test_windows_stack_qualification_rejects_noncanonical_and_unsafe_repositories(tmp_path: Path) -> None:
     worker = load_worker_module()
     runtime = worker.WindowsOutboundWorker(

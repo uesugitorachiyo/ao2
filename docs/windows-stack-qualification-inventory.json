@@ -19,7 +19,8 @@
     "ao-promoter"
   ],
   "archived_repositories_rejected": ["agy-swarms"],
-  "modes": ["diagnostic", "targeted", "full"],
+  "modes": ["diagnostic", "targeted", "full", "toolchain"],
+  "toolchain_capability_tools": ["git", "go", "python", "cargo", "rustc", "node", "npm", "powershell"],
   "allowed_parameters": ["mode", "repositories", "repos", "timeout_seconds"],
   "timeout_bounds_seconds": {
     "minimum": 30,
