@@ -257,6 +257,18 @@ def terminate_process_tree(process: subprocess.Popen[str]) -> None:
         return
 
 
+def timeout_stream_text(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
+
+
+def join_timeout_streams(*values: str) -> str:
+    return "\n".join(value for value in values if value)
+
+
 def run_bounded_child(
     command: list[str],
     *,
@@ -296,10 +308,25 @@ def run_bounded_child(
     timed_out = False
     try:
         stdout, stderr = process.communicate(timeout=timeout_seconds)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
         timed_out = True
+        stdout = timeout_stream_text(getattr(exc, "stdout", None) or getattr(exc, "output", None))
+        stderr = timeout_stream_text(getattr(exc, "stderr", None))
         terminate_process_tree(process)
-        stdout, stderr = process.communicate(timeout=5)
+        try:
+            collected_stdout, collected_stderr = process.communicate(timeout=5)
+            stdout = join_timeout_streams(stdout, collected_stdout or "")
+            stderr = join_timeout_streams(stderr, collected_stderr or "")
+        except subprocess.TimeoutExpired as drain_exc:
+            stdout = join_timeout_streams(
+                stdout,
+                timeout_stream_text(getattr(drain_exc, "stdout", None) or getattr(drain_exc, "output", None)),
+            )
+            stderr = join_timeout_streams(
+                stderr,
+                timeout_stream_text(getattr(drain_exc, "stderr", None)),
+                "Process output collection timed out after child-process tree termination.",
+            )
 
     duration = round(time.monotonic() - started, 3)
     output, truncated = sanitize_output(stdout or "", stderr or "", output_limit_bytes)
