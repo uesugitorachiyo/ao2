@@ -422,6 +422,40 @@ def test_windows_stack_qualification_bounds_and_redacts_repository_output(tmp_pa
     assert len(output.encode("utf-8")) <= 240
 
 
+def test_windows_stack_qualification_missing_executable_is_command_failure(tmp_path: Path, monkeypatch) -> None:
+    worker = load_worker_module()
+    factory = tmp_path / "factory"
+    repo = factory / "ao2"
+    (repo / ".git").mkdir(parents=True)
+
+    monkeypatch.setattr(
+        worker,
+        "DIAGNOSTIC_PROFILE",
+        ({"name": "missing-fixed-tool", "argv": ("ao2-definitely-missing-tool", "--version")},),
+    )
+
+    runtime = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=factory,
+        state=worker.WorkerState(tmp_path / "state"),
+        transport=worker.MemoryTransport(),
+        poll_interval_seconds=0.01,
+    )
+
+    result = runtime.run_action(
+        "windows_stack_qualification",
+        {"mode": "diagnostic", "repositories": ["ao2"]},
+        request_id="missing-tool",
+    )
+
+    assert result["status"] == "failed"
+    assert result["results"][0]["canonical_repository"] == "ao2"
+    assert result["results"][0]["sanitized_command_name"] == "missing-fixed-tool"
+    assert result["results"][0]["status"] == "failed"
+    assert result["results"][0]["error_category"] == "missing_dependency"
+    assert "ao2-definitely-missing-tool" in result["results"][0]["bounded_sanitized_output"]
+
+
 def test_windows_stack_qualification_timeout_does_not_block_status(tmp_path: Path, monkeypatch) -> None:
     worker = load_worker_module()
     factory = tmp_path / "factory"

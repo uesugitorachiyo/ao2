@@ -255,7 +255,23 @@ def run_bounded_child(
     else:
         popen_kwargs["start_new_session"] = True
 
-    process = subprocess.Popen(command, **popen_kwargs)
+    try:
+        process = subprocess.Popen(command, **popen_kwargs)
+    except FileNotFoundError as exc:
+        duration = round(time.monotonic() - started, 3)
+        executable = command[0] if command else str(exc.filename or "")
+        stderr = f"Executable not found: {executable}"
+        output, truncated = sanitize_output("", stderr, output_limit_bytes)
+        return {
+            "status": "failed",
+            "exit_code": None,
+            "timed_out": False,
+            "duration_seconds": duration,
+            "output": output,
+            "output_truncated": truncated,
+            "sanitized_stderr_category": "missing_dependency",
+            "command_name": Path(executable).name if executable else "",
+        }
     timed_out = False
     try:
         stdout, stderr = process.communicate(timeout=timeout_seconds)
