@@ -63966,7 +63966,7 @@ fn doctor_release_report_json(
         return report;
     }
 
-    if !command_exists("gh") {
+    if resolve_gh_command().is_none() {
         report["asset_source"] = serde_json::json!("github");
         report["assets_available"] = serde_json::json!(false);
         report["asset_count"] = serde_json::json!(0);
@@ -64026,7 +64026,20 @@ fn doctor_release_report_json(
 }
 
 fn run_gh_release_view_for_doctor(tag: &str, repo: &str) -> std::io::Result<std::process::Output> {
-    let mut child = ProcessCommand::new("gh")
+    let Some((gh, shell_script)) = resolve_gh_command() else {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "gh_not_available",
+        ));
+    };
+    let mut command = if shell_script {
+        let mut command = ProcessCommand::new("cmd.exe");
+        command.args(["/d", "/s", "/c"]).arg(gh);
+        command
+    } else {
+        ProcessCommand::new(gh)
+    };
+    let mut child = command
         .args([
             "release",
             "view",
@@ -64050,7 +64063,7 @@ fn run_gh_release_view_for_doctor(tag: &str, repo: &str) -> std::io::Result<std:
             return child.wait_with_output();
         }
         if started.elapsed() >= timeout {
-            let _ = child.kill();
+            terminate_workbench_child(&mut child);
             let _ = child.wait();
             return Err(std::io::Error::new(
                 std::io::ErrorKind::TimedOut,
@@ -64059,6 +64072,32 @@ fn run_gh_release_view_for_doctor(tag: &str, repo: &str) -> std::io::Result<std:
         }
         thread::sleep(Duration::from_millis(25));
     }
+}
+
+fn resolve_gh_command() -> Option<(PathBuf, bool)> {
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    for dir in std::env::split_paths(&path) {
+        if cfg!(windows) {
+            for (name, shell_script) in [
+                ("gh.exe", false),
+                ("gh.cmd", true),
+                ("gh.bat", true),
+                ("gh.com", false),
+                ("gh", false),
+            ] {
+                let candidate = dir.join(name);
+                if candidate.is_file() {
+                    return Some((candidate, shell_script));
+                }
+            }
+        } else {
+            let candidate = dir.join("gh");
+            if candidate.is_file() {
+                return Some((candidate, false));
+            }
+        }
+    }
+    None
 }
 
 fn release_rollback_summary_json(asset_dir: &Path) -> serde_json::Value {
@@ -70193,7 +70232,7 @@ Copy-Item -Force $SourceBinary $DestBinary
 
 $Manifest = Get-Content -Raw -LiteralPath $ManifestFile | ConvertFrom-Json
 $EvidencePath = "$DestBinary.install-verification.json"
-[ordered]@{{
+$Evidence = [ordered]@{{
     schema_version = "ao2.install-verification-evidence.v1"
     status = "verified"
     install_status = "installed"
@@ -70216,7 +70255,10 @@ $EvidencePath = "$DestBinary.install-verification.json"
     control_plane_approves_release = $false
     mutates_ao_artifacts = $false
     release_acceptance_owner = "factory-v3 evaluator-closer"
-}} | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 -LiteralPath $EvidencePath
+}}
+$Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$EvidenceJson = ($Evidence | ConvertTo-Json -Depth 5) + [Environment]::NewLine
+[System.IO.File]::WriteAllText($EvidencePath, $EvidenceJson, $Utf8NoBom)
 
 Write-Output "installed $DestBinary"
 Write-Output "install_verification_evidence=$EvidencePath"
