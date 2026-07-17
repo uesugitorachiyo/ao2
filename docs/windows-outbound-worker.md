@@ -34,7 +34,10 @@ stores a local idempotency ledger under
 `ao2_doctor` first runs an installed `ao2` binary from PATH or the standard
 local AO2 install directory. If no installed binary exists during
 pre-publication qualification, it runs the fixed repository-owned fallback:
-`cargo run --manifest-path C:\ao\factory\ao2\Cargo.toml -p ao2-cli --bin ao2 -- doctor --json`.
+`cargo run --manifest-path C:\ao\factory\ao2\Cargo.toml --target-dir C:\ao\factory\.ao2-worker-target\ao2-doctor -p ao2-cli --bin ao2 -- doctor --json`.
+The fallback uses the fixed target directory so it never rebuilds or removes
+the shared repository `target\debug\ao2.exe` while another Windows check holds
+that executable open.
 The task payload does not provide command text for that fallback.
 
 `windows_stack_qualification` is a fixed native-Windows verification action.
