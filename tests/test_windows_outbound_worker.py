@@ -121,6 +121,29 @@ def test_child_output_is_redacted_and_size_bounded(tmp_path: Path) -> None:
     assert len(output.encode("utf-8")) <= 240
 
 
+def test_successful_child_with_stderr_reports_no_error_category(tmp_path: Path) -> None:
+    worker = load_worker_module()
+    script = tmp_path / "progress_on_stderr.py"
+    script.write_text(
+        "import sys\n"
+        "print('normal output')\n"
+        "print('Finished dev profile', file=sys.stderr)\n",
+        encoding="utf-8",
+    )
+
+    result = worker.run_bounded_child(
+        [sys.executable, str(script)],
+        cwd=tmp_path,
+        timeout_seconds=5,
+        output_limit_bytes=4096,
+    )
+
+    assert result["status"] == "accepted"
+    assert result["exit_code"] == 0
+    assert result["sanitized_stderr_category"] == "none"
+    assert "Finished dev profile" in result["output"]
+
+
 def test_worker_keeps_status_responsive_while_slow_action_runs(tmp_path: Path) -> None:
     worker = load_worker_module()
     transport = worker.MemoryTransport()
