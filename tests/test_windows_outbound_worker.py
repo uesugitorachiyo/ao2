@@ -414,7 +414,7 @@ def test_ao2_full_profile_cargo_test_uses_isolated_target_dir(tmp_path: Path, mo
     (repo / ".git").mkdir(parents=True)
     recorded_commands = []
 
-    def fake_run(command, *, cwd, timeout_seconds, output_limit_bytes=worker.DEFAULT_OUTPUT_LIMIT_BYTES):
+    def fake_run(command, *, cwd, timeout_seconds, output_limit_bytes=worker.DEFAULT_OUTPUT_LIMIT_BYTES, **_kwargs):
         recorded_commands.append(list(command))
         return {
             "status": "accepted",
@@ -452,6 +452,48 @@ def test_ao2_full_profile_cargo_test_uses_isolated_target_dir(tmp_path: Path, mo
     )
     assert "--target-dir" in cargo_test
     assert cargo_test[cargo_test.index("--target-dir") + 1] == str(factory / ".ao2-worker-target" / "ao2-full")
+
+
+def test_ao2_full_profile_npm_verify_inherits_isolated_cargo_target(tmp_path: Path, monkeypatch) -> None:
+    worker = load_worker_module()
+    factory = tmp_path / "factory"
+    repo = factory / "ao2"
+    (repo / ".git").mkdir(parents=True)
+    recorded_envs = []
+
+    def fake_run(command, *, cwd, timeout_seconds, output_limit_bytes=worker.DEFAULT_OUTPUT_LIMIT_BYTES, env=None):
+        if Path(command[0]).name.lower() in {"npm", "npm.cmd"} and command[1:] == ["run", "verify"]:
+            recorded_envs.append(dict(env or {}))
+        return {
+            "status": "accepted",
+            "exit_code": 0,
+            "timed_out": False,
+            "duration_seconds": 0.01,
+            "output": "ok",
+            "output_truncated": False,
+            "sanitized_stderr_category": "none",
+            "command_name": Path(command[0]).name,
+        }
+
+    monkeypatch.setattr(worker, "run_bounded_child", fake_run)
+    runtime = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=factory,
+        state=worker.WorkerState(tmp_path / "state"),
+        transport=worker.MemoryTransport(),
+        poll_interval_seconds=0.01,
+    )
+
+    task = worker.control_task(
+        request_id="ao2-full",
+        action="windows_stack_qualification",
+        parameters={"mode": "full", "repositories": ["ao2"]},
+    )
+
+    assert runtime.accept_control_task(task) == "started"
+    assert runtime.wait_for_idle(timeout_seconds=2) is True
+    assert recorded_envs
+    assert recorded_envs == [{"CARGO_TARGET_DIR": str(factory / ".ao2-worker-target" / "ao2-full")}]
 
 
 def test_windows_stack_qualification_inventory_matches_worker_contract() -> None:
