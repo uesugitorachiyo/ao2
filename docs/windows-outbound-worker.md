@@ -57,6 +57,10 @@ The canonical inventory is machine-readable at
 `docs/windows-stack-qualification-inventory.json`. The reviewed
 repository-to-command profiles live in
 `scripts/ao2_windows_outbound_worker.py::WINDOWS_REPOSITORY_PROFILES`.
+The AO2 full profile runs Cargo build/test gates with
+`--target-dir C:\ao\factory\.ao2-worker-target\ao2-full`, avoiding the shared
+repository `target\debug\ao2.exe` when that executable is locked by another
+Windows check or installed AO2 process.
 
 After synchronizing a new AO2 commit that changes the worker source, restart the
 local Windows Scheduled Task from an elevated Windows PowerShell session:
