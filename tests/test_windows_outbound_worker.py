@@ -414,6 +414,14 @@ def test_ao2_full_profile_cargo_test_uses_isolated_target_dir(tmp_path: Path, mo
     (repo / ".git").mkdir(parents=True)
     recorded_commands = []
 
+    def fake_resolve_fixed_tool(tool_name: str):
+        paths = {
+            "cargo": "cargo.exe",
+            "npm": "npm.cmd",
+            "powershell": "powershell.exe",
+        }
+        return {"tool": tool_name, "status": "resolved", "path": paths.get(tool_name, tool_name)}
+
     def fake_run(command, *, cwd, timeout_seconds, output_limit_bytes=worker.DEFAULT_OUTPUT_LIMIT_BYTES, **_kwargs):
         recorded_commands.append(list(command))
         return {
@@ -427,6 +435,7 @@ def test_ao2_full_profile_cargo_test_uses_isolated_target_dir(tmp_path: Path, mo
             "command_name": Path(command[0]).name,
         }
 
+    monkeypatch.setattr(worker, "resolve_fixed_tool", fake_resolve_fixed_tool)
     monkeypatch.setattr(worker, "run_bounded_child", fake_run)
     transport = worker.MemoryTransport()
     runtime = worker.WindowsOutboundWorker(
@@ -461,6 +470,14 @@ def test_ao2_full_profile_npm_verify_inherits_isolated_cargo_target(tmp_path: Pa
     (repo / ".git").mkdir(parents=True)
     recorded_envs = []
 
+    def fake_resolve_fixed_tool(tool_name: str):
+        paths = {
+            "cargo": "cargo.exe",
+            "npm": "npm.cmd",
+            "powershell": "powershell.exe",
+        }
+        return {"tool": tool_name, "status": "resolved", "path": paths.get(tool_name, tool_name)}
+
     def fake_run(command, *, cwd, timeout_seconds, output_limit_bytes=worker.DEFAULT_OUTPUT_LIMIT_BYTES, env=None):
         if Path(command[0]).name.lower() in {"npm", "npm.cmd"} and command[1:] == ["run", "verify"]:
             recorded_envs.append(dict(env or {}))
@@ -475,6 +492,7 @@ def test_ao2_full_profile_npm_verify_inherits_isolated_cargo_target(tmp_path: Pa
             "command_name": Path(command[0]).name,
         }
 
+    monkeypatch.setattr(worker, "resolve_fixed_tool", fake_resolve_fixed_tool)
     monkeypatch.setattr(worker, "run_bounded_child", fake_run)
     runtime = worker.WindowsOutboundWorker(
         node_id="windows-hp255_g10",
