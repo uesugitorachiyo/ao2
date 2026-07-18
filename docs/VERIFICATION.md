@@ -538,7 +538,7 @@ Result:
   `npm run release:train-drill` with `AO2_RELEASE_TRAIN=next_patch`,
   `AO2_PUBLIC_RELEASE_TRAIN_CI_SAFE=1`, and
   `AO2_PUBLIC_RELEASE_TRAIN_DRILL_ROOT=target/candidate-patch-release-rehearsal/report`.
-  It validates the manifest-backed `v0.5.2` / `v0.1.16` candidate targets in
+  It validates the manifest-backed `v0.5.2` / `v0.1.17` candidate targets in
   the `ao2.public-release-train-drill.v1` summary and uploads one read-only
   `ao2-candidate-patch-release-rehearsal` evidence bundle. The workflow also
   runs `npm run release:candidate-rehearsal-audit`, emits
@@ -852,7 +852,7 @@ Result:
   drill reads `docs/release/release-train.json` through
   `scripts/release-train-env.sh`, defaults to the `stable` train, and records
   `release_train_manifest` plus `release_targets` in the summary. Setting
-  `AO2_RELEASE_TRAIN=next_patch` rehearses the `v0.5.2` / `v0.1.16` candidate
+  `AO2_RELEASE_TRAIN=next_patch` rehearses the `v0.5.2` / `v0.1.17` candidate
   train without publishing.
   The release readiness
   static summary must include the
@@ -1090,7 +1090,7 @@ Result:
   hosted `ao2-stable-release-evidence-packet` artifact before running
   `npm run release:stable-promotion-workflow`. Leave
   `promotion_confirm` empty for a dry-run, or set it to the exact
-  `promote-stable-v0.5.2-v0.1.16` confirmation string to allow the underlying
+  `promote-stable-v0.5.2-v0.1.17` confirmation string to allow the underlying
   script to flip AO2 and ao2-control-plane releases after all packet,
   post-release evidence, archive parity, provenance, and trust-boundary checks
   pass. The optional `stable_release_evidence_run_id` input pins the packet to a
@@ -1127,7 +1127,7 @@ Result:
   workflow-hardening evidence without treating it as authority to publish the
   full autonomous RSI claim.
   The checklist records the exact
-  `promote-stable-v0.5.2-v0.1.16` confirmation string, but does not enter it.
+  `promote-stable-v0.5.2-v0.1.17` confirmation string, but does not enter it.
   The manual `Stable Promotion Operator Checklist` workflow downloads the
   dry-run audit by `stable_promotion_dry_run_audit_run_id` and uploads only the
   generated report directory as `ao2-stable-promotion-operator-checklist`.
