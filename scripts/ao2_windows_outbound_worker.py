@@ -9,6 +9,7 @@ executes command text supplied by a task payload.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -544,6 +545,8 @@ class WorkerState:
         self.state_root = state_root
         self.state_root.mkdir(parents=True, exist_ok=True)
         self.ledger_path = self.state_root / "task-ledger.json"
+        self.result_outbox_dir = self.state_root / "result-outbox"
+        self.result_outbox_dir.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self._ledger = self._load()
 
@@ -576,6 +579,28 @@ class WorkerState:
             item["status"] = status
             item["completed_at"] = utc_now()
             self._save()
+
+    def _result_outbox_path(self, request_id: str) -> Path:
+        safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", request_id).strip("._-") or "request"
+        digest = hashlib.sha256(request_id.encode("utf-8")).hexdigest()[:16]
+        return self.result_outbox_dir / f"{safe[:120]}-{digest}.json"
+
+    def queue_result_board(self, request_id: str, board: dict[str, Any]) -> None:
+        with self._lock:
+            self.result_outbox_dir.mkdir(parents=True, exist_ok=True)
+            path = self._result_outbox_path(request_id)
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(board, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            tmp.replace(path)
+
+    def pending_result_paths(self) -> list[Path]:
+        return sorted(self.result_outbox_dir.glob("*.json"))
+
+    def remove_queued_result(self, path: Path) -> None:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            return
 
 
 class MemoryTransport:
@@ -724,7 +749,7 @@ class WindowsOutboundWorker:
             return "ignored"
 
         if arbitrary or action not in ALLOWLISTED_ACTIONS:
-            self.post_result(request_id, action or "unknown", {
+            self._post_result_best_effort(request_id, action or "unknown", {
                 "status": "failed",
                 "error_category": "action_not_allowlisted",
                 "arbitrary_command_execution": False,
@@ -736,7 +761,7 @@ class WindowsOutboundWorker:
             return "duplicate"
 
         if action in {"status", "publish_capability"}:
-            self.post_result(request_id, action, self.status_result())
+            self._post_result_best_effort(request_id, action, self.status_result())
             self.state.complete(request_id, "accepted")
             return "completed"
 
@@ -754,15 +779,14 @@ class WindowsOutboundWorker:
     def _run_action_thread(self, request_id: str, action: str, parameters: dict[str, Any]) -> None:
         try:
             result = self.run_action(action, parameters, request_id=request_id)
-            self.post_result(request_id, action, result)
-            self.state.complete(request_id, str(result.get("status", "failed")))
         except Exception as exc:  # pragma: no cover - fail closed guard
-            self.post_result(request_id, action, {
+            result = {
                 "status": "failed",
                 "error_category": "worker_exception",
                 "message": redact_text(str(exc))[:500],
-            })
-            self.state.complete(request_id, "failed")
+            }
+        self._post_result_best_effort(request_id, action, result)
+        self.state.complete(request_id, str(result.get("status", "failed")))
 
     def run_action(self, action: str, parameters: dict[str, Any], request_id: str = "") -> dict[str, Any]:
         if action == "timeout_fixture":
@@ -934,8 +958,8 @@ class WindowsOutboundWorker:
         status = "accepted" if all(item.get("status") == "accepted" for item in results) else "failed"
         return {"status": status, "repos": results}
 
-    def post_result(self, request_id: str, action: str, result: dict[str, Any]) -> None:
-        board = {
+    def result_board(self, request_id: str, action: str, result: dict[str, Any]) -> dict[str, Any]:
+        return {
             "schema_version": TASK_BOARD_SCHEMA,
             "status": "accepted" if result.get("status") != "failed" else "ready",
             "release_objective": "Report AO2 cross-host Windows worker result back to the Mac host.",
@@ -974,9 +998,32 @@ class WindowsOutboundWorker:
             },
             "trust_boundary": {"local_only": False, "stores_credentials": False, "mutates_releases": False},
         }
-        self.transport.post_board(board)
+
+    def post_result(self, request_id: str, action: str, result: dict[str, Any]) -> None:
+        board = self.result_board(request_id, action, result)
+        self.state.queue_result_board(request_id, board)
+        self.flush_result_outbox()
+
+    def _post_result_best_effort(self, request_id: str, action: str, result: dict[str, Any]) -> None:
+        try:
+            self.post_result(request_id, action, result)
+        except Exception as exc:
+            sys.stderr.write(
+                "result_publish_pending="
+                f"{request_id} error={type(exc).__name__}: {redact_text(str(exc))[:300]}\n"
+            )
+
+    def flush_result_outbox(self) -> None:
+        for path in self.state.pending_result_paths():
+            try:
+                board = json.loads(path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                continue
+            self.transport.post_board(board)
+            self.state.remove_queued_result(path)
 
     def poll_once(self) -> str:
+        self.flush_result_outbox()
         board = self.transport.latest_board()
         if not board:
             return "no_board"
