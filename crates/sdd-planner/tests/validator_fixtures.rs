@@ -1,6 +1,6 @@
 //! Fixture-driven validator tests covering V1..V11 from README §5.1.
 //!
-//! Test count = 11 to satisfy the P0 exit_check `grep -c '^#\[test\]' == 11`.
+//! Test count = 12 to satisfy the P0 exit_check `grep -c '^#\[test\]' == 12`.
 //! V11 is asserted by a single `accepts_valid_fixtures` test that walks
 //! both `valid_minimal.json` and `valid_full.json`, rather than the two
 //! named tests (`accepts_minimal`, `accepts_full`) shown in the README
@@ -82,6 +82,32 @@ fn rejects_cycle() {
             .iter()
             .any(|e| matches!(e, ValidationError::Cycle(_))),
         "expected Cycle, got {:?}",
+        report.errors
+    );
+}
+
+#[test]
+fn rejects_duplicate_step_id_before_cycle_detection() {
+    let report = validate(&fixture("invalid_duplicate_step_id.json"), None);
+    let errors = report
+        .errors
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>();
+
+    assert!(
+        errors
+            .iter()
+            .any(|error| error.contains("duplicate step id 'step_same'")),
+        "expected duplicate step id diagnostic, got {:?}",
+        report.errors
+    );
+    assert!(
+        !report
+            .errors
+            .iter()
+            .any(|error| matches!(error, ValidationError::Cycle(_))),
+        "duplicate IDs must not be reported as a cycle: {:?}",
         report.errors
     );
 }

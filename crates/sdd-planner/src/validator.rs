@@ -304,6 +304,9 @@ pub enum ValidationError {
     #[error("V4: dependency cycle involving steps {0:?}")]
     Cycle(BTreeSet<String>),
 
+    #[error("V4: duplicate step id '{0}'")]
+    DuplicateStepId(String),
+
     #[error("V5: trust_boundary.mutates_ao_artifacts must be literal false")]
     MutatingPlanner,
 
@@ -357,7 +360,9 @@ pub fn validate(plan_json: &str, surface_map: Option<&SurfaceMap>) -> Validation
     check_v9_step_ids(&plan, &mut errors);
     check_v10_title(&plan, &mut errors);
     check_v3_acceptance(&plan, &mut errors);
-    check_v4_cycles(&plan, &mut errors);
+    if !check_duplicate_step_ids(&plan, &mut errors) {
+        check_v4_cycles(&plan, &mut errors);
+    }
     if let Some(sm) = surface_map {
         check_v2_paths(&plan, sm, &mut errors);
     }
@@ -456,6 +461,20 @@ fn check_v3_acceptance(plan: &Plan, errors: &mut Vec<ValidationError>) {
             }
         }
     }
+}
+
+fn check_duplicate_step_ids(plan: &Plan, errors: &mut Vec<ValidationError>) -> bool {
+    let mut seen = HashSet::new();
+    let mut duplicates = BTreeSet::new();
+    for step in &plan.plan.steps {
+        if !seen.insert(step.id.as_str()) {
+            duplicates.insert(step.id.clone());
+        }
+    }
+    for duplicate in &duplicates {
+        errors.push(ValidationError::DuplicateStepId(duplicate.clone()));
+    }
+    !duplicates.is_empty()
 }
 
 fn check_v4_cycles(plan: &Plan, errors: &mut Vec<ValidationError>) {
