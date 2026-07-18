@@ -1063,20 +1063,13 @@ fn default_roles() -> Vec<String> {
 
 fn repo_file_inventory(root: &Path, limit: usize) -> Result<Vec<String>> {
     let mut files = Vec::new();
-    collect_repo_files(root, root, limit, &mut files)?;
+    collect_repo_files(root, root, &mut files)?;
     files.sort();
+    files.truncate(limit);
     Ok(files)
 }
 
-fn collect_repo_files(
-    root: &Path,
-    dir: &Path,
-    limit: usize,
-    files: &mut Vec<String>,
-) -> Result<()> {
-    if files.len() >= limit {
-        return Ok(());
-    }
+fn collect_repo_files(root: &Path, dir: &Path, files: &mut Vec<String>) -> Result<()> {
     let entries = match fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(_) => return Ok(()),
@@ -1089,16 +1082,13 @@ fn collect_repo_files(
             continue;
         }
         if path.is_dir() {
-            collect_repo_files(root, &path, limit, files)?;
+            collect_repo_files(root, &path, files)?;
         } else if path.is_file() {
             files.push(
                 path.strip_prefix(root)?
                     .to_string_lossy()
                     .replace('\\', "/"),
             );
-        }
-        if files.len() >= limit {
-            break;
         }
     }
     Ok(())
@@ -2768,6 +2758,48 @@ mod verifier_command_tests {
         assert!(
             status.success(),
             "`true` must remain a portable verifier no-op across AO2 supported hosts"
+        );
+    }
+}
+
+#[cfg(test)]
+mod repo_inventory_tests {
+    use super::repo_file_inventory;
+    use std::fs;
+
+    #[test]
+    fn applies_file_limit_after_deterministic_global_ordering() {
+        let repo = tempfile::tempdir().expect("tempdir");
+        fs::create_dir_all(repo.path().join("z-last")).unwrap();
+        fs::write(repo.path().join("z-last").join("z.txt"), "z").unwrap();
+        fs::create_dir_all(repo.path().join("a-first")).unwrap();
+        fs::write(repo.path().join("a-first").join("a.txt"), "a").unwrap();
+        fs::write(repo.path().join("m.txt"), "m").unwrap();
+
+        let inventory = repo_file_inventory(repo.path(), 2).expect("inventory");
+
+        assert_eq!(inventory, vec!["a-first/a.txt", "m.txt"]);
+    }
+
+    #[test]
+    fn identical_trees_with_different_creation_order_have_identical_inventory() {
+        let first = tempfile::tempdir().expect("first tempdir");
+        fs::create_dir_all(first.path().join("z-last")).unwrap();
+        fs::write(first.path().join("z-last").join("z.txt"), "z").unwrap();
+        fs::create_dir_all(first.path().join("a-first")).unwrap();
+        fs::write(first.path().join("a-first").join("a.txt"), "a").unwrap();
+        fs::write(first.path().join("m.txt"), "m").unwrap();
+
+        let second = tempfile::tempdir().expect("second tempdir");
+        fs::create_dir_all(second.path().join("a-first")).unwrap();
+        fs::write(second.path().join("a-first").join("a.txt"), "a").unwrap();
+        fs::write(second.path().join("m.txt"), "m").unwrap();
+        fs::create_dir_all(second.path().join("z-last")).unwrap();
+        fs::write(second.path().join("z-last").join("z.txt"), "z").unwrap();
+
+        assert_eq!(
+            repo_file_inventory(first.path(), 2).expect("first inventory"),
+            repo_file_inventory(second.path(), 2).expect("second inventory")
         );
     }
 }
