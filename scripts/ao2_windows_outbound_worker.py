@@ -415,6 +415,8 @@ def sanitize_output(stdout: str, stderr: str, limit_bytes: int) -> tuple[str, bo
 
 
 def stderr_category(status: str, stderr: str) -> str:
+    if status == "accepted":
+        return "none"
     if status == "timed_out":
         return "timeout"
     if not stderr.strip():
