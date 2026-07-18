@@ -291,6 +291,21 @@ fn read_test_http_request(stream: &mut TcpStream, buffer: &mut [u8]) -> usize {
 }
 
 #[test]
+fn test_http_accept_waits_for_slow_windows_child_startup() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let port = listener.local_addr().unwrap().port();
+    let client = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(5500));
+        TcpStream::connect(("127.0.0.1", port)).unwrap();
+    });
+
+    let stream = accept_test_connection(&listener, "delayed local test HTTP request");
+    drop(stream);
+    client.join().unwrap();
+}
+
+#[test]
 fn cli_can_pause_approve_resume_and_replay() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
@@ -29988,21 +30003,8 @@ fn cli_release_phase1_three_os_smoke_publish_posts_bundle_without_token_leak() {
     listener.set_nonblocking(true).unwrap();
     let port = listener.local_addr().unwrap().port();
     let server = std::thread::spawn(move || {
-        let mut attempts = 0;
-        let mut stream = loop {
-            match listener.accept() {
-                Ok((stream, _)) => break stream,
-                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                    attempts += 1;
-                    assert!(
-                        attempts <= 100,
-                        "timed out waiting for Phase 1 three-OS smoke publish request"
-                    );
-                    std::thread::sleep(std::time::Duration::from_millis(50));
-                }
-                Err(error) => panic!("accept failed: {error}"),
-            }
-        };
+        let mut stream =
+            accept_test_connection(&listener, "Phase 1 three-OS smoke publish request");
         let mut buffer = [0_u8; 16384];
         stream.set_nonblocking(false).unwrap();
         let read = read_test_http_request(&mut stream, &mut buffer);
@@ -30078,21 +30080,8 @@ fn cli_release_phase1_promotion_inputs_publish_posts_verification_without_token_
     listener.set_nonblocking(true).unwrap();
     let port = listener.local_addr().unwrap().port();
     let server = std::thread::spawn(move || {
-        let mut attempts = 0;
-        let mut stream = loop {
-            match listener.accept() {
-                Ok((stream, _)) => break stream,
-                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                    attempts += 1;
-                    assert!(
-                        attempts <= 100,
-                        "timed out waiting for Phase 1 promotion inputs publish request"
-                    );
-                    std::thread::sleep(std::time::Duration::from_millis(50));
-                }
-                Err(error) => panic!("accept failed: {error}"),
-            }
-        };
+        let mut stream =
+            accept_test_connection(&listener, "Phase 1 promotion inputs publish request");
         let mut buffer = [0_u8; 16384];
         stream.set_nonblocking(false).unwrap();
         let read = read_test_http_request(&mut stream, &mut buffer);
