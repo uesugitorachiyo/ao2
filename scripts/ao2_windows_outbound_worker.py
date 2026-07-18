@@ -105,11 +105,13 @@ FIXED_TOOL_VERSION_ARGS = {
     "npm": ("--version",),
     "powershell": ("-NoProfile", "-Command", "$PSVersionTable.PSVersion.ToString()"),
 }
-DIAGNOSTIC_PROFILE = (
+ProfileCommand = dict[str, Any]
+
+DIAGNOSTIC_PROFILE: tuple[ProfileCommand, ...] = (
     {"name": "git-head-readback", "argv": ("git", "rev-parse", "HEAD")},
     {"name": "git-clean-readback", "argv": ("git", "status", "--porcelain=v1")},
 )
-WINDOWS_REPOSITORY_PROFILES: dict[str, dict[str, tuple[dict[str, tuple[str, ...]], ...]]] = {
+WINDOWS_REPOSITORY_PROFILES: dict[str, dict[str, tuple[ProfileCommand, ...]]] = {
     "ao-architecture": {
         "targeted": (
             {"name": "architecture-stack-lock", "argv": ("{python}", "scripts/verify_stack_lock.py")},
@@ -160,7 +162,7 @@ WINDOWS_REPOSITORY_PROFILES: dict[str, dict[str, tuple[dict[str, tuple[str, ...]
             {"name": "cargo-test-workspace", "argv": ("cargo", "test", "--workspace", "--target-dir", "{ao2-full-target-dir}")},
             {"name": "cargo-fmt-check", "argv": ("cargo", "fmt", "--all", "--", "--check")},
             {"name": "cargo-clippy", "argv": ("cargo", "clippy", "--workspace", "--all-targets", "--target-dir", "{ao2-full-target-dir}", "--", "-D", "warnings")},
-            {"name": "npm-verify", "argv": ("npm", "run", "verify")},
+            {"name": "npm-verify", "argv": ("npm", "run", "verify"), "env": {"CARGO_TARGET_DIR": "{ao2-full-target-dir}"}},
         ),
     },
     "ao2-control-plane": {
@@ -275,6 +277,7 @@ def run_bounded_child(
     cwd: Path,
     timeout_seconds: float,
     output_limit_bytes: int = DEFAULT_OUTPUT_LIMIT_BYTES,
+    env: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     started = time.monotonic()
     popen_kwargs: dict[str, Any] = {
@@ -283,6 +286,10 @@ def run_bounded_child(
         "stdout": subprocess.PIPE,
         "stderr": subprocess.PIPE,
     }
+    if env:
+        child_env = os.environ.copy()
+        child_env.update(env)
+        popen_kwargs["env"] = child_env
     if os.name == "nt":
         popen_kwargs["creationflags"] = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     else:
@@ -686,12 +693,15 @@ class WindowsOutboundWorker:
 
             for command_spec in profile:
                 command = resolve_profile_command(command_spec["argv"], factory_root=self.factory_root)
-                child = run_bounded_child(
-                    command,
-                    cwd=repo_path,
-                    timeout_seconds=timeout_seconds,
-                    output_limit_bytes=self.output_limit_bytes,
-                )
+                command_env = resolve_profile_environment(command_spec.get("env", {}), factory_root=self.factory_root)
+                child_kwargs: dict[str, Any] = {
+                    "cwd": repo_path,
+                    "timeout_seconds": timeout_seconds,
+                    "output_limit_bytes": self.output_limit_bytes,
+                }
+                if command_env:
+                    child_kwargs["env"] = command_env
+                child = run_bounded_child(command, **child_kwargs)
                 results.append(stack_qualification_row(
                     node_id=self.node_id,
                     worker_source_commit=worker_source_commit,
@@ -1035,6 +1045,17 @@ def resolve_profile_command(
             if resolved.get("status") == "resolved" and resolved.get("path"):
                 command[0] = str(resolved["path"])
     return command
+
+
+def resolve_profile_environment(
+    env: dict[str, str],
+    *,
+    factory_root: Path = DEFAULT_FACTORY_ROOT,
+) -> dict[str, str]:
+    replacements = {
+        "{ao2-full-target-dir}": str(factory_root / ".ao2-worker-target" / "ao2-full"),
+    }
+    return {key: replacements.get(value, value) for key, value in env.items()}
 
 
 def stack_qualification_row(
