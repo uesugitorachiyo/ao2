@@ -1,3 +1,7 @@
+#[cfg(test)]
+use std::cell::RefCell;
+#[cfg(test)]
+use std::collections::BTreeMap;
 use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
@@ -105,7 +109,7 @@ pub fn check_obligation_ledger(
         .iter()
         .map(|contract| contract.path.replace('\\', "/"))
         .collect::<Vec<_>>();
-    let searchable_files = searchable_files(target_root, &source_paths)?;
+    let searchable_files = searchable_file_snapshots(target_root, &source_paths)?;
     for obligation in &mut checked.obligations {
         if obligation.waiver.is_some() {
             obligation.status = ObligationStatus::Waived;
@@ -128,7 +132,7 @@ pub fn check_obligation_ledger(
         obligation.evidence.clear();
         let mut evidence = Vec::new();
         for fragment in &obligation.expected_fragments {
-            if let Some(found) = find_fragment(target_root, &searchable_files, fragment)? {
+            if let Some(found) = find_fragment(target_root, &searchable_files, fragment) {
                 evidence.push(found);
             }
         }
@@ -372,27 +376,47 @@ fn is_searchable_file(path: &Path, len: u64) -> bool {
     )
 }
 
-fn find_fragment(
-    target_root: &Path,
-    files: &[PathBuf],
-    fragment: &str,
-) -> io::Result<Option<ObligationEvidence>> {
-    for path in files {
-        let content = match fs::read_to_string(path) {
-            Ok(content) => content,
+struct SearchableFileSnapshot {
+    path: PathBuf,
+    content: String,
+}
+
+fn searchable_file_snapshots(
+    root: &Path,
+    source_paths: &[String],
+) -> io::Result<Vec<SearchableFileSnapshot>> {
+    let mut snapshots = Vec::new();
+    for path in searchable_files(root, source_paths)? {
+        let content = match fs::read_to_string(&path) {
+            Ok(content) => {
+                #[cfg(test)]
+                record_obligation_file_read(root, &path, content.len());
+                content
+            }
             Err(_) => continue,
         };
-        for (index, line) in content.lines().enumerate() {
+        snapshots.push(SearchableFileSnapshot { path, content });
+    }
+    Ok(snapshots)
+}
+
+fn find_fragment(
+    target_root: &Path,
+    files: &[SearchableFileSnapshot],
+    fragment: &str,
+) -> Option<ObligationEvidence> {
+    for file in files {
+        for (index, line) in file.content.lines().enumerate() {
             if line.contains(fragment) {
-                return Ok(Some(ObligationEvidence {
-                    path: relative_path(target_root, path),
+                return Some(ObligationEvidence {
+                    path: relative_path(target_root, &file.path),
                     line: index + 1,
                     detail: format!("found expected fragment `{fragment}`"),
-                }));
+                });
             }
         }
     }
-    Ok(None)
+    None
 }
 
 fn relative_path(root: &Path, path: &Path) -> String {
@@ -421,8 +445,43 @@ fn refresh_summary_and_verdict(ledger: &mut ObligationLedger) {
 }
 
 #[cfg(test)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct ObligationFileReadStats {
+    opens: usize,
+    bytes: usize,
+}
+
+#[cfg(test)]
+thread_local! {
+    static OBLIGATION_FILE_READS: RefCell<BTreeMap<String, ObligationFileReadStats>> =
+        const { RefCell::new(BTreeMap::new()) };
+}
+
+#[cfg(test)]
+fn record_obligation_file_read(root: &Path, path: &Path, bytes: usize) {
+    let relative = relative_path(root, path);
+    OBLIGATION_FILE_READS.with(|reads| {
+        let mut reads = reads.borrow_mut();
+        let stats = reads.entry(relative).or_default();
+        stats.opens += 1;
+        stats.bytes += bytes;
+    });
+}
+
+#[cfg(test)]
+fn reset_obligation_file_reads() {
+    OBLIGATION_FILE_READS.with(|reads| reads.borrow_mut().clear());
+}
+
+#[cfg(test)]
+fn obligation_file_reads() -> BTreeMap<String, ObligationFileReadStats> {
+    OBLIGATION_FILE_READS.with(|reads| reads.borrow().clone())
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Instant;
 
     fn ledger_for_fragment(fragment: &str) -> ObligationLedger {
         let mut ledger = ObligationLedger {
@@ -477,5 +536,85 @@ mod tests {
         let checked = check_obligation_ledger(&ledger_for_fragment(fragment), root).unwrap();
         assert_eq!(checked.obligations[0].status, ObligationStatus::Pass);
         assert_eq!(checked.obligations[0].evidence[0].path, "src/lib.rs");
+    }
+
+    #[test]
+    fn obligation_check_reads_each_searchable_file_at_most_once_per_pass() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        fs::write(root.join("contract.md"), "contract source\n").unwrap();
+        fs::write(root.join("a.txt"), "alpha fragment\n").unwrap();
+        fs::write(root.join("b.txt"), "beta fragment\n").unwrap();
+
+        let mut ledger = ledger_for_fragment("alpha fragment");
+        ledger.obligations[0].expected_fragments =
+            vec!["alpha fragment".to_string(), "beta fragment".to_string()];
+
+        reset_obligation_file_reads();
+        let checked = check_obligation_ledger(&ledger, root).unwrap();
+        let reads = obligation_file_reads();
+
+        assert_eq!(checked.obligations[0].status, ObligationStatus::Pass);
+        assert_eq!(
+            checked.obligations[0]
+                .evidence
+                .iter()
+                .map(|evidence| evidence.path.as_str())
+                .collect::<Vec<_>>(),
+            vec!["a.txt", "b.txt"]
+        );
+
+        for (path, stats) in reads {
+            assert!(
+                stats.opens <= 1,
+                "{path} was opened {} times in one verification pass",
+                stats.opens
+            );
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn obligation_check_records_read_scaling() {
+        for (files, fragments) in [(100usize, 1usize), (100, 10), (1_000, 10), (10_000, 10)] {
+            let temp = tempfile::tempdir().unwrap();
+            let root = temp.path();
+            fs::write(root.join("contract.md"), "contract source\n").unwrap();
+            for index in 0..files {
+                fs::write(
+                    root.join(format!("file-{index:05}.txt")),
+                    format!("searchable fixture file {index:05}\n"),
+                )
+                .unwrap();
+            }
+
+            let mut ledger = ledger_for_fragment("missing fragment 0");
+            ledger.obligations[0].expected_fragments = (0..fragments)
+                .map(|index| format!("missing fragment {index}"))
+                .collect();
+
+            reset_obligation_file_reads();
+            let started = Instant::now();
+            let checked = check_obligation_ledger(&ledger, root).unwrap();
+            let elapsed = started.elapsed();
+            let reads = obligation_file_reads();
+            let open_attempts = reads.values().map(|stats| stats.opens).sum::<usize>();
+            let bytes_read = reads.values().map(|stats| stats.bytes).sum::<usize>();
+
+            assert_eq!(checked.obligations[0].status, ObligationStatus::Fail);
+            assert_eq!(open_attempts, files);
+            println!(
+                "{}",
+                serde_json::json!({
+                    "files": files,
+                    "expected_fragments": fragments,
+                    "unique_files_read": reads.len(),
+                    "file_open_attempts": open_attempts,
+                    "bytes_read": bytes_read,
+                    "elapsed_ms": elapsed.as_secs_f64() * 1000.0,
+                    "algorithm": "cached_searchable_file_snapshot",
+                })
+            );
+        }
     }
 }
