@@ -656,7 +656,6 @@ def test_current_public_pair_tracks_control_plane_v0_1_16():
         "docs/TROUBLESHOOTING.md",
         "docs/release/PUBLIC-RELEASE-VERIFICATION.md",
         ".github/workflows/candidate-patch-release-rehearsal.yml",
-        ".github/workflows/ci.yml",
     ]
     for path in current_pair_paths:
         text = read(path)
@@ -667,6 +666,7 @@ def test_current_public_pair_tracks_control_plane_v0_1_16():
         "docs/VERIFICATION.md",
         "docs/release/v0.5.2-stable.md",
         "scripts/candidate-patch-release-rehearsal-audit.sh",
+        ".github/workflows/ci.yml",
     ]
     for path in next_patch_pair_paths:
         text = read(path)
