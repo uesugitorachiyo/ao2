@@ -107,9 +107,199 @@ FIXED_TOOL_VERSION_ARGS = {
 }
 ProfileCommand = dict[str, Any]
 
+
+def ao2_cli_approval_profile_commands(
+    group_name: str,
+    filters: tuple[str, ...],
+    *extra_args: str,
+) -> tuple[ProfileCommand, ...]:
+    return tuple(
+        {
+            "name": f"{group_name}-{test_filter}",
+            "argv": (
+                "cargo",
+                "test",
+                "-p",
+                "ao2-cli",
+                "--target-dir",
+                "{ao2-full-target-dir}",
+                "--test",
+                "cli_approval_replay",
+                test_filter,
+                *extra_args,
+            ),
+        }
+        for test_filter in filters
+    )
+
+
 DIAGNOSTIC_PROFILE: tuple[ProfileCommand, ...] = (
     {"name": "git-head-readback", "argv": ("git", "rev-parse", "HEAD")},
     {"name": "git-clean-readback", "argv": ("git", "status", "--porcelain=v1")},
+)
+AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
+    {"name": "windows-worker-pytest", "argv": ("{python}", "-m", "pytest", "tests/test_windows_outbound_worker.py", "-q")},
+    {
+        "name": "cargo-test-workspace-non-cli",
+        "argv": ("cargo", "test", "--workspace", "--exclude", "ao2-cli", "--target-dir", "{ao2-full-target-dir}"),
+    },
+    *ao2_cli_approval_profile_commands(
+        "test-cli-approval-core",
+        (
+            "cli_adapter",
+            "cli_can_pause",
+            "cli_cockpit",
+            "cli_contract",
+            "cli_doctor",
+            "cli_evidence",
+            "cli_git",
+            "cli_init",
+            "cli_install",
+            "cli_memory",
+            "cli_repair",
+            "cli_report",
+            "cli_run",
+            "cli_skill",
+            "cli_template",
+            "cli_upgrade",
+            "cli_version",
+        ),
+    ),
+    *ao2_cli_approval_profile_commands("test-cli-approval-control-plane", ("cli_control_plane",)),
+    *ao2_cli_approval_profile_commands("test-cli-approval-factory-plan", ("cli_factory_plan",)),
+    *ao2_cli_approval_profile_commands("test-cli-approval-factory-queue", ("cli_factory_queue",)),
+    *ao2_cli_approval_profile_commands("test-cli-approval-factory-project", ("cli_factory_project",)),
+    *ao2_cli_approval_profile_commands(
+        "test-cli-approval-factory-other",
+        (
+            "cli_factory_app",
+            "cli_factory_closer",
+            "cli_factory_evaluator",
+            "cli_factory_governed",
+            "cli_factory_greenfield",
+            "cli_factory_pack",
+            "cli_factory_replacement",
+            "cli_factory_run",
+            "cli_factory_verify",
+            "cli_greenfield",
+        ),
+    ),
+    *ao2_cli_approval_profile_commands("test-cli-approval-plugin", ("cli_plugin",)),
+    *ao2_cli_approval_profile_commands(
+        "test-cli-approval-pulse-provider-release",
+        ("cli_pulse", "cli_provider", "cli_release"),
+    ),
+    *ao2_cli_approval_profile_commands(
+        "test-cli-approval-workbench-core",
+        (
+            "cli_workbench_api",
+            "cli_workbench_evidence",
+            "cli_workbench_export",
+            "cli_workbench_factory",
+            "cli_workbench_greenfield",
+            "cli_workbench_launch",
+            "cli_workbench_lists",
+            "cli_workbench_memory",
+            "cli_workbench_obligation",
+            "cli_workbench_operator",
+            "cli_workbench_serve",
+        ),
+    ),
+    *ao2_cli_approval_profile_commands("test-cli-approval-workbench-project", ("cli_workbench_project_start",)),
+    *ao2_cli_approval_profile_commands("test-cli-approval-workbench-provider", ("cli_workbench_provider",)),
+    *ao2_cli_approval_profile_commands(
+        "test-cli-approval-workbench-queue",
+        ("cli_workbench_queue",),
+        "--",
+        "--test-threads=1",
+    ),
+    *ao2_cli_approval_profile_commands(
+        "test-cli-approval-workbench-release-run-support",
+        ("cli_workbench_release", "cli_workbench_run_evidence", "cli_workbench_support"),
+    ),
+    {
+        "name": "test-cli-contract-gate-signing",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "contract_gate_support_signing",
+            "--test",
+            "contract_obligation_gate_signing_survey",
+            "--test",
+            "contract_verify_obligation_gate_signing",
+        ),
+    },
+    {
+        "name": "test-cli-factory-control",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "cp_release_snapshot",
+            "--test",
+            "factory_bridge",
+            "--test",
+            "factory_cancel_authority",
+            "--test",
+            "factory_cancel_transition",
+        ),
+    },
+    {
+        "name": "test-cli-release-readiness",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "release_evaluator_decision",
+            "--test",
+            "release_gate_obligation_gate_signing",
+            "--test",
+            "release_handoff_checklist",
+            "--test",
+            "release_support_bundle_verification",
+        ),
+    },
+    {
+        "name": "test-archive-resources",
+        "argv": ("npm", "run", "test:archive-resources"),
+        "env": {"CARGO_TARGET_DIR": "{ao2-full-target-dir}"},
+    },
+    {
+        "name": "test-cli-release-packaging-sdd",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "release_packaging",
+            "--test",
+            "sdd_subcommand",
+            "--",
+            "--test-threads=1",
+        ),
+    },
+    {"name": "cargo-fmt-check", "argv": ("cargo", "fmt", "--all", "--", "--check")},
+    {
+        "name": "cargo-clippy",
+        "argv": ("cargo", "clippy", "--workspace", "--all-targets", "--target-dir", "{ao2-full-target-dir}", "--", "-D", "warnings"),
+    },
+    {"name": "cargo-build-release", "argv": ("cargo", "build", "--release", "-p", "ao2-cli", "--target-dir", "{ao2-full-target-dir}")},
 )
 WINDOWS_REPOSITORY_PROFILES: dict[str, dict[str, tuple[ProfileCommand, ...]]] = {
     "ao-architecture": {
@@ -157,13 +347,7 @@ WINDOWS_REPOSITORY_PROFILES: dict[str, dict[str, tuple[ProfileCommand, ...]]] = 
     },
     "ao2": {
         "targeted": ({"name": "windows-worker-pytest", "argv": ("{python}", "-m", "pytest", "tests/test_windows_outbound_worker.py", "-q")},),
-        "full": (
-            {"name": "windows-worker-pytest", "argv": ("{python}", "-m", "pytest", "tests/test_windows_outbound_worker.py", "-q")},
-            {"name": "cargo-test-workspace", "argv": ("cargo", "test", "--workspace", "--target-dir", "{ao2-full-target-dir}")},
-            {"name": "cargo-fmt-check", "argv": ("cargo", "fmt", "--all", "--", "--check")},
-            {"name": "cargo-clippy", "argv": ("cargo", "clippy", "--workspace", "--all-targets", "--target-dir", "{ao2-full-target-dir}", "--", "-D", "warnings")},
-            {"name": "npm-verify", "argv": ("npm", "run", "verify"), "env": {"CARGO_TARGET_DIR": "{ao2-full-target-dir}"}},
-        ),
+        "full": AO2_FULL_WINDOWS_PROFILE,
     },
     "ao2-control-plane": {
         "targeted": ({"name": "cargo-test-workspace", "argv": ("cargo", "test", "--workspace")},),
