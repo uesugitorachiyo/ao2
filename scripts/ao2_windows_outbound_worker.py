@@ -157,9 +157,9 @@ WINDOWS_REPOSITORY_PROFILES: dict[str, dict[str, tuple[dict[str, tuple[str, ...]
         "targeted": ({"name": "windows-worker-pytest", "argv": ("{python}", "-m", "pytest", "tests/test_windows_outbound_worker.py", "-q")},),
         "full": (
             {"name": "windows-worker-pytest", "argv": ("{python}", "-m", "pytest", "tests/test_windows_outbound_worker.py", "-q")},
-            {"name": "cargo-test-workspace", "argv": ("cargo", "test", "--workspace")},
+            {"name": "cargo-test-workspace", "argv": ("cargo", "test", "--workspace", "--target-dir", "{ao2-full-target-dir}")},
             {"name": "cargo-fmt-check", "argv": ("cargo", "fmt", "--all", "--", "--check")},
-            {"name": "cargo-clippy", "argv": ("cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings")},
+            {"name": "cargo-clippy", "argv": ("cargo", "clippy", "--workspace", "--all-targets", "--target-dir", "{ao2-full-target-dir}", "--", "-D", "warnings")},
             {"name": "npm-verify", "argv": ("npm", "run", "verify")},
         ),
     },
@@ -685,7 +685,7 @@ class WindowsOutboundWorker:
                 continue
 
             for command_spec in profile:
-                command = resolve_profile_command(command_spec["argv"])
+                command = resolve_profile_command(command_spec["argv"], factory_root=self.factory_root)
                 child = run_bounded_child(
                     command,
                     cwd=repo_path,
@@ -1015,9 +1015,14 @@ def windows_toolchain_capability_report(
     }
 
 
-def resolve_profile_command(argv: tuple[str, ...]) -> list[str]:
+def resolve_profile_command(
+    argv: tuple[str, ...],
+    *,
+    factory_root: Path = DEFAULT_FACTORY_ROOT,
+) -> list[str]:
     powershell = resolve_fixed_tool("powershell")
     replacements = {
+        "{ao2-full-target-dir}": str(factory_root / ".ao2-worker-target" / "ao2-full"),
         "{python}": sys.executable,
         "{powershell}": str(powershell.get("path") or "powershell.exe"),
     }
