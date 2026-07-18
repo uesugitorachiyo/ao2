@@ -31,6 +31,14 @@ The task board allowlist is explicit: `status`, `publish_capability`,
 stores a local idempotency ledger under
 `%LOCALAPPDATA%\AO2\windows-outbound-worker`.
 
+Completed action results are written atomically to a local
+`result-outbox\` directory under the same state root before the worker attempts
+to publish them to the Mac Control Plane. If result publication fails because
+the Control Plane or network path is temporarily unavailable, the worker leaves
+the original sanitized result in that outbox and retries publication on later
+polls. It does not replace a completed action result with `worker_exception`
+merely because the HTTP result post failed.
+
 `ao2_doctor` first runs an installed `ao2` binary from PATH or the standard
 local AO2 install directory. If no installed binary exists during
 pre-publication qualification, it runs the fixed repository-owned fallback:

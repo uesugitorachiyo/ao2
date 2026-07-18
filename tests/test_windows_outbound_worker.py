@@ -178,6 +178,52 @@ def test_timeout_result_is_sanitized_and_failed_task_does_not_stop_polling(tmp_p
     assert posted["status-after-timeout"]["ao2_cross_host"]["action"] == "status"
 
 
+def test_completed_action_result_is_retried_from_durable_outbox_after_post_failure(tmp_path: Path, monkeypatch) -> None:
+    worker = load_worker_module()
+
+    class FlakyTransport(worker.MemoryTransport):
+        def __init__(self) -> None:
+            super().__init__()
+            self.failures_remaining = 1
+
+        def post_board(self, board):
+            if self.failures_remaining:
+                self.failures_remaining -= 1
+                raise OSError("network unreachable")
+            super().post_board(board)
+
+    transport = FlakyTransport()
+    state = worker.WorkerState(tmp_path / "state")
+    runtime = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        state=state,
+        transport=transport,
+        poll_interval_seconds=0.01,
+    )
+    monkeypatch.setattr(
+        runtime,
+        "run_action",
+        lambda action, parameters, request_id="": {
+            "status": "accepted",
+            "request_id": request_id,
+            "marker": "original-result",
+        },
+    )
+
+    assert runtime.accept_control_task(worker.control_task(request_id="deliver-later", action="ao2_doctor")) == "started"
+    assert runtime.wait_for_idle(timeout_seconds=2) is True
+    assert "deliver-later" not in transport.posted_results_by_request_id()
+
+    assert runtime.poll_once() == "no_board"
+
+    posted = transport.posted_results_by_request_id()
+    result = posted["deliver-later"]["ao2_cross_host"]["result"]
+    assert result["status"] == "accepted"
+    assert result["marker"] == "original-result"
+    assert state._ledger["tasks"]["deliver-later"]["status"] == "accepted"
+
+
 def test_duplicate_and_completed_tasks_are_not_executed_twice(tmp_path: Path) -> None:
     worker = load_worker_module()
     transport = worker.MemoryTransport()
