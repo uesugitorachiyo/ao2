@@ -198,7 +198,8 @@ def _parse_time(value: object, label: str) -> datetime:
 
 def _format_time(value: datetime) -> str:
     value = value.astimezone(timezone.utc)
-    return value.isoformat(timespec="seconds").replace("+00:00", "Z")
+    timespec = "microseconds" if value.microsecond else "seconds"
+    return value.isoformat(timespec=timespec).replace("+00:00", "Z")
 
 
 def _result_board(board: object, action: str) -> dict[str, Any]:
@@ -295,22 +296,67 @@ def _validate_probe(probe: dict[str, Any], expected_source_sha: str, expected_ve
     scheduled = _require_mapping(
         probe["scheduled_task"],
         "scheduled_task",
-        {"task_name", "registered", "enabled", "state"},
+        {
+            "task_name",
+            "registered",
+            "enabled",
+            "state",
+            "last_task_result",
+            "result_acceptable",
+            "action_matches_worker",
+        },
     )
-    if scheduled["task_name"] != "AO2 Windows Outbound Worker" or scheduled["state"] != "Running":
-        raise ValidationError("scheduled_task is not the running outbound worker task")
+    if scheduled["task_name"] != "AO2 Windows Outbound Worker":
+        raise ValidationError("scheduled_task name is invalid")
     _require_true(scheduled["registered"], "scheduled_task.registered")
     _require_true(scheduled["enabled"], "scheduled_task.enabled")
+    _require_true(scheduled["action_matches_worker"], "scheduled_task.action_matches_worker")
+    last_task_result = scheduled["last_task_result"]
+    if isinstance(last_task_result, bool) or not isinstance(last_task_result, int):
+        raise ValidationError("scheduled_task.last_task_result must be an integer")
+    acceptable_result = (
+        scheduled["state"] == "Running" and last_task_result == 267009
+    ) or (
+        scheduled["state"] == "Ready" and last_task_result == 0
+    )
+    if not acceptable_result:
+        raise ValidationError("scheduled_task state and last_task_result are not acceptable")
+    _require_true(scheduled["result_acceptable"], "scheduled_task.result_acceptable")
 
     worker = _require_mapping(
         probe["persistent_outbound_worker"],
         "persistent_outbound_worker",
-        {"process_id", "parent_process_id", "ancestry_verified", "outbound_only"},
+        {
+            "probe_process_id",
+            "process_id",
+            "parent_process_id",
+            "probe_parent_is_worker",
+            "worker_executable_is_python",
+            "worker_script_matches",
+            "ancestry_verified",
+            "outbound_only",
+        },
+    )
+    probe_id = _require_positive_int(
+        worker["probe_process_id"],
+        "persistent_outbound_worker.probe_process_id",
     )
     process_id = _require_positive_int(worker["process_id"], "persistent_outbound_worker.process_id")
     parent_id = _require_positive_int(worker["parent_process_id"], "persistent_outbound_worker.parent_process_id")
-    if process_id == parent_id:
+    if len({probe_id, process_id, parent_id}) != 3:
         raise ValidationError("persistent_outbound_worker ancestry is invalid")
+    _require_true(
+        worker["probe_parent_is_worker"],
+        "persistent_outbound_worker.probe_parent_is_worker",
+    )
+    _require_true(
+        worker["worker_executable_is_python"],
+        "persistent_outbound_worker.worker_executable_is_python",
+    )
+    _require_true(
+        worker["worker_script_matches"],
+        "persistent_outbound_worker.worker_script_matches",
+    )
     _require_true(worker["ancestry_verified"], "persistent_outbound_worker.ancestry_verified")
     _require_true(worker["outbound_only"], "persistent_outbound_worker.outbound_only")
 
@@ -666,9 +712,11 @@ def validate_evidence(
         "source_sha": evidence["source_sha"],
         "worker_source_commit": evidence["worker_source_commit"],
         "version": evidence["version"],
-        "evidence_sha256": hashlib.sha256(canonical_json(evidence)).hexdigest(),
-        "request_id": evidence["request_id"],
-        "result_id": evidence["result_id"],
+        "physical_evidence_sha256": hashlib.sha256(canonical_json(evidence)).hexdigest(),
+        "status_request_id": evidence["status_request_id"],
+        "status_result_id": evidence["status_result_id"],
+        "qualification_request_id": evidence["request_id"],
+        "qualification_result_id": evidence["result_id"],
         "completed_at": evidence["completed_at"],
         "expires_at": _format_time(completed + timedelta(seconds=FRESHNESS_WINDOW_SECONDS)),
         "freshness_window_seconds": FRESHNESS_WINDOW_SECONDS,

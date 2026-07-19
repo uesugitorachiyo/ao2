@@ -42,21 +42,28 @@ function Get-VerifiedVersion {
     return $versionResult
 }
 
-function Test-WorkerAncestry {
-    param([object]$WorkerProcess)
+function ConvertTo-NormalizedWindowsPath {
+    param([string]$Path)
 
-    $parentId = [int]$WorkerProcess.ParentProcessId
-    for ($depth = 0; $depth -lt 12 -and $parentId -gt 0; $depth++) {
-        $parent = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $parentId" -ErrorAction SilentlyContinue
-        if ($null -eq $parent) {
-            return $false
-        }
-        if ($parent.Name -in @("taskeng.exe", "taskhostw.exe")) {
-            return $true
-        }
-        $parentId = [int]$parent.ParentProcessId
+    if ([string]::IsNullOrWhiteSpace($Path)) {
+        throw "path must not be empty"
     }
-    return $false
+    return [System.IO.Path]::GetFullPath($Path).Replace("/", "\").TrimEnd("\").ToLowerInvariant()
+}
+
+function Test-TextBindsExactPath {
+    param(
+        [string]$Text,
+        [string]$ExpectedPath
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        return $false
+    }
+    $normalizedText = $Text.Replace("/", "\").ToLowerInvariant()
+    $normalizedExpected = ConvertTo-NormalizedWindowsPath -Path $ExpectedPath
+    $pathPattern = "(?<![A-Za-z0-9_.\\-])" + [regex]::Escape($normalizedExpected) + "(?![A-Za-z0-9_.\\-])"
+    return [regex]::IsMatch($normalizedText, $pathPattern)
 }
 
 $repositoryRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
@@ -71,10 +78,17 @@ $result = [ordered]@{
         registered = $false
         enabled = $false
         state = "Unknown"
+        last_task_result = -1
+        result_acceptable = $false
+        action_matches_worker = $false
     }
     persistent_outbound_worker = [ordered]@{
+        probe_process_id = [int]$PID
         process_id = 0
         parent_process_id = 0
+        probe_parent_is_worker = $false
+        worker_executable_is_python = $false
+        worker_script_matches = $false
         ancestry_verified = $false
         outbound_only = $false
     }
@@ -123,26 +137,67 @@ $previousPackagedProfile = $env:AO2_PACKAGED_BUILD_PROFILE
 $previousInstallDir = $env:AO2_INSTALL_DIR
 try {
     $task = Get-ScheduledTask -TaskName "AO2 Windows Outbound Worker" -ErrorAction Stop
+    $taskInfo = Get-ScheduledTaskInfo -TaskName "AO2 Windows Outbound Worker" -ErrorAction Stop
     $result.scheduled_task.registered = $true
     $result.scheduled_task.enabled = [bool]$task.Settings.Enabled
     $result.scheduled_task.state = [string]$task.State
-    if (-not $result.scheduled_task.enabled -or $result.scheduled_task.state -ne "Running") {
-        throw "AO2 Windows Outbound Worker Scheduled Task is not running"
+    $result.scheduled_task.last_task_result = [int64]$taskInfo.LastTaskResult
+    $result.scheduled_task.result_acceptable = (
+        ($result.scheduled_task.state -eq "Running" -and $result.scheduled_task.last_task_result -eq 267009) -or
+        ($result.scheduled_task.state -eq "Ready" -and $result.scheduled_task.last_task_result -eq 0)
+    )
+    if (-not $result.scheduled_task.enabled -or -not $result.scheduled_task.result_acceptable) {
+        throw "AO2 Windows Outbound Worker Scheduled Task state/result is not acceptable"
     }
 
     $workerScript = Join-Path $repositoryRoot "scripts\ao2_windows_outbound_worker.py"
-    $workerPattern = [regex]::Escape($workerScript)
-    $worker = Get-CimInstance -ClassName Win32_Process -Filter "Name = 'python.exe'" |
-        Where-Object { $_.CommandLine -match $workerPattern } |
-        Select-Object -First 1
-    if ($null -eq $worker) {
-        throw "persistent AO2 Windows outbound worker process was not found"
+    $taskActions = @($task.Actions)
+    if ($taskActions.Count -ne 1) {
+        throw "AO2 Windows Outbound Worker Scheduled Task must have exactly one action"
     }
+    $taskAction = $taskActions[0]
+    $taskExecutable = [System.IO.Path]::GetFileName([string]$taskAction.Execute).ToLowerInvariant()
+    $result.scheduled_task.action_matches_worker = (
+        $taskExecutable -eq "powershell.exe" -and
+        (Test-TextBindsExactPath -Text ([string]$taskAction.Arguments) -ExpectedPath $workerScript)
+    )
+    if (-not $result.scheduled_task.action_matches_worker) {
+        throw "Scheduled Task action does not bind the exact outbound worker script"
+    }
+
+    $probeProcesses = @(Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $PID" -ErrorAction Stop)
+    if ($probeProcesses.Count -ne 1) {
+        throw "current lifecycle probe process is ambiguous or missing"
+    }
+    $probeProcess = $probeProcesses[0]
+    $workerProcessId = [int]$probeProcess.ParentProcessId
+    $workerProcesses = @(
+        Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $workerProcessId" -ErrorAction Stop
+    )
+    if ($workerProcesses.Count -ne 1) {
+        throw "lifecycle probe parent worker process is ambiguous or missing"
+    }
+    $worker = $workerProcesses[0]
+    $workerExecutable = [System.IO.Path]::GetFileName([string]$worker.ExecutablePath).ToLowerInvariant()
+    $result.persistent_outbound_worker.probe_parent_is_worker = (
+        [int]$probeProcess.ParentProcessId -eq [int]$worker.ProcessId
+    )
+    $result.persistent_outbound_worker.worker_executable_is_python = (
+        $workerExecutable -match '^python(?:3(?:\.\d+)?)?\.exe$'
+    )
+    $result.persistent_outbound_worker.worker_script_matches = (
+        Test-TextBindsExactPath -Text ([string]$worker.CommandLine) -ExpectedPath $workerScript
+    )
     $result.persistent_outbound_worker.process_id = [int]$worker.ProcessId
     $result.persistent_outbound_worker.parent_process_id = [int]$worker.ParentProcessId
-    $result.persistent_outbound_worker.ancestry_verified = Test-WorkerAncestry -WorkerProcess $worker
+    $result.persistent_outbound_worker.ancestry_verified = (
+        $result.persistent_outbound_worker.probe_parent_is_worker -and
+        $result.persistent_outbound_worker.worker_executable_is_python -and
+        $result.persistent_outbound_worker.worker_script_matches -and
+        $result.scheduled_task.action_matches_worker
+    )
     if (-not $result.persistent_outbound_worker.ancestry_verified) {
-        throw "persistent AO2 Windows outbound worker ancestry was not verified"
+        throw "current lifecycle probe parent is not the exact Scheduled Task outbound worker"
     }
     $result.persistent_outbound_worker.outbound_only = $true
 

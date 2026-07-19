@@ -1304,7 +1304,22 @@ def test_physical_lifecycle_probe_reads_the_workspace_version_without_emitting_c
     probe = PHYSICAL_LIFECYCLE_PROBE_PATH.read_text(encoding="utf-8")
 
     assert 'Get-SourceVersion -CargoTomlPath (Join-Path $repositoryRoot "Cargo.toml")' in probe
-    assert "CommandLine -match $workerPattern" in probe
+    assert 'Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $PID"' in probe
+    assert "$workerProcessId = [int]$probeProcess.ParentProcessId" in probe
+    assert 'Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $workerProcessId"' in probe
+    assert "worker_script_matches" in probe
+    assert "probe_parent_is_worker" in probe
+    assert "worker_executable_is_python" in probe
+    assert "Get-ScheduledTaskInfo" in probe
+    assert "last_task_result" in probe
+    assert "result_acceptable" in probe
+    assert "267009" in probe
+    assert "action_matches_worker" in probe
+    assert "$task.Actions" in probe
+    assert "Select-Object -First 1" not in probe
+    assert "Name = 'python.exe'" not in probe
+    assert "taskeng.exe" not in probe
+    assert "taskhostw.exe" not in probe
     assert "command_line" not in probe
     assert "request_id" not in probe
     assert "result_id" not in probe

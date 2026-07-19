@@ -64,10 +64,17 @@ def lifecycle_probe_output() -> dict[str, object]:
             "registered": True,
             "enabled": True,
             "state": "Running",
+            "last_task_result": 267009,
+            "result_acceptable": True,
+            "action_matches_worker": True,
         },
         "persistent_outbound_worker": {
+            "probe_process_id": 102,
             "process_id": 101,
             "parent_process_id": 100,
+            "probe_parent_is_worker": True,
+            "worker_executable_is_python": True,
+            "worker_script_matches": True,
             "ancestry_verified": True,
             "outbound_only": True,
         },
@@ -165,7 +172,11 @@ def worker_status_board() -> dict[str, object]:
     return result_board("status", STATUS_REQUEST_ID, result, STATUS_COMPLETED_AT)
 
 
-def qualification_board(probe: dict[str, object] | None = None) -> dict[str, object]:
+def qualification_board(
+    probe: dict[str, object] | None = None,
+    *,
+    wrapper_completed_at: str = WRAPPER_COMPLETED_AT,
+) -> dict[str, object]:
     result = {
         "schema_version": "ao2.windows-stack-qualification-result.v1",
         "status": "accepted",
@@ -179,7 +190,7 @@ def qualification_board(probe: dict[str, object] | None = None) -> dict[str, obj
         "windows_stack_qualification",
         QUALIFICATION_REQUEST_ID,
         result,
-        WRAPPER_COMPLETED_AT,
+        wrapper_completed_at,
     )
 
 
@@ -263,9 +274,11 @@ def test_summary_matches_strict_hosted_consumer_contract() -> None:
         "source_sha",
         "worker_source_commit",
         "version",
-        "evidence_sha256",
-        "request_id",
-        "result_id",
+        "physical_evidence_sha256",
+        "status_request_id",
+        "status_result_id",
+        "qualification_request_id",
+        "qualification_result_id",
         "completed_at",
         "expires_at",
         "freshness_window_seconds",
@@ -285,7 +298,105 @@ def test_summary_matches_strict_hosted_consumer_contract() -> None:
         "installed_candidate_lifecycle": "passed",
     }
     assert summary["safety_boundaries"]["self_hosted_public_repository_runner"] is False
-    assert summary["evidence_sha256"] == hashlib.sha256(qualification.canonical_json(evidence)).hexdigest()
+    assert summary["status_request_id"] == STATUS_REQUEST_ID
+    assert summary["status_result_id"] == f"windows-worker-result-status-{STATUS_REQUEST_ID}"
+    assert summary["qualification_request_id"] == QUALIFICATION_REQUEST_ID
+    assert summary["qualification_result_id"] == (
+        f"windows-worker-result-windows-stack-qualification-{QUALIFICATION_REQUEST_ID}"
+    )
+    assert summary["physical_evidence_sha256"] == hashlib.sha256(
+        qualification.canonical_json(evidence)
+    ).hexdigest()
+
+
+def test_summary_preserves_production_fractional_seconds_in_expiry() -> None:
+    qualification = load_qualification_module()
+    fractional_completed_at = "2026-07-19T20:34:00.123456Z"
+
+    _, summary = qualification.prepare_evidence(
+        worker_status_board(),
+        qualification_board(wrapper_completed_at=fractional_completed_at),
+        SOURCE_SHA,
+        VERSION,
+    )
+
+    assert summary["completed_at"] == fractional_completed_at
+    assert summary["expires_at"] == "2026-07-20T20:34:00.123456Z"
+
+
+def test_prepare_accepts_ready_task_with_successful_last_result() -> None:
+    qualification = load_qualification_module()
+    probe = lifecycle_probe_output()
+    probe["scheduled_task"]["state"] = "Ready"
+    probe["scheduled_task"]["last_task_result"] = 0
+
+    _, summary = qualification.prepare_evidence(
+        worker_status_board(),
+        qualification_board(probe),
+        SOURCE_SHA,
+        VERSION,
+    )
+
+    assert summary["checks"]["scheduled_task"] == "passed"
+
+
+@pytest.mark.parametrize(
+    ("state", "last_task_result", "result_acceptable"),
+    [
+        ("Running", 1, False),
+        ("Ready", 267009, False),
+        ("Disabled", 0, True),
+    ],
+)
+def test_prepare_rejects_unacceptable_scheduled_task_result(
+    state: str,
+    last_task_result: int,
+    result_acceptable: bool,
+) -> None:
+    qualification = load_qualification_module()
+    probe = lifecycle_probe_output()
+    probe["scheduled_task"].update(
+        {
+            "state": state,
+            "last_task_result": last_task_result,
+            "result_acceptable": result_acceptable,
+        }
+    )
+
+    with pytest.raises(qualification.ValidationError, match="scheduled_task"):
+        qualification.prepare_evidence(
+            worker_status_board(),
+            qualification_board(probe),
+            SOURCE_SHA,
+            VERSION,
+        )
+
+
+@pytest.mark.parametrize(
+    ("section", "field"),
+    [
+        ("scheduled_task", "action_matches_worker"),
+        ("persistent_outbound_worker", "probe_parent_is_worker"),
+        ("persistent_outbound_worker", "worker_executable_is_python"),
+        ("persistent_outbound_worker", "worker_script_matches"),
+        ("persistent_outbound_worker", "ancestry_verified"),
+    ],
+)
+def test_prepare_rejects_unverified_worker_task_correlation(
+    section: str,
+    field: str,
+) -> None:
+    qualification = load_qualification_module()
+    probe = lifecycle_probe_output()
+    probe[section][field] = False
+
+    with pytest.raises(qualification.ValidationError, match=field):
+        qualification.prepare_evidence(
+            worker_status_board(),
+            qualification_board(probe),
+            SOURCE_SHA,
+            VERSION,
+        )
 
 
 @pytest.mark.parametrize(
