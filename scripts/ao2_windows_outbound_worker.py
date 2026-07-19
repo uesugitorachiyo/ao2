@@ -318,15 +318,7 @@ AO2_PHYSICAL_UNIQUE_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
     {
         "name": "ao2-doctor",
         "argv": (
-            "cargo",
-            "run",
-            "--target-dir",
-            "{ao2-physical-target-dir}",
-            "-p",
-            "ao2-cli",
-            "--bin",
-            "ao2",
-            "--",
+            "{ao2-prepared-doctor}",
             "doctor",
             "--json",
         ),
@@ -1475,6 +1467,7 @@ def resolve_profile_command(
     replacements = {
         "{ao2-full-target-dir}": str(factory_root / ".ao2-worker-target" / "ao2-full"),
         "{ao2-physical-target-dir}": str(factory_root / ".ao2-worker-target" / "ao2-physical-unique"),
+        "{ao2-prepared-doctor}": str(prepared_ao2_doctor_binary(factory_root)),
         "{python}": sys.executable,
         "{powershell}": str(powershell.get("path") or "powershell.exe"),
     }
@@ -1498,6 +1491,11 @@ def resolve_profile_environment(
         "{ao2-full-target-dir}": str(factory_root / ".ao2-worker-target" / "ao2-full"),
     }
     return {key: replacements.get(value, value) for key, value in env.items()}
+
+
+def prepared_ao2_doctor_binary(factory_root: Path = DEFAULT_FACTORY_ROOT) -> Path:
+    executable = "ao2.exe" if os.name == "nt" else "ao2"
+    return factory_root / ".ao2-worker-target" / "ao2-doctor" / "debug" / executable
 
 
 def stack_qualification_row(
