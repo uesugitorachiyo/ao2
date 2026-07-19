@@ -1188,3 +1188,49 @@ def test_windows_stack_qualification_physical_unique_runs_only_contract_physical
     assert all("release-readiness" not in " ".join(command) for command in commands_seen)
     assert all("clippy" not in " ".join(command) for command in commands_seen)
     assert len(commands_seen) == 3
+
+
+def test_physical_unique_doctor_uses_prepared_binary_not_cargo_run(
+    tmp_path: Path, monkeypatch
+) -> None:
+    worker = load_worker_module()
+    factory = tmp_path / "factory"
+    (factory / "ao2" / ".git").mkdir(parents=True)
+    commands_seen: list[list[str]] = []
+
+    def fake_run(command, *, cwd, timeout_seconds, output_limit_bytes=worker.DEFAULT_OUTPUT_LIMIT_BYTES, env=None):
+        commands_seen.append(list(command))
+        return {
+            "status": "accepted",
+            "exit_code": 0,
+            "timed_out": False,
+            "duration_seconds": 0.01,
+            "output": "ok",
+            "output_truncated": False,
+            "sanitized_stderr_category": "none",
+            "command_name": Path(command[0]).name,
+        }
+
+    monkeypatch.setattr(worker, "run_bounded_child", fake_run)
+    runtime = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=factory,
+        state=worker.WorkerState(tmp_path / "state"),
+        transport=worker.MemoryTransport(),
+        poll_interval_seconds=0.01,
+    )
+
+    result = runtime.run_action(
+        "windows_stack_qualification",
+        {"mode": "physical_unique", "repositories": ["ao2"]},
+        request_id="physical-unique-prepared-doctor",
+    )
+
+    assert result["status"] == "accepted"
+    assert commands_seen[1] == [
+        str(worker.prepared_ao2_doctor_binary(factory)),
+        "doctor",
+        "--json",
+    ]
+    assert "cargo" not in Path(commands_seen[1][0]).name.lower()
+    assert "run" not in commands_seen[1]
