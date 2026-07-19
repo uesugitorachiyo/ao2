@@ -69,7 +69,18 @@ CANONICAL_REPOSITORIES = (
 )
 ARCHIVED_REPOSITORIES = ("agy-swarms",)
 STACK_QUALIFICATION_MODES = ("diagnostic", "targeted", "full", "toolchain")
-STACK_QUALIFICATION_ALLOWED_PARAMETERS = {"mode", "repositories", "repos", "timeout_seconds"}
+STACK_QUALIFICATION_ALLOWED_PARAMETERS = {
+    "mode",
+    "repositories",
+    "repos",
+    "timeout_seconds",
+    "shard_id",
+    "checkpoint_id",
+    "profile_digest",
+    "global_deadline_seconds",
+    "reuse_from_request_id",
+    "reuse_profile_digest",
+}
 STACK_QUALIFICATION_FORBIDDEN_PARAMETERS = {
     "command",
     "commands",
@@ -905,6 +916,44 @@ class WindowsOutboundWorker:
                 "min_timeout_seconds": MIN_STACK_QUALIFICATION_TIMEOUT_SECONDS,
                 "max_timeout_seconds": MAX_STACK_QUALIFICATION_TIMEOUT_SECONDS,
             }
+        global_deadline_seconds = None
+        if "global_deadline_seconds" in parameters:
+            try:
+                global_deadline_seconds = float(parameters["global_deadline_seconds"])
+            except (TypeError, ValueError):
+                return {"status": "failed", "error_category": "invalid_global_deadline"}
+            if global_deadline_seconds <= 0:
+                return {"status": "failed", "error_category": "invalid_global_deadline"}
+
+        shard_id = str(parameters["shard_id"]) if "shard_id" in parameters else None
+        checkpoint_id = str(parameters["checkpoint_id"]) if "checkpoint_id" in parameters else None
+        profile_digest = str(parameters["profile_digest"]) if "profile_digest" in parameters else None
+        reuse_from_request_id = (
+            str(parameters["reuse_from_request_id"]) if "reuse_from_request_id" in parameters else None
+        )
+        reuse_profile_digest = (
+            str(parameters["reuse_profile_digest"]) if "reuse_profile_digest" in parameters else None
+        )
+        metadata = {
+            "shard_id": shard_id,
+            "checkpoint_id": checkpoint_id,
+            "profile_digest": profile_digest,
+        }
+        if reuse_from_request_id and reuse_profile_digest and profile_digest and reuse_profile_digest != profile_digest:
+            return {
+                "schema_version": "ao2.windows-stack-qualification-result.v1",
+                "status": "failed",
+                "error_category": "reuse_invalidated",
+                "reuse_from_request_id": reuse_from_request_id,
+                "reuse_invalidated": True,
+                "reuse_profile_digest": reuse_profile_digest,
+                "profile_digest": profile_digest,
+                "mode": mode,
+                "profile_version": STACK_PROFILE_VERSION,
+                "repositories": [],
+                "results": [],
+                "completed_at": utc_now(),
+            }
 
         if mode == "toolchain":
             return windows_toolchain_capability_report(
@@ -936,6 +985,8 @@ class WindowsOutboundWorker:
 
         worker_source_commit = repository_head(self.factory_root / "ao2")
         results: list[dict[str, Any]] = []
+        cumulative_duration_seconds = 0.0
+        deadline_exceeded = False
         for repo_name in repositories:
             repo_path = self.factory_root / repo_name
             if not repository_is_beneath_factory(self.factory_root, repo_path):
@@ -962,6 +1013,7 @@ class WindowsOutboundWorker:
                         "sanitized_stderr_category": "missing_repo",
                     },
                     output_limit_bytes=self.output_limit_bytes,
+                    metadata=metadata,
                 ))
                 continue
 
@@ -986,12 +1038,26 @@ class WindowsOutboundWorker:
                     command_name=command_spec["name"],
                     child=child,
                     output_limit_bytes=self.output_limit_bytes,
+                    metadata=metadata,
                 ))
+                try:
+                    cumulative_duration_seconds += float(child.get("duration_seconds", 0) or 0)
+                except (TypeError, ValueError):
+                    cumulative_duration_seconds = global_deadline_seconds or cumulative_duration_seconds
+                if global_deadline_seconds is not None and cumulative_duration_seconds > global_deadline_seconds:
+                    deadline_exceeded = True
+                    break
                 if child.get("status") != "accepted":
                     break
+            if deadline_exceeded:
+                break
 
-        status = "accepted" if results and all(item.get("status") == "accepted" for item in results) else "failed"
-        return {
+        status = (
+            "accepted"
+            if results and not deadline_exceeded and all(item.get("status") == "accepted" for item in results)
+            else "failed"
+        )
+        result = {
             "schema_version": "ao2.windows-stack-qualification-result.v1",
             "status": status,
             "mode": mode,
@@ -1000,6 +1066,14 @@ class WindowsOutboundWorker:
             "results": results,
             "completed_at": utc_now(),
         }
+        if deadline_exceeded:
+            result["error_category"] = "global_deadline_exceeded"
+        if global_deadline_seconds is not None:
+            result["global_deadline_seconds"] = global_deadline_seconds
+        for key, value in metadata.items():
+            if value is not None:
+                result[key] = value
+        return result
 
     def sync_ao_stack(self, parameters: dict[str, Any]) -> dict[str, Any]:
         repos = parameters.get("repos")
@@ -1366,11 +1440,12 @@ def stack_qualification_row(
     command_name: str,
     child: dict[str, Any],
     output_limit_bytes: int,
+    metadata: dict[str, str | None] | None = None,
 ) -> dict[str, Any]:
     output, truncated = sanitize_output(str(child.get("output") or ""), "", output_limit_bytes)
     timed_out = bool(child.get("timed_out"))
     status = str(child.get("status") or "failed")
-    return {
+    row = {
         "node_id": node_id,
         "worker_source_commit": worker_source_commit,
         "request_id": request_id,
@@ -1388,6 +1463,10 @@ def stack_qualification_row(
         "output_truncated": bool(child.get("output_truncated")) or truncated,
         "completed_timestamp": utc_now(),
     }
+    for key, value in (metadata or {}).items():
+        if value is not None:
+            row[key] = value
+    return row
 
 
 def ao2_doctor_command(parameters: dict[str, Any], *, factory_root: Path = DEFAULT_FACTORY_ROOT) -> list[str]:
