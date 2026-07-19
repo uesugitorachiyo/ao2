@@ -19,13 +19,19 @@ mkdir -p "$AO2_LINUX_X86_64_SMOKE_ROOT"
 AO2_LINUX_X86_64_SMOKE_ROOT=$(CDPATH= cd -- "$AO2_LINUX_X86_64_SMOKE_ROOT" && pwd)
 
 run_smoke() {
-  docker run --rm \
+  docker run --rm --platform linux/amd64 \
     -e AO2_RELEASE_ROLLBACK_VERIFY="$AO2_RELEASE_ROLLBACK_VERIFY" \
     -v "$archive_dir":/dist:ro \
     -v "$AO2_LINUX_X86_64_SMOKE_ROOT":/smoke \
     "$AO2_LINUX_X86_64_IMAGE" \
     sh -lc '
       set -eu
+      export DEBIAN_FRONTEND=noninteractive
+      if ! command -v git >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+        apt-get update >/dev/null
+        apt-get install -y --no-install-recommends ca-certificates git jq >/dev/null
+        rm -rf /var/lib/apt/lists/*
+      fi
       archive_name="$1"
       work=/smoke/linux-x86_64
       extract="$work/extract"
@@ -34,6 +40,14 @@ run_smoke() {
       repo="$work/repo"
       rm -rf "$work"
       mkdir -p "$extract" "$repo/src"
+      git init -q "$repo"
+      printf "initial\n" > "$repo/src/value.txt"
+      git -C "$repo" add -A
+      GIT_AUTHOR_NAME="AO2 Test" \
+        GIT_AUTHOR_EMAIL="ao2-test@example.invalid" \
+        GIT_COMMITTER_NAME="AO2 Test" \
+        GIT_COMMITTER_EMAIL="ao2-test@example.invalid" \
+        git -C "$repo" commit -q -m fixture
       tar -xzf "/dist/$archive_name" -C "$extract"
       test -f "$extract/RELEASE-MANIFEST.json"
       grep -q "\"schema_version\": \"ao2.release-manifest.v1\"" "$extract/RELEASE-MANIFEST.json"
@@ -90,6 +104,21 @@ SH
         --provider scripted \
         --provider-prompt-file "$work/prompt.sh" \
         --max-repair-attempts 1 > "$work/run.out"
+      approval_count=0
+      while grep -q "status=WaitingForApproval" "$work/run.out"; do
+        ticket_id=$(jq -r ".approvals[] | select(.requested_action == \"sandbox:apply\" and .status == \"pending\") | .ticket_id" \
+          "$repo/.ao2/runs/linux-x86-64-install-smoke-repair/evidence-pack/evidence-pack.json")
+        test -n "$ticket_id"
+        "$install_dir/ao2" approve "$ticket_id" \
+          --target "$repo" \
+          --approver human:release-smoke > "$work/approve.out"
+        grep -q "status=approved" "$work/approve.out"
+        approval_count=$((approval_count + 1))
+        test "$approval_count" -le 2
+        "$install_dir/ao2" run --resume linux-x86-64-install-smoke-repair \
+          --target "$repo" > "$work/run.out"
+      done
+      test "$approval_count" -eq 2
       grep -q "status=Accepted" "$work/run.out"
       /usr/bin/env -u OPENAI_API_KEY -u ANTHROPIC_API_KEY "$install_dir/ao2" replay linux-x86-64-install-smoke-repair --target "$repo" > "$work/replay.json"
       grep -q "\"digest_failures\": \\[\\]" "$work/replay.json"
