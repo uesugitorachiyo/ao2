@@ -5,6 +5,8 @@ AO2_VERSION="${AO2_VERSION:-$(scripts/current-version.sh)}"
 AO2_MACOS_ARCHIVE="${AO2_MACOS_ARCHIVE:-dist/ao2-$AO2_VERSION-macos-aarch64.tar.gz}"
 AO2_LINUX_ARCHIVE="${AO2_LINUX_ARCHIVE:-dist-linux/ao2-$AO2_VERSION-linux-aarch64.tar.gz}"
 AO2_LINUX_X86_64_ARCHIVE="${AO2_LINUX_X86_64_ARCHIVE:-dist-linux-x86_64/ao2-$AO2_VERSION-linux-x86_64.tar.gz}"
+AO2_LINUX_X86_64_SMOKE_MODE="${AO2_LINUX_X86_64_SMOKE_MODE:-remote}"
+AO2_LINUX_X86_64_DOCKER_LOG="${AO2_LINUX_X86_64_DOCKER_LOG:-}"
 AO2_UBUNTU_SSH_TARGET="${AO2_UBUNTU_SSH_TARGET:-ao2-ubuntu-nucx}"
 AO2_WINDOWS_ARCHIVE="${AO2_WINDOWS_ARCHIVE:-dist-windows/ao2-$AO2_VERSION-windows-x86_64.tar.gz}"
 AO2_RELEASE_PROVENANCE_DIR="${AO2_RELEASE_PROVENANCE_DIR:-dist-provenance}"
@@ -12,6 +14,7 @@ AO2_UBUNTU_IMAGE="${AO2_UBUNTU_IMAGE:-ubuntu:24.04}"
 AO2_SMOKE_ROOT="${AO2_SMOKE_ROOT:-$PWD/target/release-smoke/$(date +%Y%m%d%H%M%S)}"
 AO2_RELEASE_SMOKE_LEG="${AO2_RELEASE_SMOKE_LEG:-all}"
 AO2_RELEASE_SMOKE_JSON="${AO2_RELEASE_SMOKE_JSON:-}"
+AO2_RELEASE_ROLLBACK_VERIFY="${AO2_RELEASE_ROLLBACK_VERIFY:-1}"
 
 macos_status="skipped"
 macos_install_verification_evidence=""
@@ -26,6 +29,14 @@ case "$AO2_RELEASE_SMOKE_LEG" in
   macos|ubuntu|linux_x86_64|windows_static|all) ;;
   *)
     echo "invalid AO2_RELEASE_SMOKE_LEG: $AO2_RELEASE_SMOKE_LEG (expected macos|ubuntu|linux_x86_64|windows_static|all)" >&2
+    exit 2
+    ;;
+esac
+
+case "$AO2_LINUX_X86_64_SMOKE_MODE" in
+  remote|docker) ;;
+  *)
+    echo "invalid AO2_LINUX_X86_64_SMOKE_MODE: $AO2_LINUX_X86_64_SMOKE_MODE (expected remote|docker)" >&2
     exit 2
     ;;
 esac
@@ -281,14 +292,34 @@ fi
 if should_run_release_smoke_leg linux_x86_64; then
 linux_x86_64_archive_name=$(basename "$AO2_LINUX_X86_64_ARCHIVE")
 linux_x86_64_archive_dir=$(CDPATH= cd -- "$(dirname -- "$AO2_LINUX_X86_64_ARCHIVE")" && pwd)
-echo "== Native Ubuntu x86_64 install and scripted repair smoke =="
-linux_x86_64_log="$AO2_SMOKE_ROOT/linux-x86_64-remote.log"
-AO2_LINUX_X86_64_ARCHIVE="$linux_x86_64_archive_dir/$linux_x86_64_archive_name" \
-AO2_UBUNTU_SSH_TARGET="$AO2_UBUNTU_SSH_TARGET" \
-AO2_LINUX_X86_64_REMOTE_LOG="$linux_x86_64_log" \
-scripts/smoke-linux-release-remote.sh
-grep -q "linux_x86_64_remote_smoke=passed" "$linux_x86_64_log"
-printf "linux_x86_64_remote_log=%s\n" "$linux_x86_64_log"
+case "$AO2_LINUX_X86_64_SMOKE_MODE" in
+  remote)
+    echo "== Native Ubuntu x86_64 install and scripted repair smoke =="
+    linux_x86_64_log="$AO2_SMOKE_ROOT/linux-x86_64-remote.log"
+    AO2_LINUX_X86_64_ARCHIVE="$linux_x86_64_archive_dir/$linux_x86_64_archive_name" \
+    AO2_UBUNTU_SSH_TARGET="$AO2_UBUNTU_SSH_TARGET" \
+    AO2_LINUX_X86_64_REMOTE_LOG="$linux_x86_64_log" \
+    AO2_RELEASE_ROLLBACK_VERIFY="$AO2_RELEASE_ROLLBACK_VERIFY" \
+    scripts/smoke-linux-release-remote.sh
+    grep -q "linux_x86_64_remote_smoke=passed" "$linux_x86_64_log"
+    printf "linux_x86_64_remote_log=%s\n" "$linux_x86_64_log"
+    ;;
+  docker)
+    echo "== Docker Linux x86_64 install and scripted repair smoke =="
+    linux_x86_64_log="${AO2_LINUX_X86_64_DOCKER_LOG:-$AO2_SMOKE_ROOT/linux-x86_64-docker.log}"
+    AO2_LINUX_X86_64_ARCHIVE="$linux_x86_64_archive_dir/$linux_x86_64_archive_name" \
+    AO2_LINUX_X86_64_DOCKER_LOG="$linux_x86_64_log" \
+    AO2_LINUX_X86_64_SMOKE_ROOT="$AO2_SMOKE_ROOT/linux-x86_64-docker" \
+    AO2_LINUX_X86_64_IMAGE="$AO2_UBUNTU_IMAGE" \
+    AO2_RELEASE_ROLLBACK_VERIFY="$AO2_RELEASE_ROLLBACK_VERIFY" \
+    scripts/smoke-linux-release-docker.sh
+    grep -q "linux_x86_64_docker_smoke=passed" "$linux_x86_64_log"
+    if [ "$AO2_RELEASE_ROLLBACK_VERIFY" = "1" ]; then
+      grep -q "linux_x86_64_install_rollback=passed" "$linux_x86_64_log"
+    fi
+    printf "linux_x86_64_docker_log=%s\n" "$linux_x86_64_log"
+    ;;
+esac
 linux_x86_64_status="passed"
 fi
 
@@ -342,7 +373,7 @@ if [ -n "$AO2_RELEASE_SMOKE_JSON" ]; then
   export AO2_RELEASE_SMOKE_LEG AO2_SMOKE_ROOT
   export macos_status macos_install_verification_evidence
   export ubuntu_status ubuntu_install_verification_evidence
-  export linux_x86_64_status
+  export linux_x86_64_status AO2_LINUX_X86_64_SMOKE_MODE
   export windows_static_status windows_installer_status windows_install_verification_evidence
   python3 - <<'PY'
 import json
@@ -366,6 +397,7 @@ summary = {
         },
         "linux_x86_64": {
             "status": os.environ["linux_x86_64_status"],
+            "smoke_mode": os.environ["AO2_LINUX_X86_64_SMOKE_MODE"],
         },
         "windows_static": {
             "status": os.environ["windows_static_status"],

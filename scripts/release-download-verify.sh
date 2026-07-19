@@ -10,11 +10,20 @@ AO2_RELEASE_ROLLBACK_VERIFY="${AO2_RELEASE_ROLLBACK_VERIFY:-0}"
 AO2_ROLLBACK_SEED_BIN="${AO2_ROLLBACK_SEED_BIN:-target/release/ao2}"
 AO2_NATIVE_UBUNTU_DOWNLOAD_VERIFY="${AO2_NATIVE_UBUNTU_DOWNLOAD_VERIFY:-0}"
 AO2_NATIVE_WINDOWS_DOWNLOAD_VERIFY="${AO2_NATIVE_WINDOWS_DOWNLOAD_VERIFY:-0}"
+AO2_LINUX_X86_64_SMOKE_MODE="${AO2_LINUX_X86_64_SMOKE_MODE:-remote}"
 AO2_UBUNTU_SSH_TARGET="${AO2_UBUNTU_SSH_TARGET:-ao2-ubuntu-nucx}"
 AO2_WINDOWS_SSH_TARGET="${AO2_WINDOWS_SSH_TARGET:-win-hp255-via-ubuntu}"
 AO2_WINDOWS_SSH_CONNECT_TIMEOUT="${AO2_WINDOWS_SSH_CONNECT_TIMEOUT:-20}"
 AO2_WINDOWS_REMOTE_ROOT="${AO2_WINDOWS_REMOTE_ROOT:-C:/ao2-public-test/ao2-release-download-verify}"
 AO2_RELEASE_ROLLBACK_SUMMARY="$AO2_RELEASE_DOWNLOAD_DIR/release-rollback-summary.json"
+
+case "$AO2_LINUX_X86_64_SMOKE_MODE" in
+  remote|docker) ;;
+  *)
+    echo "invalid AO2_LINUX_X86_64_SMOKE_MODE: $AO2_LINUX_X86_64_SMOKE_MODE (expected remote|docker)" >&2
+    exit 2
+    ;;
+esac
 
 rm -rf "$AO2_RELEASE_DOWNLOAD_DIR"
 mkdir -p "$AO2_RELEASE_DOWNLOAD_DIR"
@@ -102,12 +111,26 @@ fi
 
 if [ "$AO2_NATIVE_UBUNTU_DOWNLOAD_VERIFY" = "1" ]; then
   ubuntu_log="$AO2_RELEASE_DOWNLOAD_DIR/ubuntu-download-verify.log"
-  AO2_LINUX_X86_64_ARCHIVE="$AO2_RELEASE_DOWNLOAD_DIR/ao2-$AO2_RELEASE_VERSION-linux-x86_64.tar.gz" \
-  AO2_UBUNTU_SSH_TARGET="$AO2_UBUNTU_SSH_TARGET" \
-  AO2_LINUX_X86_64_REMOTE_LOG="$ubuntu_log" \
-  AO2_RELEASE_ROLLBACK_VERIFY="$AO2_RELEASE_ROLLBACK_VERIFY" \
-    sh scripts/smoke-linux-release-remote.sh
-  grep -q "linux_x86_64_remote_smoke=passed" "$ubuntu_log"
+  case "$AO2_LINUX_X86_64_SMOKE_MODE" in
+    remote)
+      AO2_LINUX_X86_64_ARCHIVE="$AO2_RELEASE_DOWNLOAD_DIR/ao2-$AO2_RELEASE_VERSION-linux-x86_64.tar.gz" \
+      AO2_UBUNTU_SSH_TARGET="$AO2_UBUNTU_SSH_TARGET" \
+      AO2_LINUX_X86_64_REMOTE_LOG="$ubuntu_log" \
+      AO2_RELEASE_ROLLBACK_VERIFY="$AO2_RELEASE_ROLLBACK_VERIFY" \
+        sh scripts/smoke-linux-release-remote.sh
+      grep -q "linux_x86_64_remote_smoke=passed" "$ubuntu_log"
+      ;;
+    docker)
+      AO2_RELEASE_SMOKE_LEG=linux_x86_64 \
+      AO2_SMOKE_ROOT="$AO2_RELEASE_DOWNLOAD_DIR/linux-x86_64-download-smoke" \
+      AO2_LINUX_X86_64_ARCHIVE="$AO2_RELEASE_DOWNLOAD_DIR/ao2-$AO2_RELEASE_VERSION-linux-x86_64.tar.gz" \
+      AO2_LINUX_X86_64_SMOKE_MODE=docker \
+      AO2_LINUX_X86_64_DOCKER_LOG="$ubuntu_log" \
+      AO2_RELEASE_ROLLBACK_VERIFY="$AO2_RELEASE_ROLLBACK_VERIFY" \
+        sh scripts/smoke-release-archives.sh
+      grep -q "linux_x86_64_docker_smoke=passed" "$ubuntu_log"
+      ;;
+  esac
   if [ "$AO2_RELEASE_ROLLBACK_VERIFY" = "1" ]; then
     grep -q "linux_x86_64_install_rollback=passed" "$ubuntu_log"
     ubuntu_rollback_status="passed"
