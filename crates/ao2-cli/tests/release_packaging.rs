@@ -3954,6 +3954,15 @@ fn beta_release_notes_include_explicit_uninstall_commands() {
     assert!(notes.contains("Remove-Item -Force -ErrorAction SilentlyContinue"));
 }
 
+#[test]
+fn v052_stable_release_notes_include_rollback_command() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let notes = fs::read_to_string(root.join("docs/release/v0.5.2-stable.md"))
+        .expect("stable release notes exist");
+
+    assert!(notes.contains("ao2 install rollback"));
+}
+
 #[cfg(not(windows))]
 fn approved_asset_fixture(root: &Path) -> (PathBuf, PathBuf, PathBuf, String) {
     let publication_dir = root.join("publication");
