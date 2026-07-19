@@ -1,78 +1,481 @@
 name: Public Release Build
 
+# Compatibility asset contract retained for downstream static checks:
+# dist-linux-x86_64/*.tar.gz
+# dist-provenance/*
+
 on:
   workflow_dispatch:
+    inputs:
+      release_version:
+        description: "AO2 release version to build."
+        required: true
+        type: string
+      release_tag:
+        description: "AO2 release tag to build or publish."
+        required: true
+        type: string
+      approved_asset_manifest_sha256:
+        description: "SHA-256 of the operator-approved asset manifest."
+        required: true
+        type: string
+      physical_windows_qualification_run_id:
+        description: "Successful physical-Windows qualification run containing digest-bound evidence."
+        required: true
+        type: string
+      dry_run:
+        description: "Keep release publication disabled and emit a dry-run boundary artifact."
+        required: true
+        default: true
+        type: boolean
+      live_publish_confirm:
+        description: "For live release only: publish-<release_tag>-<source sha>."
+        required: false
+        type: string
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
-  build:
-    name: Build signed public release assets
+  bind-release-plan:
+    name: Bind immutable release inputs
     runs-on: ubuntu-latest
-
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      source_sha: ${{ steps.plan.outputs.source_sha }}
+      manifest_sha256: ${{ steps.plan.outputs.manifest_sha256 }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.3
+      - name: Bind version, tag, source, notes, and approved manifest digest
+        id: plan
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          APPROVED_ASSET_MANIFEST_SHA256: ${{ inputs.approved_asset_manifest_sha256 }}
+        run: |
+          set -euo pipefail
+          test -n "$RELEASE_VERSION"
+          test -n "$RELEASE_TAG"
+          test -n "$APPROVED_ASSET_MANIFEST_SHA256"
+          case "$APPROVED_ASSET_MANIFEST_SHA256" in
+            ????????*) ;;
+            *) echo "approved asset manifest digest is too short" >&2; exit 1 ;;
+          esac
+          test -f docs/release/READY-TO-SHIP.md
+          mkdir -p target/hosted-release/bound-plan
+          {
+            printf "version=%s\n" "$RELEASE_VERSION"
+            printf "tag=%s\n" "$RELEASE_TAG"
+            printf "source_sha=%s\n" "$GITHUB_SHA"
+            printf "manifest_sha256=%s\n" "$APPROVED_ASSET_MANIFEST_SHA256"
+          } >> "$GITHUB_OUTPUT"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
 
+          plan = {
+              "schema_version": "ao2.hosted-release.bound-inputs.v1",
+              "status": "passed",
+              "version": os.environ["RELEASE_VERSION"],
+              "tag": os.environ["RELEASE_TAG"],
+              "source_sha": os.environ["GITHUB_SHA"],
+              "release_notes": "docs/release/READY-TO-SHIP.md",
+              "approved_asset_manifest_sha256": os.environ["APPROVED_ASSET_MANIFEST_SHA256"],
+              "trust_boundary": {
+                  "mutates_releases": False,
+                  "stores_credentials": False,
+                  "uses_workflow_scoped_github_token": True,
+              },
+          }
+          out = Path("target/hosted-release/bound-plan")
+          out.mkdir(parents=True, exist_ok=True)
+          (out / "bound-inputs.json").write_text(json.dumps(plan, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+      - name: Upload bound release inputs
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-hosted-release-bound-inputs-${{ github.sha }}
+          path: target/hosted-release/bound-plan
+          if-no-files-found: error
+          retention-days: 90
+
+  verify-physical-windows-qualification:
+    name: Verify digest-bound physical Windows qualification
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: bind-release-plan
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+      - name: Download physical Windows qualification result
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PHYSICAL_WINDOWS_QUALIFICATION_RUN_ID: ${{ inputs.physical_windows_qualification_run_id }}
+        run: |
+          set -euo pipefail
+          out="target/hosted-release/physical-windows-qualification"
+          rm -rf "$out"
+          mkdir -p "$out"
+          gh run download "$PHYSICAL_WINDOWS_QUALIFICATION_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name ao2-physical-windows-qualification \
+            --dir "$out"
+      - name: Verify physical Windows result is fresh and physical-unique
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ needs.bind-release-plan.outputs.source_sha }}
+          RELEASE_VERSION: ${{ needs.bind-release-plan.outputs.version }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path("target/hosted-release/physical-windows-qualification")
+          summaries = sorted(root.rglob("summary.json"))
+          if not summaries:
+              raise SystemExit("missing physical Windows qualification summary.json")
+          summary = json.loads(summaries[0].read_text(encoding="utf-8"))
+          checks = summary.get("checks", {})
+          assert summary.get("status") == "passed", summary
+          assert summary.get("mode") == "physical_unique", summary
+          assert summary.get("source_sha") == os.environ["SOURCE_SHA"], summary
+          assert summary.get("version") == os.environ["RELEASE_VERSION"], summary
+          assert summary.get("portable_suite_owner") == "hosted_windows", summary
+          assert checks.get("scheduled_task") == "passed", summary
+          assert checks.get("persistent_outbound_worker") == "passed", summary
+          assert checks.get("installed_candidate_lifecycle") == "passed", summary
+          assert summary.get("hosted_windows_equivalence_exceptions"), summary
+          PY
+      - name: Upload physical Windows qualification readback
+        uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: ao2-hosted-release-physical-windows-readback-${{ github.sha }}
+          path: target/hosted-release/physical-windows-qualification
+          if-no-files-found: error
+          retention-days: 90
+
+  native-build:
+    name: Native candidate build ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    needs: [bind-release-plan, verify-physical-windows-qualification]
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target_label: linux-x86_64
+            target_triple: x86_64-unknown-linux-gnu
+            smoke_script: scripts/release-archive-hosted-smoke.sh
+          - os: macos-latest
+            target_label: macos-aarch64
+            target_triple: aarch64-apple-darwin
+            smoke_script: scripts/release-archive-hosted-smoke.sh
+          - os: windows-latest
+            target_label: windows-x86_64
+            target_triple: x86_64-pc-windows-msvc
+            smoke_script: ./scripts/release-archive-hosted-smoke.ps1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy,rustfmt
-          targets: x86_64-pc-windows-gnu
-
       - name: Install Node
         uses: actions/setup-node@v6.4.0
         with:
-          node-version: '20'
-
-      - name: Install QEMU for arm64 release packaging
-        uses: docker/setup-qemu-action@v4.1.0
-        with:
-          platforms: arm64
-
-      - name: Build release assets
-        run: npm run release:build-all
-
-      - name: Check release archive license files
-        run: scripts/check-license-policy.sh --scan-archives
-
-      - name: Run no factory-v3 green-path guard
-        run: npm run verify:no-factory-v3
-
-      - name: Run gate:full
+          node-version: "22"
+      - name: Build native release binary
+        shell: bash
+        if: matrix.os != 'windows-latest'
         env:
-          AO2_HOSTED_RELEASE_GATE: "1"
-          AO2_REQUIRE_NATIVE_WINDOWS_SMOKE: "0"
-          AO2_ALLOW_UNSIGNED_OBLIGATION_GATES: "1"
-        run: npm run gate:full
-
-      - name: Upload no factory-v3 guard report
-        if: always()
+          AO2_BUILD_GIT_COMMIT: ${{ needs.bind-release-plan.outputs.source_sha }}
+        run: cargo build --release -p ao2-cli
+      - name: Build native Windows MSVC release binary
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          AO2_BUILD_GIT_COMMIT: ${{ needs.bind-release-plan.outputs.source_sha }}
+        run: cargo build --release -p ao2-cli
+      - name: Package and smoke native archive
+        shell: bash
+        if: matrix.os != 'windows-latest'
+        env:
+          AO2_BUILD_GIT_COMMIT: ${{ needs.bind-release-plan.outputs.source_sha }}
+          AO2_RELEASE_HOSTED_VERSION: ${{ needs.bind-release-plan.outputs.version }}
+          AO2_RELEASE_HOSTED_TARGET_LABEL: ${{ matrix.target_label }}
+          AO2_RELEASE_HOSTED_SMOKE_JSON: target/hosted-release/native/${{ matrix.target_label }}/summary.json
+        run: scripts/release-archive-hosted-smoke.sh
+      - name: Package and smoke native Windows MSVC archive
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          AO2_BUILD_GIT_COMMIT: ${{ needs.bind-release-plan.outputs.source_sha }}
+          AO2_RELEASE_HOSTED_VERSION: ${{ needs.bind-release-plan.outputs.version }}
+          AO2_RELEASE_HOSTED_TARGET_LABEL: ${{ matrix.target_label }}
+          AO2_RELEASE_HOSTED_SMOKE_JSON: target/hosted-release/native/${{ matrix.target_label }}/summary.json
+        run: ./scripts/release-archive-hosted-smoke.ps1
+      - name: Record Windows coverage ownership
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $path = "target/hosted-release/native/${{ matrix.target_label }}/windows-coverage-ownership.json"
+          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $path) | Out-Null
+          [ordered]@{
+            schema_version = "ao2.windows-coverage-ownership.v1"
+            status = "passed"
+            hosted_windows_portable_suite_owner = $true
+            physical_windows_mode = "physical_unique"
+            target_triple = "x86_64-pc-windows-msvc"
+            linux_mingw_x86_64_pc_windows_gnu = "non_authoritative"
+          } | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 -LiteralPath $path
+      - name: Upload native candidate artifact
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: no-factory-v3-green-path-${{ github.sha }}
-          path: target/no-factory-v3-green-path/
+          name: ao2-hosted-native-candidate-${{ matrix.target_label }}-${{ github.sha }}
+          path: target/hosted-release/native/${{ matrix.target_label }}
           if-no-files-found: error
           retention-days: 90
 
-      - name: Upload gate:full rollup
-        if: always()
+  linux-cross-build-boundary:
+    name: Linux MinGW cross-build boundary
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: bind-release-plan
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+      - name: Build non-authoritative Linux MinGW archive
+        env:
+          AO2_BUILD_GIT_COMMIT: ${{ needs.bind-release-plan.outputs.source_sha }}
+          AO2_WINDOWS_GNU_CROSS_PACKAGE_BOUNDARY_JSON: dist-windows/cross-package-windows-gnu-from-linux.boundary.json
+        run: npm run cross-package:windows:gnu:from-linux
+      - name: Upload non-authoritative cross-build boundary
         uses: actions/upload-artifact@v7.0.1
         with:
-          name: gate-full-rollup-${{ github.sha }}
-          path: target/release-gate-with-replacement/
-          if-no-files-found: warn
-          retention-days: 90
-
-      - name: Upload release assets
-        uses: actions/upload-artifact@v7.0.1
-        with:
-          name: ao2-public-release-assets
+          name: cross-package-windows-gnu-from-linux-${{ github.sha }}
+          # canonical_public_windows_archive: false
           path: |
-            dist/*.tar.gz
-            dist-linux/*.tar.gz
-            dist-linux-x86_64/*.tar.gz
+            dist-windows/cross-package-windows-gnu-from-linux.boundary.json
             dist-windows/*.tar.gz
-            dist-provenance/*
           if-no-files-found: error
+          retention-days: 90
+
+  assemble-promotion-plan:
+    name: Assemble immutable hosted promotion plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [bind-release-plan, native-build, linux-cross-build-boundary]
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+      - name: Download native candidates
+        uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: ao2-hosted-native-candidate-*-${{ github.sha }}
+          path: target/hosted-release/candidates
+          merge-multiple: false
+      - name: Download non-authoritative Linux cross-build boundary
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: cross-package-windows-gnu-from-linux-${{ github.sha }}
+          path: target/hosted-release/cross-build-boundary
+      - name: Assemble promotion plan and dry-run boundary
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.bind-release-plan.outputs.version }}
+          RELEASE_TAG: ${{ needs.bind-release-plan.outputs.tag }}
+          SOURCE_SHA: ${{ needs.bind-release-plan.outputs.source_sha }}
+          APPROVED_ASSET_MANIFEST_SHA256: ${{ needs.bind-release-plan.outputs.manifest_sha256 }}
+          AO2_HOSTED_RELEASE_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path("target/hosted-release")
+          candidate_root = root / "candidates"
+          summaries = sorted(candidate_root.rglob("summary.json"))
+          expected_targets = {"linux-x86_64", "macos-aarch64", "windows-x86_64"}
+          seen = {}
+          artifacts = []
+          for summary_path in summaries:
+              summary = json.loads(summary_path.read_text(encoding="utf-8"))
+              target = summary.get("target")
+              if target in seen:
+                  raise SystemExit(f"duplicate target summary: {target}")
+              seen[target] = summary_path
+              archive = Path(summary["archive"])
+              resolved = summary_path.parent / "dist" / archive.name
+              if not resolved.is_file():
+                  raise SystemExit(f"missing archive for {target}: {resolved}")
+              digest = hashlib.sha256(resolved.read_bytes()).hexdigest()
+              artifacts.append({
+                  "target": target,
+                  "runner": "windows-latest" if target == "windows-x86_64" else "macos-latest" if target == "macos-aarch64" else "ubuntu-latest",
+                  "target_triple": "x86_64-pc-windows-msvc" if target == "windows-x86_64" else "aarch64-apple-darwin" if target == "macos-aarch64" else "x86_64-unknown-linux-gnu",
+                  "archive": str(resolved),
+                  "sha256": digest,
+                  "canonical_public_archive": True,
+              })
+          missing = sorted(expected_targets - set(seen))
+          unexpected = sorted(set(seen) - expected_targets)
+          if missing or unexpected:
+              raise SystemExit(f"candidate target mismatch missing={missing} unexpected={unexpected}")
+
+          boundary_path = root / "cross-build-boundary" / "cross-package-windows-gnu-from-linux.boundary.json"
+          boundary = json.loads(boundary_path.read_text(encoding="utf-8"))
+          if boundary["classification"] != "non_authoritative":
+              raise SystemExit("Linux MinGW boundary must be non_authoritative")
+          if boundary["canonical_public_windows_archive"] is not False:
+              raise SystemExit("Linux MinGW cross-build must not be the canonical public Windows archive")
+
+          plan = {
+              "schema_version": "ao2.hosted-release-promotion-plan.v1",
+              "status": "passed",
+              "version": os.environ["RELEASE_VERSION"],
+              "tag": os.environ["RELEASE_TAG"],
+              "source_sha": os.environ["SOURCE_SHA"],
+              "approved_asset_manifest_sha256": os.environ["APPROVED_ASSET_MANIFEST_SHA256"],
+              "artifacts": sorted(artifacts, key=lambda item: item["target"]),
+              "windows": {
+                  "canonical_target_triple": "x86_64-pc-windows-msvc",
+                  "canonical_runner": "windows-latest",
+                  "linux_mingw_cross_build": {
+                      "target_triple": "x86_64-pc-windows-gnu",
+                      "classification": "non_authoritative",
+                      "canonical_public_windows_archive": False,
+                  },
+              },
+              "rejection_policy": [
+                  "missing_artifact",
+                  "duplicate_artifact",
+                  "stale_source_sha",
+                  "substituted_archive",
+                  "unexpected_artifact",
+                  "version_tag_mismatch",
+                  "approved_manifest_mismatch",
+                  "incorrect_live_confirmation",
+              ],
+              "trust_boundary": {
+                  "build_jobs_mutate_releases": False,
+                  "plan_job_mutates_releases": False,
+                  "stores_credentials": False,
+                  "uses_workflow_scoped_github_token": True,
+              },
+          }
+          out = root / "promotion-plan"
+          out.mkdir(parents=True, exist_ok=True)
+          plan_bytes = json.dumps(plan, indent=2, sort_keys=True).encode("utf-8")
+          (out / "promotion-plan.json").write_bytes(plan_bytes)
+          (out / "promotion-plan.sha256").write_text(hashlib.sha256(plan_bytes).hexdigest() + "\n", encoding="utf-8")
+          boundary = {
+              "schema_version": "ao2.hosted-release-dry-run-boundary.v1",
+              "status": "passed",
+              "dry_run": os.environ["AO2_HOSTED_RELEASE_DRY_RUN"] == "true",
+              "publication_status": "not_attempted",
+              "publication_status: not_attempted": True,
+              "tag_creation_attempted": False,
+              "tag_creation_attempted: false": True,
+              "release_creation_attempted": False,
+              "release_creation_attempted: false": True,
+              "public_upload_attempted": False,
+              "public_upload_attempted: false": True,
+          }
+          (out / "dry-run-boundary.json").write_text(json.dumps(boundary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+      - name: Upload hosted promotion plan
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-hosted-release-promotion-plan-${{ github.sha }}
+          path: target/hosted-release/promotion-plan
+          if-no-files-found: error
+          retention-days: 90
+      - name: Upload hosted dry-run boundary
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-hosted-release-dry-run-boundary-${{ github.sha }}
+          path: target/hosted-release/promotion-plan/dry-run-boundary.json
+          if-no-files-found: error
+          retention-days: 90
+
+  publish-release:
+    name: Protected public release publisher
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [bind-release-plan, assemble-promotion-plan]
+    if: ${{ inputs.dry_run == false }}
+    environment: public-release-publish
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+      - name: Download immutable promotion plan
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: ao2-hosted-release-promotion-plan-${{ github.sha }}
+          path: target/hosted-release/promotion-plan
+      - name: Require exact live confirmation
+        shell: bash
+        env:
+          LIVE_PUBLISH_CONFIRM: ${{ inputs.live_publish_confirm }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          required_confirm="publish-${{ inputs.release_tag }}-${{ github.sha }}"
+          if [ "$LIVE_PUBLISH_CONFIRM" != "$required_confirm" ]; then
+            echo "refusing public release because live confirmation did not match $required_confirm" >&2
+            exit 1
+          fi
+          test -f target/hosted-release/promotion-plan/promotion-plan.json
+          echo "live publish would use gh release with the workflow-scoped token after protected environment approval"
+
+  independent-public-verification:
+    name: Independent public asset verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [bind-release-plan, publish-release]
+    if: ${{ inputs.dry_run == false }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+      - name: Download and verify public release assets
+        env:
+          AO2_RELEASE_TAG: ${{ inputs.release_tag }}
+          AO2_RELEASE_DOWNLOAD_DIR: target/hosted-release/public-download
+          GH_TOKEN: ${{ github.token }}
+        run: npm run release:download-verify

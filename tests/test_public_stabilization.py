@@ -581,6 +581,71 @@ def test_public_release_publication_contract_matches_signed_sidecars_and_x86_art
     assert "provenance.json.signature" not in combined_contracts
 
 
+def test_public_release_build_uses_canonical_hosted_native_dry_run_contract():
+    workflow = read(".github/workflows/public-release-build.yml")
+
+    for needle in [
+        "release_version:",
+        "release_tag:",
+        "approved_asset_manifest_sha256:",
+        "physical_windows_qualification_run_id:",
+        "dry_run:",
+        "live_publish_confirm:",
+        "bind-release-plan:",
+        "verify-physical-windows-qualification:",
+        "native-build:",
+        "assemble-promotion-plan:",
+        "publish-release:",
+        "independent-public-verification:",
+        "os: ubuntu-latest",
+        "os: macos-latest",
+        "os: windows-latest",
+        "target_triple: x86_64-unknown-linux-gnu",
+        "target_triple: aarch64-apple-darwin",
+        "target_triple: x86_64-pc-windows-msvc",
+        "scripts/release-archive-hosted-smoke.sh",
+        "./scripts/release-archive-hosted-smoke.ps1",
+        "ao2-hosted-native-candidate-${{ matrix.target_label }}-${{ github.sha }}",
+        "ao2-hosted-release-promotion-plan-${{ github.sha }}",
+        "ao2-hosted-release-dry-run-boundary-${{ github.sha }}",
+        "publication_status: not_attempted",
+        "tag_creation_attempted: false",
+        "release_creation_attempted: false",
+        "public_upload_attempted: false",
+        "environment: public-release-publish",
+        'required_confirm="publish-${{ inputs.release_tag }}-${{ github.sha }}"',
+        "GH_TOKEN: ${{ github.token }}",
+        "npm run release:download-verify",
+    ]:
+        assert needle in workflow
+
+    assert workflow.count("contents: write") == 1
+    assert "permissions: write-all" not in workflow
+    assert "OPENAI_API_KEY:" not in workflow
+    assert "ANTHROPIC_API_KEY:" not in workflow
+    assert "x86_64-pc-windows-gnu" in workflow
+    assert "non_authoritative" in workflow
+    assert "canonical_public_windows_archive: false" in workflow
+
+
+def test_linux_mingw_windows_cross_package_is_reclassified_non_authoritative():
+    package_json = json.loads(read("package.json"))
+    scripts = package_json["scripts"]
+    release_build_all = read("scripts/release-build-all.sh")
+    cross_package = read("scripts/package-windows-x86_64-docker.sh")
+
+    assert (
+        scripts["cross-package:windows:gnu:from-linux"]
+        == "node scripts/run-sh-script.js scripts/package-windows-x86_64-docker.sh"
+    )
+    assert "npm run cross-package:windows:gnu:from-linux" in release_build_all
+    assert "npm run package:windows:x86_64:docker" not in release_build_all
+    assert "x86_64-pc-windows-gnu" in cross_package
+    assert "non_authoritative" in cross_package
+    assert "canonical_public_windows_archive=false" in cross_package
+    assert "native_hosted_windows_msvc_required=true" in cross_package
+
+
 def test_release_asset_publication_readiness_uses_local_artifact_fixture():
     publication_readiness = read("scripts/release-asset-publication-readiness.sh")
     public_ship_dry_run = read("scripts/public-ship-dry-run.sh")

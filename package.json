@@ -11,6 +11,7 @@
     "package:linux:aarch64:docker": "node scripts/run-sh-script.js scripts/package-linux-aarch64-docker.sh",
     "package:linux:x86_64:docker": "node scripts/run-sh-script.js scripts/package-linux-x86_64-docker.sh",
     "package:windows:x86_64:docker": "node scripts/run-sh-script.js scripts/package-windows-x86_64-docker.sh",
+    "cross-package:windows:gnu:from-linux": "node scripts/run-sh-script.js scripts/package-windows-x86_64-docker.sh",
     "release:build-all": "node scripts/run-sh-script.js scripts/release-build-all.sh",
     "release:sign-provenance": "node scripts/run-sh-script.js scripts/release-sign-provenance.sh",
     "release:verify-provenance": "node scripts/run-sh-script.js scripts/release-verify-provenance.sh",
