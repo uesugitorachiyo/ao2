@@ -68,7 +68,7 @@ CANONICAL_REPOSITORIES = (
     "ao-promoter",
 )
 ARCHIVED_REPOSITORIES = ("agy-swarms",)
-STACK_QUALIFICATION_MODES = ("diagnostic", "targeted", "full", "toolchain")
+STACK_QUALIFICATION_MODES = ("diagnostic", "targeted", "full", "physical_unique", "toolchain")
 STACK_QUALIFICATION_ALLOWED_PARAMETERS = {
     "mode",
     "repositories",
@@ -313,8 +313,42 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
     },
     {"name": "cargo-build-release", "argv": ("cargo", "build", "--release", "-p", "ao2-cli", "--target-dir", "{ao2-full-target-dir}")},
 )
+AO2_PHYSICAL_UNIQUE_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
+    {"name": "windows-worker-pytest", "argv": ("{python}", "-m", "pytest", "tests/test_windows_outbound_worker.py", "-q")},
+    {
+        "name": "ao2-doctor",
+        "argv": (
+            "cargo",
+            "run",
+            "--target-dir",
+            "{ao2-physical-target-dir}",
+            "-p",
+            "ao2-cli",
+            "--bin",
+            "ao2",
+            "--",
+            "doctor",
+            "--json",
+        ),
+    },
+    {
+        "name": "windows-file-locking-rollback",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-adapters",
+            "--target-dir",
+            "{ao2-physical-target-dir}",
+            "--test",
+            "sandbox_adapter",
+            "windows",
+        ),
+    },
+)
 WINDOWS_REPOSITORY_PROFILES: dict[str, dict[str, tuple[ProfileCommand, ...]]] = {
     "ao-architecture": {
+        "physical_unique": (),
         "targeted": (
             {"name": "architecture-stack-lock", "argv": ("{python}", "scripts/verify_stack_lock.py")},
             {"name": "architecture-current-release", "argv": ("{python}", "scripts/verify_current_release_manifest.py")},
@@ -324,10 +358,12 @@ WINDOWS_REPOSITORY_PROFILES: dict[str, dict[str, tuple[ProfileCommand, ...]]] = 
         ),
     },
     "ao-mission": {
+        "physical_unique": (),
         "targeted": ({"name": "go-test", "argv": ("go", "test", "./...")},),
         "full": ({"name": "go-test", "argv": ("go", "test", "./...")},),
     },
     "ao-blueprint": {
+        "physical_unique": (),
         "targeted": ({"name": "blueprint-production-readiness", "argv": ("{powershell}", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/production-readiness.ps1")},),
         "full": (
             {"name": "go-test", "argv": ("go", "test", "./...")},
@@ -335,6 +371,7 @@ WINDOWS_REPOSITORY_PROFILES: dict[str, dict[str, tuple[ProfileCommand, ...]]] = 
         ),
     },
     "ao-atlas": {
+        "physical_unique": (),
         "targeted": ({"name": "atlas-production-readiness", "argv": ("{powershell}", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/production-readiness.ps1")},),
         "full": (
             {"name": "go-test", "argv": ("go", "test", "./...")},
@@ -343,14 +380,17 @@ WINDOWS_REPOSITORY_PROFILES: dict[str, dict[str, tuple[ProfileCommand, ...]]] = 
         ),
     },
     "ao-foundry": {
+        "physical_unique": (),
         "targeted": ({"name": "go-test", "argv": ("go", "test", "./...")},),
         "full": ({"name": "go-test", "argv": ("go", "test", "./...")},),
     },
     "ao-forge": {
+        "physical_unique": (),
         "targeted": ({"name": "go-test", "argv": ("go", "test", "./...")},),
         "full": ({"name": "go-test", "argv": ("go", "test", "./...")},),
     },
     "ao-covenant": {
+        "physical_unique": (),
         "targeted": ({"name": "go-test", "argv": ("go", "test", "./...")},),
         "full": (
             {"name": "go-test", "argv": ("go", "test", "./...")},
@@ -358,10 +398,12 @@ WINDOWS_REPOSITORY_PROFILES: dict[str, dict[str, tuple[ProfileCommand, ...]]] = 
         ),
     },
     "ao2": {
+        "physical_unique": AO2_PHYSICAL_UNIQUE_WINDOWS_PROFILE,
         "targeted": ({"name": "windows-worker-pytest", "argv": ("{python}", "-m", "pytest", "tests/test_windows_outbound_worker.py", "-q")},),
         "full": AO2_FULL_WINDOWS_PROFILE,
     },
     "ao2-control-plane": {
+        "physical_unique": (),
         "targeted": ({"name": "cargo-test-workspace", "argv": ("cargo", "test", "--workspace")},),
         "full": (
             {"name": "cargo-test-workspace", "argv": ("cargo", "test", "--workspace")},
@@ -370,22 +412,27 @@ WINDOWS_REPOSITORY_PROFILES: dict[str, dict[str, tuple[ProfileCommand, ...]]] = 
         ),
     },
     "ao-command": {
+        "physical_unique": (),
         "targeted": ({"name": "go-test", "argv": ("go", "test", "./...")},),
         "full": ({"name": "go-test", "argv": ("go", "test", "./...")},),
     },
     "ao-arena": {
+        "physical_unique": (),
         "targeted": ({"name": "go-test", "argv": ("go", "test", "./...")},),
         "full": ({"name": "go-test", "argv": ("go", "test", "./...")},),
     },
     "ao-crucible": {
+        "physical_unique": (),
         "targeted": ({"name": "go-test", "argv": ("go", "test", "./...")},),
         "full": ({"name": "go-test", "argv": ("go", "test", "./...")},),
     },
     "ao-sentinel": {
+        "physical_unique": (),
         "targeted": ({"name": "go-test", "argv": ("go", "test", "./...")},),
         "full": ({"name": "go-test", "argv": ("go", "test", "./...")},),
     },
     "ao-promoter": {
+        "physical_unique": (),
         "targeted": ({"name": "go-test", "argv": ("go", "test", "./...")},),
         "full": ({"name": "go-test", "argv": ("go", "test", "./...")},),
     },
@@ -1017,6 +1064,29 @@ class WindowsOutboundWorker:
                 ))
                 continue
 
+            if mode == "physical_unique" and not profile:
+                results.append(stack_qualification_row(
+                    node_id=self.node_id,
+                    worker_source_commit=worker_source_commit,
+                    request_id=request_id,
+                    repo_name=repo_name,
+                    repo_head=repo_head,
+                    profile_name=mode,
+                    command_name="delegated-to-hosted-native-windows",
+                    child={
+                        "status": "accepted",
+                        "exit_code": 0,
+                        "timed_out": False,
+                        "duration_seconds": 0,
+                        "output": "portable Windows coverage delegated to hosted native Windows by coverage ownership contract",
+                        "output_truncated": False,
+                        "sanitized_stderr_category": "none",
+                    },
+                    output_limit_bytes=self.output_limit_bytes,
+                    metadata=metadata,
+                ))
+                continue
+
             for command_spec in profile:
                 command = resolve_profile_command(command_spec["argv"], factory_root=self.factory_root)
                 command_env = resolve_profile_environment(command_spec.get("env", {}), factory_root=self.factory_root)
@@ -1404,6 +1474,7 @@ def resolve_profile_command(
     powershell = resolve_fixed_tool("powershell")
     replacements = {
         "{ao2-full-target-dir}": str(factory_root / ".ao2-worker-target" / "ao2-full"),
+        "{ao2-physical-target-dir}": str(factory_root / ".ao2-worker-target" / "ao2-physical-unique"),
         "{python}": sys.executable,
         "{powershell}": str(powershell.get("path") or "powershell.exe"),
     }
