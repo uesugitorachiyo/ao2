@@ -543,33 +543,96 @@ def run_bounded_child(
 
 
 class WorkerState:
+    LEDGER_SCHEMA = "ao2.windows-outbound-worker-ledger.v1"
+    LEDGER_EVENT_SCHEMA = "ao2.windows-outbound-worker-ledger-event.v1"
+
     def __init__(self, state_root: Path):
         self.state_root = state_root
         self.state_root.mkdir(parents=True, exist_ok=True)
         self.ledger_path = self.state_root / "task-ledger.json"
+        self.journal_path = self.state_root / "task-ledger-events.jsonl"
         self.result_outbox_dir = self.state_root / "result-outbox"
         self.result_outbox_dir.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
         self._ledger = self._load()
 
+    def _blank_ledger(self) -> dict[str, Any]:
+        return {"schema_version": self.LEDGER_SCHEMA, "tasks": {}}
+
     def _load(self) -> dict[str, Any]:
-        if not self.ledger_path.is_file():
-            return {"schema_version": "ao2.windows-outbound-worker-ledger.v1", "tasks": {}}
-        try:
-            return json.loads(self.ledger_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            return {"schema_version": "ao2.windows-outbound-worker-ledger.v1", "tasks": {}}
+        ledger = self._blank_ledger()
+        if self.ledger_path.is_file():
+            try:
+                loaded = json.loads(self.ledger_path.read_text(encoding="utf-8"))
+                if isinstance(loaded, dict):
+                    ledger = loaded
+                    ledger.setdefault("schema_version", self.LEDGER_SCHEMA)
+                    ledger.setdefault("tasks", {})
+            except json.JSONDecodeError:
+                ledger = self._blank_ledger()
+        self._replay_journal(ledger)
+        return ledger
+
+    def _replay_journal(self, ledger: dict[str, Any]) -> None:
+        if not self.journal_path.is_file():
+            return
+        tasks = ledger.setdefault("tasks", {})
+        for line in self.journal_path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(event, dict) or event.get("schema_version") != self.LEDGER_EVENT_SCHEMA:
+                continue
+            request_id = event.get("request_id")
+            if not isinstance(request_id, str) or not request_id:
+                continue
+            event_type = event.get("event")
+            if event_type == "claim":
+                action = event.get("action")
+                if not isinstance(action, str) or not action:
+                    continue
+                tasks.setdefault(
+                    request_id,
+                    {
+                        "action": action,
+                        "status": "in_progress",
+                        "started_at": event.get("recorded_at_utc", utc_now()),
+                    },
+                )
+            elif event_type == "complete":
+                status = event.get("status")
+                if not isinstance(status, str) or not status:
+                    continue
+                item = tasks.setdefault(request_id, {})
+                item["status"] = status
+                item["completed_at"] = event.get("recorded_at_utc", utc_now())
 
     def _save(self) -> None:
         tmp = self.ledger_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(self._ledger, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         tmp.replace(self.ledger_path)
 
+    def _append_journal_event(self, event: dict[str, Any]) -> None:
+        self.state_root.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "schema_version": self.LEDGER_EVENT_SCHEMA,
+            "recorded_at_utc": utc_now(),
+            **event,
+        }
+        with self.journal_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+
     def claim(self, request_id: str, action: str) -> bool:
         with self._lock:
             tasks = self._ledger.setdefault("tasks", {})
             if request_id in tasks:
                 return False
+            self._append_journal_event({"event": "claim", "request_id": request_id, "action": action})
             tasks[request_id] = {"action": action, "status": "in_progress", "started_at": utc_now()}
             self._save()
             return True
@@ -577,6 +640,7 @@ class WorkerState:
     def complete(self, request_id: str, status: str) -> None:
         with self._lock:
             tasks = self._ledger.setdefault("tasks", {})
+            self._append_journal_event({"event": "complete", "request_id": request_id, "status": status})
             item = tasks.setdefault(request_id, {})
             item["status"] = status
             item["completed_at"] = utc_now()
