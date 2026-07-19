@@ -2563,6 +2563,11 @@ fn release_operational_scripts_cover_three_os_ci_and_download_verification() {
     assert!(download.contains("AO2_RELEASE_ROLLBACK_VERIFY"));
     assert!(download.contains("release-rollback-summary.json"));
     assert!(download.contains("ao2.release-rollback-summary.v1"));
+    assert!(download.contains("\"$AO2_ROLLBACK_SEED_BIN\" install update"));
+    assert!(download.contains(
+        "\"$AO2_ROLLBACK_SEED_BIN\" install rollback --install-dir \"$macos_install_dir\""
+    ));
+    assert!(download.contains("macos_download_rollback_runner="));
     assert!(download.contains("macos_download_rollback=passed"));
     assert!(download.contains("scripts/smoke-windows-release.ps1"));
     assert!(download.contains("windows_download_verify=passed"));
