@@ -33,8 +33,10 @@ verify_release_notes() {
   observed_notes_sha256="$(sha256_file "$AO2_RELEASE_NOTES_FILE")"
   [ "$observed_notes_sha256" = "$AO2_RELEASE_NOTES_SHA256" ] || \
     fail "release notes SHA-256 mismatch: expected $AO2_RELEASE_NOTES_SHA256, observed $observed_notes_sha256"
-  grep -Eiq 'external beta' "$AO2_RELEASE_NOTES_FILE" || \
-    fail "release notes must identify the release as an external beta"
+  if [ "$release_kind" = "prerelease" ]; then
+    grep -Eiq 'external beta' "$AO2_RELEASE_NOTES_FILE" || \
+      fail "release notes must identify the release as an external beta"
+  fi
   grep -Fq 'ao2 install rollback' "$AO2_RELEASE_NOTES_FILE" || \
     fail "release notes must include the approved rollback command"
 }
@@ -107,12 +109,13 @@ verify_release_absent() {
 }
 
 verify_latest_stable() {
+  local expected="$1"
   local latest
   if ! latest="$(gh api "repos/$AO2_RELEASE_REPO/releases/latest" --jq .tag_name)"; then
     fail "latest stable release lookup failed"
   fi
-  [ "$latest" = "$AO2_RELEASE_EXPECTED_LATEST_STABLE_TAG" ] || \
-    fail "latest stable release mismatch: expected $AO2_RELEASE_EXPECTED_LATEST_STABLE_TAG, observed $latest"
+  [ "$latest" = "$expected" ] || \
+    fail "latest stable release mismatch: expected $expected, observed $latest"
 }
 
 AO2_VERSION="${AO2_VERSION:-}"
@@ -164,13 +167,24 @@ case "$AO2_VERSION" in
   *-*)
     [ "$AO2_RELEASE_CHANNEL" = "prerelease" ] || \
       fail "prerelease version requires AO2_RELEASE_CHANNEL=prerelease"
+    release_kind="prerelease"
+    release_create_flags=(--prerelease --latest=false)
+    latest_stable_after="$AO2_RELEASE_EXPECTED_LATEST_STABLE_TAG"
     ;;
-  *) fail "approved asset promotion is restricted to an AO2 prerelease" ;;
+  *)
+    [ "$AO2_RELEASE_CHANNEL" = "stable" ] || \
+      fail "stable version requires AO2_RELEASE_CHANNEL=stable"
+    release_kind="stable"
+    release_create_flags=(--latest)
+    latest_stable_after="$AO2_RELEASE_TAG"
+    ;;
 esac
-case "$(printf '%s' "$AO2_RELEASE_TITLE" | tr '[:upper:]' '[:lower:]')" in
-  *external*beta*) ;;
-  *) fail "prerelease title must identify the release as an external beta" ;;
-esac
+if [ "$release_kind" = "prerelease" ]; then
+  case "$(printf '%s' "$AO2_RELEASE_TITLE" | tr '[:upper:]' '[:lower:]')" in
+    *external*beta*) ;;
+    *) fail "prerelease title must identify the release as an external beta" ;;
+  esac
+fi
 
 case "$AO2_RELEASE_TARGET_COMMIT" in
   *[!0-9a-f]*|'') fail "runtime target commit must be lowercase hexadecimal" ;;
@@ -227,7 +241,7 @@ chmod 500 "$snapshot_helpers/release-publication-contract.sh"
 
 verify_tag_absent
 verify_release_absent
-verify_latest_stable
+verify_latest_stable "$AO2_RELEASE_EXPECTED_LATEST_STABLE_TAG"
 
 verify_approved_assets() {
   python3 "$snapshot_helpers/release-verify-approved-assets.py" \
@@ -519,7 +533,7 @@ chmod -R a-w "$snapshot_root"
 
 verify_tag_absent
 verify_release_absent
-verify_latest_stable
+verify_latest_stable "$AO2_RELEASE_EXPECTED_LATEST_STABLE_TAG"
 verify_release_notes
 verify_publisher_repository_state
 verify_approved_assets
@@ -538,7 +552,7 @@ git tag -a "$AO2_RELEASE_TAG" "$AO2_RELEASE_TARGET_COMMIT" -m "$AO2_RELEASE_TITL
 git push origin "$AO2_RELEASE_TAG"
 
 verify_release_absent
-verify_latest_stable
+verify_latest_stable "$AO2_RELEASE_EXPECTED_LATEST_STABLE_TAG"
 verify_release_notes
 verify_publisher_repository_state
 verify_approved_assets
@@ -556,10 +570,9 @@ release_url="$(gh release create "$AO2_RELEASE_TAG" "${assets[@]}" \
   --verify-tag \
   --title "$AO2_RELEASE_TITLE" \
   --notes-file "$AO2_RELEASE_NOTES_FILE" \
-  --prerelease \
-  --latest=false)"
+  "${release_create_flags[@]}")"
 
-verify_latest_stable
+verify_latest_stable "$latest_stable_after"
 
 printf 'release_approval_bound=true\n'
 printf 'release_approved_asset_manifest_sha256=%s\n' "$AO2_RELEASE_EXPECTED_ASSET_MANIFEST_SHA256"
