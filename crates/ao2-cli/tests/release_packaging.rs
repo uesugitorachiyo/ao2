@@ -3535,6 +3535,79 @@ fn provider_pilot_scripts_initialize_copied_fixture_as_isolated_git_repo() {
 }
 
 #[test]
+#[cfg(not(windows))]
+fn workbench_release_comparison_smoke_initializes_copied_fixture_as_git_repo() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let temp = tempfile::tempdir().expect("tempdir outside checkout");
+    assert!(
+        !temp.path().starts_with(&root),
+        "regression fixture must live outside the AO2 checkout"
+    );
+
+    let script_name = "smoke-workbench-release-comparison-export.sh";
+    let script_path = root.join("scripts").join(script_name);
+    let script = fs::read_to_string(&script_path).expect("workbench comparison smoke exists");
+    let copy_start = script
+        .find("cp -R fixtures/discount-service \"$repo\"")
+        .unwrap_or_else(|| panic!("{script_name} missing fixture copy"));
+    let support_keygen_start = script[copy_start..]
+        .find("ao2_cmd workbench support-keygen")
+        .map(|offset| copy_start + offset)
+        .unwrap_or_else(|| panic!("{script_name} missing support keygen boundary"));
+    let serve_start = script
+        .find("ao2_cmd workbench serve")
+        .unwrap_or_else(|| panic!("{script_name} missing workbench serve"));
+    let fixture_block = &script[copy_start..support_keygen_start];
+
+    assert!(
+        support_keygen_start < serve_start,
+        "{script_name} must prepare the fixture before workbench serve"
+    );
+    assert!(
+        fixture_block.contains("git init -q \"$repo\""),
+        "{script_name} must initialize the copied fixture as a Git repository"
+    );
+    assert!(
+        fixture_block.contains("git -C \"$repo\" commit -q -m fixture"),
+        "{script_name} must commit the isolated fixture baseline"
+    );
+    assert!(
+        fixture_block.contains("git -C \"$repo\" rev-parse --git-common-dir"),
+        "{script_name} must verify the isolated Git repository before queue execution"
+    );
+
+    let smoke_root = temp.path().join("workbench-release-comparison");
+    fs::create_dir_all(&smoke_root).expect("create workbench comparison root");
+    let repo = smoke_root.join("repo");
+    let harness = temp.path().join(format!("{script_name}.fixture-init.sh"));
+    fs::write(
+        &harness,
+        format!(
+            "set -eu\nrepo=\"$1\"\n{fixture_block}\ngit -C \"$repo\" rev-parse --git-common-dir\n",
+        ),
+    )
+    .expect("write fixture init harness");
+
+    let output = Command::new(sh_command())
+        .arg(&harness)
+        .arg(&repo)
+        .current_dir(&root)
+        .output()
+        .expect("run workbench comparison fixture init harness");
+    assert!(
+        output.status.success(),
+        "{script_name} failed to initialize copied fixture as Git repo\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout).trim(),
+        ".git",
+        "{script_name} must create a local .git common dir"
+    );
+}
+
+#[test]
 fn hosted_release_archive_smoke_ci_uploads_three_os_install_sidecar_artifacts() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let ci = fs::read_to_string(root.join(".github/workflows/ci.yml"))
