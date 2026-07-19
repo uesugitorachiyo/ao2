@@ -21,7 +21,7 @@
   "archived_repositories_rejected": ["agy-swarms"],
   "modes": ["diagnostic", "targeted", "full", "toolchain"],
   "toolchain_capability_tools": ["git", "go", "python", "cargo", "rustc", "node", "npm", "powershell"],
-  "allowed_parameters": ["mode", "repositories", "repos", "timeout_seconds"],
+  "allowed_parameters": ["checkpoint_id", "global_deadline_seconds", "mode", "profile_digest", "repositories", "repos", "reuse_from_request_id", "reuse_profile_digest", "shard_id", "timeout_seconds"],
   "timeout_bounds_seconds": {
     "minimum": 30,
     "default": 600,

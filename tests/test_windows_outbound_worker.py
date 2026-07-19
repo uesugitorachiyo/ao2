@@ -978,3 +978,157 @@ def test_windows_stack_qualification_timeout_does_not_block_status(tmp_path: Pat
     posted = transport.posted_results_by_request_id()
     assert posted["status-after-stack-timeout"]["ao2_cross_host"]["action"] == "status"
     assert posted["stack-timeout"]["ao2_cross_host"]["result"]["results"][0]["status"] == "timed_out"
+
+
+def test_windows_stack_qualification_records_shard_checkpoint_deadline_and_profile_digest(
+    tmp_path: Path, monkeypatch
+) -> None:
+    worker = load_worker_module()
+    factory = tmp_path / "factory"
+    repo = factory / "ao2"
+    (repo / ".git").mkdir(parents=True)
+
+    def fake_run(command, *, cwd, timeout_seconds, output_limit_bytes=worker.DEFAULT_OUTPUT_LIMIT_BYTES):
+        return {
+            "status": "accepted",
+            "exit_code": 0,
+            "timed_out": False,
+            "duration_seconds": 0.01,
+            "output": "ok",
+            "output_truncated": False,
+            "sanitized_stderr_category": "none",
+            "command_name": Path(command[0]).name,
+        }
+
+    monkeypatch.setattr(worker, "run_bounded_child", fake_run)
+    runtime = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=factory,
+        state=worker.WorkerState(tmp_path / "state"),
+        transport=worker.MemoryTransport(),
+        poll_interval_seconds=0.01,
+    )
+
+    result = runtime.run_action(
+        "windows_stack_qualification",
+        {
+            "mode": "diagnostic",
+            "repositories": ["ao2"],
+            "shard_id": "diagnostic-ao2",
+            "checkpoint_id": "checkpoint-001",
+            "profile_digest": "sha256:test-profile",
+            "global_deadline_seconds": 120,
+        },
+        request_id="sharded-diagnostic",
+    )
+
+    assert result["status"] == "accepted"
+    assert result["shard_id"] == "diagnostic-ao2"
+    assert result["checkpoint_id"] == "checkpoint-001"
+    assert result["profile_digest"] == "sha256:test-profile"
+    assert result["global_deadline_seconds"] == 120
+    assert result["results"][0]["shard_id"] == "diagnostic-ao2"
+    assert result["results"][0]["checkpoint_id"] == "checkpoint-001"
+    assert result["results"][0]["profile_digest"] == "sha256:test-profile"
+
+
+def test_windows_stack_qualification_global_deadline_stops_before_next_profile_row(
+    tmp_path: Path, monkeypatch
+) -> None:
+    worker = load_worker_module()
+    factory = tmp_path / "factory"
+    repo = factory / "ao2"
+    (repo / ".git").mkdir(parents=True)
+    commands_seen: list[list[str]] = []
+
+    monkeypatch.setattr(
+        worker,
+        "DIAGNOSTIC_PROFILE",
+        (
+            {"name": "slow-row", "argv": ("python", "-c", "slow")},
+            {"name": "should-not-run", "argv": ("python", "-c", "later")},
+        ),
+    )
+
+    def fake_run(command, *, cwd, timeout_seconds, output_limit_bytes=worker.DEFAULT_OUTPUT_LIMIT_BYTES):
+        commands_seen.append(list(command))
+        return {
+            "status": "accepted",
+            "exit_code": 0,
+            "timed_out": False,
+            "duration_seconds": 31.0,
+            "output": "slow ok",
+            "output_truncated": False,
+            "sanitized_stderr_category": "none",
+            "command_name": Path(command[0]).name,
+        }
+
+    monkeypatch.setattr(worker, "run_bounded_child", fake_run)
+    runtime = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=factory,
+        state=worker.WorkerState(tmp_path / "state"),
+        transport=worker.MemoryTransport(),
+        poll_interval_seconds=0.01,
+    )
+
+    result = runtime.run_action(
+        "windows_stack_qualification",
+        {"mode": "diagnostic", "repositories": ["ao2"], "global_deadline_seconds": 30},
+        request_id="deadline",
+    )
+
+    assert result["status"] == "failed"
+    assert result["error_category"] == "global_deadline_exceeded"
+    assert len(commands_seen) == 1
+    assert [row["sanitized_command_name"] for row in result["results"]] == ["slow-row"]
+
+
+def test_windows_stack_qualification_invalidates_reuse_when_profile_digest_changes(
+    tmp_path: Path, monkeypatch
+) -> None:
+    worker = load_worker_module()
+    factory = tmp_path / "factory"
+    repo = factory / "ao2"
+    (repo / ".git").mkdir(parents=True)
+    commands_seen: list[list[str]] = []
+
+    def fake_run(command, *, cwd, timeout_seconds, output_limit_bytes=worker.DEFAULT_OUTPUT_LIMIT_BYTES):
+        commands_seen.append(list(command))
+        return {
+            "status": "accepted",
+            "exit_code": 0,
+            "timed_out": False,
+            "duration_seconds": 0.01,
+            "output": "ok",
+            "output_truncated": False,
+            "sanitized_stderr_category": "none",
+            "command_name": Path(command[0]).name,
+        }
+
+    monkeypatch.setattr(worker, "run_bounded_child", fake_run)
+    runtime = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=factory,
+        state=worker.WorkerState(tmp_path / "state"),
+        transport=worker.MemoryTransport(),
+        poll_interval_seconds=0.01,
+    )
+
+    result = runtime.run_action(
+        "windows_stack_qualification",
+        {
+            "mode": "diagnostic",
+            "repositories": ["ao2"],
+            "reuse_from_request_id": "retained-windows-run",
+            "reuse_profile_digest": "sha256:old-profile",
+            "profile_digest": "sha256:new-profile",
+        },
+        request_id="reuse-invalidated",
+    )
+
+    assert result["status"] == "failed"
+    assert result["error_category"] == "reuse_invalidated"
+    assert result["reuse_from_request_id"] == "retained-windows-run"
+    assert result["reuse_invalidated"] is True
+    assert commands_seen == []
