@@ -21,9 +21,18 @@ AO2_VERSION="${AO2_VERSION:-$(scripts/current-version.sh)}"
 AO2_MACOS_ARCHIVE="${AO2_MACOS_ARCHIVE:-dist/ao2-$AO2_VERSION-macos-aarch64.tar.gz}"
 AO2_LINUX_ARCHIVE="${AO2_LINUX_ARCHIVE:-dist-linux/ao2-$AO2_VERSION-linux-aarch64.tar.gz}"
 AO2_LINUX_X86_64_ARCHIVE="${AO2_LINUX_X86_64_ARCHIVE:-dist-linux-x86_64/ao2-$AO2_VERSION-linux-x86_64.tar.gz}"
+AO2_LINUX_X86_64_SMOKE_MODE="${AO2_LINUX_X86_64_SMOKE_MODE:-remote}"
 AO2_UBUNTU_SSH_TARGET="${AO2_UBUNTU_SSH_TARGET:-ao2-ubuntu-nucx}"
 AO2_UBUNTU_IMAGE="${AO2_UBUNTU_IMAGE:-ubuntu:24.04}"
 AO2_WINDOWS_ARCHIVE="${AO2_WINDOWS_ARCHIVE:-dist-windows/ao2-$AO2_VERSION-windows-x86_64.tar.gz}"
+
+case "$AO2_LINUX_X86_64_SMOKE_MODE" in
+  remote|docker) ;;
+  *)
+    echo "invalid AO2_LINUX_X86_64_SMOKE_MODE: $AO2_LINUX_X86_64_SMOKE_MODE (expected remote|docker)" >&2
+    exit 2
+    ;;
+esac
 
 mkdir -p "$AO2_THREE_OS_SMOKE_ROOT"
 AO2_THREE_OS_SMOKE_ROOT=$(CDPATH= cd -- "$AO2_THREE_OS_SMOKE_ROOT" && pwd)
@@ -43,6 +52,7 @@ orchestration_log="$AO2_THREE_OS_SMOKE_ROOT/orchestration.log"
   printf "# AO2 Three-OS Release Smoke\n\n"
   printf "%s\n" "- root: \`$AO2_THREE_OS_SMOKE_ROOT\`"
   printf "%s\n" "- ubuntu target: \`$AO2_UBUNTU_SSH_TARGET\`"
+  printf "%s\n" "- linux x86_64 smoke mode: \`$AO2_LINUX_X86_64_SMOKE_MODE\`"
   printf "%s\n\n" "- windows target: \`$AO2_WINDOWS_SSH_TARGET\`"
 } > "$report"
 
@@ -247,19 +257,21 @@ if ! run_logged_step \
 fi
 cat "$ubuntu_smoke_log"
 
-echo "== native Ubuntu x86_64 smoke =="
+echo "== Linux x86_64 smoke ($AO2_LINUX_X86_64_SMOKE_MODE) =="
 : > "$linux_x86_64_smoke_log"
 if ! run_logged_step \
-  linux_x86_64_remote_smoke \
+  "linux_x86_64_${AO2_LINUX_X86_64_SMOKE_MODE}_smoke" \
   "$AO2_LOCAL_SMOKE_TIMEOUT_SECONDS" \
   "$linux_x86_64_smoke_log" \
   env \
   AO2_RELEASE_SMOKE_LEG=linux_x86_64 \
+  AO2_LINUX_X86_64_SMOKE_MODE="$AO2_LINUX_X86_64_SMOKE_MODE" \
   AO2_SMOKE_ROOT="$AO2_THREE_OS_SMOKE_ROOT/local/linux-x86_64" \
   AO2_LINUX_X86_64_ARCHIVE="$AO2_LINUX_X86_64_ARCHIVE" \
+  AO2_UBUNTU_IMAGE="$AO2_UBUNTU_IMAGE" \
   AO2_UBUNTU_SSH_TARGET="$AO2_UBUNTU_SSH_TARGET" \
   scripts/smoke-release-archives.sh; then
-  printf "linux_x86_64_remote_smoke_failed_or_timed_out=1\n" >> "$linux_x86_64_smoke_log"
+  printf "linux_x86_64_%s_smoke_failed_or_timed_out=1\n" "$AO2_LINUX_X86_64_SMOKE_MODE" >> "$linux_x86_64_smoke_log"
 fi
 cat "$linux_x86_64_smoke_log"
 
@@ -330,7 +342,7 @@ fi
   printf '```text\n'
   cat "$ubuntu_smoke_log"
   printf '```\n\n'
-  printf "## Native Ubuntu x86_64 Smoke\n\n"
+  printf "## Linux x86_64 Smoke (%s)\n\n" "$AO2_LINUX_X86_64_SMOKE_MODE"
   printf '```text\n'
   cat "$linux_x86_64_smoke_log"
   printf '```\n\n'
@@ -344,7 +356,7 @@ fi
   printf '```\n'
 } >> "$report"
 
-python3 - "$summary_json" "$report" "$windows_log" "$macos_smoke_log" "$ubuntu_smoke_log" "$linux_x86_64_smoke_log" "$windows_static_smoke_log" "$AO2_REQUIRE_NATIVE_WINDOWS_SMOKE" "$AO2_THREE_OS_SMOKE_ROOT" "$AO2_WINDOWS_SSH_TARGET" <<'PY'
+python3 - "$summary_json" "$report" "$windows_log" "$macos_smoke_log" "$ubuntu_smoke_log" "$linux_x86_64_smoke_log" "$windows_static_smoke_log" "$AO2_REQUIRE_NATIVE_WINDOWS_SMOKE" "$AO2_THREE_OS_SMOKE_ROOT" "$AO2_WINDOWS_SSH_TARGET" "$AO2_LINUX_X86_64_SMOKE_MODE" <<'PY'
 import json
 import re
 import sys
@@ -360,6 +372,7 @@ windows_static_log_path = Path(sys.argv[7])
 native_windows_required = sys.argv[8] == "1"
 root = sys.argv[9]
 windows_target = sys.argv[10]
+linux_x86_64_smoke_mode = sys.argv[11]
 
 windows_log = windows_log_path.read_text(encoding="utf-8", errors="replace")
 macos_log = macos_log_path.read_text(encoding="utf-8", errors="replace")
@@ -399,8 +412,8 @@ ubuntu_status = status_from_log(
 )
 linux_x86_64_status = status_from_log(
     linux_x86_64_log,
-    "linux_x86_64_remote_smoke",
-    passed_markers=("linux_x86_64_remote_smoke=passed",),
+    f"linux_x86_64_{linux_x86_64_smoke_mode}_smoke",
+    passed_markers=("linux_x86_64_remote_smoke=passed", "linux_x86_64_docker_smoke=passed"),
 )
 windows_static_status = status_from_log(
     windows_static_log,
@@ -433,6 +446,7 @@ summary = {
     "local_smoke": local_status,
     "macos_smoke": macos_status,
     "ubuntu_smoke": ubuntu_status,
+    "linux_x86_64_smoke_mode": linux_x86_64_smoke_mode,
     "linux_x86_64_remote_smoke": linux_x86_64_status,
     "windows_static_smoke": windows_static_status,
     "native_windows_required": native_windows_required,
@@ -464,7 +478,11 @@ if ! grep -q "macos_smoke=passed" "$macos_smoke_log"; then
   grep -q "macos_install_smoke=skipped" "$macos_smoke_log"
 fi
 grep -q "ubuntu_smoke=passed" "$ubuntu_smoke_log"
-grep -q "linux_x86_64_remote_smoke=passed" "$linux_x86_64_smoke_log"
+if [ "$AO2_LINUX_X86_64_SMOKE_MODE" = "docker" ]; then
+  grep -q "linux_x86_64_docker_smoke=passed" "$linux_x86_64_smoke_log"
+else
+  grep -q "linux_x86_64_remote_smoke=passed" "$linux_x86_64_smoke_log"
+fi
 grep -q "windows_static_smoke=passed" "$windows_static_smoke_log"
 if ! grep -q "windows_native_smoke=passed" "$windows_log"; then
   grep -q "windows_native_smoke=skipped" "$windows_log"

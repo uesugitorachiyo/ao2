@@ -1515,9 +1515,13 @@ fn release_archive_smoke_script_covers_ubuntu_and_windows_paths() {
     assert!(script.contains("AO2_MACOS_ARCHIVE"));
     assert!(script.contains("AO2_LINUX_ARCHIVE"));
     assert!(script.contains("AO2_LINUX_X86_64_ARCHIVE"));
+    assert!(script.contains("AO2_LINUX_X86_64_SMOKE_MODE"));
+    assert!(script.contains("AO2_LINUX_X86_64_DOCKER_LOG"));
     assert!(script.contains("AO2_WINDOWS_ARCHIVE"));
     assert!(script.contains("AO2_UBUNTU_SSH_TARGET"));
     assert!(script.contains("linux_x86_64_remote_smoke=passed"));
+    assert!(script.contains("linux_x86_64_docker_smoke=passed"));
+    assert!(script.contains("linux_x86_64_install_rollback=passed"));
     assert!(linux_remote.contains("rollback_runner"));
     assert!(linux_remote.contains("linux_x86_64_install_rollback=passed"));
     assert!(script.contains("install.sh"));
@@ -2157,7 +2161,9 @@ fn release_operational_scripts_cover_three_os_ci_and_download_verification() {
     assert!(three_os.contains("AO2_WINDOWS_SSH_TARGET"));
     assert!(three_os.contains("AO2_UBUNTU_SSH_TARGET"));
     assert!(three_os.contains("AO2_LINUX_X86_64_ARCHIVE"));
+    assert!(three_os.contains("AO2_LINUX_X86_64_SMOKE_MODE"));
     assert!(three_os.contains("linux_x86_64_remote_smoke"));
+    assert!(three_os.contains("linux_x86_64_docker_smoke"));
     assert!(three_os.contains("macos_smoke_log"));
     assert!(three_os.contains("ubuntu_smoke_log"));
     assert!(three_os.contains("windows_static_smoke_log"));
@@ -2540,6 +2546,9 @@ fn release_operational_scripts_cover_three_os_ci_and_download_verification() {
     assert!(download.contains("gh release download"));
     assert!(download.contains("release-verify-provenance.sh"));
     assert!(download.contains("AO2_LINUX_X86_64_ARCHIVE"));
+    assert!(download.contains("AO2_LINUX_X86_64_SMOKE_MODE"));
+    assert!(download.contains("scripts/smoke-release-archives.sh"));
+    assert!(download.contains("linux_x86_64_docker_smoke=passed"));
     assert!(download.contains("AO2_NATIVE_WINDOWS_DOWNLOAD_VERIFY"));
     assert!(download.contains("AO2_RELEASE_ROLLBACK_VERIFY"));
     assert!(download.contains("release-rollback-summary.json"));
@@ -2552,6 +2561,10 @@ fn release_operational_scripts_cover_three_os_ci_and_download_verification() {
     assert!(download.contains("release_download_verify=passed"));
 
     assert!(release_ship.contains("AO2_RELEASE_COMPARISON_DIR"));
+    assert!(release_ship.contains("AO2_LINUX_X86_64_SMOKE_MODE"));
+    assert!(release_ship.contains(
+        "env -u AO2_UBUNTU_SSH_TARGET -u AO2_LINUX_X86_64_SSH_TARGET npm run release:build-all"
+    ));
     assert!(release_ship.contains("npm run release:retention-preflight"));
     assert!(release_ship.contains("AO2_RELEASE_RETENTION_KEEP_RELEASES"));
     assert!(release_ship.contains("AO2_RELEASE_RETENTION_KEEP_BUNDLES"));
