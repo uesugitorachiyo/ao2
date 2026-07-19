@@ -193,6 +193,12 @@ docker run --rm \
   "$AO2_UBUNTU_IMAGE" \
   sh -lc '
     set -eu
+    export DEBIAN_FRONTEND=noninteractive
+    if ! command -v git >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+      apt-get update >/dev/null
+      apt-get install -y --no-install-recommends ca-certificates git jq >/dev/null
+      rm -rf /var/lib/apt/lists/*
+    fi
     work=/smoke/ubuntu
     extract="$work/extract"
     install_dir="$work/bin"

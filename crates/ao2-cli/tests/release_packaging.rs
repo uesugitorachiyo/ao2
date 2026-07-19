@@ -1511,6 +1511,8 @@ fn release_archive_smoke_script_covers_ubuntu_and_windows_paths() {
     let script = fs::read_to_string(script_path).expect("release smoke script exists");
     let linux_remote = fs::read_to_string(root.join("scripts/smoke-linux-release-remote.sh"))
         .expect("native Linux x86_64 smoke script exists");
+    let linux_docker = fs::read_to_string(root.join("scripts/smoke-linux-release-docker.sh"))
+        .expect("Docker Linux x86_64 smoke script exists");
 
     assert!(script.contains("AO2_MACOS_ARCHIVE"));
     assert!(script.contains("AO2_LINUX_ARCHIVE"));
@@ -1534,6 +1536,14 @@ fn release_archive_smoke_script_covers_ubuntu_and_windows_paths() {
     assert!(script.contains("provider_contract_verify=passed"));
     assert!(script.contains("git init -q \"$repo\""));
     assert!(script.contains("git -C \"$repo\" commit -q -m fixture"));
+    assert!(script.contains("apt-get install -y --no-install-recommends ca-certificates git jq"));
+    assert!(
+        linux_docker.contains("apt-get install -y --no-install-recommends ca-certificates git jq")
+    );
+    assert!(linux_docker.contains("docker run --rm --platform linux/amd64"));
+    assert!(linux_docker.contains("git init -q \"$repo\""));
+    assert!(linux_docker.contains("git -C \"$repo\" commit -q -m fixture"));
+    assert!(linux_docker.contains("approve \"$ticket_id\""));
     assert!(script.contains("requested_action == \"sandbox:apply\""));
     assert!(script.contains("approve \"$ticket_id\""));
     assert!(script.contains("run --resume"));
