@@ -3665,12 +3665,13 @@ fn release_build_all_script_and_manual_workflow_cover_public_release_sequence() 
     assert!(script.contains("npm run package:local"));
     assert!(script.contains("npm run package:linux:aarch64:docker"));
     assert!(script.contains("npm run package:linux:x86_64:docker"));
-    assert!(script.contains("npm run package:windows:x86_64:docker"));
+    assert!(script.contains("npm run cross-package:windows:gnu:from-linux"));
     assert!(script.contains("npm run release:sign-provenance"));
     assert!(script.contains("npm run release:verify-provenance"));
     assert!(script.contains("release_build_all=passed"));
 
     assert!(package_json.contains("\"release:build-all\""));
+    assert!(package_json.contains("\"cross-package:windows:gnu:from-linux\""));
     assert!(package_json.contains("\"release:ship\""));
 
     assert!(ship_script.contains("AO2_RELEASE_SHIP_CONFIRM"));
@@ -3699,7 +3700,12 @@ fn release_build_all_script_and_manual_workflow_cover_public_release_sequence() 
     assert!(workflow.contains("workflow_dispatch:"));
     assert!(!workflow.contains("pull_request:"));
     assert!(!workflow.contains("\n  push:"));
-    assert!(workflow.contains("npm run release:build-all"));
+    assert!(workflow.contains("bind-release-plan:"));
+    assert!(workflow.contains("verify-physical-windows-qualification:"));
+    assert!(workflow.contains("native-build:"));
+    assert!(workflow.contains("assemble-promotion-plan:"));
+    assert!(workflow.contains("x86_64-pc-windows-msvc"));
+    assert!(workflow.contains("cross-package:windows:gnu:from-linux"));
     assert!(workflow.contains("actions/upload-artifact@v7.0.1"));
 }
 

@@ -286,11 +286,52 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
+  hosted-release-guard:
+    name: Hosted release safety guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: bind-release-plan
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: "22"
+      - name: Run no factory-v3 green-path guard
+        run: npm run verify:no-factory-v3
+      - name: Run hosted release gate guard
+        env:
+          AO2_HOSTED_RELEASE_GATE: "1"
+          AO2_REQUIRE_NATIVE_WINDOWS_SMOKE: "0"
+          AO2_ALLOW_UNSIGNED_OBLIGATION_GATES: "1"
+        run: npm run gate:full
+      - name: Upload no factory-v3 guard report
+        uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: no-factory-v3-green-path-${{ github.sha }}
+          path: target/no-factory-v3-green-path/
+          if-no-files-found: warn
+          retention-days: 90
+      - name: Upload gate:full rollup
+        uses: actions/upload-artifact@v7.0.1
+        if: always()
+        with:
+          name: gate-full-rollup-${{ github.sha }}
+          path: target/release-gate-with-replacement/
+          if-no-files-found: warn
+          retention-days: 90
+
   assemble-promotion-plan:
     name: Assemble immutable hosted promotion plan
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [bind-release-plan, native-build, linux-cross-build-boundary]
+    needs: [bind-release-plan, native-build, linux-cross-build-boundary, hosted-release-guard]
     permissions:
       actions: read
       contents: read
