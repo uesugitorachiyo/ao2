@@ -3634,6 +3634,8 @@ fn public_release_publisher_enforces_prerelease_channel_and_immutable_asset_cont
         .expect("release publication staging script exists");
     let ship = fs::read_to_string(root.join("scripts/release-ship.sh"))
         .expect("release ship script exists");
+    let approved = fs::read_to_string(root.join("scripts/release-publish-approved-assets.sh"))
+        .expect("approved asset publisher exists");
 
     for needle in [
         "AO2_RELEASE_CHANNEL",
@@ -3691,6 +3693,13 @@ fn public_release_publisher_enforces_prerelease_channel_and_immutable_asset_cont
     assert!(ship.contains("release_approved_asset_manifest_sha256=not_supplied"));
     assert!(ship.contains("refusing to overwrite existing release"));
     assert!(ship.contains("refusing to reuse existing release tag"));
+
+    assert!(approved.contains("prerelease version requires AO2_RELEASE_CHANNEL=prerelease"));
+    assert!(approved.contains("stable version requires AO2_RELEASE_CHANNEL=stable"));
+    assert!(!approved.contains("approved asset promotion is restricted to an AO2 prerelease"));
+    assert!(approved.contains("release_create_flags=(--latest)"));
+    assert!(approved.contains("release_create_flags=(--prerelease --latest=false)"));
+    assert!(approved.contains("latest_stable_after=\"$AO2_RELEASE_TAG\""));
 }
 
 #[test]
