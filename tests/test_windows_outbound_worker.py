@@ -9,6 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKER_PATH = ROOT / "scripts" / "ao2_windows_outbound_worker.py"
+PHYSICAL_LIFECYCLE_PROBE_PATH = ROOT / "scripts" / "Test-AO2PhysicalWindowsLifecycle.ps1"
 
 
 def load_worker_module():
@@ -1182,12 +1183,13 @@ def test_windows_stack_qualification_physical_unique_runs_only_contract_physical
         "windows-worker-pytest",
         "ao2-doctor",
         "windows-file-locking-rollback",
+        "physical-windows-lifecycle",
         "delegated-to-hosted-native-windows",
         "delegated-to-hosted-native-windows",
     ]
     assert all("release-readiness" not in " ".join(command) for command in commands_seen)
     assert all("clippy" not in " ".join(command) for command in commands_seen)
-    assert len(commands_seen) == 3
+    assert len(commands_seen) == 4
 
 
 def test_physical_unique_doctor_uses_prepared_binary_not_cargo_run(
@@ -1234,3 +1236,74 @@ def test_physical_unique_doctor_uses_prepared_binary_not_cargo_run(
     ]
     assert "cargo" not in Path(commands_seen[1][0]).name.lower()
     assert "run" not in commands_seen[1]
+
+
+def test_physical_unique_lifecycle_probe_is_fixed_and_rejects_task_execution_overrides(
+    tmp_path: Path, monkeypatch
+) -> None:
+    worker = load_worker_module()
+    factory = tmp_path / "factory"
+    (factory / "ao2" / ".git").mkdir(parents=True)
+    commands_seen: list[tuple[list[str], Path, dict[str, str] | None]] = []
+
+    def fake_run(command, *, cwd, timeout_seconds, output_limit_bytes=worker.DEFAULT_OUTPUT_LIMIT_BYTES, env=None):
+        commands_seen.append((list(command), Path(cwd), env))
+        return {
+            "status": "accepted",
+            "exit_code": 0,
+            "timed_out": False,
+            "duration_seconds": 0.01,
+            "output": "{}",
+            "output_truncated": False,
+            "sanitized_stderr_category": "none",
+            "command_name": Path(command[0]).name,
+        }
+
+    monkeypatch.setattr(worker, "run_bounded_child", fake_run)
+    runtime = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=factory,
+        state=worker.WorkerState(tmp_path / "state"),
+        transport=worker.MemoryTransport(),
+        poll_interval_seconds=0.01,
+    )
+
+    result = runtime.run_action(
+        "windows_stack_qualification",
+        {"mode": "physical_unique", "repositories": ["ao2"]},
+        request_id="physical-lifecycle-fixed",
+    )
+
+    assert result["status"] == "accepted"
+    lifecycle_command = next(
+        command
+        for command, _, _ in commands_seen
+        if any(part.endswith("Test-AO2PhysicalWindowsLifecycle.ps1") for part in command)
+    )
+    assert lifecycle_command[1:] == [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "scripts/Test-AO2PhysicalWindowsLifecycle.ps1",
+    ]
+    assert next(cwd for command, cwd, _ in commands_seen if command == lifecycle_command) == factory / "ao2"
+    assert next(env for command, _, env in commands_seen if command == lifecycle_command) is None
+
+    for forbidden_key in worker.STACK_QUALIFICATION_FORBIDDEN_PARAMETERS:
+        denied = runtime.run_action(
+            "windows_stack_qualification",
+            {"mode": "physical_unique", "repositories": ["ao2"], forbidden_key: "task-controlled"},
+            request_id=f"physical-lifecycle-{forbidden_key}",
+        )
+        assert denied["status"] == "failed"
+        assert denied["error_category"] == "unsupported_parameter"
+
+
+def test_physical_lifecycle_probe_reads_the_workspace_version_without_emitting_command_lines() -> None:
+    probe = PHYSICAL_LIFECYCLE_PROBE_PATH.read_text(encoding="utf-8")
+
+    assert 'Get-SourceVersion -CargoTomlPath (Join-Path $repositoryRoot "Cargo.toml")' in probe
+    assert "CommandLine -match $workerPattern" in probe
+    assert "command_line" not in probe
+    assert "ConvertTo-Json -Compress" in probe

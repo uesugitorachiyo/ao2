@@ -337,6 +337,17 @@ AO2_PHYSICAL_UNIQUE_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
             "windows",
         ),
     },
+    {
+        "name": "physical-windows-lifecycle",
+        "argv": (
+            "{powershell}",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            "scripts/Test-AO2PhysicalWindowsLifecycle.ps1",
+        ),
+    },
 )
 WINDOWS_REPOSITORY_PROFILES: dict[str, dict[str, tuple[ProfileCommand, ...]]] = {
     "ao-architecture": {
