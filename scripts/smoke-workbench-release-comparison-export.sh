@@ -32,6 +32,12 @@ serve_err="$AO2_WORKBENCH_RELEASE_COMPARISON_ROOT/workbench-serve.err"
 
 rm -rf "$repo"
 cp -R fixtures/discount-service "$repo"
+git init -q "$repo"
+git -C "$repo" config user.name "AO2 Canary"
+git -C "$repo" config user.email "ao2-canary@example.invalid"
+git -C "$repo" add -A
+git -C "$repo" commit -q -m fixture
+git -C "$repo" rev-parse --git-common-dir >/dev/null
 ao2_cmd workbench support-keygen --out "$signing_key" --bits 2048 >/dev/null
 cat > "$redaction_prompt" <<'PROMPT'
 cat > discount_service/discounts.py <<'PY'
