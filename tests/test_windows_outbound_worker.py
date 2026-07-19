@@ -1306,4 +1306,24 @@ def test_physical_lifecycle_probe_reads_the_workspace_version_without_emitting_c
     assert 'Get-SourceVersion -CargoTomlPath (Join-Path $repositoryRoot "Cargo.toml")' in probe
     assert "CommandLine -match $workerPattern" in probe
     assert "command_line" not in probe
+    assert "request_id" not in probe
+    assert "result_id" not in probe
+    assert "completed_at" not in probe
+    assert "AO2_BUILD_GIT_COMMIT" in probe
+    assert "cargo build --locked -p ao2-cli --bin ao2 --target-dir $targetRoot" in probe
+    assert "cargo build --locked --release -p ao2-cli --bin ao2 --target-dir $targetRoot" in probe
+    assert "version --json" in probe
+    assert "release package" in probe
+    assert "BUILD-PROVENANCE.json" in probe
+    assert "RELEASE-MANIFEST.json" in probe
+    assert 'Join-Path $extractRoot "install.ps1"' in probe
+    assert "ao2.exe.install-verification.json" in probe
+    assert "$installVerification.offline_verification.schema_version" in probe
+    assert "$installVerification.offline_verification.status" in probe
+    assert "$installVerification.offline_verification.checksum_coverage_verified" in probe
+    assert '$installVerification.release_acceptance_owner -ne "factory-v3 evaluator-closer"' in probe
+    assert "install rollback --install-dir $installRoot" in probe
+    assert "Get-FileHash -Algorithm SHA256" in probe
+    assert "rollback_runner_separate" in probe
+    assert "temp_cleanup_completed" in probe
     assert "ConvertTo-Json -Compress" in probe
