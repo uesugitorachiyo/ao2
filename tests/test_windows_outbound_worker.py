@@ -274,6 +274,43 @@ def test_duplicate_and_completed_tasks_are_not_executed_twice(tmp_path: Path) ->
     assert len(transport.posted_results_by_request_id()) == 1
 
 
+def test_scaled_worker_ledger_recovers_duplicate_protection_after_primary_json_corruption(
+    tmp_path: Path, monkeypatch
+) -> None:
+    worker = load_worker_module()
+    state_root = tmp_path / "state"
+    state = worker.WorkerState(state_root)
+
+    for index in range(1200):
+        request_id = f"scaled-ledger-{index:04d}"
+        assert state.claim(request_id, "status") is True
+        state.complete(request_id, "accepted")
+
+    state.ledger_path.write_text('{"schema_version": "truncated", "tasks": {', encoding="utf-8")
+
+    transport = worker.MemoryTransport()
+    executions: list[str] = []
+    restarted = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        state=worker.WorkerState(state_root),
+        transport=transport,
+        poll_interval_seconds=0.01,
+    )
+    monkeypatch.setattr(
+        restarted,
+        "run_action",
+        lambda action, parameters, request_id="": executions.append(request_id)
+        or {"status": "accepted", "request_id": request_id},
+    )
+
+    task = worker.control_task(request_id="scaled-ledger-1199", action="ao2_doctor")
+
+    assert restarted.accept_control_task(task) == "duplicate"
+    assert executions == []
+    assert "scaled-ledger-1199" not in transport.posted_results_by_request_id()
+
+
 def test_allowlist_rejects_arbitrary_command_text(tmp_path: Path) -> None:
     worker = load_worker_module()
     transport = worker.MemoryTransport()
