@@ -1132,3 +1132,59 @@ def test_windows_stack_qualification_invalidates_reuse_when_profile_digest_chang
     assert result["reuse_from_request_id"] == "retained-windows-run"
     assert result["reuse_invalidated"] is True
     assert commands_seen == []
+
+
+def test_windows_stack_qualification_physical_unique_runs_only_contract_physical_rows(
+    tmp_path: Path, monkeypatch
+) -> None:
+    worker = load_worker_module()
+    factory = tmp_path / "factory"
+    for repo_name in ("ao2", "ao2-control-plane", "ao-command"):
+        (factory / repo_name / ".git").mkdir(parents=True)
+    commands_seen: list[list[str]] = []
+
+    def fake_run(command, *, cwd, timeout_seconds, output_limit_bytes=worker.DEFAULT_OUTPUT_LIMIT_BYTES, env=None):
+        commands_seen.append(list(command))
+        return {
+            "status": "accepted",
+            "exit_code": 0,
+            "timed_out": False,
+            "duration_seconds": 0.01,
+            "output": "ok",
+            "output_truncated": False,
+            "sanitized_stderr_category": "none",
+            "command_name": Path(command[0]).name,
+        }
+
+    monkeypatch.setattr(worker, "run_bounded_child", fake_run)
+    runtime = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=factory,
+        state=worker.WorkerState(tmp_path / "state"),
+        transport=worker.MemoryTransport(),
+        poll_interval_seconds=0.01,
+    )
+
+    result = runtime.run_action(
+        "windows_stack_qualification",
+        {
+            "mode": "physical_unique",
+            "repositories": ["ao2", "ao2-control-plane", "ao-command"],
+            "profile_digest": "sha256:physical-unique",
+        },
+        request_id="physical-unique",
+    )
+
+    assert result["status"] == "accepted"
+    assert result["mode"] == "physical_unique"
+    command_names = [row["sanitized_command_name"] for row in result["results"]]
+    assert command_names == [
+        "windows-worker-pytest",
+        "ao2-doctor",
+        "windows-file-locking-rollback",
+        "delegated-to-hosted-native-windows",
+        "delegated-to-hosted-native-windows",
+    ]
+    assert all("release-readiness" not in " ".join(command) for command in commands_seen)
+    assert all("clippy" not in " ".join(command) for command in commands_seen)
+    assert len(commands_seen) == 3
