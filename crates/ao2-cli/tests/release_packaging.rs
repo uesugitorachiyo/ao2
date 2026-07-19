@@ -4247,6 +4247,13 @@ fn linux_x86_64_docker_packaging_constrains_emulated_build_parallelism() {
     assert!(script.contains("AO2_LINUX_X86_64_CARGO_BUILD_JOBS"));
     assert!(script.contains("CARGO_BUILD_JOBS=\"$AO2_LINUX_X86_64_CARGO_BUILD_JOBS\""));
     assert!(script.contains("CARGO_INCREMENTAL=0"));
+    assert!(script.contains("AO2_LINUX_X86_64_BUILD_STRATEGY"));
+    assert!(script.contains("AO2_LINUX_X86_64_RUN_DOCKER_PLATFORM"));
+    assert!(script.contains("AO2_LINUX_X86_64_BUILD_DOCKER_PLATFORM"));
+    assert!(script.contains("x86_64-unknown-linux-gnu"));
+    assert!(script.contains("gcc-x86-64-linux-gnu"));
+    assert!(script.contains("libc6-dev-amd64-cross"));
+    assert!(script.contains("CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER"));
 }
 
 #[test]
