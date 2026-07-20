@@ -4425,20 +4425,30 @@ fn w4_release_workflows_include_no_factory_v3_guard_artifacts() {
     let public_release =
         fs::read_to_string(root.join(".github/workflows/public-release-build.yml"))
             .expect("public release build workflow exists");
+    let hosted_validator =
+        fs::read_to_string(root.join("scripts/validate_hosted_release_candidates.py"))
+            .expect("hosted native candidate validator exists");
     let w4_roadmap = fs::read_to_string(root.join("docs/roadmap/PHASE-2-W4-CI-INTEGRATION.md"))
         .expect("W4 roadmap exists");
     let ready_to_ship = fs::read_to_string(root.join("docs/release/READY-TO-SHIP.md"))
         .expect("ready-to-ship release runbook exists");
 
-    for artifact in [&release_gate, &public_release] {
-        assert!(artifact.contains("npm run verify:no-factory-v3"));
-        assert!(artifact.contains("AO2_HOSTED_RELEASE_GATE"));
-        assert!(artifact.contains("AO2_REQUIRE_NATIVE_WINDOWS_SMOKE"));
-        assert!(artifact.contains("AO2_ALLOW_UNSIGNED_OBLIGATION_GATES"));
-        assert!(artifact.contains("target/no-factory-v3-green-path/"));
-        assert!(artifact.contains("target/release-gate-with-replacement/"));
-        assert!(artifact.contains("if-no-files-found: warn"));
-    }
+    assert!(release_gate.contains("npm run verify:no-factory-v3"));
+    assert!(release_gate.contains("AO2_HOSTED_RELEASE_GATE"));
+    assert!(release_gate.contains("AO2_REQUIRE_NATIVE_WINDOWS_SMOKE"));
+    assert!(release_gate.contains("AO2_ALLOW_UNSIGNED_OBLIGATION_GATES"));
+    assert!(release_gate.contains("target/no-factory-v3-green-path/"));
+    assert!(release_gate.contains("target/release-gate-with-replacement/"));
+    assert!(release_gate.contains("if-no-files-found: warn"));
+
+    assert!(public_release.contains("npm run verify:no-factory-v3"));
+    assert!(public_release.contains("validate_hosted_release_candidates.py"));
+    assert!(public_release.contains("--source-sha \"$SOURCE_SHA\""));
+    assert!(public_release.contains("npm run verify:replacement"));
+    assert!(public_release.contains("target/no-factory-v3-green-path/"));
+    assert!(public_release.contains("target/hosted-release/native-gate/summary.json"));
+    assert!(hosted_validator.contains("signed_four_archive_release_gate"));
+    assert!(!public_release.contains("npm run gate:full"));
     assert!(w4_roadmap.contains("Stage 0"));
     assert!(w4_roadmap.contains("gate_with_replacement_passed=3/3"));
     assert!(ready_to_ship.contains("release-gate.yml"));
@@ -4584,8 +4594,11 @@ fn ci_workflow_runs_on_public_changes_while_release_gates_stay_manual() {
         assert!(release_workflow.contains("workflow_dispatch:"));
         assert!(!release_workflow.contains("pull_request:"));
         assert!(!release_workflow.contains("\n  push:"));
-        assert!(release_workflow.contains("npm run gate:full"));
     }
+    assert!(release_gate.contains("npm run gate:full"));
+    assert!(public_release.contains("validate_hosted_release_candidates.py"));
+    assert!(public_release.contains("npm run verify:replacement"));
+    assert!(!public_release.contains("npm run gate:full"));
 }
 
 #[test]
