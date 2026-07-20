@@ -25,7 +25,7 @@ the normal flow is:
 
 [`v0.5.2`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.2)
 is the current stable public AO2 release. It is qualified with
-[AO2 Control Plane v0.1.16](https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.16).
+[AO2 Control Plane v0.1.17](https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.17).
 
 Choose one supported archive:
 

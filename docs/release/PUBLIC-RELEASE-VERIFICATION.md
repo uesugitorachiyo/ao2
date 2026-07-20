@@ -6,7 +6,7 @@ This is the operator index for verifying public release evidence across
 The current public release pair is:
 
 - AO2 stable release: `v0.5.2`
-- AO2 control-plane stable release: `v0.1.16`
+- AO2 control-plane stable release: `v0.1.17`
 
 All checks below are read-only. They download release assets or GitHub Actions
 artifacts, verify checksums and summaries, and do not approve AO2 runs, mutate
@@ -58,7 +58,7 @@ release approval authority.
 
 The control-plane uses `Post Release Verification` in
 `.github/workflows/post-release-verification.yml`. It can be dispatched
-manually and runs on schedule. It downloads all public `v0.1.16` release
+manually and runs on schedule. It downloads all public `v0.1.17` release
 assets, verifies `SHA256SUMS`, and writes a release publication closure summary
 on Ubuntu, macOS, and Windows.
 

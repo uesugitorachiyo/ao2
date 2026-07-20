@@ -97,7 +97,7 @@ not use a live provider transcript, so a nested `provider_score.verdict` of
   sections only.
 - Common failures: [Troubleshooting](TROUBLESHOOTING.md)
 - Public release evidence: [Public Release Verification](release/PUBLIC-RELEASE-VERIFICATION.md)
-- Compatible stable companion: [AO2 Control Plane v0.1.16](https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.16)
+- Compatible stable companion: [AO2 Control Plane v0.1.17](https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.17)
 
 Open an issue with the AO2 version, host OS, command, and redacted error output
 if the public archive verifies but install or the governed demo fails.
