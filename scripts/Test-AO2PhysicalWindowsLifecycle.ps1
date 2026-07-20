@@ -17,6 +17,25 @@ function Get-Sha256 {
     return (Get-FileHash -Algorithm SHA256 -LiteralPath $Path).Hash.ToLowerInvariant()
 }
 
+function Invoke-QuietNativeCommand {
+    param(
+        [string]$FilePath,
+        [string[]]$ArgumentList
+    )
+
+    $nativeExitCode = -1
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        # Windows PowerShell 5.1 promotes native stderr to NativeCommandError.
+        $ErrorActionPreference = "Continue"
+        & $FilePath @ArgumentList *> $null
+        $nativeExitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+    return [int]$nativeExitCode
+}
+
 function Get-VerifiedVersion {
     param(
         [string]$Binary,
@@ -222,8 +241,10 @@ try {
     $failureStage = "debug-build"
     $env:AO2_BUILD_GIT_COMMIT = $sourceSha
     $env:AO2_BUILD_PROFILE = "debug"
-    & cargo build --locked -p ao2-cli --bin ao2 --target-dir $targetRoot *> $null
-    if ($LASTEXITCODE -ne 0) {
+    $debugBuildExitCode = Invoke-QuietNativeCommand -FilePath cargo -ArgumentList @(
+        "build", "--locked", "-p", "ao2-cli", "--bin", "ao2", "--target-dir", $targetRoot
+    )
+    if ($debugBuildExitCode -ne 0) {
         throw "exact-head debug prior build failed"
     }
     $failureStage = "debug-identity"
@@ -234,8 +255,10 @@ try {
     $result.installed_candidate_lifecycle.prior_digest = $priorDigest
 
     $env:AO2_BUILD_PROFILE = "release"
-    & cargo build --locked --release -p ao2-cli --bin ao2 --target-dir $targetRoot *> $null
-    if ($LASTEXITCODE -ne 0) {
+    $releaseBuildExitCode = Invoke-QuietNativeCommand -FilePath cargo -ArgumentList @(
+        "build", "--locked", "--release", "-p", "ao2-cli", "--bin", "ao2", "--target-dir", $targetRoot
+    )
+    if ($releaseBuildExitCode -ne 0) {
         throw "exact-head release candidate build failed"
     }
     $candidateBinary = Join-Path $targetRoot "release\ao2.exe"
@@ -265,8 +288,10 @@ try {
     }
     $result.installed_candidate_lifecycle.candidate_package_created = $true
 
-    & tar -xzf $archive -C $extractRoot *> $null
-    if ($LASTEXITCODE -ne 0) {
+    $extractExitCode = Invoke-QuietNativeCommand -FilePath tar -ArgumentList @(
+        "-xzf", $archive, "-C", $extractRoot
+    )
+    if ($extractExitCode -ne 0) {
         throw "release package extraction failed"
     }
     $manifest = Get-Content -Raw -LiteralPath (Join-Path $extractRoot "RELEASE-MANIFEST.json") | ConvertFrom-Json
