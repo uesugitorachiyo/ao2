@@ -457,6 +457,7 @@ jobs:
               --test contract_gate_support_signing
               --test contract_obligation_gate_signing_survey
               --test contract_verify_obligation_gate_signing
+              --test troubleshooting_support_bundle
           - os: windows-latest
             phase: test-cli-factory-control
             timeout_minutes: 20

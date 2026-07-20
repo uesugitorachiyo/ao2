@@ -8,6 +8,62 @@ For public issue reports, start from
 [AO2 Support Reproduction Checklist](SUPPORT-REPRODUCTION.md). The same file is
 available at `docs/SUPPORT-REPRODUCTION.md` in the repository.
 
+## Privacy-Safe Support Bundle
+
+Build a deterministic observer-only troubleshooting record from a bounded
+source file:
+
+```sh
+ao2 support bundle \
+  --input support-source.json \
+  --out support-bundle.json \
+  --json
+```
+
+The source record names numeric AO2 and Control Plane versions, allowlisted
+platform and workflow/verifier identities, approval/replay/evidence status,
+public-safe digests, repository-owned failure category and phase values,
+bounded diagnostic excerpts, and one repository-owned exact smallest safe next
+action. It must declare every execution and publication boundary false.
+
+The command rejects input larger than 64 KiB, unknown fields, malformed
+digests, symlink input, source-like log content, and unsafe boundary claims. It
+limits logs to 16 entries of 2 KiB each and replaces every free-form diagnostic
+payload with `[REDACTED_LOG]`. This excludes known and unrecognized credential,
+environment, source, repository, and filesystem content. Import requires the
+recorded input and fully-redacted counts to equal the actual log cardinality.
+The command refuses to overwrite an existing output, and the generated bundle
+is also limited to 64 KiB.
+
+The stable `problem_fingerprint` identifies the normalized failure and is safe
+to carry into the separately governed `ao2 issue draft-pr` evidence path.
+Changing only diagnostic log text does not change the fingerprint. Treat the
+bundle as sanitized untrusted input: inspect it before issue drafting, and do
+not add raw logs, environment dumps, source fragments, private repository
+names, or local build artifacts.
+
+To bind an inspected bundle to a governed draft preview, set the draft
+evidence-pack digest to the bundle's exact `bundle_sha256`, use the canonical
+support title `AO2 troubleshooting: <category> during <phase>` and body fields
+derived from the bundle workflow identity, problem fingerprint, and bundle
+SHA-256, and run:
+
+```sh
+ao2 issue draft-pr preview \
+  --evidence draft-evidence.json \
+  --support-bundle support-bundle.json \
+  --out draft-action.json \
+  --json
+```
+
+The preview rejects any bundle, draft text, or draft-evidence mismatch and adds
+a typed digest/fingerprint support binding to the action. Verification rejects
+reserved support claims without that binding. Neither path performs an issue
+write.
+
+`ao2 support bundle` performs no work, provider call, issue/public write,
+release, or deployment.
+
 ## Approvals
 
 AO2 approval prompts bind the proposed change to exact content digests. If an

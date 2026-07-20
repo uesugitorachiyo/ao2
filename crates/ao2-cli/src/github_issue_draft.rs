@@ -27,6 +27,8 @@ pub(crate) enum DraftPrCommand {
     Preview {
         #[arg(long)]
         evidence: PathBuf,
+        #[arg(long = "support-bundle")]
+        support_bundle: Option<PathBuf>,
         #[arg(long)]
         out: PathBuf,
         #[arg(long)]
@@ -58,9 +60,10 @@ pub(crate) fn run(command: DraftPrCommand, digest: DigestFn) -> Result<()> {
     match command {
         DraftPrCommand::Preview {
             evidence,
+            support_bundle,
             out,
             json,
-        } => preview(&evidence, &out, json, digest),
+        } => preview(&evidence, support_bundle.as_deref(), &out, json, digest),
         DraftPrCommand::Verify {
             action,
             expected_action_digest,
@@ -160,8 +163,21 @@ struct DraftSubject {
     issue: IssueIdentity,
     repository: RepositoryIdentity,
     repair: RepairEvidence,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    support_bundle: Option<SupportBundleSubjectBinding>,
     request: DraftRequest,
     safety: SafetyBoundary,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct SupportBundleSubjectBinding {
+    schema_version: String,
+    bundle_sha256: String,
+    problem_fingerprint: String,
+    workflow_identity: String,
+    failure_category: String,
+    failed_phase: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -378,9 +394,41 @@ where
     Option::<T>::deserialize(deserializer)
 }
 
-fn preview(path: &Path, out: &Path, json: bool, digest: DigestFn) -> Result<()> {
+fn preview(
+    path: &Path,
+    support_bundle: Option<&Path>,
+    out: &Path,
+    json: bool,
+    digest: DigestFn,
+) -> Result<()> {
     let evidence: DraftEvidence = read_bounded_json(path)?;
-    let subject = subject_from_evidence(evidence)?;
+    let support_binding = if let Some(bundle_path) = support_bundle {
+        let binding = crate::support_bundle::validate_for_governed_issue(bundle_path, digest)?;
+        if evidence.repair.evidence_pack_sha256 != binding.bundle_sha256 {
+            bail!("draft evidence is not bound to the exact support bundle digest");
+        }
+        let subject_binding = SupportBundleSubjectBinding {
+            schema_version: "ao2.github-draft-pr-support-binding.v0.1".to_string(),
+            bundle_sha256: binding.bundle_sha256,
+            problem_fingerprint: binding.problem_fingerprint,
+            workflow_identity: binding.workflow_identity,
+            failure_category: binding.failure_category,
+            failed_phase: binding.failed_phase,
+        };
+        let (expected_title, expected_body) = support_draft_text(&subject_binding);
+        if evidence.draft.title != expected_title || evidence.draft.body != expected_body {
+            bail!("support bundle draft text must match the canonical privacy-safe template");
+        }
+        Some(subject_binding)
+    } else {
+        if contains_reserved_support_claim(&evidence.draft.body) {
+            bail!(
+                "draft body makes a reserved support-bundle claim without validated bundle input"
+            );
+        }
+        None
+    };
+    let subject = subject_from_evidence(evidence, support_binding)?;
     let subject_value = serde_json::to_value(&subject)?;
     let action = DraftAction {
         schema_version: "ao2.github-draft-pr-action.v1".to_string(),
@@ -778,7 +826,10 @@ fn validate_exchange_attestation(
     Ok(())
 }
 
-fn subject_from_evidence(evidence: DraftEvidence) -> Result<DraftSubject> {
+fn subject_from_evidence(
+    evidence: DraftEvidence,
+    support_bundle: Option<SupportBundleSubjectBinding>,
+) -> Result<DraftSubject> {
     if evidence.schema_version != "ao2.github-draft-pr-evidence.v1" {
         bail!("schema_version must be ao2.github-draft-pr-evidence.v1");
     }
@@ -810,8 +861,27 @@ fn subject_from_evidence(evidence: DraftEvidence) -> Result<DraftSubject> {
         },
         repository: evidence.repository,
         repair: evidence.repair,
+        support_bundle,
         safety: evidence.safety,
     })
+}
+
+fn support_draft_text(binding: &SupportBundleSubjectBinding) -> (String, String) {
+    (
+        format!(
+            "AO2 troubleshooting: {} during {}",
+            binding.failure_category, binding.failed_phase
+        ),
+        format!(
+            "Sanitized AO2 troubleshooting bundle for {}.\n\nProblem fingerprint: {}\nBundle SHA-256: {}",
+            binding.workflow_identity, binding.problem_fingerprint, binding.bundle_sha256
+        ),
+    )
+}
+
+fn contains_reserved_support_claim(body: &str) -> bool {
+    let normalized = body.to_ascii_lowercase();
+    normalized.contains("problem fingerprint:") || normalized.contains("bundle sha-256:")
 }
 
 fn load_and_verify_action(path: &Path, expected: &str, digest: DigestFn) -> Result<DraftAction> {
@@ -844,6 +914,36 @@ fn validate_subject(subject: &DraftSubject) -> Result<()> {
     validate_repository(&subject.repository)?;
     validate_repair(&subject.repair)?;
     validate_safety(&subject.safety)?;
+    match &subject.support_bundle {
+        Some(binding) => {
+            if binding.schema_version != "ao2.github-draft-pr-support-binding.v0.1"
+                || !is_sha256(&binding.bundle_sha256)
+                || !binding
+                    .problem_fingerprint
+                    .strip_prefix("sha256:")
+                    .is_some_and(is_sha256)
+                || subject.repair.evidence_pack_sha256 != binding.bundle_sha256
+            {
+                bail!("support bundle subject binding is invalid");
+            }
+            crate::support_bundle::validate_governed_issue_metadata(
+                &binding.workflow_identity,
+                &binding.failure_category,
+                &binding.failed_phase,
+            )?;
+            let (expected_title, expected_body) = support_draft_text(binding);
+            let expected_bound_body = bind_evidence_footer(&expected_body, &subject.issue)?;
+            if subject.request.body.title != expected_title
+                || subject.request.body.body != expected_bound_body
+            {
+                bail!("support bundle draft request does not match its canonical binding");
+            }
+        }
+        None if contains_reserved_support_claim(&subject.request.body.body) => {
+            bail!("draft action makes a reserved support-bundle claim without typed binding");
+        }
+        None => {}
+    }
     validate_evidence_footer(&subject.request.body.body, &subject.issue)?;
     let (owner, repo) = split_repository(&subject.repository.target)?;
     let expected_path = format!("/repos/{owner}/{repo}/pulls");
