@@ -1354,8 +1354,11 @@ def test_physical_lifecycle_probe_reads_the_workspace_version_without_emitting_c
     assert "result_id" not in probe
     assert "completed_at" not in probe
     assert "AO2_BUILD_GIT_COMMIT" in probe
-    assert "cargo build --locked -p ao2-cli --bin ao2 --target-dir $targetRoot" in probe
-    assert "cargo build --locked --release -p ao2-cli --bin ao2 --target-dir $targetRoot" in probe
+    assert '"build", "--locked", "-p", "ao2-cli", "--bin", "ao2", "--target-dir", $targetRoot' in probe
+    assert (
+        '"build", "--locked", "--release", "-p", "ao2-cli", "--bin", "ao2", "--target-dir", $targetRoot'
+        in probe
+    )
     assert "version --json" in probe
     assert "release package" in probe
     assert "BUILD-PROVENANCE.json" in probe
@@ -1398,3 +1401,15 @@ def test_physical_lifecycle_probe_emits_only_a_fixed_failure_stage() -> None:
         in probe
     )
     assert "$_.Exception.Message" not in probe
+
+
+def test_physical_lifecycle_probe_preserves_native_exit_codes_under_strict_error_handling() -> None:
+    probe = PHYSICAL_LIFECYCLE_PROBE_PATH.read_text(encoding="utf-8")
+
+    assert "function Invoke-QuietNativeCommand" in probe
+    assert '$ErrorActionPreference = "Continue"' in probe
+    assert "return [int]$nativeExitCode" in probe
+    assert probe.count("Invoke-QuietNativeCommand -FilePath cargo") == 2
+    assert "Invoke-QuietNativeCommand -FilePath tar" in probe
+    assert "& cargo build" not in probe
+    assert "& tar -xzf" not in probe
