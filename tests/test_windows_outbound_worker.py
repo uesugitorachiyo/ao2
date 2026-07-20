@@ -1356,3 +1356,16 @@ def test_physical_lifecycle_probe_returns_nonzero_after_a_caught_failure() -> No
     assert "$result | ConvertTo-Json -Compress -Depth 5" in probe
     assert "if (-not $lifecycleSucceeded) {" in probe
     assert "exit 1" in probe
+
+
+def test_physical_lifecycle_probe_emits_only_a_fixed_failure_stage() -> None:
+    probe = PHYSICAL_LIFECYCLE_PROBE_PATH.read_text(encoding="utf-8")
+
+    assert '$failureStage = "source-cleanliness"' in probe
+    assert '$failureStage = "debug-build"' in probe
+    assert '$failureStage = "debug-identity"' in probe
+    assert (
+        '[Console]::Error.WriteLine("physical_windows_lifecycle_failure_stage=$failureStage")'
+        in probe
+    )
+    assert "$_.Exception.Message" not in probe
