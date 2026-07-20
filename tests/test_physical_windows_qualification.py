@@ -4,9 +4,12 @@ import base64
 import copy
 import hashlib
 import importlib.util
+import io
 import json
+import re
 import subprocess
 import sys
+import tarfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -18,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "scripts" / "physical_windows_qualification.py"
 IMPORT_SCRIPT_PATH = ROOT / "scripts" / "import_physical_windows_qualification.py"
 RUN_METADATA_SCRIPT_PATH = ROOT / "scripts" / "validate_physical_windows_workflow_run.py"
+HOSTED_CANDIDATE_SCRIPT_PATH = ROOT / "scripts" / "validate_hosted_release_candidates.py"
 WORKER_PATH = ROOT / "scripts" / "ao2_windows_outbound_worker.py"
 IMPORT_WORKFLOW_PATH = ROOT / ".github" / "workflows" / "import-physical-windows-qualification.yml"
 PUBLIC_RELEASE_WORKFLOW_PATH = ROOT / ".github" / "workflows" / "public-release-build.yml"
@@ -79,6 +83,144 @@ def load_run_metadata_script():
         "validate_physical_windows_workflow_run",
         RUN_METADATA_SCRIPT_PATH,
     )
+
+
+def load_hosted_candidate_script():
+    return load_module(
+        "validate_hosted_release_candidates",
+        HOSTED_CANDIDATE_SCRIPT_PATH,
+    )
+
+
+def create_hosted_candidate_fixture(
+    root: Path,
+    *,
+    source_sha: str = SOURCE_SHA,
+    version: str = VERSION,
+) -> Path:
+    binary_names = {
+        "linux-x86_64": "bin/ao2",
+        "macos-aarch64": "bin/ao2",
+        "windows-x86_64": "bin/ao2.exe",
+    }
+    common_files = {
+        "LICENSE": b"license\n",
+        "NOTICE": b"notice\n",
+        "README.txt": b"readme\n",
+        "SBOM.cdx.json": b'{"bomFormat":"CycloneDX"}\n',
+        "UNINSTALL.txt": b"uninstall\n",
+        "VERSION": f"{version}\n".encode(),
+        "Verify-Release.ps1": b"Write-Output verified\n",
+        "install.ps1": b"Write-Output installed\n",
+        "install.sh": b"#!/bin/sh\n",
+        "verify-release.sh": b"#!/bin/sh\n",
+    }
+    for target, binary_name in binary_names.items():
+        artifact = root / f"ao2-hosted-native-candidate-{target}-{source_sha}"
+        dist = artifact / "dist"
+        dist.mkdir(parents=True)
+        archive_name = f"ao2-{version}-{target}.tar.gz"
+        archive = dist / archive_name
+        files = dict(common_files)
+        files[binary_name] = f"binary:{target}\n".encode()
+        files["BUILD-PROVENANCE.json"] = (
+            json.dumps(
+                {
+                    "build_profile": "release",
+                    "git_commit": source_sha,
+                    "package": "ao2",
+                    "schema_version": "ao2.build-provenance.v1",
+                    "target": target,
+                    "version": version,
+                },
+                sort_keys=True,
+            )
+            + "\n"
+        ).encode()
+        manifest_files = sorted([*files, "RELEASE-MANIFEST.json", "RELEASE-VERIFICATION.json", "SHA256SUMS"])
+        files["RELEASE-MANIFEST.json"] = (
+            json.dumps(
+                {
+                    "binary": "ao2",
+                    "binary_path": binary_name,
+                    "binary_sha256": hashlib.sha256(files[binary_name]).hexdigest(),
+                    "build_provenance": "BUILD-PROVENANCE.json",
+                    "checksum_file": "SHA256SUMS",
+                    "files": manifest_files,
+                    "package": f"ao2-{version}-{target}",
+                    "schema_version": "ao2.release-manifest.v1",
+                    "target": target,
+                    "version": version,
+                },
+                sort_keys=True,
+            )
+            + "\n"
+        ).encode()
+        files["RELEASE-VERIFICATION.json"] = (
+            json.dumps(
+                {
+                    "binary_path": binary_name,
+                    "control_plane_approves_release": False,
+                    "mutates_ao_artifacts": False,
+                    "provider_api_keys_required": False,
+                    "schema_version": "ao2.release-archive-offline-verification.v1",
+                    "status": "packaged",
+                    "target": target,
+                    "version": version,
+                },
+                sort_keys=True,
+            )
+            + "\n"
+        ).encode()
+        files["SHA256SUMS"] = "".join(
+            f"{hashlib.sha256(body).hexdigest()}  {name}\n"
+            for name, body in sorted(files.items())
+        ).encode()
+        with tarfile.open(archive, "w:gz") as bundle:
+            for name, body in sorted(files.items()):
+                info = tarfile.TarInfo(name)
+                info.mode = 0o755 if name == binary_name or name.endswith(".sh") else 0o644
+                info.size = len(body)
+                bundle.addfile(info, io.BytesIO(body))
+        summary = {
+            "archive": (
+                f"target\\release-archive-hosted-smoke\\{target}\\dist\\{archive_name}"
+                if target == "windows-x86_64"
+                else f"target/release-archive-hosted-smoke/{target}/dist/{archive_name}"
+            ),
+            "control_plane_approves_release": False,
+            "install_verification_evidence": "target/install-verification.json",
+            "install_verification_schema": "ao2.install-verification-evidence.v1",
+            "installed_binary": binary_name,
+            "mutates_ao_artifacts": False,
+            "provider_api_keys_required": False,
+            "release_acceptance_owner": "factory-v3 evaluator-closer",
+            "schema_version": "ao2.release-archive-hosted-smoke.v1",
+            "status": "passed",
+            "target": target,
+            "version": version,
+        }
+        (artifact / "summary.json").write_text(
+            json.dumps(summary, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        if target == "windows-x86_64":
+            (artifact / "windows-coverage-ownership.json").write_text(
+                json.dumps(
+                    {
+                        "hosted_windows_portable_suite_owner": True,
+                        "linux_mingw_x86_64_pc_windows_gnu": "non_authoritative",
+                        "physical_windows_mode": "physical_unique",
+                        "schema_version": "ao2.windows-coverage-ownership.v1",
+                        "status": "passed",
+                        "target_triple": "x86_64-pc-windows-msvc",
+                    },
+                    sort_keys=True,
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+    return root
 
 
 def producer_run_metadata(
@@ -1127,14 +1269,16 @@ def test_public_release_promotion_plan_binds_verified_physical_evidence_digest()
     assert 're.split(r"[\\\\/]", str(summary.get("archive", "")))[-1]' in assemble["run"]
 
 
-def test_public_release_hosted_guard_builds_the_exact_source_binary_before_gate() -> None:
+def test_public_release_hosted_guard_builds_exact_source_before_replacement_gate() -> None:
     workflow = load_public_release_workflow()
     guard = workflow["jobs"]["hosted-release-guard"]
     steps = guard["steps"]
     download = next(step for step in steps if step["name"] == "Download native gate candidates")
-    prepare = next(step for step in steps if step["name"] == "Prepare exact native gate archives")
+    validation = next(
+        step for step in steps if step["name"] == "Validate exact hosted native candidates"
+    )
     build = next(step for step in steps if step["name"] == "Build hosted release gate binary")
-    gate = next(step for step in steps if step["name"] == "Run hosted release gate guard")
+    replacement = next(step for step in steps if step["name"] == "Run replacement parity guard")
 
     assert guard["needs"] == ["bind-release-plan", "native-build"]
     assert guard["permissions"] == {"actions": "read", "contents": "read"}
@@ -1144,22 +1288,136 @@ def test_public_release_hosted_guard_builds_the_exact_source_binary_before_gate(
         "path": "target/hosted-release/gate-candidates",
         "merge-multiple": "false",
     }
-    assert prepare["env"] == {
-        "RELEASE_VERSION": "${{ needs.bind-release-plan.outputs.version }}",
-    }
-    for target, destination in {
-        "linux-x86_64": "dist-linux-x86_64",
-        "macos-aarch64": "dist",
-        "windows-x86_64": "dist-windows",
-    }.items():
-        assert target in prepare["run"]
-        assert destination in prepare["run"]
-    assert 're.split(r"[\\\\/]", str(summary.get("archive", "")))[-1]' in prepare["run"]
-    assert steps.index(download) < steps.index(prepare) < steps.index(build) < steps.index(gate)
+    assert steps.index(download) < steps.index(validation) < steps.index(build) < steps.index(replacement)
     assert build["env"] == {
         "AO2_BUILD_GIT_COMMIT": "${{ needs.bind-release-plan.outputs.source_sha }}",
     }
     assert build["run"] == "cargo build --locked --release -p ao2-cli --bin ao2"
+
+
+def test_hosted_candidate_validator_accepts_exact_three_platform_contract(tmp_path: Path) -> None:
+    validator = load_hosted_candidate_script()
+    root = create_hosted_candidate_fixture(tmp_path / "candidates")
+
+    report = validator.validate_candidates(root, SOURCE_SHA, VERSION)
+
+    assert report["schema_version"] == "ao2.hosted-native-candidate-gate.v1"
+    assert report["status"] == "passed"
+    assert report["source_sha"] == SOURCE_SHA
+    assert report["version"] == VERSION
+    assert [item["target"] for item in report["artifacts"]] == [
+        "linux-x86_64",
+        "macos-aarch64",
+        "windows-x86_64",
+    ]
+    assert all(len(item["archive_sha256"]) == 64 for item in report["artifacts"])
+    assert report["trust_boundary"] == {
+        "mutates_ao_artifacts": False,
+        "mutates_releases": False,
+        "requires_signing_credentials": False,
+        "signed_four_archive_release_gate": "separate_canonical_gate",
+    }
+
+
+@pytest.mark.parametrize(
+    ("mutation", "error"),
+    [
+        ("wrong_source", "git_commit"),
+        ("unsafe_summary", "mutates_ao_artifacts"),
+        ("missing_target", "target mismatch"),
+        ("unexpected_root_file", "candidate root inventory"),
+        ("unsafe_tar_member", "unsafe archive member"),
+        ("altered_checksum", "checksum mismatch"),
+    ],
+)
+def test_hosted_candidate_validator_rejects_invalid_candidate_contract(
+    tmp_path: Path,
+    mutation: str,
+    error: str,
+) -> None:
+    validator = load_hosted_candidate_script()
+    root = create_hosted_candidate_fixture(tmp_path / "candidates")
+    linux = next(root.glob("*linux-x86_64*"))
+    if mutation == "unsafe_summary":
+        summary_path = linux / "summary.json"
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        summary["mutates_ao_artifacts"] = True
+        summary_path.write_text(json.dumps(summary) + "\n", encoding="utf-8")
+    elif mutation == "missing_target":
+        macos = next(item for item in root.iterdir() if "macos-aarch64" in item.name)
+        for path in sorted(macos.rglob("*"), reverse=True):
+            if path.is_file():
+                path.unlink()
+            else:
+                path.rmdir()
+        macos.rmdir()
+    elif mutation == "unexpected_root_file":
+        (root / "unexpected.txt").write_text("unexpected\n", encoding="utf-8")
+    else:
+        archive = next((linux / "dist").glob("*.tar.gz"))
+        with tarfile.open(archive, "r:gz") as source:
+            members = [(member, source.extractfile(member).read()) for member in source.getmembers()]
+        if mutation == "wrong_source":
+            members = [
+                (
+                    member,
+                    (
+                        body.replace(SOURCE_SHA.encode(), ("b" * 40).encode())
+                        if member.name == "BUILD-PROVENANCE.json"
+                        else body
+                    ),
+                )
+                for member, body in members
+            ]
+        elif mutation == "unsafe_tar_member":
+            info = tarfile.TarInfo("../escape")
+            info.size = 1
+            members.append((info, b"x"))
+        elif mutation == "altered_checksum":
+            members = [
+                (
+                    member,
+                    re.sub(rb"^[0-9a-f]{64}", b"0" * 64, body, count=1)
+                    if member.name == "SHA256SUMS"
+                    else body,
+                )
+                for member, body in members
+            ]
+        with tarfile.open(archive, "w:gz") as destination:
+            for member, body in members:
+                member.size = len(body)
+                destination.addfile(member, io.BytesIO(body))
+
+    with pytest.raises(validator.CandidateValidationError, match=error):
+        validator.validate_candidates(root, SOURCE_SHA, VERSION)
+
+
+def test_public_release_hosted_guard_uses_three_candidate_gate_not_signed_four_archive_gate() -> None:
+    workflow = load_public_release_workflow()
+    guard = workflow["jobs"]["hosted-release-guard"]
+    steps = guard["steps"]
+    validation = next(
+        step for step in steps if step["name"] == "Validate exact hosted native candidates"
+    )
+    replacement = next(step for step in steps if step["name"] == "Run replacement parity guard")
+
+    assert validation["env"] == {
+        "RELEASE_VERSION": "${{ needs.bind-release-plan.outputs.version }}",
+        "SOURCE_SHA": "${{ needs.bind-release-plan.outputs.source_sha }}",
+    }
+    assert validation["run"] == (
+        "python3 scripts/validate_hosted_release_candidates.py "
+        "--root target/hosted-release/gate-candidates "
+        "--source-sha \"$SOURCE_SHA\" --version \"$RELEASE_VERSION\" "
+        "--out target/hosted-release/native-gate/summary.json"
+    )
+    assert replacement["run"] == "npm run verify:replacement"
+    assert all(step.get("run") != "npm run gate:full" for step in steps)
+    assert any(
+        step["name"] == "Upload hosted native candidate gate"
+        and step["with"]["path"] == "target/hosted-release/native-gate/summary.json"
+        for step in steps
+    )
 
 
 def test_import_script_main_materializes_exact_canonical_artifact(
