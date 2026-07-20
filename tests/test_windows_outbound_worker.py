@@ -5,11 +5,13 @@ import json
 import subprocess
 import sys
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKER_PATH = ROOT / "scripts" / "ao2_windows_outbound_worker.py"
+AUTHORIZER_PATH = ROOT / "scripts" / "authorize_windows_control_task.py"
 PHYSICAL_LIFECYCLE_PROBE_PATH = ROOT / "scripts" / "Test-AO2PhysicalWindowsLifecycle.ps1"
 
 
@@ -21,6 +23,29 @@ def load_worker_module():
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def allow_test_execution(*_args, **_kwargs):
+    return True, "test_fixture_authorized"
+
+
+def generate_rsa_keypair(tmp_path: Path) -> tuple[Path, Path]:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    private_key = tmp_path / "task-authorization-private.pem"
+    public_key = tmp_path / "task-authorization-public.pem"
+    subprocess.run(
+        ["openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048", "-out", private_key],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    subprocess.run(
+        ["openssl", "pkey", "-in", private_key, "-pubout", "-out", public_key],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return private_key, public_key
 
 
 def test_bounded_child_timeout_kills_process_tree(tmp_path: Path) -> None:
@@ -182,6 +207,7 @@ def test_worker_keeps_status_responsive_while_slow_action_runs(tmp_path: Path) -
         state=state,
         transport=transport,
         poll_interval_seconds=0.01,
+        execution_authorization_verifier=allow_test_execution,
     )
 
     slow = worker.control_task(
@@ -211,6 +237,7 @@ def test_timeout_result_is_sanitized_and_failed_task_does_not_stop_polling(tmp_p
         state=state,
         transport=transport,
         poll_interval_seconds=0.01,
+        execution_authorization_verifier=allow_test_execution,
     )
 
     timed = worker.control_task(
@@ -253,6 +280,7 @@ def test_completed_action_result_is_retried_from_durable_outbox_after_post_failu
         state=state,
         transport=transport,
         poll_interval_seconds=0.01,
+        execution_authorization_verifier=allow_test_execution,
     )
     monkeypatch.setattr(
         runtime,
@@ -326,6 +354,7 @@ def test_scaled_worker_ledger_recovers_duplicate_protection_after_primary_json_c
         state=worker.WorkerState(state_root),
         transport=transport,
         poll_interval_seconds=0.01,
+        execution_authorization_verifier=allow_test_execution,
     )
     monkeypatch.setattr(
         restarted,
@@ -519,6 +548,7 @@ def test_windows_stack_qualification_action_is_allowlisted_and_uses_fixed_profil
         state=worker.WorkerState(tmp_path / "state"),
         transport=transport,
         poll_interval_seconds=0.01,
+        execution_authorization_verifier=allow_test_execution,
     )
 
     task = worker.control_task(
@@ -580,6 +610,7 @@ def test_ao2_full_profile_cargo_test_uses_isolated_target_dir(tmp_path: Path, mo
         state=worker.WorkerState(tmp_path / "state"),
         transport=transport,
         poll_interval_seconds=0.01,
+        execution_authorization_verifier=allow_test_execution,
     )
 
     task = worker.control_task(
@@ -643,6 +674,7 @@ def test_ao2_full_profile_npm_verify_inherits_isolated_cargo_target(tmp_path: Pa
         state=worker.WorkerState(tmp_path / "state"),
         transport=worker.MemoryTransport(),
         poll_interval_seconds=0.01,
+        execution_authorization_verifier=allow_test_execution,
     )
 
     task = worker.control_task(
@@ -695,6 +727,7 @@ def test_ao2_full_profile_uses_windows_ci_partitions_instead_of_monolithic_works
         state=worker.WorkerState(tmp_path / "state"),
         transport=worker.MemoryTransport(),
         poll_interval_seconds=0.01,
+        execution_authorization_verifier=allow_test_execution,
     )
 
     task = worker.control_task(
@@ -991,6 +1024,7 @@ def test_windows_stack_qualification_timeout_does_not_block_status(tmp_path: Pat
         state=worker.WorkerState(tmp_path / "state"),
         transport=transport,
         poll_interval_seconds=0.01,
+        execution_authorization_verifier=allow_test_execution,
     )
 
     started = runtime.accept_control_task(
@@ -1413,3 +1447,319 @@ def test_physical_lifecycle_probe_preserves_native_exit_codes_under_strict_error
     assert "Invoke-QuietNativeCommand -FilePath tar" in probe
     assert "& cargo build" not in probe
     assert "& tar -xzf" not in probe
+
+
+def test_execution_authorization_accepts_exact_short_lived_signed_action(
+    tmp_path: Path, monkeypatch
+) -> None:
+    worker = load_worker_module()
+    private_key, public_key = generate_rsa_keypair(tmp_path)
+    task = worker.control_task(request_id="signed-doctor", action="ao2_doctor")
+    signed = worker.authorize_control_task(
+        task,
+        private_key_path=private_key,
+        public_key_path=public_key,
+        ttl_seconds=300,
+        trusted_key_sha256s=(worker.public_key_sha256(public_key.read_text()),),
+    )
+    transport = worker.MemoryTransport()
+    runtime = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        state=worker.WorkerState(tmp_path / "state"),
+        transport=transport,
+        trusted_execution_key_sha256s=(worker.public_key_sha256(public_key.read_text()),),
+    )
+    monkeypatch.setattr(
+        runtime,
+        "run_action",
+        lambda action, parameters, request_id="": {
+            "status": "accepted",
+            "action": action,
+            "request_id": request_id,
+        },
+    )
+
+    assert runtime.accept_control_task(signed) == "started"
+    assert runtime.wait_for_idle(timeout_seconds=2)
+    result = transport.posted_results_by_request_id()["signed-doctor"]["ao2_cross_host"]["result"]
+    assert result["status"] == "accepted"
+    assert result["request_id"] == "signed-doctor"
+    receipt = result["execution_authorization"]
+    assert receipt["status"] == "verified"
+    assert receipt["request_id"] == "signed-doctor"
+    assert receipt["target_node"] == "windows-hp255_g10"
+    assert receipt["action_digest"] == worker.execution_action_digest(
+        signed["ao2_cross_host"]
+    )
+    assert receipt["signing_public_key_sha256"] == worker.public_key_sha256(
+        public_key.read_text()
+    )
+    assert "signature" not in json.dumps(receipt)
+    assert "public_key_pem" not in receipt
+    assert runtime.accept_control_task(signed) == "duplicate"
+
+
+def test_execution_authorization_rejects_unsigned_and_altered_mutations(tmp_path: Path) -> None:
+    worker = load_worker_module()
+    private_key, public_key = generate_rsa_keypair(tmp_path)
+    trusted = (worker.public_key_sha256(public_key.read_text()),)
+    transport = worker.MemoryTransport()
+    runtime = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        state=worker.WorkerState(tmp_path / "state"),
+        transport=transport,
+        trusted_execution_key_sha256s=trusted,
+    )
+
+    unsigned = worker.control_task(request_id="unsigned-sync", action="sync_ao_stack")
+    assert runtime.accept_control_task(unsigned) == "rejected"
+    unsigned_result = transport.posted_results_by_request_id()["unsigned-sync"]["ao2_cross_host"]["result"]
+    assert unsigned_result["error_category"] == "execution_authorization_missing"
+    assert "unsigned-sync" not in runtime.state._ledger["tasks"]
+
+    signed = worker.authorize_control_task(
+        worker.control_task(
+            request_id="altered-qualification",
+            action="windows_stack_qualification",
+            parameters={"mode": "physical_unique", "repositories": ["ao2"]},
+        ),
+        private_key_path=private_key,
+        public_key_path=public_key,
+        trusted_key_sha256s=trusted,
+    )
+    signed["ao2_cross_host"]["parameters"]["repositories"] = ["ao-command"]
+    assert runtime.accept_control_task(signed) == "rejected"
+    altered_result = transport.posted_results_by_request_id()["altered-qualification"]["ao2_cross_host"]["result"]
+    assert altered_result["error_category"] == "execution_authorization_action_digest_mismatch"
+    assert "altered-qualification" not in runtime.state._ledger["tasks"]
+
+
+def test_execution_authorization_rejects_stale_and_untrusted_signatures(tmp_path: Path) -> None:
+    worker = load_worker_module()
+    private_key, public_key = generate_rsa_keypair(tmp_path)
+    stale = worker.authorize_control_task(
+        worker.control_task(request_id="stale-doctor", action="ao2_doctor"),
+        private_key_path=private_key,
+        public_key_path=public_key,
+        issued_at=datetime.now(timezone.utc) - timedelta(hours=1),
+        ttl_seconds=300,
+        trusted_key_sha256s=(worker.public_key_sha256(public_key.read_text()),),
+    )
+    transport = worker.MemoryTransport()
+    trusted_runtime = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        state=worker.WorkerState(tmp_path / "trusted-state"),
+        transport=transport,
+        trusted_execution_key_sha256s=(worker.public_key_sha256(public_key.read_text()),),
+    )
+
+    assert trusted_runtime.accept_control_task(stale) == "rejected"
+    stale_result = transport.posted_results_by_request_id()["stale-doctor"]["ao2_cross_host"]["result"]
+    assert stale_result["error_category"] == "execution_authorization_expired"
+
+    other_private, other_public = generate_rsa_keypair(tmp_path / "other")
+    untrusted = worker.authorize_control_task(
+        worker.control_task(request_id="untrusted-doctor", action="ao2_doctor"),
+        private_key_path=other_private,
+        public_key_path=other_public,
+        trusted_key_sha256s=(worker.public_key_sha256(other_public.read_text()),),
+    )
+    assert trusted_runtime.accept_control_task(untrusted) == "rejected"
+    untrusted_result = transport.posted_results_by_request_id()["untrusted-doctor"]["ao2_cross_host"]["result"]
+    assert untrusted_result["error_category"] == "execution_authorization_untrusted_key"
+
+
+def test_execution_authorization_preserves_unsigned_observer_probes_and_target_filter(
+    tmp_path: Path,
+) -> None:
+    worker = load_worker_module()
+    transport = worker.MemoryTransport()
+    runtime = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        state=worker.WorkerState(tmp_path / "state"),
+        transport=transport,
+        trusted_execution_key_sha256s=(worker.DEFAULT_EXECUTION_KEY_SHA256,),
+    )
+
+    assert runtime.accept_control_task(
+        worker.control_task(request_id="observer-status", action="status")
+    ) == "completed"
+    assert runtime.accept_control_task(
+        worker.control_task(
+            request_id="wrong-node-mutation",
+            action="sync_ao_stack",
+            target_node="other-node",
+        )
+    ) == "ignored"
+    assert runtime.accept_control_task(
+        worker.control_task(request_id="observer-status", action="status")
+    ) == "duplicate"
+
+
+def test_authorizer_function_emits_canonical_verifiable_board(tmp_path: Path) -> None:
+    worker = load_worker_module()
+    private_key, public_key = generate_rsa_keypair(tmp_path)
+    board = {
+        "schema_version": worker.TASK_BOARD_SCHEMA,
+        "tasks": [
+            worker.control_task(
+                request_id="cli-qualification",
+                action="windows_stack_qualification",
+                parameters={"mode": "physical_unique", "repositories": ["ao2"]},
+            )
+        ],
+    }
+    authorized_task = worker.authorize_control_task(
+        board["tasks"][0],
+        private_key_path=private_key,
+        public_key_path=public_key,
+        ttl_seconds=300,
+        trusted_key_sha256s=(worker.public_key_sha256(public_key.read_text()),),
+    )
+    authorized = {"schema_version": worker.TASK_BOARD_SCHEMA, "tasks": [authorized_task]}
+    authorized_bytes = worker.canonical_json_bytes(authorized) + b"\n"
+    assert json.loads(authorized_bytes) == authorized
+    verified, category = worker.verify_execution_authorization(
+        authorized["tasks"][0]["ao2_cross_host"],
+        trusted_key_sha256s=(worker.public_key_sha256(public_key.read_text()),),
+        state_root=tmp_path / "state",
+    )
+    assert (verified, category) == (True, "execution_authorization_verified")
+    assert private_key.read_text() not in authorized_bytes.decode()
+
+
+def test_authorizer_cli_rejects_malformed_and_oversized_input(tmp_path: Path) -> None:
+    private_key, public_key = generate_rsa_keypair(tmp_path)
+    output_path = tmp_path / "authorized.json"
+    for name, payload in (
+        ("malformed.json", b"{"),
+        ("nonstandard.json", b'{"schema_version":"ao2.ai-task-board.v1","tasks":[NaN]}'),
+        ("oversized.json", b"x" * (1024 * 1024 + 1)),
+    ):
+        input_path = tmp_path / name
+        input_path.write_bytes(payload)
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(AUTHORIZER_PATH),
+                "--input",
+                str(input_path),
+                "--output",
+                str(output_path),
+                "--private-key",
+                str(private_key),
+                "--public-key",
+                str(public_key),
+            ],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        assert result.returncode != 0
+    assert not output_path.exists()
+
+
+def test_authorizer_rejects_private_mismatched_and_untrusted_public_keys(tmp_path: Path) -> None:
+    worker = load_worker_module()
+    private_key, public_key = generate_rsa_keypair(tmp_path / "first")
+    other_private, other_public = generate_rsa_keypair(tmp_path / "second")
+    task = worker.control_task(request_id="key-validation", action="ao2_doctor")
+    trusted = (worker.public_key_sha256(public_key.read_text()),)
+
+    for candidate_private, candidate_public, expected in (
+        (private_key, private_key, "public key PEM"),
+        (private_key, other_public, "does not match private key"),
+        (other_private, other_public, "not trusted"),
+    ):
+        try:
+            worker.authorize_control_task(
+                task,
+                private_key_path=candidate_private,
+                public_key_path=candidate_public,
+                trusted_key_sha256s=trusted,
+            )
+        except ValueError as exc:
+            assert expected in str(exc)
+        else:
+            raise AssertionError(f"expected key validation failure: {expected}")
+
+
+def test_worker_rejects_non_object_parameters_before_authorization_or_execution(
+    tmp_path: Path,
+) -> None:
+    worker = load_worker_module()
+    verifier_calls = []
+    executions = []
+    runtime = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        state=worker.WorkerState(tmp_path / "state"),
+        transport=worker.MemoryTransport(),
+        execution_authorization_verifier=lambda *_args, **_kwargs: verifier_calls.append(True)
+        or (True, "verified"),
+    )
+    runtime.run_action = lambda *_args, **_kwargs: executions.append(True) or {"status": "accepted"}
+    task = worker.control_task(request_id="array-parameters", action="ao2_doctor")
+    task["ao2_cross_host"]["parameters"] = ["ignored-by-old-worker"]
+
+    assert runtime.accept_control_task(task) == "rejected"
+    assert verifier_calls == []
+    assert executions == []
+    assert "array-parameters" not in runtime.state._ledger["tasks"]
+
+
+def test_poll_once_bounds_task_count_authorization_work_and_duplicate_ids(tmp_path: Path) -> None:
+    worker = load_worker_module()
+
+    class BoardTransport(worker.MemoryTransport):
+        def __init__(self, board):
+            super().__init__()
+            self.board = board
+
+        def latest_board(self):
+            return self.board
+
+    verifier_calls = []
+    over_budget = {
+        "schema_version": worker.TASK_BOARD_SCHEMA,
+        "tasks": [
+            worker.control_task(request_id=f"budget-{index}", action="ao2_doctor")
+            for index in range(worker.MAX_EXECUTION_AUTHORIZATIONS_PER_POLL + 1)
+        ],
+    }
+    runtime = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        state=worker.WorkerState(tmp_path / "budget-state"),
+        transport=BoardTransport(over_budget),
+        execution_authorization_verifier=lambda *_args, **_kwargs: verifier_calls.append(True)
+        or (False, "invalid"),
+    )
+    assert runtime.poll_once() == "authorization_budget_exceeded"
+    assert verifier_calls == []
+
+    oversized = {
+        "schema_version": worker.TASK_BOARD_SCHEMA,
+        "tasks": [
+            worker.control_task(request_id=f"status-{index}", action="status")
+            for index in range(worker.MAX_CONTROL_TASKS_PER_BOARD + 1)
+        ],
+    }
+    runtime.transport = BoardTransport(oversized)
+    assert runtime.poll_once() == "board_task_limit_exceeded"
+
+    duplicate = {
+        "schema_version": worker.TASK_BOARD_SCHEMA,
+        "tasks": [
+            worker.control_task(request_id="same-id", action="ao2_doctor"),
+            worker.control_task(request_id="same-id", action="sync_ao_stack"),
+        ],
+    }
+    runtime.transport = BoardTransport(duplicate)
+    assert runtime.poll_once() == "duplicate_control_request_id"
+    assert verifier_calls == []

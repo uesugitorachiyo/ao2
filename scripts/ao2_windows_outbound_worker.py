@@ -9,6 +9,7 @@ executes command text supplied by a task payload.
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -17,18 +18,27 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 
 CONTROL_TASK_SCHEMA = "ao2.cross-host.control-task.v1"
+EXECUTION_AUTHORIZATION_SCHEMA = "ao2.cross-host.execution-authorization.v1"
 WORKER_RESULT_SCHEMA = "ao2.cross-host.windows-worker-result.v1"
 TASK_BOARD_SCHEMA = "ao2.ai-task-board.v1"
+DEFAULT_EXECUTION_KEY_SHA256 = "7fedf62781b08a50abff300425f47c79b72f76f7208024a951d0533ebdb8f28c"
+EXECUTION_AUTHORIZATION_ALGORITHM = "rsa-pkcs1v15-sha256"
+EXECUTION_AUTHORIZATION_MAX_TTL_SECONDS = 900
+EXECUTION_AUTHORIZATION_CLOCK_SKEW_SECONDS = 300
+UNSIGNED_OBSERVER_ACTIONS = ("status", "publish_capability")
+MAX_CONTROL_TASKS_PER_BOARD = 32
+MAX_EXECUTION_AUTHORIZATIONS_PER_POLL = 4
 DEFAULT_NODE_ID = "windows-hp255_g10"
 DEFAULT_FACTORY_ROOT = Path(r"C:\ao\factory") if os.name == "nt" else Path.cwd()
 DEFAULT_STATE_ROOT = (
@@ -452,6 +462,286 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def canonical_json_bytes(value: Any) -> bytes:
+    return json.dumps(
+        value,
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+
+
+def canonical_public_key_bytes(public_key_pem: str) -> bytes:
+    normalized = public_key_pem.replace("\r\n", "\n").replace("\r", "\n").strip()
+    return (normalized + "\n").encode("ascii")
+
+
+def public_key_sha256(public_key_pem: str) -> str:
+    return hashlib.sha256(canonical_public_key_bytes(public_key_pem)).hexdigest()
+
+
+def execution_action_digest(cross_host: dict[str, Any]) -> str:
+    unsigned = {key: value for key, value in cross_host.items() if key != "execution_authorization"}
+    return hashlib.sha256(canonical_json_bytes(unsigned)).hexdigest()
+
+
+def parse_utc_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.endswith("Z"):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value[:-1] + "+00:00")
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc)
+
+
+def resolve_openssl() -> str | None:
+    resolved = shutil.which("openssl") or shutil.which("openssl.exe")
+    if resolved:
+        return str(Path(resolved))
+    if os.name == "nt":
+        roots = [
+            os.environ.get("ProgramFiles"),
+            os.environ.get("ProgramFiles(x86)"),
+            os.environ.get("ProgramW6432"),
+        ]
+        for root in roots:
+            if not root:
+                continue
+            for relative in (
+                Path("Git") / "usr" / "bin" / "openssl.exe",
+                Path("OpenSSL-Win64") / "bin" / "openssl.exe",
+                Path("OpenSSL-Win32") / "bin" / "openssl.exe",
+            ):
+                candidate = Path(root) / relative
+                if candidate.is_file():
+                    return str(candidate)
+    return None
+
+
+def execution_authorization_subject(
+    cross_host: dict[str, Any],
+    *,
+    public_key_digest: str,
+    issued_at: datetime,
+    expires_at: datetime,
+) -> dict[str, Any]:
+    return {
+        "schema_version": EXECUTION_AUTHORIZATION_SCHEMA,
+        "action_digest": execution_action_digest(cross_host),
+        "target_node": str(cross_host.get("target_node") or ""),
+        "request_id": str(cross_host.get("request_id") or ""),
+        "issued_at": issued_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "expires_at": expires_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "signing_public_key_sha256": public_key_digest,
+    }
+
+
+def authorize_control_task(
+    task: dict[str, Any],
+    *,
+    private_key_path: Path,
+    public_key_path: Path,
+    ttl_seconds: int = 300,
+    issued_at: datetime | None = None,
+    openssl_path: str | None = None,
+    trusted_key_sha256s: tuple[str, ...] = (DEFAULT_EXECUTION_KEY_SHA256,),
+) -> dict[str, Any]:
+    if ttl_seconds <= 0 or ttl_seconds > EXECUTION_AUTHORIZATION_MAX_TTL_SECONDS:
+        raise ValueError("execution authorization ttl must be between 1 and 900 seconds")
+    authorized = json.loads(json.dumps(task))
+    cross_host = authorized.get("ao2_cross_host")
+    if not isinstance(cross_host, dict):
+        raise ValueError("control task is missing ao2_cross_host")
+    if not isinstance(cross_host.get("parameters"), dict):
+        raise ValueError("control task parameters must be an object")
+    cross_host.pop("execution_authorization", None)
+    public_key_pem = public_key_path.read_text(encoding="utf-8")
+    normalized_public_key = canonical_public_key_bytes(public_key_pem)
+    if not (
+        normalized_public_key.startswith(b"-----BEGIN PUBLIC KEY-----\n")
+        and normalized_public_key.endswith(b"\n-----END PUBLIC KEY-----\n")
+        and b"PRIVATE KEY" not in normalized_public_key
+    ):
+        raise ValueError("execution authorization requires a public key PEM")
+    key_digest = public_key_sha256(public_key_pem)
+    issued = (issued_at or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    subject = execution_authorization_subject(
+        cross_host,
+        public_key_digest=key_digest,
+        issued_at=issued,
+        expires_at=issued + timedelta(seconds=ttl_seconds),
+    )
+    openssl = openssl_path or resolve_openssl()
+    if not openssl:
+        raise RuntimeError("openssl is required to sign an execution authorization")
+    with tempfile.TemporaryDirectory(prefix="ao2-task-authorization-") as temp_dir:
+        root = Path(temp_dir)
+        derived_public_key_path = root / "derived-public.pem"
+        subject_path = root / "subject.json"
+        signature_path = root / "subject.sig"
+        derive_result = subprocess.run(
+            [
+                openssl,
+                "pkey",
+                "-in",
+                str(private_key_path),
+                "-pubout",
+                "-out",
+                str(derived_public_key_path),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=15,
+            check=False,
+        )
+        if derive_result.returncode != 0 or not derived_public_key_path.is_file():
+            raise ValueError("openssl could not derive a public key from the private key")
+        derived_public_key = canonical_public_key_bytes(
+            derived_public_key_path.read_text(encoding="utf-8")
+        )
+        if derived_public_key != normalized_public_key:
+            raise ValueError("execution authorization public key does not match private key")
+        trusted = {
+            value.lower()
+            for value in trusted_key_sha256s
+            if re.fullmatch(r"[0-9a-fA-F]{64}", value)
+        }
+        if key_digest not in trusted:
+            raise ValueError("execution authorization public key is not trusted")
+        subject_path.write_bytes(canonical_json_bytes(subject))
+        result = subprocess.run(
+            [
+                openssl,
+                "dgst",
+                "-sha256",
+                "-sign",
+                str(private_key_path),
+                "-out",
+                str(signature_path),
+                str(subject_path),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=15,
+            check=False,
+        )
+        if result.returncode != 0 or not signature_path.is_file():
+            raise RuntimeError("openssl failed to sign the execution authorization")
+        signature = base64.b64encode(signature_path.read_bytes()).decode("ascii")
+    cross_host["execution_authorization"] = {
+        "subject": subject,
+        "signature_algorithm": EXECUTION_AUTHORIZATION_ALGORITHM,
+        "signature_base64": signature,
+        "public_key_pem": normalized_public_key.decode("ascii"),
+    }
+    return authorized
+
+
+def verify_execution_authorization(
+    cross_host: dict[str, Any],
+    *,
+    trusted_key_sha256s: tuple[str, ...],
+    state_root: Path,
+    now: datetime | None = None,
+) -> tuple[bool, str]:
+    authorization = cross_host.get("execution_authorization")
+    if not isinstance(authorization, dict):
+        return False, "execution_authorization_missing"
+    if set(authorization) != {
+        "subject",
+        "signature_algorithm",
+        "signature_base64",
+        "public_key_pem",
+    }:
+        return False, "execution_authorization_malformed"
+    subject = authorization.get("subject")
+    if not isinstance(subject, dict) or set(subject) != {
+        "schema_version",
+        "action_digest",
+        "target_node",
+        "request_id",
+        "issued_at",
+        "expires_at",
+        "signing_public_key_sha256",
+    }:
+        return False, "execution_authorization_malformed"
+    if subject.get("schema_version") != EXECUTION_AUTHORIZATION_SCHEMA:
+        return False, "execution_authorization_schema_mismatch"
+    if authorization.get("signature_algorithm") != EXECUTION_AUTHORIZATION_ALGORITHM:
+        return False, "execution_authorization_algorithm_mismatch"
+    public_key_pem = authorization.get("public_key_pem")
+    signature_base64 = authorization.get("signature_base64")
+    if not isinstance(public_key_pem, str) or len(public_key_pem.encode("utf-8")) > 8192:
+        return False, "execution_authorization_malformed"
+    if not isinstance(signature_base64, str) or len(signature_base64) > 4096:
+        return False, "execution_authorization_malformed"
+    try:
+        public_key_bytes = canonical_public_key_bytes(public_key_pem)
+        signature_bytes = base64.b64decode(signature_base64, validate=True)
+    except (UnicodeError, ValueError):
+        return False, "execution_authorization_malformed"
+    key_digest = hashlib.sha256(public_key_bytes).hexdigest()
+    trusted = {value.lower() for value in trusted_key_sha256s if re.fullmatch(r"[0-9a-fA-F]{64}", value)}
+    if key_digest not in trusted or subject.get("signing_public_key_sha256") != key_digest:
+        return False, "execution_authorization_untrusted_key"
+    if subject.get("target_node") != cross_host.get("target_node"):
+        return False, "execution_authorization_target_mismatch"
+    if subject.get("request_id") != cross_host.get("request_id"):
+        return False, "execution_authorization_request_mismatch"
+    if subject.get("action_digest") != execution_action_digest(cross_host):
+        return False, "execution_authorization_action_digest_mismatch"
+    issued_at = parse_utc_timestamp(subject.get("issued_at"))
+    expires_at = parse_utc_timestamp(subject.get("expires_at"))
+    if not issued_at or not expires_at or expires_at <= issued_at:
+        return False, "execution_authorization_timestamp_invalid"
+    if (expires_at - issued_at).total_seconds() > EXECUTION_AUTHORIZATION_MAX_TTL_SECONDS:
+        return False, "execution_authorization_ttl_exceeded"
+    current = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    if issued_at > current + timedelta(seconds=EXECUTION_AUTHORIZATION_CLOCK_SKEW_SECONDS):
+        return False, "execution_authorization_not_yet_valid"
+    if current > expires_at:
+        return False, "execution_authorization_expired"
+    openssl = resolve_openssl()
+    if not openssl:
+        return False, "execution_authorization_verifier_unavailable"
+    verification_root = state_root / "authorization-verification"
+    verification_root.mkdir(parents=True, exist_ok=True)
+    try:
+        with tempfile.TemporaryDirectory(prefix="verify-", dir=verification_root) as temp_dir:
+            root = Path(temp_dir)
+            subject_path = root / "subject.json"
+            signature_path = root / "subject.sig"
+            public_key_path = root / "public.pem"
+            subject_path.write_bytes(canonical_json_bytes(subject))
+            signature_path.write_bytes(signature_bytes)
+            public_key_path.write_bytes(public_key_bytes)
+            result = subprocess.run(
+                [
+                    openssl,
+                    "dgst",
+                    "-sha256",
+                    "-verify",
+                    str(public_key_path),
+                    "-signature",
+                    str(signature_path),
+                    str(subject_path),
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+                check=False,
+            )
+    except (OSError, subprocess.TimeoutExpired):
+        return False, "execution_authorization_verification_failed"
+    if result.returncode != 0:
+        return False, "execution_authorization_signature_invalid"
+    return True, "execution_authorization_verified"
+
+
 def redact_text(value: str) -> str:
     redacted = value
     for pattern in SECRET_PATTERNS:
@@ -815,6 +1105,8 @@ class WindowsOutboundWorker:
         transport: MemoryTransport | HttpTaskBoardTransport,
         poll_interval_seconds: float = DEFAULT_POLL_INTERVAL_SECONDS,
         output_limit_bytes: int = DEFAULT_OUTPUT_LIMIT_BYTES,
+        trusted_execution_key_sha256s: tuple[str, ...] = (DEFAULT_EXECUTION_KEY_SHA256,),
+        execution_authorization_verifier: Any = None,
     ) -> None:
         self.node_id = node_id
         self.factory_root = factory_root
@@ -822,6 +1114,10 @@ class WindowsOutboundWorker:
         self.transport = transport
         self.poll_interval_seconds = poll_interval_seconds
         self.output_limit_bytes = output_limit_bytes
+        self.trusted_execution_key_sha256s = trusted_execution_key_sha256s
+        self.execution_authorization_verifier = (
+            execution_authorization_verifier or verify_execution_authorization
+        )
         self._threads: list[threading.Thread] = []
         self._stopped = False
         self._thread_lock = threading.Lock()
@@ -851,6 +1147,10 @@ class WindowsOutboundWorker:
             "factory_root": str(self.factory_root),
             "state_root": str(self.state.state_root),
             "allowed_actions": list(ALLOWLISTED_ACTIONS),
+            "unsigned_observer_actions": list(UNSIGNED_OBSERVER_ACTIONS),
+            "execution_authorization_required": True,
+            "execution_authorization_schema": EXECUTION_AUTHORIZATION_SCHEMA,
+            "execution_authorization_trusted_key_count": len(self.trusted_execution_key_sha256s),
             "worker_source_commit": repository_head(self.factory_root / "ao2"),
             "ao2_repository_worktree": repository_worktree_status(self.factory_root / "ao2"),
             "stack_qualification_profile_version": STACK_PROFILE_VERSION,
@@ -885,6 +1185,44 @@ class WindowsOutboundWorker:
             })
             return "rejected"
 
+        if not isinstance(cross_host.get("parameters"), dict):
+            self._post_result_best_effort(request_id, action, {
+                "status": "failed",
+                "error_category": "invalid_parameters",
+                "arbitrary_command_execution": False,
+                "execution_authorization_required": action not in UNSIGNED_OBSERVER_ACTIONS,
+            })
+            return "rejected"
+
+        authorization_receipt = None
+        if action not in UNSIGNED_OBSERVER_ACTIONS:
+            authorized, authorization_status = self.execution_authorization_verifier(
+                cross_host,
+                trusted_key_sha256s=self.trusted_execution_key_sha256s,
+                state_root=self.state.state_root,
+            )
+            if not authorized:
+                self._post_result_best_effort(request_id, action, {
+                    "status": "failed",
+                    "error_category": authorization_status,
+                    "arbitrary_command_execution": False,
+                    "execution_authorization_required": True,
+                })
+                return "rejected"
+            authorization = cross_host.get("execution_authorization")
+            subject = authorization.get("subject") if isinstance(authorization, dict) else None
+            if isinstance(subject, dict):
+                authorization_receipt = {
+                    "schema_version": EXECUTION_AUTHORIZATION_SCHEMA,
+                    "status": "verified",
+                    "action_digest": subject["action_digest"],
+                    "target_node": subject["target_node"],
+                    "request_id": subject["request_id"],
+                    "issued_at": subject["issued_at"],
+                    "expires_at": subject["expires_at"],
+                    "signing_public_key_sha256": subject["signing_public_key_sha256"],
+                }
+
         if not self.state.claim(request_id, action):
             return "duplicate"
 
@@ -895,7 +1233,7 @@ class WindowsOutboundWorker:
 
         thread = threading.Thread(
             target=self._run_action_thread,
-            args=(request_id, action, parameters),
+            args=(request_id, action, parameters, authorization_receipt),
             name=f"ao2-worker-{request_id}",
             daemon=True,
         )
@@ -904,7 +1242,13 @@ class WindowsOutboundWorker:
         thread.start()
         return "started"
 
-    def _run_action_thread(self, request_id: str, action: str, parameters: dict[str, Any]) -> None:
+    def _run_action_thread(
+        self,
+        request_id: str,
+        action: str,
+        parameters: dict[str, Any],
+        authorization_receipt: dict[str, Any] | None,
+    ) -> None:
         try:
             result = self.run_action(action, parameters, request_id=request_id)
         except Exception as exc:  # pragma: no cover - fail closed guard
@@ -913,6 +1257,8 @@ class WindowsOutboundWorker:
                 "error_category": "worker_exception",
                 "message": redact_text(str(exc))[:500],
             }
+        if authorization_receipt is not None:
+            result["execution_authorization"] = authorization_receipt
         self._post_result_best_effort(request_id, action, result)
         self.state.complete(request_id, str(result.get("status", "failed")))
 
@@ -1241,8 +1587,33 @@ class WindowsOutboundWorker:
         board = self.transport.latest_board()
         if not board:
             return "no_board"
+        tasks = board.get("tasks")
+        if not isinstance(tasks, list):
+            return "malformed_task_board"
+        if len(tasks) > MAX_CONTROL_TASKS_PER_BOARD:
+            return "board_task_limit_exceeded"
+        request_ids: set[str] = set()
+        authorization_count = 0
+        for task in tasks:
+            cross_host = task.get("ao2_cross_host") if isinstance(task, dict) else None
+            if (
+                not isinstance(cross_host, dict)
+                or cross_host.get("schema_version") != CONTROL_TASK_SCHEMA
+                or cross_host.get("target_node") != self.node_id
+            ):
+                continue
+            request_id = str(cross_host.get("request_id") or "")
+            if request_id:
+                if request_id in request_ids:
+                    return "duplicate_control_request_id"
+                request_ids.add(request_id)
+            action = str(cross_host.get("action") or "")
+            if action not in UNSIGNED_OBSERVER_ACTIONS:
+                authorization_count += 1
+        if authorization_count > MAX_EXECUTION_AUTHORIZATIONS_PER_POLL:
+            return "authorization_budget_exceeded"
         accepted = "no_control_task"
-        for task in board.get("tasks", []):
+        for task in tasks:
             status = self.accept_control_task(task)
             if status != "ignored":
                 accepted = status

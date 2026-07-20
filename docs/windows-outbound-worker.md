@@ -31,6 +31,40 @@ The task board allowlist is explicit: `status`, `publish_capability`,
 stores a local idempotency ledger under
 `%LOCALAPPDATA%\AO2\windows-outbound-worker`.
 
+`status` and `publish_capability` are read-only observer probes and may remain
+unsigned. Every command-executing action requires an
+`ao2.cross-host.execution-authorization.v1` envelope signed with the AO2
+release key. The worker verifies the RSA/SHA-256 signature, pins the public key
+to the published AO2 release-key SHA-256, binds the signature to the canonical
+action digest, node, and request identifier, and rejects authorizations older
+than their maximum 15-minute window. The Control Plane bearer authenticates
+storage access only and is not worker-execution authority.
+
+Create the unsigned task board without embedding a credential, then authorize
+it on the initiating host immediately before upload:
+
+```bash
+mkdir -p target/windows-control
+openssl pkey \
+  -in .release-signing/ao2-release-signing-key.pem \
+  -pubout \
+  -out target/windows-control/ao2-release-signing-public.pem
+test "$(shasum -a 256 target/windows-control/ao2-release-signing-public.pem | awk '{print $1}')" = \
+  "7fedf62781b08a50abff300425f47c79b72f76f7208024a951d0533ebdb8f28c"
+python3 scripts/authorize_windows_control_task.py \
+  --input target/windows-control/task-board.json \
+  --output target/windows-control/task-board.authorized.json \
+  --private-key .release-signing/ao2-release-signing-key.pem \
+  --public-key target/windows-control/ao2-release-signing-public.pem \
+  --ttl-seconds 300
+```
+
+Upload only `task-board.authorized.json`. The private key is read locally by
+the signer and is never included in the board, logs, worker state, or Control
+Plane storage. Altering action parameters after signing invalidates the action
+digest. An unsigned, expired, wrong-node, untrusted-key, or replayed mutation
+fails before the worker claims the request.
+
 Completed action results are written atomically to a local
 `result-outbox\` directory under the same state root before the worker attempts
 to publish them to the Mac Control Plane. If result publication fails because

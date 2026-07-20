@@ -7995,10 +7995,11 @@ def test_ci_runs_python_guard_tests_and_pulse_docs_reference_persistent_local_mi
         "tests/test_public_stabilization.py "
         "tests/test_phase1_promote_wrapper.py "
         "tests/test_ao2_native_runtime_platform_evidence.py "
-        "tests/test_ao2_rsi_claim_readiness.py "
-        "tests/test_ao2_rsi_governed_self_change_dry_run.py "
-        "tests/test_ao2_rsi_live_self_change_rehearsal.py -q"
-    ) in ci
+            "tests/test_ao2_rsi_claim_readiness.py "
+            "tests/test_ao2_rsi_governed_self_change_dry_run.py "
+            "tests/test_ao2_rsi_live_self_change_rehearsal.py "
+            "tests/test_windows_outbound_worker.py -q"
+        ) in ci
     assert ".ao2-local/pulse/" in verification
     assert "cargo clean" in verification
     assert "target/pulse-next-recommended-tasks" in verification
