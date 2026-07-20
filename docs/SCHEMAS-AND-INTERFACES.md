@@ -456,6 +456,128 @@ static export paths, and local run record without opening raw evidence JSON.
 support bundles must include that verification as first-class evidence before
 the bundle verifier accepts the release handoff.
 
+### Local GitHub draft PR publisher fixture
+
+`ao2 issue draft-pr` exercises the governed issue-to-draft-PR write boundary
+against a local fixture API. It never accepts GitHub credentials or a public
+endpoint.
+
+Commands:
+
+```text
+ao2 issue draft-pr preview --evidence <evidence.json> --out <action.json> --json
+ao2 issue draft-pr verify --action <action.json> --expected-action-digest <sha256> --json
+ao2 issue draft-pr fixture-publish --action <action.json> --expected-action-digest <sha256> --fixture-api http://127.0.0.1:<port> --json
+```
+
+`ao2.github-draft-pr-evidence.v1` is strict and bounded to 64 KiB. It binds:
+
+- canonical issue URL, positive issue number, snapshot SHA-256, and
+  `classification=authentic_bug`;
+- exact target repository, base and head branches, and full lowercase commit
+  SHAs;
+- 1-100 sorted unique changed paths, diff/evidence/verification SHA-256
+  values, `status=verified`, request/result identifiers, and worker source
+  commit;
+- bounded draft title and body;
+- explicit false flags for prompt injection, security sensitivity, policy
+  blocking, issue writes, ready-for-review, review approval, merge, and
+  release.
+
+`preview` derives `ao2.github-draft-pr-action.v1`. Its approval digest is
+SHA-256 over only the `subject`, serialized with `ao2-canonical-v1` (sorted
+keys, no whitespace). It appends one deterministic, bounded `AO2-Evidence:`
+footer to the draft body containing the canonical issue URL and issue snapshot
+SHA-256. User-supplied footer markers are rejected. The complete pretty JSON
+action, including its trailing newline, must fit the same 64 KiB input bound
+before `preview` exclusively creates the output. An existing file or symlink is
+never followed or overwritten. `verify` requires the exact footer before
+checking the digest and rejects unknown fields, malformed or oversized input,
+digest drift, identity drift, unverified repair evidence, and any unsafe
+boundary. On Unix, all input commands open with `O_NOFOLLOW | O_NONBLOCK`. On
+Windows, they retain reparse-point protection, set security QoS to
+identification before open, and accept only opened handles for which
+`GetFileType` returns `FILE_TYPE_DISK`. Every platform checks regularity and
+size on the opened handle before and after the bounded read; Windows rejects
+named pipes and devices before entering the read.
+
+`fixture-publish` accepts only credential-free `http` endpoints expressed as a
+numeric loopback address plus an explicit port. It follows no redirects, sends
+no authorization header, limits response bodies to 256 KiB, and applies one
+three-second deadline across each complete connect, request write, and response
+read exchange. It uses only:
+
+```text
+GET  /ao2/fixture-attestation
+GET  /repos/<owner>/<repo>/git/ref/heads/<branch>
+GET  /repos/<owner>/<repo>/pulls?state=all&head=<owner:branch>&base=<base>
+POST /repos/<owner>/<repo>/pulls
+```
+
+Every request carries:
+
+- one fresh 256-bit lowercase hexadecimal `X-AO2-Client-Challenge` generated
+  for that invocation;
+- the exact canonical action digest and SHA-256 of the exact serialized draft
+  request body;
+- the target repository, action request path, `draft=true`, and exact base and
+  head commits;
+- after the first response, the fixture instance identifier supplied by that
+  response.
+
+Every accepted response is a strict envelope with
+`ao2.local-draft-pr-fixture-exchange-attestation.v1`. The fixture
+self-attestation repeats the fixture instance, invocation challenge, action
+digest, request-body digest, repository, action request path, draft flag, both
+commits, exact exchange method and path, outcome, and pull number when exactly
+one pull is applicable. The `pull_number` member is always required and must be
+JSON `null` when no pull is applicable. Unknown, missing, or mismatched fields
+fail closed.
+
+Before discovery or creation, the client requires
+`ao2.local-draft-pr-fixture-attestation.v1` with the strict exchange
+self-attestation and the explicit claims `claims_local_only=true`,
+`claims_forwarding_capable=false`, and
+`claims_external_network_enabled=false`. These are unauthenticated fixture
+claims, not proof of process isolation or network behavior. The client then
+resolves both base and head refs and requires their current commits to equal
+the digest-bound action commits.
+
+No matching pull sends one digest-bound `draft=true` POST. The POST includes
+exact base/head commit preconditions. A successful response must attest that
+the same fixture instance received the challenge-bound action and request,
+reports outcome `created`, reports the exact positive pull number, reports
+enforcement of both commits, and claims it neither forwarded nor contacted an
+external endpoint. The write self-attestation repeats the challenge, action and
+request-body digests, repository, action path, draft flag, commits, outcome,
+and applicable pull number. Its `pull_number` member is always required and may
+be JSON `null` only for a no-pull outcome. The client validates this strict
+self-attestation. It does not authenticate the claims or claim it observed the
+fixture write. One exact open draft with the exact positive pull number and
+issue-bound body returns an idempotent readback without a POST.
+
+On a strict create-conflict response with an equally strict write attestation,
+the client re-reads once. Exactly one matching draft returns
+`idempotent_readback_after_create_conflict`; zero, drifted, or multiple results
+fail closed. The readback reports `post_performed=true` and
+`fixture_write_observed=false`; the exact reread identifies the idempotent
+outcome, not an observed fixture write. Pull number zero fails on created,
+existing-idempotent, and conflict-recovery paths. Identity drift, missing or
+changed evidence binding, non-draft state, closed or merged state, unknown
+response fields, and malformed attestations also fail closed.
+
+Publish readbacks report
+`client_contact_scope=numeric_loopback_only`,
+`fixture_exchange_attestation_status=strict_challenge_bound_self_attestation`,
+`fixture_claims_authenticated=false`,
+`fixture_write_observed=false`,
+`external_write_observability=not_observable_from_client`, and
+`behavior_outside_client_observable_boundary=not_claimed`. A 201 response uses
+the honest status `fixture_reported_created`. The client reports only its own
+POST and prohibited-action behavior. It does not infer public or external
+writes from a loopback interaction and makes no claim about fixture behavior
+outside the client-observable boundary.
+
 ## Minimum Interfaces
 
 ```ts

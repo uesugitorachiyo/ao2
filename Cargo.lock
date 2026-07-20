@@ -136,6 +136,7 @@ dependencies = [
  "chrono",
  "clap",
  "flate2",
+ "libc",
  "rand 0.8.6",
  "rsa",
  "sdd-planner",
@@ -148,6 +149,7 @@ dependencies = [
  "tempfile",
  "toml",
  "walkdir",
+ "windows-sys",
 ]
 
 [[package]]

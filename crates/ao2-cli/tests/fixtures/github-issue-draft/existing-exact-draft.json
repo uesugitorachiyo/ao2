@@ -1,0 +1,20 @@
+[
+  {
+    "number": 9,
+    "state": "open",
+    "draft": true,
+    "title": "Fix bounded issue #8 reproduction",
+    "body": "Repairs the verified issue #8 reproduction.\n\nEvidence is digest-bound and this pull request remains draft-only.\n\nAO2-Evidence: issue_url=https://github.com/uesugitorachiyo/ao-crucible/issues/8 snapshot_sha256=1111111111111111111111111111111111111111111111111111111111111111",
+    "base": {
+      "ref": "main",
+      "sha": "2222222222222222222222222222222222222222"
+    },
+    "head": {
+      "ref": "ao2/issue-8-bounded-repair",
+      "sha": "3333333333333333333333333333333333333333",
+      "repo": {
+        "full_name": "uesugitorachiyo/ao-crucible"
+      }
+    }
+  }
+]
