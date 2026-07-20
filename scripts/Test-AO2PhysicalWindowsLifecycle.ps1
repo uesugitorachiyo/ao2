@@ -130,6 +130,7 @@ $result = [ordered]@{
 
 $workRoot = Join-Path ([System.IO.Path]::GetTempPath()) "ao2-physical-windows-lifecycle-$sourceSha"
 $lifecycleSucceeded = $false
+$failureStage = "scheduled-task"
 $previousBuildCommit = $env:AO2_BUILD_GIT_COMMIT
 $previousBuildProfile = $env:AO2_BUILD_PROFILE
 $previousPackagedCommit = $env:AO2_PACKAGED_GIT_COMMIT
@@ -150,6 +151,7 @@ try {
         throw "AO2 Windows Outbound Worker Scheduled Task state/result is not acceptable"
     }
 
+    $failureStage = "worker-ancestry"
     $workerScript = Join-Path $repositoryRoot "scripts\ao2_windows_outbound_worker.py"
     $taskActions = @($task.Actions)
     if ($taskActions.Count -ne 1) {
@@ -201,6 +203,7 @@ try {
     }
     $result.persistent_outbound_worker.outbound_only = $true
 
+    $failureStage = "source-cleanliness"
     $cleanTree = @(& git -C $repositoryRoot status --porcelain 2>$null).Count -eq 0
     if (-not $cleanTree -or $sourceSha -notmatch '^[0-9a-f]{40}$') {
         throw "source checkout is not an exact clean Git head"
@@ -209,18 +212,21 @@ try {
         Remove-Item -LiteralPath $workRoot -Recurse -Force
     }
 
+    $failureStage = "workspace-preparation"
     $targetRoot = Join-Path $workRoot "target"
     $distRoot = Join-Path $workRoot "dist"
     $extractRoot = Join-Path $workRoot "extract"
     $installRoot = Join-Path $workRoot "install"
     New-Item -ItemType Directory -Path $targetRoot, $distRoot, $extractRoot, $installRoot -Force | Out-Null
 
+    $failureStage = "debug-build"
     $env:AO2_BUILD_GIT_COMMIT = $sourceSha
     $env:AO2_BUILD_PROFILE = "debug"
     & cargo build --locked -p ao2-cli --bin ao2 --target-dir $targetRoot *> $null
     if ($LASTEXITCODE -ne 0) {
         throw "exact-head debug prior build failed"
     }
+    $failureStage = "debug-identity"
     $priorBinary = Join-Path $targetRoot "debug\ao2.exe"
     $priorVersion = Get-VerifiedVersion $priorBinary $version $sourceSha "debug"
     $priorDigest = Get-Sha256 $priorBinary
@@ -373,6 +379,7 @@ try {
 }
 catch {
     $lifecycleSucceeded = $false
+    [Console]::Error.WriteLine("physical_windows_lifecycle_failure_stage=$failureStage")
 }
 finally {
     $env:AO2_BUILD_GIT_COMMIT = $previousBuildCommit
