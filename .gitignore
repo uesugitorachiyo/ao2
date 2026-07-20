@@ -6,6 +6,8 @@
 /dist-provenance/
 /.release-signing/
 /node_modules/
+**/__pycache__/
+*.py[cod]
 /.DS_Store
 **/.DS_Store
 /.ao2/runs/
