@@ -1342,3 +1342,17 @@ def test_physical_lifecycle_probe_reads_the_workspace_version_without_emitting_c
     assert "rollback_runner_separate" in probe
     assert "temp_cleanup_completed" in probe
     assert "ConvertTo-Json -Compress" in probe
+
+
+def test_physical_lifecycle_probe_handles_clean_git_output_on_windows_powershell() -> None:
+    probe = PHYSICAL_LIFECYCLE_PROBE_PATH.read_text(encoding="utf-8")
+
+    assert '$cleanTree = @(& git -C $repositoryRoot status --porcelain 2>$null).Count -eq 0' in probe
+
+
+def test_physical_lifecycle_probe_returns_nonzero_after_a_caught_failure() -> None:
+    probe = PHYSICAL_LIFECYCLE_PROBE_PATH.read_text(encoding="utf-8")
+
+    assert "$result | ConvertTo-Json -Compress -Depth 5" in probe
+    assert "if (-not $lifecycleSucceeded) {" in probe
+    assert "exit 1" in probe

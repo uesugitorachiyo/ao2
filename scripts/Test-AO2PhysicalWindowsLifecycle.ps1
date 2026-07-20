@@ -201,7 +201,7 @@ try {
     }
     $result.persistent_outbound_worker.outbound_only = $true
 
-    $cleanTree = (& git -C $repositoryRoot status --porcelain 2>$null).Count -eq 0
+    $cleanTree = @(& git -C $repositoryRoot status --porcelain 2>$null).Count -eq 0
     if (-not $cleanTree -or $sourceSha -notmatch '^[0-9a-f]{40}$') {
         throw "source checkout is not an exact clean Git head"
     }
@@ -390,3 +390,6 @@ finally {
 }
 
 $result | ConvertTo-Json -Compress -Depth 5
+if (-not $lifecycleSucceeded) {
+    exit 1
+}
