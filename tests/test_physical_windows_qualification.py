@@ -1124,6 +1124,42 @@ def test_public_release_promotion_plan_binds_verified_physical_evidence_digest()
     assert "re.fullmatch(r\"[0-9a-f]{64}\", physical_evidence_sha256)" in assemble["run"]
     assert '"physical_windows_evidence_sha256": physical_evidence_sha256' in assemble["run"]
     assert '"physical_windows_evidence_mismatch"' in assemble["run"]
+    assert 're.split(r"[\\\\/]", str(summary.get("archive", "")))[-1]' in assemble["run"]
+
+
+def test_public_release_hosted_guard_builds_the_exact_source_binary_before_gate() -> None:
+    workflow = load_public_release_workflow()
+    guard = workflow["jobs"]["hosted-release-guard"]
+    steps = guard["steps"]
+    download = next(step for step in steps if step["name"] == "Download native gate candidates")
+    prepare = next(step for step in steps if step["name"] == "Prepare exact native gate archives")
+    build = next(step for step in steps if step["name"] == "Build hosted release gate binary")
+    gate = next(step for step in steps if step["name"] == "Run hosted release gate guard")
+
+    assert guard["needs"] == ["bind-release-plan", "native-build"]
+    assert guard["permissions"] == {"actions": "read", "contents": "read"}
+    assert download["uses"] == "actions/download-artifact@v8.0.1"
+    assert download["with"] == {
+        "pattern": "ao2-hosted-native-candidate-*-${{ github.sha }}",
+        "path": "target/hosted-release/gate-candidates",
+        "merge-multiple": "false",
+    }
+    assert prepare["env"] == {
+        "RELEASE_VERSION": "${{ needs.bind-release-plan.outputs.version }}",
+    }
+    for target, destination in {
+        "linux-x86_64": "dist-linux-x86_64",
+        "macos-aarch64": "dist",
+        "windows-x86_64": "dist-windows",
+    }.items():
+        assert target in prepare["run"]
+        assert destination in prepare["run"]
+    assert 're.split(r"[\\\\/]", str(summary.get("archive", "")))[-1]' in prepare["run"]
+    assert steps.index(download) < steps.index(prepare) < steps.index(build) < steps.index(gate)
+    assert build["env"] == {
+        "AO2_BUILD_GIT_COMMIT": "${{ needs.bind-release-plan.outputs.source_sha }}",
+    }
+    assert build["run"] == "cargo build --locked --release -p ao2-cli --bin ao2"
 
 
 def test_import_script_main_materializes_exact_canonical_artifact(

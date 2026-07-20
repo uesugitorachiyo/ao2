@@ -337,18 +337,75 @@ jobs:
     name: Hosted release safety guard
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: bind-release-plan
+    needs: [bind-release-plan, native-build]
     permissions:
+      actions: read
       contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.3
+      - name: Download native gate candidates
+        uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: ao2-hosted-native-candidate-*-${{ github.sha }}
+          path: target/hosted-release/gate-candidates
+          merge-multiple: false
+      - name: Prepare exact native gate archives
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.bind-release-plan.outputs.version }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import shutil
+          from pathlib import Path
+
+          root = Path("target/hosted-release/gate-candidates")
+          destinations = {
+              "linux-x86_64": Path("dist-linux-x86_64"),
+              "macos-aarch64": Path("dist"),
+              "windows-x86_64": Path("dist-windows"),
+          }
+          version = os.environ["RELEASE_VERSION"]
+          seen = set()
+          for summary_path in sorted(root.rglob("summary.json")):
+              summary = json.loads(summary_path.read_text(encoding="utf-8-sig"))
+              target = summary.get("target")
+              if target not in destinations or target in seen:
+                  raise SystemExit(f"unexpected or duplicate native gate target: {target}")
+              if (
+                  summary.get("schema_version") != "ao2.release-archive-hosted-smoke.v1"
+                  or summary.get("status") != "passed"
+                  or summary.get("version") != version
+              ):
+                  raise SystemExit(f"invalid native gate summary: {summary_path}")
+              archive_name = re.split(r"[\\/]", str(summary.get("archive", "")))[-1]
+              expected_name = f"ao2-{version}-{target}.tar.gz"
+              if archive_name != expected_name:
+                  raise SystemExit(f"native gate archive name mismatch for {target}")
+              archive = summary_path.parent / "dist" / archive_name
+              if not archive.is_file() or archive.is_symlink():
+                  raise SystemExit(f"missing or unsafe native gate archive for {target}")
+              destination = destinations[target] / archive_name
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              shutil.copyfile(archive, destination)
+              seen.add(target)
+          if seen != set(destinations):
+              raise SystemExit(f"native gate target mismatch: {sorted(seen)}")
+          PY
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install Node
         uses: actions/setup-node@v6.4.0
         with:
           node-version: "22"
+      - name: Build hosted release gate binary
+        env:
+          AO2_BUILD_GIT_COMMIT: ${{ needs.bind-release-plan.outputs.source_sha }}
+        run: cargo build --locked --release -p ao2-cli --bin ao2
       - name: Run no factory-v3 green-path guard
         run: npm run verify:no-factory-v3
       - name: Run hosted release gate guard
@@ -426,8 +483,8 @@ jobs:
               if target in seen:
                   raise SystemExit(f"duplicate target summary: {target}")
               seen[target] = summary_path
-              archive = Path(summary["archive"])
-              resolved = summary_path.parent / "dist" / archive.name
+              archive_name = re.split(r"[\\/]", str(summary.get("archive", "")))[-1]
+              resolved = summary_path.parent / "dist" / archive_name
               if not resolved.is_file():
                   raise SystemExit(f"missing archive for {target}: {resolved}")
               digest = hashlib.sha256(resolved.read_bytes()).hexdigest()
