@@ -27,6 +27,8 @@ pub(crate) enum DraftPrCommand {
     Preview {
         #[arg(long)]
         evidence: PathBuf,
+        #[arg(long = "support-bundle")]
+        support_bundle: Option<PathBuf>,
         #[arg(long)]
         out: PathBuf,
         #[arg(long)]
@@ -58,9 +60,10 @@ pub(crate) fn run(command: DraftPrCommand, digest: DigestFn) -> Result<()> {
     match command {
         DraftPrCommand::Preview {
             evidence,
+            support_bundle,
             out,
             json,
-        } => preview(&evidence, &out, json, digest),
+        } => preview(&evidence, support_bundle.as_deref(), &out, json, digest),
         DraftPrCommand::Verify {
             action,
             expected_action_digest,
@@ -378,8 +381,27 @@ where
     Option::<T>::deserialize(deserializer)
 }
 
-fn preview(path: &Path, out: &Path, json: bool, digest: DigestFn) -> Result<()> {
+fn preview(
+    path: &Path,
+    support_bundle: Option<&Path>,
+    out: &Path,
+    json: bool,
+    digest: DigestFn,
+) -> Result<()> {
     let evidence: DraftEvidence = read_bounded_json(path)?;
+    if let Some(bundle_path) = support_bundle {
+        let fingerprint = crate::support_bundle::validate_for_governed_issue(bundle_path, digest)?;
+        let fingerprint_digest = fingerprint
+            .strip_prefix("sha256:")
+            .context("support bundle fingerprint must use sha256")?;
+        if evidence.repair.evidence_pack_sha256 != fingerprint_digest {
+            bail!("draft evidence is not bound to the support bundle fingerprint");
+        }
+        let required_body_binding = format!("Problem fingerprint: {fingerprint}");
+        if !evidence.draft.body.contains(&required_body_binding) {
+            bail!("draft body is not bound to the support bundle fingerprint");
+        }
+    }
     let subject = subject_from_evidence(evidence)?;
     let subject_value = serde_json::to_value(&subject)?;
     let action = DraftAction {

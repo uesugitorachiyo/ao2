@@ -54,6 +54,7 @@ mod pulse_run;
 mod release_handoff;
 mod risky_pr_readback;
 mod sdd_cmd;
+mod support_bundle;
 
 use pulse_eval_loop::{
     pulse_eval_loop_handoff_json, pulse_eval_loop_run_chain_json, pulse_eval_loop_run_once_json,
@@ -111,6 +112,10 @@ enum Command {
     Repair {
         #[command(subcommand)]
         command: RepairCommand,
+    },
+    Support {
+        #[command(subcommand)]
+        command: support_bundle::SupportCommand,
     },
     Status {
         run_id: String,
@@ -4059,6 +4064,7 @@ fn real_main() -> Result<()> {
         Command::Greenfield { command } => greenfield(command),
         Command::Sdd { command } => sdd_cmd::run(command),
         Command::Issue { command } => issue(command),
+        Command::Support { command } => support_bundle::run(command, canonical_json_sha256),
         Command::Export { run_id, target } => export(target, run_id),
         Command::Version { json } => version(json),
         Command::Doctor {

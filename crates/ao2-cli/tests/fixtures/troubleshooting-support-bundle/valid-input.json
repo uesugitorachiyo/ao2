@@ -1,0 +1,43 @@
+{
+  "schema_version": "ao2.troubleshooting-support-source.v0.1",
+  "ao2_version": "0.5.2",
+  "control_plane_version": "0.1.16",
+  "platform": {
+    "os": "windows",
+    "architecture": "x86_64"
+  },
+  "workflow": {
+    "identity": "risky-pr-v1",
+    "verifier_identity": "ao2-report-verifier-v1"
+  },
+  "approval": {
+    "status": "waiting",
+    "action_digest": "1111111111111111111111111111111111111111111111111111111111111111"
+  },
+  "replay": {
+    "status": "not_attempted"
+  },
+  "evidence": {
+    "status": "retained",
+    "digest": "2222222222222222222222222222222222222222222222222222222222222222"
+  },
+  "manifest_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+  "release_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+  "failure": {
+    "category": "verification_failed",
+    "phase": "report_contract"
+  },
+  "logs": [
+    "report contract verification failed",
+    "Authorization: Bearer fixture-secret",
+    "target=workspace/ao2"
+  ],
+  "smallest_safe_next_action": "Re-run ao2 report verify against the retained evidence pack.",
+  "safety": {
+    "executes_work": false,
+    "calls_providers": false,
+    "issue_write_performed": false,
+    "public_write_performed": false,
+    "release_or_deployment_performed": false
+  }
+}

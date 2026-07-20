@@ -8,6 +8,56 @@ For public issue reports, start from
 [AO2 Support Reproduction Checklist](SUPPORT-REPRODUCTION.md). The same file is
 available at `docs/SUPPORT-REPRODUCTION.md` in the repository.
 
+## Privacy-Safe Support Bundle
+
+Build a deterministic observer-only troubleshooting record from a bounded
+source file:
+
+```sh
+ao2 support bundle \
+  --input support-source.json \
+  --out support-bundle.json \
+  --json
+```
+
+The source record names AO2 and Control Plane versions, platform,
+workflow/verifier identities, approval/replay/evidence status, public-safe
+digests, failure category and phase, bounded diagnostic excerpts, and the exact
+smallest safe next action. It must declare every execution and publication
+boundary false.
+
+The command rejects input larger than 64 KiB, unknown fields, malformed
+digests, symlink input, source-like log content, and unsafe boundary claims. It
+limits logs to 16 entries of 2 KiB each, removes credential values, environment
+assignment values, and Unix, Windows-drive, UNC, or file URI filesystem paths,
+then refuses to overwrite an existing output. The generated bundle is also
+limited to 64 KiB.
+
+The stable `problem_fingerprint` identifies the normalized failure and is safe
+to carry into the separately governed `ao2 issue draft-pr` evidence path.
+Changing only diagnostic log text does not change the fingerprint. Treat the
+bundle as sanitized untrusted input: inspect it before issue drafting, and do
+not add raw logs, environment dumps, source fragments, private repository
+names, or local build artifacts.
+
+To bind an inspected bundle to a governed draft preview, set the draft
+evidence-pack digest to the fingerprint digest, include `Problem fingerprint:
+sha256:<digest>` in its body, and run:
+
+```sh
+ao2 issue draft-pr preview \
+  --evidence draft-evidence.json \
+  --support-bundle support-bundle.json \
+  --out draft-action.json \
+  --json
+```
+
+The preview rejects any bundle or draft-evidence mismatch and still performs
+no issue write.
+
+`ao2 support bundle` performs no work, provider call, issue/public write,
+release, or deployment.
+
 ## Approvals
 
 AO2 approval prompts bind the proposed change to exact content digests. If an

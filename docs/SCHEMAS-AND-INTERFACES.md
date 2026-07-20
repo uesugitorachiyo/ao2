@@ -578,6 +578,73 @@ POST and prohibited-action behavior. It does not infer public or external
 writes from a loopback interaction and makes no claim about fixture behavior
 outside the client-observable boundary.
 
+### Privacy-safe troubleshooting support bundle
+
+`ao2 support bundle` converts one bounded local source record into deterministic
+observer-only JSON:
+
+```text
+ao2 support bundle --input <support-source.json> --out <support-bundle.json> --json
+```
+
+The strict input schema is `ao2.troubleshooting-support-source.v0.1`. It
+requires:
+
+- AO2 and Control Plane versions;
+- operating-system and architecture identifiers;
+- workflow and verifier identities;
+- approval status and, when applicable, its SHA-256 action digest;
+- replay and evidence status plus the retained evidence digest;
+- manifest and release SHA-256 digests;
+- bounded failure category and phase;
+- at most 16 diagnostic log excerpts of at most 2 KiB each;
+- one bounded smallest safe next action;
+- explicit false observer-only flags for execution, provider calls, issue and
+  public writes, and release or deployment.
+
+Input and generated output are each limited to 64 KiB. Unknown or duplicate
+fields, malformed JSON, unsupported states, invalid digests, source-like log
+content, and authority-widening flags are rejected. On Unix, input is opened
+with `O_NOFOLLOW | O_NONBLOCK`; Windows uses reparse-point protection and
+accepts only disk-file handles. The command creates the output exclusively and
+does not overwrite an existing file or symlink.
+
+The output schema is `ao2.troubleshooting-support-bundle.v0.1`. Credentials,
+generic environment assignment values, and Unix, Windows-drive, UNC, or file
+URI filesystem paths are removed from the bounded logs. The bundle records
+only redaction counts, never original values. It carries a stable
+`problem_fingerprint` computed with
+`ao2-canonical-v1` over normalized versions, platform, workflow/verifier,
+approval, replay/evidence, manifest/release digests, failure identity, and next
+action. Log contents, redaction counts, timestamps, and output paths do not
+affect that fingerprint.
+
+`governed_issue_route.input_trust=sanitized_untrusted` marks the bundle as
+input suitable for the separately governed issue draft projection:
+
+```text
+ao2 issue draft-pr preview \
+  --evidence <draft-evidence.json> \
+  --support-bundle <support-bundle.json> \
+  --out <draft-action.json> \
+  --json
+```
+
+That path strictly revalidates the bundle, reproduces its canonical
+fingerprint, and requires the draft evidence digest and body to bind the exact
+fingerprint. Altered, malformed, unsafe, or mismatched bundles fail closed. It
+does not authorize or perform issue creation. The bundle always emits:
+
+```text
+observer_only=true
+safe_to_execute=false
+executes_work=false
+calls_providers=false
+issue_write_performed=false
+public_write_performed=false
+release_or_deployment_performed=false
+```
+
 ## Minimum Interfaces
 
 ```ts
