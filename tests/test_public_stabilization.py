@@ -8017,6 +8017,13 @@ def test_pulse_local_mirror_script_is_exposed_and_ignored():
     assert "ANTHROPIC_API_KEY" not in text
 
 
+def test_python_bytecode_caches_are_ignored_repository_wide():
+    gitignore = read(".gitignore").splitlines()
+
+    assert "**/__pycache__/" in gitignore
+    assert "*.py[cod]" in gitignore
+
+
 def test_ci_uploads_guard_and_release_readiness_artifacts():
     package_json = json.loads(read("package.json"))
     ci = read(".github/workflows/ci.yml")
