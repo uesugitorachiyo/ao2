@@ -350,52 +350,12 @@ jobs:
           pattern: ao2-hosted-native-candidate-*-${{ github.sha }}
           path: target/hosted-release/gate-candidates
           merge-multiple: false
-      - name: Prepare exact native gate archives
+      - name: Validate exact hosted native candidates
         shell: bash
         env:
           RELEASE_VERSION: ${{ needs.bind-release-plan.outputs.version }}
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import json
-          import os
-          import re
-          import shutil
-          from pathlib import Path
-
-          root = Path("target/hosted-release/gate-candidates")
-          destinations = {
-              "linux-x86_64": Path("dist-linux-x86_64"),
-              "macos-aarch64": Path("dist"),
-              "windows-x86_64": Path("dist-windows"),
-          }
-          version = os.environ["RELEASE_VERSION"]
-          seen = set()
-          for summary_path in sorted(root.rglob("summary.json")):
-              summary = json.loads(summary_path.read_text(encoding="utf-8-sig"))
-              target = summary.get("target")
-              if target not in destinations or target in seen:
-                  raise SystemExit(f"unexpected or duplicate native gate target: {target}")
-              if (
-                  summary.get("schema_version") != "ao2.release-archive-hosted-smoke.v1"
-                  or summary.get("status") != "passed"
-                  or summary.get("version") != version
-              ):
-                  raise SystemExit(f"invalid native gate summary: {summary_path}")
-              archive_name = re.split(r"[\\/]", str(summary.get("archive", "")))[-1]
-              expected_name = f"ao2-{version}-{target}.tar.gz"
-              if archive_name != expected_name:
-                  raise SystemExit(f"native gate archive name mismatch for {target}")
-              archive = summary_path.parent / "dist" / archive_name
-              if not archive.is_file() or archive.is_symlink():
-                  raise SystemExit(f"missing or unsafe native gate archive for {target}")
-              destination = destinations[target] / archive_name
-              destination.parent.mkdir(parents=True, exist_ok=True)
-              shutil.copyfile(archive, destination)
-              seen.add(target)
-          if seen != set(destinations):
-              raise SystemExit(f"native gate target mismatch: {sorted(seen)}")
-          PY
+          SOURCE_SHA: ${{ needs.bind-release-plan.outputs.source_sha }}
+        run: python3 scripts/validate_hosted_release_candidates.py --root target/hosted-release/gate-candidates --source-sha "$SOURCE_SHA" --version "$RELEASE_VERSION" --out target/hosted-release/native-gate/summary.json
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Install Node
@@ -408,12 +368,8 @@ jobs:
         run: cargo build --locked --release -p ao2-cli --bin ao2
       - name: Run no factory-v3 green-path guard
         run: npm run verify:no-factory-v3
-      - name: Run hosted release gate guard
-        env:
-          AO2_HOSTED_RELEASE_GATE: "1"
-          AO2_REQUIRE_NATIVE_WINDOWS_SMOKE: "0"
-          AO2_ALLOW_UNSIGNED_OBLIGATION_GATES: "1"
-        run: npm run gate:full
+      - name: Run replacement parity guard
+        run: npm run verify:replacement
       - name: Upload no factory-v3 guard report
         uses: actions/upload-artifact@v7.0.1
         if: always()
@@ -422,13 +378,13 @@ jobs:
           path: target/no-factory-v3-green-path/
           if-no-files-found: warn
           retention-days: 90
-      - name: Upload gate:full rollup
+      - name: Upload hosted native candidate gate
         uses: actions/upload-artifact@v7.0.1
         if: always()
         with:
-          name: gate-full-rollup-${{ github.sha }}
-          path: target/release-gate-with-replacement/
-          if-no-files-found: warn
+          name: hosted-native-candidate-gate-${{ github.sha }}
+          path: target/hosted-release/native-gate/summary.json
+          if-no-files-found: error
           retention-days: 90
 
   assemble-promotion-plan:
