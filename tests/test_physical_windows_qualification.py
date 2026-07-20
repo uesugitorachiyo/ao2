@@ -17,6 +17,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "scripts" / "physical_windows_qualification.py"
 IMPORT_SCRIPT_PATH = ROOT / "scripts" / "import_physical_windows_qualification.py"
+RUN_METADATA_SCRIPT_PATH = ROOT / "scripts" / "validate_physical_windows_workflow_run.py"
 WORKER_PATH = ROOT / "scripts" / "ao2_windows_outbound_worker.py"
 IMPORT_WORKFLOW_PATH = ROOT / ".github" / "workflows" / "import-physical-windows-qualification.yml"
 PUBLIC_RELEASE_WORKFLOW_PATH = ROOT / ".github" / "workflows" / "public-release-build.yml"
@@ -71,6 +72,57 @@ def load_public_release_workflow() -> dict[str, object]:
 def load_import_script():
     load_qualification_module()
     return load_module("import_physical_windows_qualification", IMPORT_SCRIPT_PATH)
+
+
+def load_run_metadata_script():
+    return load_module(
+        "validate_physical_windows_workflow_run",
+        RUN_METADATA_SCRIPT_PATH,
+    )
+
+
+def producer_run_metadata(
+    *,
+    run_id: int = 123456789,
+    repository: str = "uesugitorachiyo/ao2",
+    source_sha: str = SOURCE_SHA,
+) -> dict[str, object]:
+    return {
+        "id": run_id,
+        "name": "Import Physical Windows Qualification",
+        "path": ".github/workflows/import-physical-windows-qualification.yml",
+        "event": "workflow_dispatch",
+        "status": "completed",
+        "conclusion": "success",
+        "head_sha": source_sha,
+        "repository": {
+            "id": 987654321,
+            "full_name": repository,
+        },
+    }
+
+
+def producer_artifact_metadata(
+    *,
+    run_id: int = 123456789,
+    source_sha: str = SOURCE_SHA,
+) -> dict[str, object]:
+    return {
+        "total_count": 1,
+        "artifacts": [
+            {
+                "id": 24681012,
+                "name": "ao2-physical-windows-qualification",
+                "expired": False,
+                "workflow_run": {
+                    "id": run_id,
+                    "repository_id": 987654321,
+                    "head_repository_id": 987654321,
+                    "head_sha": source_sha,
+                },
+            }
+        ],
+    }
 
 
 def replace_source_sha(value: object, source_sha: str) -> object:
@@ -814,6 +866,202 @@ def test_public_release_consumes_only_the_canonical_physical_qualification_bundl
     assert 'expected_inventory=$\'evidence.json\\nsummary.json\'' in run
     assert "physical_evidence_sha256" in run
     assert "GITHUB_OUTPUT" in run
+
+
+def test_public_release_authenticates_producer_run_and_exact_artifact_before_download() -> None:
+    workflow = load_public_release_workflow()
+    verification = workflow["jobs"]["verify-physical-windows-qualification"]
+    metadata = next(
+        step
+        for step in verification["steps"]
+        if step["name"] == "Authenticate producer workflow run and artifact"
+    )
+    download_index = next(
+        index
+        for index, step in enumerate(verification["steps"])
+        if step["name"] == "Download physical Windows qualification result"
+    )
+    metadata_index = verification["steps"].index(metadata)
+
+    assert metadata_index < download_index
+    assert metadata["env"] == {
+        "GH_TOKEN": "${{ github.token }}",
+        "RUN_ID": "${{ inputs.physical_windows_qualification_run_id }}",
+        "EXPECTED_REPOSITORY": "${{ github.repository }}",
+        "EXPECTED_SOURCE_SHA": "${{ needs.bind-release-plan.outputs.source_sha }}",
+        "RUN_METADATA_PATH": "target/hosted-release/physical-windows-metadata/run.json",
+        "ARTIFACTS_METADATA_PATH": "target/hosted-release/physical-windows-metadata/artifacts.json",
+    }
+    run = metadata["run"]
+    assert "python3 scripts/validate_physical_windows_workflow_run.py validate-run-id" in run
+    assert "python3 scripts/validate_physical_windows_workflow_run.py validate-metadata" in run
+    assert 'gh api --method GET "repos/$EXPECTED_REPOSITORY/actions/runs/$RUN_ID"' in run
+    assert run.count("gh api --method GET") == 2
+    assert '"repos/$EXPECTED_REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100"' in run
+    assert '>"$RUN_METADATA_PATH"' in run
+    assert '>"$ARTIFACTS_METADATA_PATH"' in run
+    assert "assert " not in run
+
+
+def test_workflow_run_metadata_validator_accepts_exact_successful_producer() -> None:
+    validator = load_run_metadata_script()
+
+    artifact_id = validator.validate_metadata(
+        producer_run_metadata(),
+        producer_artifact_metadata(),
+        "123456789",
+        "uesugitorachiyo/ao2",
+        SOURCE_SHA,
+    )
+
+    assert artifact_id == 24681012
+
+
+@pytest.mark.parametrize(
+    "run_id",
+    [
+        "",
+        "0",
+        "0123456789",
+        "123abc",
+        "-123",
+        "1" * 21,
+    ],
+)
+def test_workflow_run_metadata_validator_rejects_unbounded_run_id(run_id: str) -> None:
+    validator = load_run_metadata_script()
+
+    with pytest.raises(validator.MetadataValidationError, match="run id"):
+        validator.validate_run_id(run_id)
+
+
+@pytest.mark.parametrize(
+    ("mutation", "error"),
+    [
+        (("id", 123456788), "run id"),
+        (("repository.full_name", "other/ao2"), "repository"),
+        (("path", ".github/workflows/ci.yml"), "workflow path"),
+        (("name", "Other Workflow"), "workflow name"),
+        (("event", "push"), "workflow_dispatch"),
+        (("status", "in_progress"), "completed"),
+        (("conclusion", "failure"), "success"),
+        (("head_sha", "b" * 40), "head_sha"),
+    ],
+)
+def test_workflow_run_metadata_validator_rejects_wrong_producer_run(
+    mutation: tuple[str, object],
+    error: str,
+) -> None:
+    validator = load_run_metadata_script()
+    run = producer_run_metadata()
+    field, value = mutation
+    if field == "repository.full_name":
+        run["repository"]["full_name"] = value
+    else:
+        run[field] = value
+
+    with pytest.raises(validator.MetadataValidationError, match=error):
+        validator.validate_metadata(
+            run,
+            producer_artifact_metadata(),
+            "123456789",
+            "uesugitorachiyo/ao2",
+            SOURCE_SHA,
+        )
+
+
+@pytest.mark.parametrize(
+    ("artifacts", "error"),
+    [
+        ({"total_count": 0, "artifacts": []}, "total_count"),
+        (
+            {
+                "total_count": 2,
+                "artifacts": [
+                    producer_artifact_metadata()["artifacts"][0],
+                    {
+                        **producer_artifact_metadata()["artifacts"][0],
+                        "id": 24681013,
+                    },
+                ],
+            },
+            "total_count",
+        ),
+        (
+            {
+                "total_count": 1,
+                "artifacts": [],
+            },
+            "exactly one",
+        ),
+        (
+            {
+                "total_count": 1,
+                "artifacts": [
+                    {
+                        **producer_artifact_metadata()["artifacts"][0],
+                        "name": "other-artifact",
+                    }
+                ],
+            },
+            "artifact name",
+        ),
+        (
+            {
+                "total_count": 1,
+                "artifacts": [
+                    {
+                        **producer_artifact_metadata()["artifacts"][0],
+                        "expired": True,
+                    }
+                ],
+            },
+            "expired",
+        ),
+    ],
+)
+def test_workflow_run_metadata_validator_rejects_wrong_artifact_cardinality_or_state(
+    artifacts: dict[str, object],
+    error: str,
+) -> None:
+    validator = load_run_metadata_script()
+
+    with pytest.raises(validator.MetadataValidationError, match=error):
+        validator.validate_metadata(
+            producer_run_metadata(),
+            artifacts,
+            "123456789",
+            "uesugitorachiyo/ao2",
+            SOURCE_SHA,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "error"),
+    [
+        ("id", 123456788, "workflow run id"),
+        ("head_sha", "b" * 40, "workflow run head_sha"),
+        ("repository_id", 1, "repository_id"),
+        ("head_repository_id", 1, "head_repository_id"),
+    ],
+)
+def test_workflow_run_metadata_validator_rejects_artifact_run_binding_mismatch(
+    field: str,
+    value: object,
+    error: str,
+) -> None:
+    validator = load_run_metadata_script()
+    artifacts = producer_artifact_metadata()
+    artifacts["artifacts"][0]["workflow_run"][field] = value
+
+    with pytest.raises(validator.MetadataValidationError, match=error):
+        validator.validate_metadata(
+            producer_run_metadata(),
+            artifacts,
+            "123456789",
+            "uesugitorachiyo/ao2",
+            SOURCE_SHA,
+        )
 
 
 def test_public_release_promotion_plan_binds_verified_physical_evidence_digest() -> None:

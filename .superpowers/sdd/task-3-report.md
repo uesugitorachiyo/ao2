@@ -2,9 +2,10 @@
 
 ## Status
 
-Complete. The hosted release consumer now validates the exact imported
-physical-Windows artifact with the shared strict validator before native
-candidate builds or promotion-plan assembly.
+Complete after review fixes. The hosted release consumer now authenticates the
+exact successful import workflow run and its sole non-expired artifact before
+download, then validates the imported physical-Windows evidence with the shared
+strict validator before native candidate builds or promotion-plan assembly.
 
 ## TDD Evidence
 
@@ -20,11 +21,22 @@ The initial failures showed that the physical verification job exposed no
 `physical_evidence_sha256` output and that `assemble-promotion-plan` did not
 depend on physical verification.
 
+The review-fix RED run showed both missing metadata controls:
+
+```text
+$ python3 -m pytest tests/test_physical_windows_qualification.py -q \
+    -k 'authenticates_producer or workflow_run_metadata_validator'
+25 failed, 57 deselected
+```
+
+The workflow had no pre-download authentication step, and the fixed metadata
+validator did not yet exist.
+
 ### GREEN
 
 ```text
 $ python3 -m pytest tests/test_physical_windows_qualification.py -q
-57 passed
+82 passed
 
 $ python3 -m pytest tests/test_public_stabilization.py -q \
     -k 'canonical_hosted_native_dry_run_contract or physical_windows_import_contract'
@@ -34,8 +46,14 @@ $ cargo test -p ao2-cli --test release_packaging \
     release_build_all_script_and_manual_workflow_cover_public_release_sequence
 1 passed, 79 filtered out
 
-$ python3 - <<'PY'  # PyYAML contract parse
-workflow YAML and physical evidence dependency: ok
+$ python3 -m py_compile \
+    scripts/validate_physical_windows_workflow_run.py \
+    scripts/physical_windows_qualification.py \
+    scripts/import_physical_windows_qualification.py
+(exit 0)
+
+$ python3 - <<'PY'  # PyYAML contract parse and step ordering
+workflow YAML and pre-download metadata authentication: ok
 
 $ git diff --check
 (exit 0)
@@ -43,6 +61,15 @@ $ git diff --check
 
 ## Changes
 
+- Before download, the verification job validates a bounded decimal run ID,
+  fetches the run and artifact listing through two authenticated read-only
+  `gh api` requests, and passes their responses only through fixed files and
+  environment values.
+- The fixed metadata validator requires the current repository, exact import
+  workflow path and name, `workflow_dispatch`, completed/success state,
+  immutable source SHA, `total_count == 1`, exactly one artifact entry, the
+  fixed artifact name, `expired == false`, and matching artifact workflow-run,
+  source, and repository identifiers whenever those API fields are present.
 - `verify-physical-windows-qualification` now downloads the named artifact,
   rejects any nested/non-file entry or inventory other than exactly
   `evidence.json` and `summary.json`, and invokes
@@ -63,6 +90,7 @@ $ git diff --check
 ## Files Changed
 
 - `.github/workflows/public-release-build.yml`
+- `scripts/validate_physical_windows_workflow_run.py`
 - `tests/test_physical_windows_qualification.py`
 - `tests/test_public_stabilization.py`
 - `crates/ao2-cli/tests/release_packaging.rs`
@@ -70,13 +98,14 @@ $ git diff --check
 ## Self-Review
 
 The old recursive first-`summary.json` selection and inline Python assertions
-are gone from the physical qualification consumer. The validation work uses no
-production `assert`; malformed, stale, failed, source-mismatched,
-version-mismatched, or digest-mismatched evidence fails through the shared
-validator. The validation sidecar is outside the downloaded readback artifact,
-so the artifact inventory remains exactly two files. No runner, permission,
-credential, tag, release, upload, deployment, or publication behavior was
-added or relaxed.
+are gone from the physical qualification consumer. The metadata and evidence
+validation paths use no production `assert`. Behavioral tests cover valid
+metadata; malformed or unbounded IDs; wrong repository, workflow path/name,
+event, state, conclusion, or head; zero, duplicate, wrong-name, and expired
+artifacts; and artifact workflow-run/source/repository mismatches. The
+validation sidecar is outside the downloaded readback artifact, so the artifact
+inventory remains exactly two files. No runner, permission, credential, tag,
+release, upload, deployment, or publication behavior was added or relaxed.
 
 ## Concerns
 

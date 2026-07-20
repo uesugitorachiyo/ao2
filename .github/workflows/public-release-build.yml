@@ -120,6 +120,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.3
+      - name: Authenticate producer workflow run and artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.physical_windows_qualification_run_id }}
+          EXPECTED_REPOSITORY: ${{ github.repository }}
+          EXPECTED_SOURCE_SHA: ${{ needs.bind-release-plan.outputs.source_sha }}
+          RUN_METADATA_PATH: target/hosted-release/physical-windows-metadata/run.json
+          ARTIFACTS_METADATA_PATH: target/hosted-release/physical-windows-metadata/artifacts.json
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "$RUN_METADATA_PATH")"
+          python3 scripts/validate_physical_windows_workflow_run.py validate-run-id
+          gh api --method GET "repos/$EXPECTED_REPOSITORY/actions/runs/$RUN_ID" \
+            >"$RUN_METADATA_PATH"
+          gh api --method GET \
+            "repos/$EXPECTED_REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100" \
+            >"$ARTIFACTS_METADATA_PATH"
+          python3 scripts/validate_physical_windows_workflow_run.py validate-metadata
       - name: Download physical Windows qualification result
         shell: bash
         env:
