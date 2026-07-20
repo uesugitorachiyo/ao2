@@ -1,0 +1,58 @@
+name: Import Physical Windows Qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      evidence_base64:
+        description: Canonical base64-encoded physical-Windows evidence JSON.
+        required: true
+        type: string
+      evidence_sha256:
+        description: Lowercase SHA-256 digest of the decoded evidence JSON.
+        required: true
+        type: string
+      source_sha:
+        description: Exact lowercase AO2 source commit qualified by the evidence.
+        required: true
+        type: string
+      version:
+        description: AO2 version discovered from the exact qualified source commit.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  import-physical-windows-qualification:
+    name: Import digest-bound physical Windows qualification
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact qualified source
+        uses: actions/checkout@v6.0.3
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate and materialize qualification
+        env:
+          EVIDENCE_BASE64: ${{ inputs.evidence_base64 }}
+          EVIDENCE_SHA256: ${{ inputs.evidence_sha256 }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          VERSION: ${{ inputs.version }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          python3 scripts/import_physical_windows_qualification.py
+
+      - name: Upload physical Windows qualification
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-physical-windows-qualification
+          path: |
+            target/physical-windows-qualification/evidence.json
+            target/physical-windows-qualification/summary.json
+          if-no-files-found: error
+          retention-days: 7

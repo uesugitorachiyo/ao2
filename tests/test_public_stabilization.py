@@ -10,6 +10,8 @@ import subprocess
 import tarfile
 from pathlib import Path
 
+import yaml
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -593,6 +595,15 @@ def test_public_release_build_uses_canonical_hosted_native_dry_run_contract():
         "live_publish_confirm:",
         "bind-release-plan:",
         "verify-physical-windows-qualification:",
+        "physical_evidence_sha256: ${{ steps.verify.outputs.physical_evidence_sha256 }}",
+        "Validate canonical physical Windows qualification bundle",
+        "Authenticate producer workflow run and artifact",
+        "validate_physical_windows_workflow_run.py validate-run-id",
+        "validate_physical_windows_workflow_run.py validate-metadata",
+        "actions/runs/$RUN_ID/artifacts?per_page=100",
+        "python3 scripts/physical_windows_qualification.py validate",
+        "physical_windows_evidence_sha256",
+        "physical_windows_evidence_mismatch",
         "native-build:",
         "assemble-promotion-plan:",
         "publish-release:",
@@ -626,6 +637,29 @@ def test_public_release_build_uses_canonical_hosted_native_dry_run_contract():
     assert "x86_64-pc-windows-gnu" in workflow
     assert "non_authoritative" in workflow
     assert "canonical_public_windows_archive: false" in workflow
+    assert "needs.verify-physical-windows-qualification.outputs.physical_evidence_sha256" in workflow
+
+
+def test_public_release_physical_windows_import_contract_is_read_only_and_parseable():
+    workflow_path = REPO_ROOT / ".github/workflows/import-physical-windows-qualification.yml"
+    workflow = yaml.load(workflow_path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+    job = workflow["jobs"]["import-physical-windows-qualification"]
+    inputs = workflow["on"]["workflow_dispatch"]["inputs"]
+
+    assert workflow["permissions"] == {"contents": "read"}
+    assert job["permissions"] == {"contents": "read"}
+    assert job["runs-on"] == "ubuntu-latest"
+    assert set(workflow["on"]) == {"workflow_dispatch"}
+    assert set(inputs) == {"evidence_base64", "evidence_sha256", "source_sha", "version"}
+    assert all(input_spec["required"] == "true" for input_spec in inputs.values())
+    assert all(input_spec["type"] == "string" for input_spec in inputs.values())
+    artifact = job["steps"][-1]["with"]
+    assert artifact["name"] == "ao2-physical-windows-qualification"
+    assert set(artifact["path"].splitlines()) == {
+        "target/physical-windows-qualification/evidence.json",
+        "target/physical-windows-qualification/summary.json",
+    }
+    assert artifact["if-no-files-found"] == "error"
 
 
 def test_linux_mingw_windows_cross_package_is_reclassified_non_authoritative():

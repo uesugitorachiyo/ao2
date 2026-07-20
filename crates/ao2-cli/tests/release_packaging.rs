@@ -3702,8 +3702,19 @@ fn release_build_all_script_and_manual_workflow_cover_public_release_sequence() 
     assert!(!workflow.contains("\n  push:"));
     assert!(workflow.contains("bind-release-plan:"));
     assert!(workflow.contains("verify-physical-windows-qualification:"));
+    assert!(workflow.contains(
+        "physical_evidence_sha256: ${{ steps.verify.outputs.physical_evidence_sha256 }}"
+    ));
+    assert!(workflow.contains("Validate canonical physical Windows qualification bundle"));
+    assert!(workflow.contains("Authenticate producer workflow run and artifact"));
+    assert!(workflow.contains("validate_physical_windows_workflow_run.py validate-run-id"));
+    assert!(workflow.contains("validate_physical_windows_workflow_run.py validate-metadata"));
+    assert!(workflow.contains("actions/runs/$RUN_ID/artifacts?per_page=100"));
+    assert!(workflow.contains("python3 scripts/physical_windows_qualification.py validate"));
     assert!(workflow.contains("native-build:"));
     assert!(workflow.contains("assemble-promotion-plan:"));
+    assert!(workflow.contains("physical_windows_evidence_sha256"));
+    assert!(workflow.contains("physical_windows_evidence_mismatch"));
     assert!(workflow.contains("x86_64-pc-windows-msvc"));
     assert!(workflow.contains("cross-package:windows:gnu:from-linux"));
     assert!(workflow.contains("actions/upload-artifact@v7.0.1"));
