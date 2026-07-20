@@ -3702,7 +3702,9 @@ fn release_build_all_script_and_manual_workflow_cover_public_release_sequence() 
     assert!(!workflow.contains("\n  push:"));
     assert!(workflow.contains("bind-release-plan:"));
     assert!(workflow.contains("verify-physical-windows-qualification:"));
-    assert!(workflow.contains("physical_evidence_sha256: ${{ steps.verify.outputs.physical_evidence_sha256 }}"));
+    assert!(workflow.contains(
+        "physical_evidence_sha256: ${{ steps.verify.outputs.physical_evidence_sha256 }}"
+    ));
     assert!(workflow.contains("Validate canonical physical Windows qualification bundle"));
     assert!(workflow.contains("Authenticate producer workflow run and artifact"));
     assert!(workflow.contains("validate_physical_windows_workflow_run.py validate-run-id"));
