@@ -1109,6 +1109,45 @@ fn verify_rejects_altered_digest_and_unknown_action_fields() {
 }
 
 #[test]
+fn verify_rejects_changed_files_and_diff_digest_after_approval() {
+    let (_temp, action_path, action) = preview(&fixture_path());
+    let expected_digest = action["approval"]["action_digest"]
+        .as_str()
+        .expect("digest")
+        .to_owned();
+
+    for (pointer, replacement) in [
+        (
+            "/subject/repair/changed_files",
+            serde_json::json!(["src/lib.rs"]),
+        ),
+        (
+            "/subject/repair/diff_sha256",
+            serde_json::json!("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"),
+        ),
+    ] {
+        let mut altered = action.clone();
+        *altered.pointer_mut(pointer).expect("repair binding") = replacement;
+        let (_changed_temp, changed) = write_json(&altered);
+        rejected(
+            &[
+                "issue",
+                "draft-pr",
+                "verify",
+                "--action",
+                changed.to_str().expect("utf8"),
+                "--expected-action-digest",
+                &expected_digest,
+                "--json",
+            ],
+            "digest",
+        );
+    }
+
+    assert!(action_path.is_file());
+}
+
+#[test]
 fn fixture_publish_accepts_strict_challenge_bound_exchange_and_write_attestations() {
     let (_temp, action_path, action) = preview(&fixture_path());
     let digest = action["approval"]["action_digest"]

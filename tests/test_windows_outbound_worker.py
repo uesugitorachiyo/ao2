@@ -33,14 +33,16 @@ def generate_rsa_keypair(tmp_path: Path) -> tuple[Path, Path]:
     tmp_path.mkdir(parents=True, exist_ok=True)
     private_key = tmp_path / "task-authorization-private.pem"
     public_key = tmp_path / "task-authorization-public.pem"
+    openssl = load_worker_module().resolve_openssl()
+    assert openssl is not None
     subprocess.run(
-        ["openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048", "-out", private_key],
+        [openssl, "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:2048", "-out", private_key],
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
     subprocess.run(
-        ["openssl", "pkey", "-in", private_key, "-pubout", "-out", public_key],
+        [openssl, "pkey", "-in", private_key, "-pubout", "-out", public_key],
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,

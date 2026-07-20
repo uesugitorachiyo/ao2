@@ -11,9 +11,9 @@
   },
   "consumer": {
     "repository": "ao2-control-plane",
-    "version": "v0.1.16",
-    "release_url": "https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.16",
-    "tag_target": "f4f5fea9fefa1081cebcbabac550b0e08b9f0e3d"
+    "version": "v0.1.17",
+    "release_url": "https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.17",
+    "tag_target": "6336801eedc4a8402d12b306b98603ce0a6fb6b5"
   },
   "execution_receipt": {
     "schema_version": "ao2.execution-receipt.v1",

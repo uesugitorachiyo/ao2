@@ -180,4 +180,4 @@ do not paste private paths or credential values into public issues.
 
 Use [Public Release Verification](release/PUBLIC-RELEASE-VERIFICATION.md) to
 inspect hosted post-release smoke and consumer evidence. The AO2 `v0.5.2`
-stable release is paired with AO2 Control Plane `v0.1.16`.
+stable release is paired with AO2 Control Plane `v0.1.17`.
