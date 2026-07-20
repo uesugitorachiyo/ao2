@@ -48,6 +48,7 @@ use signature::{SignatureEncoding, Signer, Verifier};
 use tar::Builder;
 
 mod factory_bridge;
+mod github_issue_draft;
 mod pulse_eval_loop;
 mod pulse_run;
 mod release_handoff;
@@ -1242,6 +1243,11 @@ enum IssueCommand {
         target_commit: String,
         #[arg(long)]
         json: bool,
+    },
+    /// Build, verify, or exercise a bounded local draft pull request action.
+    DraftPr {
+        #[command(subcommand)]
+        command: github_issue_draft::DraftPrCommand,
     },
 }
 
@@ -4106,6 +4112,9 @@ fn issue(command: IssueCommand) -> Result<()> {
             target_commit,
             json,
         } => issue_acquire(&url, &upstream_url, &default_branch, &target_commit, json),
+        IssueCommand::DraftPr { command } => {
+            github_issue_draft::run(command, canonical_json_sha256)
+        }
     }
 }
 

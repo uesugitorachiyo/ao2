@@ -1,0 +1,57 @@
+{
+  "operation": "open_feature_generated_draft_pr",
+  "issue": {
+    "canonical_url": "https://github.com/uesugitorachiyo/ao-crucible/issues/8",
+    "number": 8,
+    "snapshot_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "classification": "authentic_bug"
+  },
+  "repository": {
+    "target": "uesugitorachiyo/ao-crucible",
+    "base_branch": "main",
+    "base_commit": "2222222222222222222222222222222222222222",
+    "head_repository": "uesugitorachiyo/ao-crucible",
+    "head_branch": "ao2/issue-8-bounded-repair",
+    "head_commit": "3333333333333333333333333333333333333333"
+  },
+  "repair": {
+    "changed_files": [
+      "internal/crucible/repair.go",
+      "internal/crucible/repair_test.go"
+    ],
+    "diff_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+    "evidence_pack_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+    "verification_sha256": "6666666666666666666666666666666666666666666666666666666666666666",
+    "status": "verified",
+    "provenance": {
+      "request_id": "issue-8-repair-request",
+      "result_id": "issue-8-repair-result",
+      "worker_source_commit": "7777777777777777777777777777777777777777"
+    }
+  },
+  "request": {
+    "method": "POST",
+    "path": "/repos/uesugitorachiyo/ao-crucible/pulls",
+    "body": {
+      "title": "Fix bounded issue #8 reproduction",
+      "body": "Repairs the verified issue #8 reproduction.\n\nEvidence is digest-bound and this pull request remains draft-only.\n\nAO2-Evidence: issue_url=https://github.com/uesugitorachiyo/ao-crucible/issues/8 snapshot_sha256=1111111111111111111111111111111111111111111111111111111111111111",
+      "head": "uesugitorachiyo:ao2/issue-8-bounded-repair",
+      "base": "main",
+      "draft": true,
+      "preconditions": {
+        "base_commit": "2222222222222222222222222222222222222222",
+        "head_commit": "3333333333333333333333333333333333333333"
+      }
+    }
+  },
+  "safety": {
+    "prompt_injection_detected": false,
+    "security_sensitive": false,
+    "policy_blocked": false,
+    "issue_write": false,
+    "ready_for_review": false,
+    "review_approval": false,
+    "merge": false,
+    "release": false
+  }
+}
