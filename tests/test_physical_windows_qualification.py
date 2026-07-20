@@ -10,11 +10,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "scripts" / "physical_windows_qualification.py"
 WORKER_PATH = ROOT / "scripts" / "ao2_windows_outbound_worker.py"
+IMPORT_WORKFLOW_PATH = ROOT / ".github" / "workflows" / "import-physical-windows-qualification.yml"
 SOURCE_SHA = "a" * 40
 VERSION = "0.5.2"
 NODE_ID = "windows-hp255_g10"
@@ -50,6 +52,10 @@ def load_qualification_module():
     module = load_module("physical_windows_qualification", MODULE_PATH)
     module._utc_now = lambda: NOW
     return module
+
+
+def load_import_workflow() -> dict[str, object]:
+    return yaml.load(IMPORT_WORKFLOW_PATH.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
 
 
 def lifecycle_probe_output() -> dict[str, object]:
@@ -645,3 +651,104 @@ def test_cli_writes_canonical_json_with_trailing_newline(tmp_path: Path, capsys)
 
     assert output.endswith("\n")
     assert output == json.dumps(json.loads(output), sort_keys=True, separators=(",", ":")) + "\n"
+
+
+def test_import_workflow_is_manual_read_only_and_binds_exact_source() -> None:
+    workflow = load_import_workflow()
+
+    assert set(workflow) == {"name", "on", "permissions", "jobs"}
+    assert set(workflow["on"]) == {"workflow_dispatch"}
+    inputs = workflow["on"]["workflow_dispatch"]["inputs"]
+    assert set(inputs) == {"evidence_base64", "evidence_sha256", "source_sha", "version"}
+    for input_spec in inputs.values():
+        assert input_spec["required"] == "true"
+        assert input_spec["type"] == "string"
+    assert workflow["permissions"] == {"contents": "read"}
+
+    jobs = workflow["jobs"]
+    assert set(jobs) == {"import-physical-windows-qualification"}
+    job = jobs["import-physical-windows-qualification"]
+    assert job["runs-on"] == "ubuntu-latest"
+    assert job["permissions"] == {"contents": "read"}
+    checkout = job["steps"][0]
+    assert checkout["uses"] == "actions/checkout@v6.0.3"
+    assert checkout["with"] == {
+        "ref": "${{ inputs.source_sha }}",
+        "fetch-depth": "1",
+        "persist-credentials": "false",
+    }
+
+    text = IMPORT_WORKFLOW_PATH.read_text(encoding="utf-8")
+    assert "re.fullmatch(r\"[0-9a-f]{40}\", source_sha)" in text
+    assert 'head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()' in text
+    assert "github_sha != source_sha" in text
+    assert 'subprocess.check_output(["scripts/current-version.sh"], text=True).strip()' in text
+    assert "discovered_version != version" in text
+
+
+def test_import_workflow_uses_env_only_bounded_import_and_exact_artifact_files() -> None:
+    workflow = load_import_workflow()
+    job = workflow["jobs"]["import-physical-windows-qualification"]
+    import_step = next(step for step in job["steps"] if step["name"] == "Validate and materialize qualification")
+    assert import_step["env"] == {
+        "EVIDENCE_BASE64": "${{ inputs.evidence_base64 }}",
+        "EVIDENCE_SHA256": "${{ inputs.evidence_sha256 }}",
+        "SOURCE_SHA": "${{ inputs.source_sha }}",
+        "VERSION": "${{ inputs.version }}",
+        "GITHUB_SHA": "${{ github.sha }}",
+    }
+
+    run = import_step["run"]
+    assert "${{ inputs." not in run
+    assert "os.environ[\"EVIDENCE_BASE64\"]" in run
+    assert "len(encoded) > 60000" in run
+    assert "len(decoded) > 45000" in run
+    assert "hashlib.sha256(decoded).hexdigest() != expected_digest" in run
+    assert "base64.b64decode(encoded.encode(\"ascii\"), validate=True)" in run
+    assert "shell=True" not in run
+    assert "eval" not in run
+    assert "echo " not in run
+    assert "$(" not in run
+    assert '"scripts/physical_windows_qualification.py",' in run
+    assert '"import",' in run
+    assert '"--encoded", encoded,' in run
+    assert '"--expected-digest", expected_digest,' in run
+    assert '"--source-sha", source_sha,' in run
+    assert '"--version", version,' in run
+    assert 'Path("target/physical-windows-qualification/evidence.json").write_bytes(decoded)' in run
+    assert 'Path("target/physical-windows-qualification/summary.json").write_bytes(result.stdout)' in run
+
+    upload = job["steps"][-1]
+    assert upload["uses"] == "actions/upload-artifact@v7.0.1"
+    assert upload["with"] == {
+        "name": "ao2-physical-windows-qualification",
+        "path": "target/physical-windows-qualification",
+        "if-no-files-found": "error",
+        "retention-days": "7",
+    }
+
+
+def test_import_workflow_rejects_mutation_and_arbitrary_execution_primitives() -> None:
+    text = IMPORT_WORKFLOW_PATH.read_text(encoding="utf-8").lower()
+
+    for forbidden in [
+        "self-hosted",
+        "contents: write",
+        "actions: write",
+        "pull-requests: write",
+        "id-token: write",
+        "gh_token",
+        "secrets.",
+        "actions/create-release",
+        "softprops/action-gh-release",
+        "gh release",
+        "git tag",
+        "environment:",
+        "deployment",
+        "publication",
+        "workflow_call",
+        "pull_request:",
+        "push:",
+        "schedule:",
+    ]:
+        assert forbidden not in text

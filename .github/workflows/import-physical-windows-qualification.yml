@@ -1,0 +1,126 @@
+name: Import Physical Windows Qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      evidence_base64:
+        description: Canonical base64-encoded physical-Windows evidence JSON.
+        required: true
+        type: string
+      evidence_sha256:
+        description: Lowercase SHA-256 digest of the decoded evidence JSON.
+        required: true
+        type: string
+      source_sha:
+        description: Exact lowercase AO2 source commit qualified by the evidence.
+        required: true
+        type: string
+      version:
+        description: AO2 version discovered from the exact qualified source commit.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  import-physical-windows-qualification:
+    name: Import digest-bound physical Windows qualification
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact qualified source
+        uses: actions/checkout@v6.0.3
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate and materialize qualification
+        env:
+          EVIDENCE_BASE64: ${{ inputs.evidence_base64 }}
+          EVIDENCE_SHA256: ${{ inputs.evidence_sha256 }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          VERSION: ${{ inputs.version }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          python3 - <<'PY'
+          import base64
+          import binascii
+          import hashlib
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          encoded = os.environ["EVIDENCE_BASE64"]
+          expected_digest = os.environ["EVIDENCE_SHA256"]
+          source_sha = os.environ["SOURCE_SHA"]
+          version = os.environ["VERSION"]
+          github_sha = os.environ["GITHUB_SHA"]
+
+          if not re.fullmatch(r"[0-9a-f]{40}", source_sha):
+              raise SystemExit("source_sha must be a lowercase 40-character SHA")
+          if not re.fullmatch(r"[0-9a-f]{64}", expected_digest):
+              raise SystemExit("evidence_sha256 must be a lowercase SHA-256")
+          head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          if head != source_sha:
+              raise SystemExit("checked-out HEAD does not match source_sha")
+          if github_sha != source_sha:
+              raise SystemExit("github.sha does not match source_sha")
+          discovered_version = subprocess.check_output(["scripts/current-version.sh"], text=True).strip()
+          if discovered_version != version:
+              raise SystemExit("discovered source version does not match version")
+          if len(encoded) > 60000:
+              raise SystemExit("encoded evidence exceeds 60000 characters")
+          try:
+              decoded = base64.b64decode(encoded.encode("ascii"), validate=True)
+          except (UnicodeEncodeError, binascii.Error) as exc:
+              raise SystemExit("evidence_base64 is not valid base64") from exc
+          if len(decoded) > 45000:
+              raise SystemExit("decoded evidence exceeds 45000 bytes")
+          if hashlib.sha256(decoded).hexdigest() != expected_digest:
+              raise SystemExit("evidence digest does not match evidence_sha256")
+
+          result = subprocess.run(
+              [
+                  sys.executable,
+                  "scripts/physical_windows_qualification.py",
+                  "import",
+                  "--encoded", encoded,
+                  "--expected-digest", expected_digest,
+                  "--source-sha", source_sha,
+                  "--version", version,
+              ],
+              check=False,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.PIPE,
+          )
+          if result.returncode != 0:
+              sys.stderr.buffer.write(result.stderr)
+              raise SystemExit(result.returncode)
+          summary = json.loads(result.stdout)
+          if summary.get("schema_version") != "ao2.physical-windows-qualification-summary.v1":
+              raise SystemExit("importer did not produce the physical Windows summary schema")
+          if summary.get("status") != "passed":
+              raise SystemExit("importer did not produce a passed summary")
+          if summary.get("source_sha") != source_sha or summary.get("version") != version:
+              raise SystemExit("importer summary source binding is invalid")
+          if summary.get("physical_evidence_sha256") != expected_digest:
+              raise SystemExit("importer summary evidence digest binding is invalid")
+
+          Path("target/physical-windows-qualification").mkdir(parents=True, exist_ok=True)
+          Path("target/physical-windows-qualification/evidence.json").write_bytes(decoded)
+          Path("target/physical-windows-qualification/summary.json").write_bytes(result.stdout)
+          PY
+
+      - name: Upload physical Windows qualification
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-physical-windows-qualification
+          path: target/physical-windows-qualification
+          if-no-files-found: error
+          retention-days: 7
