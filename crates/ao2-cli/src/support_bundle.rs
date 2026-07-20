@@ -143,9 +143,8 @@ struct SanitizedLog {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct RedactionSummary {
-    credentials: usize,
-    environment_values: usize,
-    filesystem_paths: usize,
+    input_log_entries: usize,
+    fully_redacted_log_entries: usize,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -291,17 +290,17 @@ fn validate_bundle(bundle: &SupportBundle, digest: DigestFn) -> Result<()> {
     if bundle.logs.len() > MAX_LOGS {
         bail!("support bundle logs must contain at most 16 entries");
     }
+    if bundle.redaction.input_log_entries != bundle.logs.len()
+        || bundle.redaction.fully_redacted_log_entries != bundle.logs.len()
+    {
+        bail!("support bundle redaction summary does not match its log entries");
+    }
     for (index, log) in bundle.logs.iter().enumerate() {
         if log.sequence != index + 1 {
             bail!("support bundle log sequence is not contiguous");
         }
-        validate_text("support bundle log entry", &log.text, MAX_LOG_BYTES)?;
-        if looks_like_private_source(&log.text) {
-            bail!("support bundle log entry appears to contain private source content");
-        }
-        let (sanitized, _) = sanitize_logs(std::slice::from_ref(&log.text))?;
-        if sanitized[0].text != log.text {
-            bail!("support bundle contains unsanitized diagnostic data");
+        if log.text != "[REDACTED_LOG]" {
+            bail!("support bundle contains a non-redacted diagnostic entry");
         }
     }
     if bundle.governed_issue_route.input_trust != "sanitized_untrusted"
@@ -572,26 +571,18 @@ fn validate_digest(name: &str, value: &str) -> Result<()> {
 
 fn sanitize_logs(logs: &[String]) -> Result<(Vec<SanitizedLog>, RedactionSummary)> {
     let mut sanitized = Vec::with_capacity(logs.len());
-    let mut summary = RedactionSummary {
-        credentials: 0,
-        environment_values: 0,
-        filesystem_paths: 0,
+    let summary = RedactionSummary {
+        input_log_entries: logs.len(),
+        fully_redacted_log_entries: logs.len(),
     };
     for (index, raw) in logs.iter().enumerate() {
         validate_text("log entry", raw, MAX_LOG_BYTES)?;
         if looks_like_private_source(raw) {
             bail!("log entry appears to contain private source content");
         }
-        let (without_env, env_count) = redact_environment_values(raw);
-        let secret_safe = redact_credentials(&without_env);
-        let secret_count = usize::from(secret_safe != without_env);
-        let (path_safe, path_count) = redact_filesystem_paths(&secret_safe);
-        summary.credentials += secret_count;
-        summary.environment_values += env_count;
-        summary.filesystem_paths += path_count;
         sanitized.push(SanitizedLog {
             sequence: index + 1,
-            text: path_safe,
+            text: "[REDACTED_LOG]".to_string(),
         });
     }
     Ok((sanitized, summary))

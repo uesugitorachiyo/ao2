@@ -28,10 +28,12 @@ boundary false.
 
 The command rejects input larger than 64 KiB, unknown fields, malformed
 digests, symlink input, source-like log content, and unsafe boundary claims. It
-limits logs to 16 entries of 2 KiB each, removes credential values, environment
-assignment values, and Unix, Windows-drive, UNC, or file URI filesystem paths,
-then refuses to overwrite an existing output. The generated bundle is also
-limited to 64 KiB.
+limits logs to 16 entries of 2 KiB each and replaces every free-form diagnostic
+payload with `[REDACTED_LOG]`. This excludes known and unrecognized credential,
+environment, source, repository, and filesystem content. Import requires the
+recorded input and fully-redacted counts to equal the actual log cardinality.
+The command refuses to overwrite an existing output, and the generated bundle
+is also limited to 64 KiB.
 
 The stable `problem_fingerprint` identifies the normalized failure and is safe
 to carry into the separately governed `ao2 issue draft-pr` evidence path.

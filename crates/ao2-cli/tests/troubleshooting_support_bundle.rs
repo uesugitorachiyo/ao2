@@ -92,6 +92,13 @@ fn builds_deterministic_observer_only_bundle_with_stable_fingerprint() {
     );
     assert!(first_stdout["approval"].get("secret").is_none());
     assert_eq!(first_stdout["logs"].as_array().expect("logs").len(), 3);
+    assert!(first_stdout["logs"]
+        .as_array()
+        .expect("logs")
+        .iter()
+        .all(|entry| entry["text"] == "[REDACTED_LOG]"));
+    assert_eq!(first_stdout["redaction"]["input_log_entries"], 3);
+    assert_eq!(first_stdout["redaction"]["fully_redacted_log_entries"], 3);
     assert_eq!(first_stdout["observer_only"], true);
     assert_eq!(first_stdout["safe_to_execute"], false);
     assert_eq!(first_stdout["executes_work"], false);
@@ -198,9 +205,7 @@ fn redacts_credentials_environment_values_and_filesystem_paths() {
             "bundle leaked {forbidden:?}:\n{rendered}"
         );
     }
-    assert!(rendered.contains("[REDACTED]"));
-    assert!(rendered.contains("[REDACTED_ENV]"));
-    assert!(rendered.contains("[REDACTED_PATH]"));
+    assert!(rendered.contains("[REDACTED_LOG]"));
 }
 
 #[test]
@@ -212,7 +217,11 @@ fn redacts_ambiguous_environment_and_path_forms_and_rejects_source_fragments() {
         "failed at file://server/private/share.log",
         "failed at `/home/alice/private.log`",
         "failed at </var/lib/ao2/private.log>",
-        "failed path:src/private/project/main.rs:41"
+        "failed path:src/private/project/main.rs:41",
+        "customer_secret := computePrivateValue()",
+        "env:PRIVATE_CONTEXT=alpha-secret",
+        "%2FUsers%2FAlice%2Fprivate",
+        "repository=private-customer-repair"
     ]);
     let (_input_temp, input_path) = write_json(&input);
     let (_output_temp, output_path, output) = run_bundle(&input_path);
@@ -225,6 +234,10 @@ fn redacts_ambiguous_environment_and_path_forms_and_rejects_source_fragments() {
         "/home/alice",
         "/var/lib/ao2",
         "src/private/project",
+        "computePrivateValue",
+        "alpha-secret",
+        "%2FUsers",
+        "private-customer-repair",
     ] {
         assert!(
             !rendered.contains(forbidden),
@@ -412,8 +425,13 @@ fn sanitized_bundle_fingerprint_is_compatible_with_governed_issue_preview() {
     assert_eq!(verify_json["client_issue_write_performed"], false);
     assert_eq!(verify_json["client_merge_performed"], false);
 
-    let mut altered_bundle = bundle;
-    altered_bundle["logs"][0]["text"] = json!("altered sanitized diagnostic");
+    let mut altered_bundle = bundle.clone();
+    altered_bundle["logs"]
+        .as_array_mut()
+        .expect("logs")
+        .push(json!({"sequence": 4, "text": "[REDACTED_LOG]"}));
+    altered_bundle["redaction"]["input_log_entries"] = json!(4);
+    altered_bundle["redaction"]["fully_redacted_log_entries"] = json!(4);
     let (_altered_temp, altered_path) = write_json(&altered_bundle);
     let rejected_action = evidence_temp.path().join("rejected-action.json");
     let altered = ao2(&[
@@ -430,6 +448,28 @@ fn sanitized_bundle_fingerprint_is_compatible_with_governed_issue_preview() {
     ]);
     assert!(!altered.status.success(), "altered bundle was accepted");
     assert!(String::from_utf8_lossy(&altered.stderr).contains("bundle digest"));
+
+    let mut false_summary = bundle.clone();
+    false_summary["redaction"]["fully_redacted_log_entries"] = json!(999);
+    let (_summary_temp, summary_path) = write_json(&false_summary);
+    let false_summary_action = evidence_temp.path().join("false-summary-action.json");
+    let false_summary_output = ao2(&[
+        "issue",
+        "draft-pr",
+        "preview",
+        "--evidence",
+        evidence_path.to_str().expect("evidence path"),
+        "--support-bundle",
+        summary_path.to_str().expect("bundle path"),
+        "--out",
+        false_summary_action.to_str().expect("action path"),
+        "--json",
+    ]);
+    assert!(
+        !false_summary_output.status.success(),
+        "fabricated redaction summary was accepted"
+    );
+    assert!(String::from_utf8_lossy(&false_summary_output.stderr).contains("redaction summary"));
 
     let mut mismatched_evidence = evidence;
     mismatched_evidence["repair"]["evidence_pack_sha256"] = json!("9".repeat(64));

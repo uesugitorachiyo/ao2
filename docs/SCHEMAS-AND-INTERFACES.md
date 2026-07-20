@@ -609,11 +609,14 @@ with `O_NOFOLLOW | O_NONBLOCK`; Windows uses reparse-point protection and
 accepts only disk-file handles. The command creates the output exclusively and
 does not overwrite an existing file or symlink.
 
-The output schema is `ao2.troubleshooting-support-bundle.v0.1`. Credentials,
-generic environment assignment values, and Unix, Windows-drive, UNC, or file
-URI filesystem paths are removed from the bounded logs. The bundle records
-only redaction counts, never original values. It carries a stable
-`problem_fingerprint` computed with
+The output schema is `ao2.troubleshooting-support-bundle.v0.1`. Every
+free-form diagnostic payload is replaced with the fixed
+`[REDACTED_LOG]` sentinel. This excludes credentials, environment values,
+source fragments, repository identifiers, encoded or literal filesystem
+paths, and unrecognized private content without depending on heuristic secret
+detection. The bundle records only the input and fully-redacted log counts,
+which import requires to equal the actual bounded log cardinality. It carries
+a stable `problem_fingerprint` computed with
 `ao2-canonical-v1` over normalized versions, platform, workflow/verifier,
 approval, replay/evidence, manifest/release digests, failure identity, and next
 action. Log contents, redaction counts, timestamps, and output paths do not
