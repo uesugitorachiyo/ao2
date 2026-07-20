@@ -645,7 +645,10 @@ def test_public_release_physical_windows_import_contract_is_read_only_and_parsea
     assert all(input_spec["type"] == "string" for input_spec in inputs.values())
     artifact = job["steps"][-1]["with"]
     assert artifact["name"] == "ao2-physical-windows-qualification"
-    assert artifact["path"] == "target/physical-windows-qualification"
+    assert set(artifact["path"].splitlines()) == {
+        "target/physical-windows-qualification/evidence.json",
+        "target/physical-windows-qualification/summary.json",
+    }
     assert artifact["if-no-files-found"] == "error"
 
 

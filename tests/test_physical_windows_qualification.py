@@ -5,6 +5,7 @@ import copy
 import hashlib
 import importlib.util
 import json
+import subprocess
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -15,6 +16,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "scripts" / "physical_windows_qualification.py"
+IMPORT_SCRIPT_PATH = ROOT / "scripts" / "import_physical_windows_qualification.py"
 WORKER_PATH = ROOT / "scripts" / "ao2_windows_outbound_worker.py"
 IMPORT_WORKFLOW_PATH = ROOT / ".github" / "workflows" / "import-physical-windows-qualification.yml"
 SOURCE_SHA = "a" * 40
@@ -56,6 +58,69 @@ def load_qualification_module():
 
 def load_import_workflow() -> dict[str, object]:
     return yaml.load(IMPORT_WORKFLOW_PATH.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+
+
+def load_import_script():
+    load_qualification_module()
+    return load_module("import_physical_windows_qualification", IMPORT_SCRIPT_PATH)
+
+
+def replace_source_sha(value: object, source_sha: str) -> object:
+    if isinstance(value, dict):
+        return {key: replace_source_sha(item, source_sha) for key, item in value.items()}
+    if isinstance(value, list):
+        return [replace_source_sha(item, source_sha) for item in value]
+    return source_sha if value == SOURCE_SHA else value
+
+
+def create_import_fixture(tmp_path: Path) -> tuple[Path, dict[str, str], bytes]:
+    repository = tmp_path / "repo"
+    scripts = repository / "scripts"
+    scripts.mkdir(parents=True)
+    version_script = scripts / "current-version.sh"
+    version_script.write_text(
+        "#!/bin/sh\nset -eu\nawk '$1 == \"version\" && $2 == \"=\" {gsub(/\\\"/, \"\", $3); print $3; exit}' Cargo.toml\n",
+        encoding="utf-8",
+    )
+    version_script.chmod(0o755)
+    (repository / "Cargo.toml").write_text(
+        f'[workspace.package]\nversion = "{VERSION}"\n',
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "init", "-q"], cwd=repository, check=True)
+    subprocess.run(["git", "add", "Cargo.toml", "scripts/current-version.sh"], cwd=repository, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=AO2 Test",
+            "-c",
+            "user.email=ao2-test@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "fixture",
+        ],
+        cwd=repository,
+        check=True,
+    )
+    source_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repository, text=True).strip()
+    qualification, evidence, _ = prepared_evidence()
+    evidence = replace_source_sha(evidence, source_sha)
+    payload = qualification.canonical_json(evidence)
+    environment = {
+        "EVIDENCE_BASE64": base64.b64encode(payload).decode("ascii"),
+        "EVIDENCE_SHA256": hashlib.sha256(payload).hexdigest(),
+        "SOURCE_SHA": source_sha,
+        "VERSION": VERSION,
+        "GITHUB_SHA": source_sha,
+    }
+    return repository, environment, payload
+
+
+def install_import_environment(monkeypatch, environment: dict[str, str]) -> None:
+    for name, value in environment.items():
+        monkeypatch.setenv(name, value)
 
 
 def lifecycle_probe_output() -> dict[str, object]:
@@ -678,15 +743,8 @@ def test_import_workflow_is_manual_read_only_and_binds_exact_source() -> None:
         "persist-credentials": "false",
     }
 
-    text = IMPORT_WORKFLOW_PATH.read_text(encoding="utf-8")
-    assert "re.fullmatch(r\"[0-9a-f]{40}\", source_sha)" in text
-    assert 'head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()' in text
-    assert "github_sha != source_sha" in text
-    assert 'subprocess.check_output(["scripts/current-version.sh"], text=True).strip()' in text
-    assert "discovered_version != version" in text
 
-
-def test_import_workflow_uses_env_only_bounded_import_and_exact_artifact_files() -> None:
+def test_import_workflow_uses_fixed_env_only_script_and_exact_artifact_files() -> None:
     workflow = load_import_workflow()
     job = workflow["jobs"]["import-physical-windows-qualification"]
     import_step = next(step for step in job["steps"] if step["name"] == "Validate and materialize qualification")
@@ -697,35 +755,173 @@ def test_import_workflow_uses_env_only_bounded_import_and_exact_artifact_files()
         "VERSION": "${{ inputs.version }}",
         "GITHUB_SHA": "${{ github.sha }}",
     }
-
-    run = import_step["run"]
-    assert "${{ inputs." not in run
-    assert "os.environ[\"EVIDENCE_BASE64\"]" in run
-    assert "len(encoded) > 60000" in run
-    assert "len(decoded) > 45000" in run
-    assert "hashlib.sha256(decoded).hexdigest() != expected_digest" in run
-    assert "base64.b64decode(encoded.encode(\"ascii\"), validate=True)" in run
-    assert "shell=True" not in run
-    assert "eval" not in run
-    assert "echo " not in run
-    assert "$(" not in run
-    assert '"scripts/physical_windows_qualification.py",' in run
-    assert '"import",' in run
-    assert '"--encoded", encoded,' in run
-    assert '"--expected-digest", expected_digest,' in run
-    assert '"--source-sha", source_sha,' in run
-    assert '"--version", version,' in run
-    assert 'Path("target/physical-windows-qualification/evidence.json").write_bytes(decoded)' in run
-    assert 'Path("target/physical-windows-qualification/summary.json").write_bytes(result.stdout)' in run
+    assert import_step["run"].strip() == "python3 scripts/import_physical_windows_qualification.py"
 
     upload = job["steps"][-1]
     assert upload["uses"] == "actions/upload-artifact@v7.0.1"
-    assert upload["with"] == {
-        "name": "ao2-physical-windows-qualification",
-        "path": "target/physical-windows-qualification",
-        "if-no-files-found": "error",
-        "retention-days": "7",
+    assert upload["with"]["name"] == "ao2-physical-windows-qualification"
+    assert set(upload["with"]["path"].splitlines()) == {
+        "target/physical-windows-qualification/evidence.json",
+        "target/physical-windows-qualification/summary.json",
     }
+    assert upload["with"]["if-no-files-found"] == "error"
+    assert upload["with"]["retention-days"] == "7"
+
+
+def test_import_script_main_materializes_exact_canonical_artifact(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    importer = load_import_script()
+    qualification = load_qualification_module()
+    repository, environment, payload = create_import_fixture(tmp_path)
+    install_import_environment(monkeypatch, environment)
+    monkeypatch.chdir(repository)
+    monkeypatch.setattr(importer, "_utc_now", lambda: NOW)
+
+    assert importer.main() == 0
+
+    destination = repository / "target" / "physical-windows-qualification"
+    assert importer.relative_file_inventory(destination) == ["evidence.json", "summary.json"]
+    assert (destination / "evidence.json").read_bytes() == payload
+    summary_bytes = (destination / "summary.json").read_bytes()
+    summary = json.loads(summary_bytes)
+    assert summary_bytes == qualification.canonical_json(summary)
+    assert summary["physical_evidence_sha256"] == environment["EVIDENCE_SHA256"]
+    assert summary["source_sha"] == environment["SOURCE_SHA"]
+    assert summary["version"] == environment["VERSION"]
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "error"),
+    [
+        ("EVIDENCE_SHA256", "0" * 64, "digest"),
+        ("SOURCE_SHA", "not-a-sha", "lowercase 40-character SHA"),
+        ("SOURCE_SHA", "b" * 40, "HEAD"),
+        ("VERSION", "9.9.9", "version"),
+    ],
+)
+def test_import_script_rejects_bad_bindings_without_partial_artifact(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+    field: str,
+    value: str,
+    error: str,
+) -> None:
+    importer = load_import_script()
+    repository, environment, _ = create_import_fixture(tmp_path)
+    environment[field] = value
+    if field == "SOURCE_SHA":
+        environment["GITHUB_SHA"] = value
+    install_import_environment(monkeypatch, environment)
+    monkeypatch.chdir(repository)
+    monkeypatch.setattr(importer, "_utc_now", lambda: NOW)
+
+    assert importer.main() == 2
+    assert error in capsys.readouterr().err
+    assert not (repository / "target" / "physical-windows-qualification").exists()
+
+
+def test_import_script_rejects_strict_validation_failure_without_partial_artifact(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    importer = load_import_script()
+    qualification = load_qualification_module()
+    repository, environment, payload = create_import_fixture(tmp_path)
+    evidence = json.loads(payload)
+    evidence["mode"] = "hosted"
+    invalid_payload = qualification.canonical_json(evidence)
+    environment["EVIDENCE_BASE64"] = base64.b64encode(invalid_payload).decode("ascii")
+    environment["EVIDENCE_SHA256"] = hashlib.sha256(invalid_payload).hexdigest()
+    install_import_environment(monkeypatch, environment)
+    monkeypatch.chdir(repository)
+    monkeypatch.setattr(importer, "_utc_now", lambda: NOW)
+
+    assert importer.main() == 2
+    assert "physical_unique" in capsys.readouterr().err
+    assert not (repository / "target" / "physical-windows-qualification").exists()
+
+
+def test_import_script_rejects_preexisting_or_extra_file_inventory(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    importer = load_import_script()
+    repository, environment, _ = create_import_fixture(tmp_path)
+    destination = repository / "target" / "physical-windows-qualification"
+    destination.mkdir(parents=True)
+    (destination / "unexpected.txt").write_text("preserve\n", encoding="utf-8")
+    install_import_environment(monkeypatch, environment)
+    monkeypatch.chdir(repository)
+    monkeypatch.setattr(importer, "_utc_now", lambda: NOW)
+
+    assert importer.main() == 2
+    assert "already exists" in capsys.readouterr().err
+    assert (destination / "unexpected.txt").read_text(encoding="utf-8") == "preserve\n"
+
+    inventory_root = tmp_path / "inventory"
+    inventory_root.mkdir()
+    for name in ("evidence.json", "summary.json", "extra.json"):
+        (inventory_root / name).write_text("{}\n", encoding="utf-8")
+    with pytest.raises(importer.ArtifactImportError, match="inventory"):
+        importer.verify_exact_inventory(inventory_root)
+
+
+def test_import_script_cleans_staging_after_atomic_write_failure(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    importer = load_import_script()
+    repository, environment, _ = create_import_fixture(tmp_path)
+    writes = 0
+    real_atomic_write = importer.atomic_write
+
+    def fail_second_write(path: Path, payload: bytes) -> None:
+        nonlocal writes
+        writes += 1
+        if writes == 2:
+            raise OSError("simulated write failure")
+        real_atomic_write(path, payload)
+
+    monkeypatch.setattr(importer, "atomic_write", fail_second_write)
+    monkeypatch.setattr(importer, "_utc_now", lambda: NOW)
+
+    with pytest.raises(OSError, match="simulated write failure"):
+        importer.import_qualification(repository, environment)
+
+    target = repository / "target"
+    assert not (target / "physical-windows-qualification").exists()
+    assert not list(target.glob(".physical-windows-qualification-*"))
+
+
+def test_import_script_never_places_payload_in_child_argv(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    importer = load_import_script()
+    repository, environment, _ = create_import_fixture(tmp_path)
+    child_argv: list[list[str]] = []
+    real_check_output = importer.subprocess.check_output
+
+    def capture_check_output(argv, **kwargs):
+        child_argv.append([str(item) for item in argv])
+        return real_check_output(argv, **kwargs)
+
+    monkeypatch.setattr(importer.subprocess, "check_output", capture_check_output)
+    monkeypatch.setattr(importer, "_utc_now", lambda: NOW)
+
+    importer.import_qualification(repository, environment)
+
+    flattened = "\n".join(item for argv in child_argv for item in argv)
+    assert environment["EVIDENCE_BASE64"] not in flattened
+    assert child_argv == [
+        ["git", "rev-parse", "HEAD"],
+        [str(repository / "scripts" / "current-version.sh")],
+    ]
 
 
 def test_import_workflow_rejects_mutation_and_arbitrary_execution_primitives() -> None:
