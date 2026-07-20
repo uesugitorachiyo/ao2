@@ -852,6 +852,7 @@ class WindowsOutboundWorker:
             "state_root": str(self.state.state_root),
             "allowed_actions": list(ALLOWLISTED_ACTIONS),
             "worker_source_commit": repository_head(self.factory_root / "ao2"),
+            "ao2_repository_worktree": repository_worktree_status(self.factory_root / "ao2"),
             "stack_qualification_profile_version": STACK_PROFILE_VERSION,
             "mac_should_probe_windows": False,
             "windows_http_endpoint": None,
@@ -1320,6 +1321,58 @@ def repository_head(repo_path: Path) -> str:
     if result.returncode == 0 and re.fullmatch(r"[0-9a-fA-F]{40}", head):
         return head.lower()
     return "unknown"
+
+
+def repository_worktree_status(repo_path: Path, *, entry_limit: int = 32) -> dict[str, Any]:
+    limit = max(1, min(int(entry_limit), 32))
+    if not (repo_path / ".git").exists():
+        return {
+            "status": "unavailable",
+            "clean": False,
+            "entry_count": 0,
+            "entries": [],
+            "entries_truncated": False,
+            "error_category": "missing_repo",
+        }
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain=v1", "--untracked-files=all"],
+            cwd=repo_path,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+            check=False,
+        )
+    except Exception:
+        return {
+            "status": "unavailable",
+            "clean": False,
+            "entry_count": 0,
+            "entries": [],
+            "entries_truncated": False,
+            "error_category": "status_failed",
+        }
+    if result.returncode != 0:
+        return {
+            "status": "unavailable",
+            "clean": False,
+            "entry_count": 0,
+            "entries": [],
+            "entries_truncated": False,
+            "error_category": "status_failed",
+        }
+    raw_entries = result.stdout.splitlines()
+    entries = [redact_text(entry)[:240] for entry in raw_entries[:limit]]
+    clean = not raw_entries
+    return {
+        "status": "passed" if clean else "attention",
+        "clean": clean,
+        "entry_count": len(raw_entries),
+        "entries": entries,
+        "entries_truncated": len(raw_entries) > limit,
+        "error_category": "none",
+    }
 
 
 def qualification_profile(repo_name: str, mode: str) -> tuple[dict[str, tuple[str, ...]], ...]:
