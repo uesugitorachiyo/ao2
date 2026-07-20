@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -145,6 +146,32 @@ def test_successful_child_with_stderr_reports_no_error_category(tmp_path: Path) 
     assert "Finished dev profile" in result["output"]
 
 
+def test_repository_worktree_status_is_bounded_and_redacted(tmp_path: Path) -> None:
+    worker = load_worker_module()
+    repo = tmp_path / "ao2"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "AO2 Test"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.email", "ao2@example.invalid"], cwd=repo, check=True)
+    tracked = repo / "tracked.txt"
+    tracked.write_text("original\n", encoding="utf-8")
+    subprocess.run(["git", "add", "tracked.txt"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "fixture"], cwd=repo, check=True)
+    tracked.write_text("changed\n", encoding="utf-8")
+    (repo / "AO2_CP_API_TOKEN=do-not-expose.txt").write_text("fixture\n", encoding="utf-8")
+
+    result = worker.repository_worktree_status(repo, entry_limit=32)
+
+    assert result["status"] == "attention"
+    assert result["clean"] is False
+    assert result["entry_count"] == 2
+    assert result["entries_truncated"] is False
+    assert len(result["entries"]) == 2
+    assert any("tracked.txt" in entry for entry in result["entries"])
+    assert "do-not-expose" not in json.dumps(result)
+    assert "<redacted>" in json.dumps(result)
+
+
 def test_worker_keeps_status_responsive_while_slow_action_runs(tmp_path: Path) -> None:
     worker = load_worker_module()
     transport = worker.MemoryTransport()
@@ -169,6 +196,8 @@ def test_worker_keeps_status_responsive_while_slow_action_runs(tmp_path: Path) -
 
     posted = transport.posted_results_by_request_id()
     assert posted["status-while-slow"]["ao2_cross_host"]["action"] == "status"
+    status_result = posted["status-while-slow"]["ao2_cross_host"]["result"]
+    assert status_result["ao2_repository_worktree"]["status"] == "unavailable"
     assert runtime.running_action_count() == 1
 
 
