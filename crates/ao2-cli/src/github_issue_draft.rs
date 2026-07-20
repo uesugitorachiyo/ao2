@@ -880,7 +880,8 @@ fn support_draft_text(binding: &SupportBundleSubjectBinding) -> (String, String)
 }
 
 fn contains_reserved_support_claim(body: &str) -> bool {
-    body.contains("Problem fingerprint:") || body.contains("Bundle SHA-256:")
+    let normalized = body.to_ascii_lowercase();
+    normalized.contains("problem fingerprint:") || normalized.contains("bundle sha-256:")
 }
 
 fn load_and_verify_action(path: &Path, expected: &str, digest: DigestFn) -> Result<DraftAction> {

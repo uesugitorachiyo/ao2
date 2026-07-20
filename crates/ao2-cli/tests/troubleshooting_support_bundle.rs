@@ -338,6 +338,13 @@ fn rejects_invalid_digests_fields_and_excess_logs() {
     let (_temp, path) = write_json(&contradictory_evidence);
     rejected(&path, "must be absent");
 
+    for field in ["ao2_version", "control_plane_version"] {
+        let mut oversized_version = valid_input();
+        oversized_version[field] = json!(format!("{}.2", "1".repeat(65)));
+        let (_temp, path) = write_json(&oversized_version);
+        rejected(&path, "at most 64 bytes");
+    }
+
     for (field, value) in [
         ("failure.category", "private_client_failure"),
         ("failure.phase", "customer_repository"),
@@ -545,6 +552,30 @@ fn sanitized_bundle_fingerprint_is_compatible_with_governed_issue_preview() {
         "reserved bundle claim was accepted without bundle validation"
     );
     assert!(String::from_utf8_lossy(&unvalidated.stderr).contains("reserved support-bundle claim"));
+
+    let mut lowercase_claim = evidence.clone();
+    lowercase_claim["draft"]["body"] = json!(format!(
+        "problem fingerprint: {fingerprint}\nbundle sha-256: {bundle_sha256}"
+    ));
+    let (_lowercase_temp, lowercase_path) = write_json(&lowercase_claim);
+    let lowercase_action = evidence_temp.path().join("lowercase-action.json");
+    let lowercase_output = ao2(&[
+        "issue",
+        "draft-pr",
+        "preview",
+        "--evidence",
+        lowercase_path.to_str().expect("evidence path"),
+        "--out",
+        lowercase_action.to_str().expect("action path"),
+        "--json",
+    ]);
+    assert!(
+        !lowercase_output.status.success(),
+        "case-varied reserved bundle claim was accepted without typed binding"
+    );
+    assert!(
+        String::from_utf8_lossy(&lowercase_output.stderr).contains("reserved support-bundle claim")
+    );
 
     let mut private_draft = evidence;
     private_draft["draft"]["title"] = json!("private token ghp_fixture");

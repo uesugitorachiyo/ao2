@@ -499,6 +499,7 @@ fn validate_product_metadata(
 }
 
 fn validate_version(name: &str, value: &str) -> Result<()> {
+    validate_text(name, value, 64)?;
     let components = value.split('.').collect::<Vec<_>>();
     if !(2..=3).contains(&components.len())
         || components.iter().any(|component| {
