@@ -115,6 +115,8 @@ jobs:
     permissions:
       actions: read
       contents: read
+    outputs:
+      physical_evidence_sha256: ${{ steps.verify.outputs.physical_evidence_sha256 }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.3
@@ -132,32 +134,58 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --name ao2-physical-windows-qualification \
             --dir "$out"
-      - name: Verify physical Windows result is fresh and physical-unique
+      - name: Validate canonical physical Windows qualification bundle
+        id: verify
         shell: bash
         env:
           SOURCE_SHA: ${{ needs.bind-release-plan.outputs.source_sha }}
           RELEASE_VERSION: ${{ needs.bind-release-plan.outputs.version }}
         run: |
+          set -euo pipefail
+          root="target/hosted-release/physical-windows-qualification"
+          validation_root="target/hosted-release/physical-windows-validation"
+          test -d "$root"
+          test ! -L "$root"
+          if find "$root" -mindepth 1 -maxdepth 1 ! -type f -print -quit | grep -q .; then
+            echo "physical Windows qualification artifact contains a nested or non-file entry" >&2
+            exit 1
+          fi
+          expected_inventory=$'evidence.json\nsummary.json'
+          actual_inventory="$(find "$root" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)"
+          if [ "$actual_inventory" != "$expected_inventory" ]; then
+            echo "physical Windows qualification artifact inventory is not exact" >&2
+            exit 1
+          fi
+          rm -rf "$validation_root"
+          mkdir -p "$validation_root"
+          python3 scripts/physical_windows_qualification.py validate \
+            --evidence "$root/evidence.json" \
+            --source-sha "$SOURCE_SHA" \
+            --version "$RELEASE_VERSION" \
+            > "$validation_root/summary.json"
+          PHYSICAL_EVIDENCE_PATH="$root/evidence.json" \
+          SUPPLIED_SUMMARY_PATH="$root/summary.json" \
+          VALIDATED_SUMMARY_PATH="$validation_root/summary.json" \
           python3 - <<'PY'
+          import hashlib
           import json
           import os
+          import re
           from pathlib import Path
 
-          root = Path("target/hosted-release/physical-windows-qualification")
-          summaries = sorted(root.rglob("summary.json"))
-          if not summaries:
-              raise SystemExit("missing physical Windows qualification summary.json")
-          summary = json.loads(summaries[0].read_text(encoding="utf-8"))
-          checks = summary.get("checks", {})
-          assert summary.get("status") == "passed", summary
-          assert summary.get("mode") == "physical_unique", summary
-          assert summary.get("source_sha") == os.environ["SOURCE_SHA"], summary
-          assert summary.get("version") == os.environ["RELEASE_VERSION"], summary
-          assert summary.get("portable_suite_owner") == "hosted_windows", summary
-          assert checks.get("scheduled_task") == "passed", summary
-          assert checks.get("persistent_outbound_worker") == "passed", summary
-          assert checks.get("installed_candidate_lifecycle") == "passed", summary
-          assert summary.get("hosted_windows_equivalence_exceptions"), summary
+          evidence = Path(os.environ["PHYSICAL_EVIDENCE_PATH"]).read_bytes()
+          supplied_summary = Path(os.environ["SUPPLIED_SUMMARY_PATH"]).read_bytes()
+          validated_summary = Path(os.environ["VALIDATED_SUMMARY_PATH"]).read_bytes()
+          if supplied_summary != validated_summary:
+              raise SystemExit("physical Windows qualification summary is not the canonical validator output")
+          summary = json.loads(validated_summary)
+          physical_evidence_sha256 = hashlib.sha256(evidence).hexdigest()
+          if summary.get("physical_evidence_sha256") != physical_evidence_sha256:
+              raise SystemExit("physical Windows qualification evidence digest does not match canonical summary")
+          if not re.fullmatch(r"[0-9a-f]{64}", physical_evidence_sha256):
+              raise SystemExit("physical Windows qualification evidence digest is invalid")
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              output.write(f"physical_evidence_sha256={physical_evidence_sha256}\n")
           PY
       - name: Upload physical Windows qualification readback
         uses: actions/upload-artifact@v7.0.1
@@ -331,7 +359,7 @@ jobs:
     name: Assemble immutable hosted promotion plan
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [bind-release-plan, native-build, linux-cross-build-boundary, hosted-release-guard]
+    needs: [bind-release-plan, verify-physical-windows-qualification, native-build, linux-cross-build-boundary, hosted-release-guard]
     permissions:
       actions: read
       contents: read
@@ -356,6 +384,7 @@ jobs:
           RELEASE_TAG: ${{ needs.bind-release-plan.outputs.tag }}
           SOURCE_SHA: ${{ needs.bind-release-plan.outputs.source_sha }}
           APPROVED_ASSET_MANIFEST_SHA256: ${{ needs.bind-release-plan.outputs.manifest_sha256 }}
+          PHYSICAL_WINDOWS_EVIDENCE_SHA256: ${{ needs.verify-physical-windows-qualification.outputs.physical_evidence_sha256 }}
           AO2_HOSTED_RELEASE_DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
@@ -363,6 +392,7 @@ jobs:
           import hashlib
           import json
           import os
+          import re
           from pathlib import Path
 
           root = Path("target/hosted-release")
@@ -402,6 +432,10 @@ jobs:
           if boundary["canonical_public_windows_archive"] is not False:
               raise SystemExit("Linux MinGW cross-build must not be the canonical public Windows archive")
 
+          physical_evidence_sha256 = os.environ["PHYSICAL_WINDOWS_EVIDENCE_SHA256"]
+          if not re.fullmatch(r"[0-9a-f]{64}", physical_evidence_sha256):
+              raise SystemExit("physical Windows evidence digest must be a lowercase SHA-256")
+
           plan = {
               "schema_version": "ao2.hosted-release-promotion-plan.v1",
               "status": "passed",
@@ -409,6 +443,7 @@ jobs:
               "tag": os.environ["RELEASE_TAG"],
               "source_sha": os.environ["SOURCE_SHA"],
               "approved_asset_manifest_sha256": os.environ["APPROVED_ASSET_MANIFEST_SHA256"],
+              "physical_windows_evidence_sha256": physical_evidence_sha256,
               "artifacts": sorted(artifacts, key=lambda item: item["target"]),
               "windows": {
                   "canonical_target_triple": "x86_64-pc-windows-msvc",
@@ -427,6 +462,7 @@ jobs:
                   "unexpected_artifact",
                   "version_tag_mismatch",
                   "approved_manifest_mismatch",
+                  "physical_windows_evidence_mismatch",
                   "incorrect_live_confirmation",
               ],
               "trust_boundary": {

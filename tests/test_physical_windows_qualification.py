@@ -19,6 +19,7 @@ MODULE_PATH = ROOT / "scripts" / "physical_windows_qualification.py"
 IMPORT_SCRIPT_PATH = ROOT / "scripts" / "import_physical_windows_qualification.py"
 WORKER_PATH = ROOT / "scripts" / "ao2_windows_outbound_worker.py"
 IMPORT_WORKFLOW_PATH = ROOT / ".github" / "workflows" / "import-physical-windows-qualification.yml"
+PUBLIC_RELEASE_WORKFLOW_PATH = ROOT / ".github" / "workflows" / "public-release-build.yml"
 SOURCE_SHA = "a" * 40
 VERSION = "0.5.2"
 NODE_ID = "windows-hp255_g10"
@@ -58,6 +59,13 @@ def load_qualification_module():
 
 def load_import_workflow() -> dict[str, object]:
     return yaml.load(IMPORT_WORKFLOW_PATH.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+
+
+def load_public_release_workflow() -> dict[str, object]:
+    return yaml.load(
+        PUBLIC_RELEASE_WORKFLOW_PATH.read_text(encoding="utf-8"),
+        Loader=yaml.BaseLoader,
+    )
 
 
 def load_import_script():
@@ -766,6 +774,64 @@ def test_import_workflow_uses_fixed_env_only_script_and_exact_artifact_files() -
     }
     assert upload["with"]["if-no-files-found"] == "error"
     assert upload["with"]["retention-days"] == "7"
+
+
+def test_public_release_consumes_only_the_canonical_physical_qualification_bundle() -> None:
+    workflow = load_public_release_workflow()
+    jobs = workflow["jobs"]
+    verification = jobs["verify-physical-windows-qualification"]
+
+    assert verification["outputs"] == {
+        "physical_evidence_sha256": "${{ steps.verify.outputs.physical_evidence_sha256 }}",
+    }
+    download = next(
+        step
+        for step in verification["steps"]
+        if step["name"] == "Download physical Windows qualification result"
+    )
+    assert download["env"] == {
+        "GH_TOKEN": "${{ github.token }}",
+        "PHYSICAL_WINDOWS_QUALIFICATION_RUN_ID": "${{ inputs.physical_windows_qualification_run_id }}",
+    }
+    assert "--name ao2-physical-windows-qualification" in download["run"]
+    verify = next(
+        step
+        for step in verification["steps"]
+        if step["name"] == "Validate canonical physical Windows qualification bundle"
+    )
+    assert verify["id"] == "verify"
+    assert verify["env"] == {
+        "SOURCE_SHA": "${{ needs.bind-release-plan.outputs.source_sha }}",
+        "RELEASE_VERSION": "${{ needs.bind-release-plan.outputs.version }}",
+    }
+    run = verify["run"]
+    assert "python3 scripts/physical_windows_qualification.py validate" in run
+    assert "--evidence \"$root/evidence.json\"" in run
+    assert "--source-sha \"$SOURCE_SHA\"" in run
+    assert "--version \"$RELEASE_VERSION\"" in run
+    assert "rglob" not in run
+    assert "assert " not in run
+    assert 'expected_inventory=$\'evidence.json\\nsummary.json\'' in run
+    assert "physical_evidence_sha256" in run
+    assert "GITHUB_OUTPUT" in run
+
+
+def test_public_release_promotion_plan_binds_verified_physical_evidence_digest() -> None:
+    workflow = load_public_release_workflow()
+    plan = workflow["jobs"]["assemble-promotion-plan"]
+
+    assert "verify-physical-windows-qualification" in plan["needs"]
+    assemble = next(
+        step
+        for step in plan["steps"]
+        if step["name"] == "Assemble promotion plan and dry-run boundary"
+    )
+    assert assemble["env"]["PHYSICAL_WINDOWS_EVIDENCE_SHA256"] == (
+        "${{ needs.verify-physical-windows-qualification.outputs.physical_evidence_sha256 }}"
+    )
+    assert "re.fullmatch(r\"[0-9a-f]{64}\", physical_evidence_sha256)" in assemble["run"]
+    assert '"physical_windows_evidence_sha256": physical_evidence_sha256' in assemble["run"]
+    assert '"physical_windows_evidence_mismatch"' in assemble["run"]
 
 
 def test_import_script_main_materializes_exact_canonical_artifact(

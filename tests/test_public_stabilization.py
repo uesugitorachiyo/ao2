@@ -595,6 +595,11 @@ def test_public_release_build_uses_canonical_hosted_native_dry_run_contract():
         "live_publish_confirm:",
         "bind-release-plan:",
         "verify-physical-windows-qualification:",
+        "physical_evidence_sha256: ${{ steps.verify.outputs.physical_evidence_sha256 }}",
+        "Validate canonical physical Windows qualification bundle",
+        "python3 scripts/physical_windows_qualification.py validate",
+        "physical_windows_evidence_sha256",
+        "physical_windows_evidence_mismatch",
         "native-build:",
         "assemble-promotion-plan:",
         "publish-release:",
@@ -628,6 +633,7 @@ def test_public_release_build_uses_canonical_hosted_native_dry_run_contract():
     assert "x86_64-pc-windows-gnu" in workflow
     assert "non_authoritative" in workflow
     assert "canonical_public_windows_archive: false" in workflow
+    assert "needs.verify-physical-windows-qualification.outputs.physical_evidence_sha256" in workflow
 
 
 def test_public_release_physical_windows_import_contract_is_read_only_and_parseable():
