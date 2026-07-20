@@ -617,7 +617,9 @@ only redaction counts, never original values. It carries a stable
 `ao2-canonical-v1` over normalized versions, platform, workflow/verifier,
 approval, replay/evidence, manifest/release digests, failure identity, and next
 action. Log contents, redaction counts, timestamps, and output paths do not
-affect that fingerprint.
+affect that fingerprint. The separate `bundle_sha256` covers the complete
+canonical sanitized bundle except its self-referential digest field, including
+logs and redaction counts.
 
 `governed_issue_route.input_trust=sanitized_untrusted` marks the bundle as
 input suitable for the separately governed issue draft projection:
@@ -630,10 +632,12 @@ ao2 issue draft-pr preview \
   --json
 ```
 
-That path strictly revalidates the bundle, reproduces its canonical
-fingerprint, and requires the draft evidence digest and body to bind the exact
-fingerprint. Altered, malformed, unsafe, or mismatched bundles fail closed. It
-does not authorize or perform issue creation. The bundle always emits:
+That path strictly revalidates the bundle, reproduces its canonical problem
+fingerprint and whole-bundle digest, requires the draft evidence-pack digest to
+equal `bundle_sha256`, and requires the draft body to bind the problem
+fingerprint. Altered, malformed, unsafe, non-canonical, or mismatched bundles
+fail closed. It does not authorize or perform issue creation. The bundle always
+emits:
 
 ```text
 observer_only=true

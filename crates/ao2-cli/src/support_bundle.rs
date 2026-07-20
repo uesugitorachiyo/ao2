@@ -121,6 +121,7 @@ struct SupportBundle {
     logs: Vec<SanitizedLog>,
     redaction: RedactionSummary,
     problem_fingerprint: String,
+    bundle_sha256: String,
     smallest_safe_next_action: String,
     governed_issue_route: GovernedIssueRoute,
     observer_only: bool,
@@ -177,7 +178,7 @@ fn build(input: &Path, out: &Path, print_json: bool, digest: DigestFn) -> Result
     );
     let problem_fingerprint = format!("sha256:{}", digest(&fingerprint_subject));
     let (logs, redaction) = sanitize_logs(&source.logs)?;
-    let bundle = SupportBundle {
+    let mut bundle = SupportBundle {
         schema_version: "ao2.troubleshooting-support-bundle.v0.1".to_string(),
         ao2_version: source.ao2_version,
         control_plane_version: source.control_plane_version,
@@ -192,6 +193,7 @@ fn build(input: &Path, out: &Path, print_json: bool, digest: DigestFn) -> Result
         logs,
         redaction,
         problem_fingerprint: problem_fingerprint.clone(),
+        bundle_sha256: String::new(),
         smallest_safe_next_action: source.smallest_safe_next_action,
         governed_issue_route: GovernedIssueRoute {
             input_trust: "sanitized_untrusted".to_string(),
@@ -208,6 +210,7 @@ fn build(input: &Path, out: &Path, print_json: bool, digest: DigestFn) -> Result
         public_write_performed: false,
         release_or_deployment_performed: false,
     };
+    bundle.bundle_sha256 = canonical_bundle_sha256(&bundle, digest)?;
     let rendered = format!("{}\n", serde_json::to_string_pretty(&bundle)?);
     if rendered.len() as u64 > MAX_BYTES {
         bail!(
@@ -225,10 +228,21 @@ fn build(input: &Path, out: &Path, print_json: bool, digest: DigestFn) -> Result
     Ok(())
 }
 
-pub(crate) fn validate_for_governed_issue(path: &Path, digest: DigestFn) -> Result<String> {
+pub(crate) struct GovernedIssueBinding {
+    pub(crate) problem_fingerprint: String,
+    pub(crate) bundle_sha256: String,
+}
+
+pub(crate) fn validate_for_governed_issue(
+    path: &Path,
+    digest: DigestFn,
+) -> Result<GovernedIssueBinding> {
     let bundle: SupportBundle = read_bounded_json(path)?;
     validate_bundle(&bundle, digest)?;
-    Ok(bundle.problem_fingerprint)
+    Ok(GovernedIssueBinding {
+        problem_fingerprint: bundle.problem_fingerprint,
+        bundle_sha256: bundle.bundle_sha256,
+    })
 }
 
 fn validate_bundle(bundle: &SupportBundle, digest: DigestFn) -> Result<()> {
@@ -273,6 +287,7 @@ fn validate_bundle(bundle: &SupportBundle, digest: DigestFn) -> Result<()> {
         &bundle.smallest_safe_next_action,
         MAX_NEXT_ACTION_BYTES,
     )?;
+    validate_bundle_normalization(bundle)?;
     if bundle.logs.len() > MAX_LOGS {
         bail!("support bundle logs must contain at most 16 entries");
     }
@@ -323,7 +338,35 @@ fn validate_bundle(bundle: &SupportBundle, digest: DigestFn) -> Result<()> {
     if bundle.problem_fingerprint != expected {
         bail!("support bundle problem fingerprint does not match its canonical fields");
     }
+    if bundle.bundle_sha256 != canonical_bundle_sha256(bundle, digest)? {
+        bail!("support bundle digest does not match its canonical contents");
+    }
     Ok(())
+}
+
+fn validate_bundle_normalization(bundle: &SupportBundle) -> Result<()> {
+    if bundle.ao2_version != normalize_text(&bundle.ao2_version)
+        || bundle.control_plane_version != normalize_text(&bundle.control_plane_version)
+        || bundle.platform.os != bundle.platform.os.trim().to_ascii_lowercase()
+        || bundle.platform.architecture != bundle.platform.architecture.trim().to_ascii_lowercase()
+        || bundle.workflow.identity != normalize_text(&bundle.workflow.identity)
+        || bundle.workflow.verifier_identity != normalize_text(&bundle.workflow.verifier_identity)
+        || bundle.failure.category != normalize_text(&bundle.failure.category).to_ascii_lowercase()
+        || bundle.failure.phase != normalize_text(&bundle.failure.phase).to_ascii_lowercase()
+        || bundle.smallest_safe_next_action != normalize_text(&bundle.smallest_safe_next_action)
+    {
+        bail!("support bundle fields are not canonically normalized");
+    }
+    Ok(())
+}
+
+fn canonical_bundle_sha256(bundle: &SupportBundle, digest: DigestFn) -> Result<String> {
+    let mut subject = serde_json::to_value(bundle)?;
+    subject
+        .as_object_mut()
+        .context("support bundle must serialize as an object")?
+        .remove("bundle_sha256");
+    Ok(digest(&subject))
 }
 
 fn validate_source(source: &SupportSource) -> Result<()> {
@@ -563,10 +606,10 @@ fn redact_environment_values(input: &str) -> (String, usize) {
         let at_boundary = index == 0
             || bytes[index - 1].is_ascii_whitespace()
             || matches!(bytes[index - 1], b'(' | b'[' | b'{' | b',' | b';');
-        if at_boundary && matches!(bytes[index], b'A'..=b'Z' | b'_') {
+        if at_boundary && (bytes[index].is_ascii_alphabetic() || bytes[index] == b'_') {
             let mut key_end = index + 1;
             while key_end < input.len()
-                && matches!(bytes[key_end], b'A'..=b'Z' | b'0'..=b'9' | b'_')
+                && (bytes[key_end].is_ascii_alphanumeric() || bytes[key_end] == b'_')
             {
                 key_end += 1;
             }
@@ -576,7 +619,15 @@ fn redact_environment_values(input: &str) -> (String, usize) {
                 if value_start < input.len() && matches!(bytes[value_start], b'"' | b'\'') {
                     let quote = bytes[value_start];
                     value_end += 1;
-                    while value_end < input.len() && bytes[value_end] != quote {
+                    let mut escaped = false;
+                    while value_end < input.len() {
+                        if bytes[value_end] == quote && !escaped {
+                            break;
+                        }
+                        escaped = bytes[value_end] == b'\\' && !escaped;
+                        if bytes[value_end] != b'\\' {
+                            escaped = false;
+                        }
                         value_end += 1;
                     }
                     if value_end < input.len() {
@@ -639,7 +690,7 @@ fn redact_filesystem_paths(input: &str) -> (String, usize) {
         let end = output[start..]
             .char_indices()
             .find_map(|(offset, ch)| {
-                (ch.is_whitespace() || matches!(ch, '"' | '\'' | ',' | ';' | ')' | ']'))
+                (ch.is_whitespace() || matches!(ch, '"' | '\'' | ',' | ';' | ')' | ']' | '>' | '`'))
                     .then_some(start + offset)
             })
             .unwrap_or(output.len());
@@ -655,7 +706,7 @@ fn find_filesystem_path_start(input: &str) -> Option<usize> {
             continue;
         }
         let suffix = &input[index..];
-        if suffix.starts_with("file:///") {
+        if suffix.starts_with("file://") {
             return Some(index);
         }
         if suffix.starts_with("~/") || suffix.starts_with("./") || suffix.starts_with("../") {
@@ -665,7 +716,7 @@ fn find_filesystem_path_start(input: &str) -> Option<usize> {
             .char_indices()
             .find_map(|(offset, candidate)| {
                 (candidate.is_whitespace()
-                    || matches!(candidate, '"' | '\'' | ',' | ';' | ')' | ']'))
+                    || matches!(candidate, '"' | '\'' | ',' | ';' | ')' | ']' | '>' | '`'))
                 .then_some(offset)
             })
             .unwrap_or(suffix.len());
@@ -700,7 +751,7 @@ fn find_filesystem_path_start(input: &str) -> Option<usize> {
 fn path_boundary_before(input: &str, index: usize) -> bool {
     index == 0
         || input[..index].chars().next_back().is_some_and(|ch| {
-            ch.is_whitespace() || matches!(ch, '=' | ':' | '(' | '[' | '{' | '"' | '\'')
+            ch.is_whitespace() || matches!(ch, '=' | ':' | '(' | '[' | '{' | '"' | '\'' | '<' | '`')
         })
 }
 
@@ -724,12 +775,22 @@ fn looks_like_private_source(input: &str) -> bool {
         "interface ",
         "namespace ",
         "using ",
+        "if ",
+        "for ",
+        "while ",
+        "match ",
+        "return ",
+        "select ",
+        "insert ",
+        "update ",
+        "delete ",
         "#include ",
         "#!/",
         "<script",
         "use crate::",
     ];
-    let trimmed = input.trim_start();
+    let normalized = input.trim_start().to_ascii_lowercase();
+    let trimmed = normalized.as_str();
     let candidates = std::iter::once(trimmed).chain(
         trimmed
             .split_once(": ")
@@ -812,16 +873,71 @@ fn windows_input_open_flags() -> u32 {
 #[cfg(windows)]
 fn validate_windows_opened_input(file: &fs::File, path: &Path) -> Result<()> {
     use std::os::windows::io::AsRawHandle;
-    use windows_sys::Win32::Storage::FileSystem::{GetFileType, FILE_TYPE_DISK};
+    use windows_sys::Win32::Storage::FileSystem::{
+        FileAttributeTagInfo, GetFileInformationByHandleEx, GetFileType, FILE_ATTRIBUTE_TAG_INFO,
+    };
 
     let file_type = unsafe { GetFileType(file.as_raw_handle()) };
-    if file_type != FILE_TYPE_DISK {
+    let mut tag_info = FILE_ATTRIBUTE_TAG_INFO::default();
+    let inspected = unsafe {
+        GetFileInformationByHandleEx(
+            file.as_raw_handle(),
+            FileAttributeTagInfo,
+            std::ptr::from_mut(&mut tag_info).cast(),
+            std::mem::size_of::<FILE_ATTRIBUTE_TAG_INFO>() as u32,
+        )
+    };
+    if inspected == 0 {
         bail!(
-            "Windows input handle must have FILE_TYPE_DISK before read: {}",
+            "inspect Windows input reparse attributes before read: {}",
+            path.display()
+        );
+    }
+    validate_windows_file_characteristics(file_type, tag_info.FileAttributes, path)
+}
+
+#[cfg(windows)]
+fn validate_windows_file_characteristics(
+    file_type: u32,
+    file_attributes: u32,
+    path: &Path,
+) -> Result<()> {
+    use windows_sys::Win32::Storage::FileSystem::{FILE_ATTRIBUTE_REPARSE_POINT, FILE_TYPE_DISK};
+
+    if file_type != FILE_TYPE_DISK || file_attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+        bail!(
+            "Windows input must be a non-reparse FILE_TYPE_DISK before read: {}",
             path.display()
         );
     }
     Ok(())
+}
+
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use super::*;
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_REPARSE_POINT, FILE_TYPE_DISK, FILE_TYPE_PIPE,
+    };
+
+    #[test]
+    fn input_characteristics_reject_non_disk_and_reparse_handles() {
+        let path = Path::new("support-bundle.json");
+        assert!(
+            validate_windows_file_characteristics(FILE_TYPE_DISK, FILE_ATTRIBUTE_NORMAL, path)
+                .is_ok()
+        );
+        assert!(
+            validate_windows_file_characteristics(FILE_TYPE_PIPE, FILE_ATTRIBUTE_NORMAL, path)
+                .is_err()
+        );
+        assert!(validate_windows_file_characteristics(
+            FILE_TYPE_DISK,
+            FILE_ATTRIBUTE_REPARSE_POINT,
+            path
+        )
+        .is_err());
+    }
 }
 
 fn write_exclusive(path: &Path, bytes: &[u8]) -> Result<()> {

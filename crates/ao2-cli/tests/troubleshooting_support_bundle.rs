@@ -83,6 +83,13 @@ fn builds_deterministic_observer_only_bundle_with_stable_fingerprint() {
     assert_eq!(first_stdout["platform"]["os"], "windows");
     assert_eq!(first_stdout["platform"]["architecture"], "x86_64");
     assert_eq!(first_stdout["approval"]["status"], "waiting");
+    assert_eq!(
+        first_stdout["bundle_sha256"]
+            .as_str()
+            .expect("bundle digest")
+            .len(),
+        64
+    );
     assert!(first_stdout["approval"].get("secret").is_none());
     assert_eq!(first_stdout["logs"].as_array().expect("logs").len(), 3);
     assert_eq!(first_stdout["observer_only"], true);
@@ -194,6 +201,46 @@ fn redacts_credentials_environment_values_and_filesystem_paths() {
     assert!(rendered.contains("[REDACTED]"));
     assert!(rendered.contains("[REDACTED_ENV]"));
     assert!(rendered.contains("[REDACTED_PATH]"));
+}
+
+#[test]
+fn redacts_ambiguous_environment_and_path_forms_and_rejects_source_fragments() {
+    let mut input = valid_input();
+    input["logs"] = json!([
+        "private_context=\"alpha secret\"",
+        r#"PRIVATE_CONTEXT="alpha\\\" tail-secret""#,
+        "failed at file://server/private/share.log",
+        "failed at `/home/alice/private.log`",
+        "failed at </var/lib/ao2/private.log>",
+        "failed path:src/private/project/main.rs:41"
+    ]);
+    let (_input_temp, input_path) = write_json(&input);
+    let (_output_temp, output_path, output) = run_bundle(&input_path);
+    assert_success(&output);
+    let rendered = fs::read_to_string(output_path).expect("bundle");
+    for forbidden in [
+        "alpha secret",
+        "tail-secret",
+        "file://server",
+        "/home/alice",
+        "/var/lib/ao2",
+        "src/private/project",
+    ] {
+        assert!(
+            !rendered.contains(forbidden),
+            "bundle leaked {forbidden:?}:\n{rendered}"
+        );
+    }
+
+    for source in [
+        "SELECT customer_secret FROM private_table;",
+        "if customer_secret != expected { return deny; }",
+    ] {
+        let mut source_input = valid_input();
+        source_input["logs"] = json!([source]);
+        let (_temp, path) = write_json(&source_input);
+        rejected(&path, "private source content");
+    }
 }
 
 #[test]
@@ -312,6 +359,7 @@ fn sanitized_bundle_fingerprint_is_compatible_with_governed_issue_preview() {
     let bundle: Value =
         serde_json::from_slice(&fs::read(&bundle_path).expect("bundle")).expect("bundle json");
     let fingerprint = bundle["problem_fingerprint"].as_str().expect("fingerprint");
+    let bundle_sha256 = bundle["bundle_sha256"].as_str().expect("bundle sha256");
     let mut evidence: Value = serde_json::from_slice(
         &fs::read(
             Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -324,9 +372,7 @@ fn sanitized_bundle_fingerprint_is_compatible_with_governed_issue_preview() {
     evidence["draft"]["body"] = json!(format!(
         "Sanitized untrusted troubleshooting input.\n\nProblem fingerprint: {fingerprint}"
     ));
-    evidence["repair"]["evidence_pack_sha256"] = json!(fingerprint
-        .strip_prefix("sha256:")
-        .expect("prefixed digest"));
+    evidence["repair"]["evidence_pack_sha256"] = json!(bundle_sha256);
     let (evidence_temp, evidence_path) = write_json(&evidence);
     let action_path = evidence_temp.path().join("action.json");
     let preview = ao2(&[
@@ -367,7 +413,7 @@ fn sanitized_bundle_fingerprint_is_compatible_with_governed_issue_preview() {
     assert_eq!(verify_json["client_merge_performed"], false);
 
     let mut altered_bundle = bundle;
-    altered_bundle["failure"]["phase"] = json!("altered_phase");
+    altered_bundle["logs"][0]["text"] = json!("altered sanitized diagnostic");
     let (_altered_temp, altered_path) = write_json(&altered_bundle);
     let rejected_action = evidence_temp.path().join("rejected-action.json");
     let altered = ao2(&[
@@ -383,7 +429,7 @@ fn sanitized_bundle_fingerprint_is_compatible_with_governed_issue_preview() {
         "--json",
     ]);
     assert!(!altered.status.success(), "altered bundle was accepted");
-    assert!(String::from_utf8_lossy(&altered.stderr).contains("fingerprint"));
+    assert!(String::from_utf8_lossy(&altered.stderr).contains("bundle digest"));
 
     let mut mismatched_evidence = evidence;
     mismatched_evidence["repair"]["evidence_pack_sha256"] = json!("9".repeat(64));

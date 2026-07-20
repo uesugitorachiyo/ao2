@@ -390,14 +390,11 @@ fn preview(
 ) -> Result<()> {
     let evidence: DraftEvidence = read_bounded_json(path)?;
     if let Some(bundle_path) = support_bundle {
-        let fingerprint = crate::support_bundle::validate_for_governed_issue(bundle_path, digest)?;
-        let fingerprint_digest = fingerprint
-            .strip_prefix("sha256:")
-            .context("support bundle fingerprint must use sha256")?;
-        if evidence.repair.evidence_pack_sha256 != fingerprint_digest {
-            bail!("draft evidence is not bound to the support bundle fingerprint");
+        let binding = crate::support_bundle::validate_for_governed_issue(bundle_path, digest)?;
+        if evidence.repair.evidence_pack_sha256 != binding.bundle_sha256 {
+            bail!("draft evidence is not bound to the exact support bundle digest");
         }
-        let required_body_binding = format!("Problem fingerprint: {fingerprint}");
+        let required_body_binding = format!("Problem fingerprint: {}", binding.problem_fingerprint);
         if !evidence.draft.body.contains(&required_body_binding) {
             bail!("draft body is not bound to the support bundle fingerprint");
         }

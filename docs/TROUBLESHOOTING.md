@@ -41,8 +41,8 @@ not add raw logs, environment dumps, source fragments, private repository
 names, or local build artifacts.
 
 To bind an inspected bundle to a governed draft preview, set the draft
-evidence-pack digest to the fingerprint digest, include `Problem fingerprint:
-sha256:<digest>` in its body, and run:
+evidence-pack digest to the bundle's exact `bundle_sha256`, include `Problem
+fingerprint: sha256:<digest>` in its body, and run:
 
 ```sh
 ao2 issue draft-pr preview \
