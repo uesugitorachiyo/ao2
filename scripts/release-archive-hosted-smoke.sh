@@ -109,6 +109,14 @@ Path(os.environ["summary_json"]).write_text(
 )
 PY
 
+candidate_dist="$(dirname -- "$summary_json")/dist"
+mkdir -p "$candidate_dist"
+candidate_archive="$candidate_dist/$(basename -- "$archive")"
+if [ "$archive" != "$candidate_archive" ]; then
+  cp "$archive" "$candidate_archive"
+fi
+cmp "$archive" "$candidate_archive"
+
 printf "release_archive_hosted_smoke=passed\n"
 printf "target=%s\n" "$target_label"
 printf "summary=%s\n" "$summary_json"

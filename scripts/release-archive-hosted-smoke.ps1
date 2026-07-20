@@ -88,6 +88,17 @@ New-Item -ItemType Directory -Force -Path (Split-Path -Parent $SummaryJson) | Ou
     release_acceptance_owner = "factory-v3 evaluator-closer"
 } | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 -LiteralPath $SummaryJson
 
+$CandidateDist = Join-Path (Split-Path -Parent $SummaryJson) "dist"
+New-Item -ItemType Directory -Force -Path $CandidateDist | Out-Null
+$CandidateArchive = Join-Path $CandidateDist (Split-Path -Leaf $Archive)
+if ([System.IO.Path]::GetFullPath($Archive) -ne [System.IO.Path]::GetFullPath($CandidateArchive)) {
+    Copy-Item -LiteralPath $Archive -Destination $CandidateArchive -Force
+}
+$SourceArchiveDigest = (Get-FileHash -Algorithm SHA256 -LiteralPath $Archive).Hash
+if ((Get-FileHash -Algorithm SHA256 -LiteralPath $CandidateArchive).Hash -ne $SourceArchiveDigest) {
+    throw "staged native candidate archive digest mismatch"
+}
+
 Write-Output "release_archive_hosted_smoke=passed"
 Write-Output "target=$TargetLabel"
 Write-Output "summary=$SummaryJson"

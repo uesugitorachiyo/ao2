@@ -640,6 +640,18 @@ def test_public_release_build_uses_canonical_hosted_native_dry_run_contract():
     assert "needs.verify-physical-windows-qualification.outputs.physical_evidence_sha256" in workflow
 
 
+def test_hosted_release_smoke_stages_the_verified_archive_beside_its_summary():
+    unix_smoke = read("scripts/release-archive-hosted-smoke.sh")
+    windows_smoke = read("scripts/release-archive-hosted-smoke.ps1")
+
+    assert 'candidate_dist="$(dirname -- "$summary_json")/dist"' in unix_smoke
+    assert 'if [ "$archive" != "$candidate_archive" ]; then' in unix_smoke
+    assert 'cp "$archive" "$candidate_archive"' in unix_smoke
+    assert '$CandidateDist = Join-Path (Split-Path -Parent $SummaryJson) "dist"' in windows_smoke
+    assert "[System.IO.Path]::GetFullPath($Archive)" in windows_smoke
+    assert "Copy-Item -LiteralPath $Archive -Destination $CandidateArchive -Force" in windows_smoke
+
+
 def test_public_release_physical_windows_import_contract_is_read_only_and_parseable():
     workflow_path = REPO_ROOT / ".github/workflows/import-physical-windows-qualification.yml"
     workflow = yaml.load(workflow_path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
