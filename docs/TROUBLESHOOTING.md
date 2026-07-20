@@ -20,11 +20,11 @@ ao2 support bundle \
   --json
 ```
 
-The source record names AO2 and Control Plane versions, platform,
-workflow/verifier identities, approval/replay/evidence status, public-safe
-digests, failure category and phase, bounded diagnostic excerpts, and the exact
-smallest safe next action. It must declare every execution and publication
-boundary false.
+The source record names numeric AO2 and Control Plane versions, allowlisted
+platform and workflow/verifier identities, approval/replay/evidence status,
+public-safe digests, repository-owned failure category and phase values,
+bounded diagnostic excerpts, and one repository-owned exact smallest safe next
+action. It must declare every execution and publication boundary false.
 
 The command rejects input larger than 64 KiB, unknown fields, malformed
 digests, symlink input, source-like log content, and unsafe boundary claims. It
@@ -43,8 +43,10 @@ not add raw logs, environment dumps, source fragments, private repository
 names, or local build artifacts.
 
 To bind an inspected bundle to a governed draft preview, set the draft
-evidence-pack digest to the bundle's exact `bundle_sha256`, include `Problem
-fingerprint: sha256:<digest>` in its body, and run:
+evidence-pack digest to the bundle's exact `bundle_sha256`, use the canonical
+support title `AO2 troubleshooting: <category> during <phase>` and body fields
+derived from the bundle workflow identity, problem fingerprint, and bundle
+SHA-256, and run:
 
 ```sh
 ao2 issue draft-pr preview \
@@ -54,8 +56,10 @@ ao2 issue draft-pr preview \
   --json
 ```
 
-The preview rejects any bundle or draft-evidence mismatch and still performs
-no issue write.
+The preview rejects any bundle, draft text, or draft-evidence mismatch and adds
+a typed digest/fingerprint support binding to the action. Verification rejects
+reserved support claims without that binding. Neither path performs an issue
+write.
 
 `ao2 support bundle` performs no work, provider call, issue/public write,
 release, or deployment.

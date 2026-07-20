@@ -3,15 +3,52 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
-use ao2_policy::redact_secrets;
 use clap::Subcommand;
 use serde::{Deserialize, Serialize};
 
 const MAX_BYTES: u64 = 65_536;
 const MAX_LOGS: usize = 16;
 const MAX_LOG_BYTES: usize = 2_048;
-const MAX_SHORT_FIELD_BYTES: usize = 128;
-const MAX_NEXT_ACTION_BYTES: usize = 512;
+const ALLOWED_WORKFLOWS: &[&str] = &[
+    "risky-pr-v1",
+    "public-release-build-v1",
+    "release-gate-v1",
+    "pulse-v1",
+];
+const ALLOWED_VERIFIERS: &[&str] = &[
+    "ao2-report-verifier-v1",
+    "ao2-release-verifier-v1",
+    "ao2-evidence-verifier-v1",
+];
+const ALLOWED_FAILURE_CATEGORIES: &[&str] = &[
+    "approval_blocked",
+    "evidence_missing",
+    "manifest_mismatch",
+    "release_mismatch",
+    "replay_failed",
+    "verification_failed",
+    "worker_stale",
+];
+const ALLOWED_FAILURE_PHASES: &[&str] = &[
+    "approval",
+    "evidence",
+    "execution",
+    "intake",
+    "planning",
+    "recovery",
+    "release",
+    "replay",
+    "report_contract",
+    "verification",
+];
+const ALLOWED_NEXT_ACTIONS: &[&str] = &[
+    "Inspect the exact approval action digest before retrying.",
+    "Refresh the worker heartbeat before trusting running state.",
+    "Re-run ao2 report verify against the retained evidence pack.",
+    "Restore the retained evidence pack before retrying.",
+    "Retry replay from the last verified checkpoint.",
+    "Stop and request bounded operator authority for the exact action.",
+];
 
 type DigestFn = fn(&serde_json::Value) -> String;
 
@@ -159,8 +196,8 @@ struct GovernedIssueRoute {
 
 fn build(input: &Path, out: &Path, print_json: bool, digest: DigestFn) -> Result<()> {
     let mut source: SupportSource = read_bounded_json(input)?;
-    validate_source(&source)?;
     normalize_source(&mut source);
+    validate_source(&source)?;
 
     let fingerprint_subject = fingerprint_subject(
         &source.ao2_version,
@@ -230,6 +267,9 @@ fn build(input: &Path, out: &Path, print_json: bool, digest: DigestFn) -> Result
 pub(crate) struct GovernedIssueBinding {
     pub(crate) problem_fingerprint: String,
     pub(crate) bundle_sha256: String,
+    pub(crate) workflow_identity: String,
+    pub(crate) failure_category: String,
+    pub(crate) failed_phase: String,
 }
 
 pub(crate) fn validate_for_governed_issue(
@@ -241,26 +281,45 @@ pub(crate) fn validate_for_governed_issue(
     Ok(GovernedIssueBinding {
         problem_fingerprint: bundle.problem_fingerprint,
         bundle_sha256: bundle.bundle_sha256,
+        workflow_identity: bundle.workflow.identity,
+        failure_category: bundle.failure.category,
+        failed_phase: bundle.failure.phase,
     })
+}
+
+pub(crate) fn validate_governed_issue_metadata(
+    workflow_identity: &str,
+    failure_category: &str,
+    failed_phase: &str,
+) -> Result<()> {
+    validate_allowed(
+        "support_bundle.workflow_identity",
+        workflow_identity,
+        ALLOWED_WORKFLOWS,
+    )?;
+    validate_allowed(
+        "support_bundle.failure_category",
+        failure_category,
+        ALLOWED_FAILURE_CATEGORIES,
+    )?;
+    validate_allowed(
+        "support_bundle.failed_phase",
+        failed_phase,
+        ALLOWED_FAILURE_PHASES,
+    )
 }
 
 fn validate_bundle(bundle: &SupportBundle, digest: DigestFn) -> Result<()> {
     if bundle.schema_version != "ao2.troubleshooting-support-bundle.v0.1" {
         bail!("unsupported troubleshooting support bundle schema");
     }
-    validate_public_text("ao2_version", &bundle.ao2_version, 64)?;
-    validate_public_text("control_plane_version", &bundle.control_plane_version, 64)?;
-    validate_token("platform.os", &bundle.platform.os)?;
-    validate_token("platform.architecture", &bundle.platform.architecture)?;
-    validate_public_text(
-        "workflow.identity",
-        &bundle.workflow.identity,
-        MAX_SHORT_FIELD_BYTES,
-    )?;
-    validate_public_text(
-        "workflow.verifier_identity",
-        &bundle.workflow.verifier_identity,
-        MAX_SHORT_FIELD_BYTES,
+    validate_product_metadata(
+        &bundle.ao2_version,
+        &bundle.control_plane_version,
+        &bundle.platform,
+        &bundle.workflow,
+        &bundle.failure,
+        &bundle.smallest_safe_next_action,
     )?;
     validate_approval(&bundle.approval)?;
     validate_status(
@@ -271,21 +330,6 @@ fn validate_bundle(bundle: &SupportBundle, digest: DigestFn) -> Result<()> {
     validate_evidence(&bundle.evidence)?;
     validate_digest("manifest_sha256", &bundle.manifest_sha256)?;
     validate_digest("release_sha256", &bundle.release_sha256)?;
-    validate_public_text(
-        "failure.category",
-        &bundle.failure.category,
-        MAX_SHORT_FIELD_BYTES,
-    )?;
-    validate_public_text(
-        "failure.phase",
-        &bundle.failure.phase,
-        MAX_SHORT_FIELD_BYTES,
-    )?;
-    validate_public_text(
-        "smallest_safe_next_action",
-        &bundle.smallest_safe_next_action,
-        MAX_NEXT_ACTION_BYTES,
-    )?;
     validate_bundle_normalization(bundle)?;
     if bundle.logs.len() > MAX_LOGS {
         bail!("support bundle logs must contain at most 16 entries");
@@ -372,19 +416,13 @@ fn validate_source(source: &SupportSource) -> Result<()> {
     if source.schema_version != "ao2.troubleshooting-support-source.v0.1" {
         bail!("unsupported troubleshooting support source schema");
     }
-    validate_public_text("ao2_version", &source.ao2_version, 64)?;
-    validate_public_text("control_plane_version", &source.control_plane_version, 64)?;
-    validate_token("platform.os", &source.platform.os)?;
-    validate_token("platform.architecture", &source.platform.architecture)?;
-    validate_public_text(
-        "workflow.identity",
-        &source.workflow.identity,
-        MAX_SHORT_FIELD_BYTES,
-    )?;
-    validate_public_text(
-        "workflow.verifier_identity",
-        &source.workflow.verifier_identity,
-        MAX_SHORT_FIELD_BYTES,
+    validate_product_metadata(
+        &source.ao2_version,
+        &source.control_plane_version,
+        &source.platform,
+        &source.workflow,
+        &source.failure,
+        &source.smallest_safe_next_action,
     )?;
     validate_approval(&source.approval)?;
     validate_status(
@@ -395,21 +433,6 @@ fn validate_source(source: &SupportSource) -> Result<()> {
     validate_evidence(&source.evidence)?;
     validate_digest("manifest_sha256", &source.manifest_sha256)?;
     validate_digest("release_sha256", &source.release_sha256)?;
-    validate_public_text(
-        "failure.category",
-        &source.failure.category,
-        MAX_SHORT_FIELD_BYTES,
-    )?;
-    validate_public_text(
-        "failure.phase",
-        &source.failure.phase,
-        MAX_SHORT_FIELD_BYTES,
-    )?;
-    validate_public_text(
-        "smallest_safe_next_action",
-        &source.smallest_safe_next_action,
-        MAX_NEXT_ACTION_BYTES,
-    )?;
     if source.logs.len() > MAX_LOGS {
         bail!("logs must contain at most 16 entries");
     }
@@ -438,6 +461,60 @@ fn normalize_source(source: &mut SupportSource) {
 
 fn normalize_text(value: &str) -> String {
     value.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn validate_product_metadata(
+    ao2_version: &str,
+    control_plane_version: &str,
+    platform: &Platform,
+    workflow: &WorkflowIdentity,
+    failure: &FailureIdentity,
+    smallest_safe_next_action: &str,
+) -> Result<()> {
+    validate_version("ao2_version", ao2_version)?;
+    validate_version("control_plane_version", control_plane_version)?;
+    validate_allowed("platform.os", &platform.os, &["linux", "macos", "windows"])?;
+    validate_allowed(
+        "platform.architecture",
+        &platform.architecture,
+        &["aarch64", "x86_64"],
+    )?;
+    validate_allowed("workflow.identity", &workflow.identity, ALLOWED_WORKFLOWS)?;
+    validate_allowed(
+        "workflow.verifier_identity",
+        &workflow.verifier_identity,
+        ALLOWED_VERIFIERS,
+    )?;
+    validate_allowed(
+        "failure.category",
+        &failure.category,
+        ALLOWED_FAILURE_CATEGORIES,
+    )?;
+    validate_allowed("failure.phase", &failure.phase, ALLOWED_FAILURE_PHASES)?;
+    validate_allowed(
+        "smallest_safe_next_action",
+        smallest_safe_next_action,
+        ALLOWED_NEXT_ACTIONS,
+    )
+}
+
+fn validate_version(name: &str, value: &str) -> Result<()> {
+    let components = value.split('.').collect::<Vec<_>>();
+    if !(2..=3).contains(&components.len())
+        || components.iter().any(|component| {
+            component.is_empty() || !component.bytes().all(|byte| byte.is_ascii_digit())
+        })
+    {
+        bail!("{name} must be a numeric two- or three-component version");
+    }
+    Ok(())
+}
+
+fn validate_allowed(name: &str, value: &str, allowed: &[&str]) -> Result<()> {
+    if !allowed.contains(&value) {
+        bail!("{name} is not an allowed public support value");
+    }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -512,33 +589,6 @@ fn validate_text(name: &str, value: &str, max: usize) -> Result<()> {
     Ok(())
 }
 
-fn validate_token(name: &str, value: &str) -> Result<()> {
-    validate_public_text(name, value, 64)?;
-    if !value
-        .bytes()
-        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
-    {
-        bail!("{name} contains unsupported characters");
-    }
-    Ok(())
-}
-
-fn validate_public_text(name: &str, value: &str, max: usize) -> Result<()> {
-    validate_text(name, value, max)?;
-    let (without_env, env_count) = redact_environment_values(value);
-    let secret_safe = redact_credentials(&without_env);
-    let (path_safe, path_count) = redact_filesystem_paths(&secret_safe);
-    if env_count > 0
-        || path_count > 0
-        || secret_safe != without_env
-        || path_safe != secret_safe
-        || looks_like_private_source(value)
-    {
-        bail!("{name} must not contain credentials, environment values, filesystem paths, or private source content");
-    }
-    Ok(())
-}
-
 fn validate_status(name: &str, value: &str, allowed: &[&str]) -> Result<()> {
     if !allowed.contains(&value) {
         bail!("{name} is unsupported");
@@ -586,164 +636,6 @@ fn sanitize_logs(logs: &[String]) -> Result<(Vec<SanitizedLog>, RedactionSummary
         });
     }
     Ok((sanitized, summary))
-}
-
-fn redact_environment_values(input: &str) -> (String, usize) {
-    let bytes = input.as_bytes();
-    let mut output = String::with_capacity(input.len());
-    let mut count = 0;
-    let mut index = 0;
-    while index < input.len() {
-        let at_boundary = index == 0
-            || bytes[index - 1].is_ascii_whitespace()
-            || matches!(bytes[index - 1], b'(' | b'[' | b'{' | b',' | b';');
-        if at_boundary && (bytes[index].is_ascii_alphabetic() || bytes[index] == b'_') {
-            let mut key_end = index + 1;
-            while key_end < input.len()
-                && (bytes[key_end].is_ascii_alphanumeric() || bytes[key_end] == b'_')
-            {
-                key_end += 1;
-            }
-            if key_end < input.len() && bytes[key_end] == b'=' {
-                let value_start = key_end + 1;
-                let mut value_end = value_start;
-                if value_start < input.len() && matches!(bytes[value_start], b'"' | b'\'') {
-                    let quote = bytes[value_start];
-                    value_end += 1;
-                    let mut escaped = false;
-                    while value_end < input.len() {
-                        if bytes[value_end] == quote && !escaped {
-                            break;
-                        }
-                        escaped = bytes[value_end] == b'\\' && !escaped;
-                        if bytes[value_end] != b'\\' {
-                            escaped = false;
-                        }
-                        value_end += 1;
-                    }
-                    if value_end < input.len() {
-                        value_end += 1;
-                    }
-                } else {
-                    while value_end < input.len() && !bytes[value_end].is_ascii_whitespace() {
-                        value_end += 1;
-                    }
-                }
-                output.push_str(&input[index..key_end]);
-                output.push_str("=[REDACTED_ENV]");
-                count += 1;
-                index = value_end;
-                continue;
-            }
-        }
-        let ch = input[index..].chars().next().expect("valid char boundary");
-        output.push(ch);
-        index += ch.len_utf8();
-    }
-    (output, count)
-}
-
-fn redact_credentials(input: &str) -> String {
-    let lower = input.to_ascii_lowercase();
-    for marker in [
-        "authorization:",
-        "proxy-authorization:",
-        "cookie:",
-        "set-cookie:",
-    ] {
-        if let Some(start) = lower.find(marker) {
-            return format!(
-                "{}{} [REDACTED]",
-                &input[..start],
-                &input[start..start + marker.len()]
-            );
-        }
-    }
-    let Some((name, _value)) = input.split_once(':') else {
-        return redact_secrets(input);
-    };
-    let normalized = name.trim().to_ascii_lowercase();
-    if normalized == "authorization"
-        || normalized == "proxy-authorization"
-        || normalized == "cookie"
-        || normalized == "set-cookie"
-        || normalized.contains("password")
-    {
-        return format!("{}: [REDACTED]", name.trim_end());
-    }
-    redact_secrets(input)
-}
-
-fn redact_filesystem_paths(input: &str) -> (String, usize) {
-    let mut output = input.to_string();
-    let mut count = 0;
-    while let Some(start) = find_filesystem_path_start(&output) {
-        let end = output[start..]
-            .char_indices()
-            .find_map(|(offset, ch)| {
-                (ch.is_whitespace() || matches!(ch, '"' | '\'' | ',' | ';' | ')' | ']' | '>' | '`'))
-                    .then_some(start + offset)
-            })
-            .unwrap_or(output.len());
-        output.replace_range(start..end, "[REDACTED_PATH]");
-        count += 1;
-    }
-    (output, count)
-}
-
-fn find_filesystem_path_start(input: &str) -> Option<usize> {
-    for (index, ch) in input.char_indices() {
-        if !path_boundary_before(input, index) {
-            continue;
-        }
-        let suffix = &input[index..];
-        if suffix.starts_with("file://") {
-            return Some(index);
-        }
-        if suffix.starts_with("~/") || suffix.starts_with("./") || suffix.starts_with("../") {
-            return Some(index);
-        }
-        let token_end = suffix
-            .char_indices()
-            .find_map(|(offset, candidate)| {
-                (candidate.is_whitespace()
-                    || matches!(candidate, '"' | '\'' | ',' | ';' | ')' | ']' | '>' | '`'))
-                .then_some(offset)
-            })
-            .unwrap_or(suffix.len());
-        let token = &suffix[..token_end];
-        if !token.contains("://")
-            && (token.contains('/') || token.contains('\\'))
-            && (ch.is_ascii_alphanumeric() || matches!(ch, '.' | '~' | '_'))
-        {
-            return Some(index);
-        }
-        if ch == '/' && !suffix.starts_with("//") {
-            if input[..index].ends_with("http:") || input[..index].ends_with("https:") {
-                continue;
-            }
-            return Some(index);
-        }
-        if suffix.starts_with(r"\\") {
-            return Some(index);
-        }
-        let bytes = suffix.as_bytes();
-        if bytes.len() >= 3
-            && bytes[0].is_ascii_alphabetic()
-            && bytes[1] == b':'
-            && matches!(bytes[2], b'/' | b'\\')
-        {
-            return Some(index);
-        }
-    }
-    None
-}
-
-fn path_boundary_before(input: &str, index: usize) -> bool {
-    index == 0
-        || input[..index].chars().next_back().is_some_and(|ch| {
-            ch.is_whitespace() || matches!(ch, '=' | ':' | '(' | '[' | '{' | '"' | '\'' | '<' | '`')
-        })
 }
 
 fn looks_like_private_source(input: &str) -> bool {

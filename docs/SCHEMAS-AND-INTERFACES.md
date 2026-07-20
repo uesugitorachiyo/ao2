@@ -587,8 +587,10 @@ observer-only JSON:
 ao2 support bundle --input <support-source.json> --out <support-bundle.json> --json
 ```
 
-The strict input schema is `ao2.troubleshooting-support-source.v0.1`. It
-requires:
+The strict input schema is `ao2.troubleshooting-support-source.v0.1`. Versions
+must be numeric, platform values and workflow/verifier identities are
+allowlisted, and failure category, failed phase, and smallest safe next action
+must use repository-owned public support values. It requires:
 
 - AO2 and Control Plane versions;
 - operating-system and architecture identifiers;
@@ -637,10 +639,13 @@ ao2 issue draft-pr preview \
 
 That path strictly revalidates the bundle, reproduces its canonical problem
 fingerprint and whole-bundle digest, requires the draft evidence-pack digest to
-equal `bundle_sha256`, and requires the draft body to bind the problem
-fingerprint. Altered, malformed, unsafe, non-canonical, or mismatched bundles
-fail closed. It does not authorize or perform issue creation. The bundle always
-emits:
+equal `bundle_sha256`, and generates a typed support binding in the draft
+subject. The draft title and body must exactly match the repository-owned
+privacy-safe template derived from that binding. Reserved fingerprint or
+bundle-digest claims without `--support-bundle` fail closed, including during
+action verification. Altered, malformed, unsafe, non-canonical, private-text,
+or mismatched bundles fail closed. It does not authorize or perform issue
+creation. The bundle always emits:
 
 ```text
 observer_only=true

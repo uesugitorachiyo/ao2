@@ -337,6 +337,26 @@ fn rejects_invalid_digests_fields_and_excess_logs() {
     contradictory_evidence["evidence"]["status"] = json!("not_available");
     let (_temp, path) = write_json(&contradictory_evidence);
     rejected(&path, "must be absent");
+
+    for (field, value) in [
+        ("failure.category", "private_client_failure"),
+        ("failure.phase", "customer_repository"),
+        ("workflow.identity", "private-customer-workflow"),
+        (
+            "smallest_safe_next_action",
+            "Inspect private-customer-repository before retrying.",
+        ),
+    ] {
+        let mut private_metadata = valid_input();
+        match field {
+            "failure.category" => private_metadata["failure"]["category"] = json!(value),
+            "failure.phase" => private_metadata["failure"]["phase"] = json!(value),
+            "workflow.identity" => private_metadata["workflow"]["identity"] = json!(value),
+            _ => private_metadata["smallest_safe_next_action"] = json!(value),
+        }
+        let (_temp, path) = write_json(&private_metadata);
+        rejected(&path, "allowed public support value");
+    }
 }
 
 #[test]
@@ -365,6 +385,17 @@ fn rejects_symlink_input_without_following_it() {
     rejected(&link, "without following links");
 }
 
+#[cfg(windows)]
+#[test]
+fn rejects_windows_file_symlink_input_as_reparse_point() {
+    use std::os::windows::fs::symlink_file;
+
+    let temp = tempfile::tempdir().expect("tempdir");
+    let link = temp.path().join("input-link.json");
+    symlink_file(fixture_path(), &link).expect("create file symlink");
+    rejected(&link, "non-reparse FILE_TYPE_DISK");
+}
+
 #[test]
 fn sanitized_bundle_fingerprint_is_compatible_with_governed_issue_preview() {
     let (_bundle_temp, bundle_path, bundle_output) = run_bundle(&fixture_path());
@@ -381,9 +412,10 @@ fn sanitized_bundle_fingerprint_is_compatible_with_governed_issue_preview() {
         .expect("draft fixture"),
     )
     .expect("draft fixture json");
-    evidence["draft"]["title"] = json!("Troubleshooting bundle readback");
+    evidence["draft"]["title"] =
+        json!("AO2 troubleshooting: verification_failed during report_contract");
     evidence["draft"]["body"] = json!(format!(
-        "Sanitized untrusted troubleshooting input.\n\nProblem fingerprint: {fingerprint}"
+        "Sanitized AO2 troubleshooting bundle for risky-pr-v1.\n\nProblem fingerprint: {fingerprint}\nBundle SHA-256: {bundle_sha256}"
     ));
     evidence["repair"]["evidence_pack_sha256"] = json!(bundle_sha256);
     let (evidence_temp, evidence_path) = write_json(&evidence);
@@ -405,6 +437,10 @@ fn sanitized_bundle_fingerprint_is_compatible_with_governed_issue_preview() {
     assert_eq!(preview_json["subject"]["safety"]["issue_write"], false);
     assert_eq!(preview_json["subject"]["safety"]["merge"], false);
     assert_eq!(preview_json["subject"]["safety"]["release"], false);
+    assert_eq!(
+        preview_json["subject"]["support_bundle"]["bundle_sha256"],
+        bundle_sha256
+    );
     let digest = preview_json["approval"]["action_digest"]
         .as_str()
         .expect("action digest");
@@ -471,7 +507,7 @@ fn sanitized_bundle_fingerprint_is_compatible_with_governed_issue_preview() {
     );
     assert!(String::from_utf8_lossy(&false_summary_output.stderr).contains("redaction summary"));
 
-    let mut mismatched_evidence = evidence;
+    let mut mismatched_evidence = evidence.clone();
     mismatched_evidence["repair"]["evidence_pack_sha256"] = json!("9".repeat(64));
     let (_mismatch_temp, mismatch_path) = write_json(&mismatched_evidence);
     let mismatched_action = evidence_temp.path().join("mismatched-action.json");
@@ -492,4 +528,46 @@ fn sanitized_bundle_fingerprint_is_compatible_with_governed_issue_preview() {
         "mismatched binding was accepted"
     );
     assert!(String::from_utf8_lossy(&mismatch.stderr).contains("not bound"));
+
+    let unvalidated_action = evidence_temp.path().join("unvalidated-action.json");
+    let unvalidated = ao2(&[
+        "issue",
+        "draft-pr",
+        "preview",
+        "--evidence",
+        evidence_path.to_str().expect("evidence path"),
+        "--out",
+        unvalidated_action.to_str().expect("action path"),
+        "--json",
+    ]);
+    assert!(
+        !unvalidated.status.success(),
+        "reserved bundle claim was accepted without bundle validation"
+    );
+    assert!(String::from_utf8_lossy(&unvalidated.stderr).contains("reserved support-bundle claim"));
+
+    let mut private_draft = evidence;
+    private_draft["draft"]["title"] = json!("private token ghp_fixture");
+    private_draft["draft"]["body"] = json!(format!(
+        "Authorization: Basic private-value\n\nProblem fingerprint: {fingerprint}\nBundle SHA-256: {bundle_sha256}"
+    ));
+    let (_private_temp, private_path) = write_json(&private_draft);
+    let private_action = evidence_temp.path().join("private-action.json");
+    let private_output = ao2(&[
+        "issue",
+        "draft-pr",
+        "preview",
+        "--evidence",
+        private_path.to_str().expect("evidence path"),
+        "--support-bundle",
+        bundle_path.to_str().expect("bundle path"),
+        "--out",
+        private_action.to_str().expect("action path"),
+        "--json",
+    ]);
+    assert!(
+        !private_output.status.success(),
+        "private draft text was accepted"
+    );
+    assert!(String::from_utf8_lossy(&private_output.stderr).contains("privacy-safe template"));
 }
