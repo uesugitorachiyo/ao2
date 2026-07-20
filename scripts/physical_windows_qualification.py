@@ -187,12 +187,15 @@ def _require_zero(value: object, label: str) -> None:
 
 def _parse_time(value: object, label: str) -> datetime:
     text = _require_string(value, label)
+    if re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})",
+        text,
+    ) is None:
+        raise ValidationError(f"{label} must be RFC 3339")
     try:
         parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
     except ValueError as exc:
-        raise ValidationError(f"{label} must be ISO-8601") from exc
-    if parsed.tzinfo is None:
-        raise ValidationError(f"{label} must include a timezone")
+        raise ValidationError(f"{label} must be RFC 3339") from exc
     return parsed.astimezone(timezone.utc)
 
 
@@ -480,6 +483,8 @@ def prepare_evidence(
     qualification_result = qualification["result"]
     if status_wrapper["node_id"] != qualification_wrapper["node_id"]:
         raise ValidationError("status and qualification node_id mismatch")
+    if status_result.get("node_id") != status_wrapper["node_id"]:
+        raise ValidationError("status result node_id does not match status wrapper")
     if status_result.get("worker_source_commit") != source_sha:
         raise ValidationError("status worker_source_commit does not match source_sha")
     _require_false(status_result.get("windows_inbound_ports_opened"), "windows_inbound_ports_opened")
@@ -614,11 +619,11 @@ def validate_evidence(
     )
     if completed > now:
         raise ValidationError("completed_at is in the future")
-    if now - completed > timedelta(seconds=FRESHNESS_WINDOW_SECONDS):
+    if now >= completed + timedelta(seconds=FRESHNESS_WINDOW_SECONDS):
         raise ValidationError("evidence freshness exceeds the 24-hour window")
     if status_completed > completed:
         raise ValidationError("status_completed_at exceeds completed_at")
-    if now - status_completed > timedelta(seconds=FRESHNESS_WINDOW_SECONDS):
+    if now >= status_completed + timedelta(seconds=FRESHNESS_WINDOW_SECONDS):
         raise ValidationError("status freshness exceeds the 24-hour window")
     if qualification_completed > completed:
         raise ValidationError("qualification_completed_at exceeds completed_at")

@@ -565,6 +565,15 @@ def test_prepare_rejects_wrong_top_level_qualification_contract(mutate, error: s
         qualification.prepare_evidence(status, board, SOURCE_SHA, VERSION)
 
 
+def test_prepare_rejects_status_result_node_mismatch() -> None:
+    qualification = load_qualification_module()
+    status = worker_status_board()
+    wrapper(status)["result"]["node_id"] = "different-node"
+
+    with pytest.raises(qualification.ValidationError, match="status result node_id"):
+        qualification.prepare_evidence(status, qualification_board(), SOURCE_SHA, VERSION)
+
+
 def test_prepare_rejects_wrong_probe_version() -> None:
     qualification = load_qualification_module()
     probe = lifecycle_probe_output()
@@ -696,6 +705,41 @@ def test_validate_rejects_future_and_stale_completion_times() -> None:
     stale_status["status_completed_at"] = (NOW - timedelta(seconds=86401)).isoformat().replace("+00:00", "Z")
     with pytest.raises(qualification.ValidationError, match="status freshness"):
         qualification.validate_evidence(stale_status, SOURCE_SHA, VERSION, NOW)
+
+
+def test_validate_rejects_evidence_at_exact_expiry_boundary() -> None:
+    qualification, evidence, _ = prepared_evidence()
+
+    expired = copy.deepcopy(evidence)
+    exact_expiry_source = (NOW - timedelta(seconds=86400)).isoformat().replace("+00:00", "Z")
+    expired["status_completed_at"] = exact_expiry_source
+    expired["qualification_completed_at"] = exact_expiry_source
+    expired["completed_at"] = exact_expiry_source
+    with pytest.raises(qualification.ValidationError, match="freshness"):
+        qualification.validate_evidence(expired, SOURCE_SHA, VERSION, NOW)
+
+    expired_status = copy.deepcopy(evidence)
+    expired_status["status_completed_at"] = (
+        NOW - timedelta(seconds=86400)
+    ).isoformat().replace("+00:00", "Z")
+    with pytest.raises(qualification.ValidationError, match="status freshness"):
+        qualification.validate_evidence(expired_status, SOURCE_SHA, VERSION, NOW)
+
+
+@pytest.mark.parametrize(
+    "timestamp",
+    [
+        "2026-07-19X20:34:30Z",
+        "2026-07-19T20:34Z",
+        "2026-07-19T20:34:30+00:00:30",
+    ],
+)
+def test_validate_rejects_non_rfc3339_timestamp_spellings(timestamp: str) -> None:
+    qualification, evidence, _ = prepared_evidence()
+    evidence["completed_at"] = timestamp
+
+    with pytest.raises(qualification.ValidationError, match="RFC 3339"):
+        qualification.validate_evidence(evidence, SOURCE_SHA, VERSION, NOW)
 
 
 def test_validate_rejects_mutated_observed_worker_boundaries() -> None:
