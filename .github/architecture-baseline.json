@@ -1,0 +1,113 @@
+{
+  "baseline_source": {
+    "head": "947e566bd3f54ed902f3c14fc0c90e21a24359bc",
+    "v0_5_3_tag_target": "947e566bd3f54ed902f3c14fc0c90e21a24359bc"
+  },
+  "budgets": {
+    "new_integration_test_file_lines_hard_ceiling": 4000,
+    "new_integration_test_file_tests_hard_ceiling": 35,
+    "new_production_file_lines_hard_ceiling": 5000,
+    "production_total_lines_soft_cap": 79000,
+    "shared_test_leaf_lines_hard_ceiling": 500
+  },
+  "measurements": {
+    "source": {
+      "file_lines": {
+        "crates/ao2-cli/src/factory_bridge.rs": 1743,
+        "crates/ao2-cli/src/github_issue_draft.rs": 1529,
+        "crates/ao2-cli/src/main.rs": 70760,
+        "crates/ao2-cli/src/pulse_eval_loop.rs": 443,
+        "crates/ao2-cli/src/pulse_run.rs": 216,
+        "crates/ao2-cli/src/release_handoff.rs": 1122,
+        "crates/ao2-cli/src/risky_pr_readback.rs": 318,
+        "crates/ao2-cli/src/sdd_cmd.rs": 367,
+        "crates/ao2-cli/src/support_bundle.rs": 845
+      },
+      "main_rs_lines": 70760,
+      "main_rs_source_concentration_percent": 91.4886,
+      "main_rs_top_level_functions": 969,
+      "main_rs_top_level_types": 149,
+      "module_declarations": [
+        "crates/ao2-cli/src/main.rs::factory_bridge",
+        "crates/ao2-cli/src/main.rs::github_issue_draft",
+        "crates/ao2-cli/src/main.rs::pulse_eval_loop",
+        "crates/ao2-cli/src/main.rs::pulse_run",
+        "crates/ao2-cli/src/main.rs::release_handoff",
+        "crates/ao2-cli/src/main.rs::risky_pr_readback",
+        "crates/ao2-cli/src/main.rs::sdd_cmd",
+        "crates/ao2-cli/src/main.rs::support_bundle"
+      ],
+      "production_total_lines": 77343
+    },
+    "tests": {
+      "cli_approval_replay_line_concentration_percent": 74.2112,
+      "cli_approval_replay_rs_lines": 48828,
+      "cli_approval_replay_tests": 407,
+      "file_lines": {
+        "crates/ao2-cli/tests/cli_approval_replay.rs": 48828,
+        "crates/ao2-cli/tests/contract_gate_support_signing.rs": 456,
+        "crates/ao2-cli/tests/contract_obligation_gate_signing_survey.rs": 444,
+        "crates/ao2-cli/tests/contract_verify_obligation_gate_signing.rs": 321,
+        "crates/ao2-cli/tests/cp_release_snapshot.rs": 287,
+        "crates/ao2-cli/tests/factory_bridge.rs": 1645,
+        "crates/ao2-cli/tests/factory_cancel_authority.rs": 381,
+        "crates/ao2-cli/tests/factory_cancel_transition.rs": 433,
+        "crates/ao2-cli/tests/github_issue_draft_publisher.rs": 2423,
+        "crates/ao2-cli/tests/github_issue_intake.rs": 162,
+        "crates/ao2-cli/tests/release_evaluator_decision.rs": 650,
+        "crates/ao2-cli/tests/release_gate_obligation_gate_signing.rs": 1250,
+        "crates/ao2-cli/tests/release_handoff_checklist.rs": 339,
+        "crates/ao2-cli/tests/release_packaging.rs": 5371,
+        "crates/ao2-cli/tests/release_support_bundle_verification.rs": 1179,
+        "crates/ao2-cli/tests/sdd_subcommand.rs": 1023,
+        "crates/ao2-cli/tests/troubleshooting_support_bundle.rs": 604
+      },
+      "file_tests": {
+        "crates/ao2-cli/tests/cli_approval_replay.rs": 407,
+        "crates/ao2-cli/tests/contract_gate_support_signing.rs": 7,
+        "crates/ao2-cli/tests/contract_obligation_gate_signing_survey.rs": 7,
+        "crates/ao2-cli/tests/contract_verify_obligation_gate_signing.rs": 5,
+        "crates/ao2-cli/tests/cp_release_snapshot.rs": 3,
+        "crates/ao2-cli/tests/factory_bridge.rs": 26,
+        "crates/ao2-cli/tests/factory_cancel_authority.rs": 12,
+        "crates/ao2-cli/tests/factory_cancel_transition.rs": 14,
+        "crates/ao2-cli/tests/github_issue_draft_publisher.rs": 30,
+        "crates/ao2-cli/tests/github_issue_intake.rs": 5,
+        "crates/ao2-cli/tests/release_evaluator_decision.rs": 9,
+        "crates/ao2-cli/tests/release_gate_obligation_gate_signing.rs": 17,
+        "crates/ao2-cli/tests/release_handoff_checklist.rs": 10,
+        "crates/ao2-cli/tests/release_packaging.rs": 83,
+        "crates/ao2-cli/tests/release_support_bundle_verification.rs": 11,
+        "crates/ao2-cli/tests/sdd_subcommand.rs": 16,
+        "crates/ao2-cli/tests/troubleshooting_support_bundle.rs": 9
+      },
+      "integration_test_file_total_lines": 65796,
+      "integration_test_static_count": 671
+    },
+    "unsafe_blocks": [
+      "crates/ao2-cli/src/github_issue_draft.rs:1270:let file_type = unsafe { GetFileType(file.as_raw_handle()) };",
+      "crates/ao2-cli/src/support_bundle.rs:764:let file_type = unsafe { GetFileType(file.as_raw_handle()) };",
+      "crates/ao2-cli/src/support_bundle.rs:766:let inspected = unsafe {"
+    ],
+    "workspace_dependency_edges": [
+      "ao2-adapters->ao2-adapter-claude",
+      "ao2-adapters->ao2-adapter-codex",
+      "ao2-artifacts->ao2-core",
+      "ao2-cli->ao2-adapters",
+      "ao2-cli->ao2-core",
+      "ao2-cli->ao2-policy",
+      "ao2-cli->ao2-runtime",
+      "ao2-cli->sdd-planner",
+      "ao2-policy->ao2-core",
+      "ao2-runtime->ao2-adapters",
+      "ao2-runtime->ao2-artifacts",
+      "ao2-runtime->ao2-core",
+      "ao2-runtime->ao2-policy"
+    ]
+  },
+  "notes": [
+    "Initial ratchet was measured at AO2 v0.5.3 post-hackathon start SHA.",
+    "Existing oversize files are grandfathered debt and may not grow."
+  ],
+  "schema_version": "ao2.rust_architecture_baseline.v1"
+}
