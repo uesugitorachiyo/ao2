@@ -645,6 +645,12 @@ def test_public_release_build_uses_canonical_hosted_native_dry_run_contract():
         'ref="refs/tags/$RELEASE_TAG"',
         'sha="$SOURCE_SHA"',
         "--verify-tag",
+        "cleanup_partial_draft",
+        "gh release delete",
+        '--method DELETE "repos/$REPOSITORY/git/refs/tags/$RELEASE_TAG"',
+        "publication_sha_before",
+        "publication_sha_after",
+        "--draft=true",
     ]:
         assert needle in workflow
 
@@ -655,6 +661,7 @@ def test_public_release_build_uses_canonical_hosted_native_dry_run_contract():
     assert workflow.index("hosted_release_promotion.py verify-public") < workflow.index(
         "gh release edit"
     )
+    assert "git/matching-refs/tags/" not in workflow
     assert "permissions: write-all" not in workflow
     assert "OPENAI_API_KEY:" not in workflow
     assert "ANTHROPIC_API_KEY:" not in workflow

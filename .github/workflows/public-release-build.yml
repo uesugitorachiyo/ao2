@@ -654,7 +654,7 @@ jobs:
             --plan-sha256 "$PROMOTION_PLAN_SHA256" \
             --physical-evidence-sha256 "$EXPECTED_PHYSICAL_WINDOWS_EVIDENCE_SHA256" \
             --out target/hosted-release/publication-validation.json
-      - name: Require exact live confirmation and absent tag
+      - name: Require exact live confirmation
         shell: bash
         env:
           LIVE_PUBLISH_CONFIRM: ${{ inputs.live_publish_confirm }}
@@ -673,19 +673,6 @@ jobs:
           fi
           notes="docs/release/v${RELEASE_VERSION}-stable.md"
           test -f "$notes"
-          gh api --method GET \
-            "repos/$REPOSITORY/git/matching-refs/tags/$RELEASE_TAG" \
-            >target/hosted-release/matching-tag-refs.json
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          refs = json.loads(
-              Path("target/hosted-release/matching-tag-refs.json").read_text(encoding="utf-8")
-          )
-          if refs:
-              raise SystemExit("release tag already exists")
-          PY
       - name: Attest exact frozen release assets
         uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
         with:
@@ -707,11 +694,40 @@ jobs:
           set -euo pipefail
           publication="target/hosted-release/publication"
           notes="docs/release/v${RELEASE_VERSION}-stable.md"
+          tag_created=false
+          cleanup_partial_draft() {
+            rc=$?
+            trap - EXIT
+            if [ "$rc" -eq 0 ]; then
+              return
+            fi
+            release_metadata="target/hosted-release/partial-release.json"
+            if gh api --method GET \
+              "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" \
+              >"$release_metadata" 2>/dev/null; then
+              if [ "$(jq -r .draft "$release_metadata")" = "true" ]; then
+                gh release delete "$RELEASE_TAG" --repo "$REPOSITORY" --yes
+              fi
+            fi
+            if [ "$tag_created" = "true" ]; then
+              current_sha="$(gh api --method GET \
+                "repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG" \
+                --jq .object.sha 2>/dev/null || true)"
+              if [ "$current_sha" = "$SOURCE_SHA" ] && ! gh api --method GET \
+                "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" \
+                >/dev/null 2>&1; then
+                gh api --method DELETE "repos/$REPOSITORY/git/refs/tags/$RELEASE_TAG"
+              fi
+            fi
+            exit "$rc"
+          }
+          trap cleanup_partial_draft EXIT
           gh api --method POST \
             "repos/$REPOSITORY/git/refs" \
             -f ref="refs/tags/$RELEASE_TAG" \
             -f sha="$SOURCE_SHA" \
             >target/hosted-release/created-tag-ref.json
+          tag_created=true
           created_sha="$(jq -r .object.sha target/hosted-release/created-tag-ref.json)"
           test "$created_sha" = "$SOURCE_SHA"
           gh release create "$RELEASE_TAG" \
@@ -725,6 +741,7 @@ jobs:
             "$publication/ao2-$RELEASE_VERSION-windows-x86_64.tar.gz" \
             "$publication/promotion-plan.json" \
             "$publication/SHA256SUMS"
+          trap - EXIT
       - name: Verify draft assets and publish
         shell: bash
         env:
@@ -740,6 +757,31 @@ jobs:
           set -euo pipefail
           draft_root="target/hosted-release/draft-readback"
           mkdir -p "$draft_root"
+          cleanup_partial_draft() {
+            rc=$?
+            trap - EXIT
+            if [ "$rc" -eq 0 ]; then
+              return
+            fi
+            release_metadata="target/hosted-release/failed-draft-release.json"
+            if gh api --method GET \
+              "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" \
+              >"$release_metadata" 2>/dev/null; then
+              if [ "$(jq -r .draft "$release_metadata")" = "true" ]; then
+                gh release delete "$RELEASE_TAG" --repo "$REPOSITORY" --yes
+              fi
+            fi
+            current_sha="$(gh api --method GET \
+              "repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG" \
+              --jq .object.sha 2>/dev/null || true)"
+            if [ "$current_sha" = "$SOURCE_SHA" ] && ! gh api --method GET \
+              "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" \
+              >/dev/null 2>&1; then
+              gh api --method DELETE "repos/$REPOSITORY/git/refs/tags/$RELEASE_TAG"
+            fi
+            exit "$rc"
+          }
+          trap cleanup_partial_draft EXIT
           gh release download "$RELEASE_TAG" \
             --repo "$REPOSITORY" \
             --dir "$draft_root"
@@ -763,13 +805,23 @@ jobs:
           release_is_draft="$(gh api --method GET \
             "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" --jq .draft)"
           test "$release_is_draft" = "true"
-          actual_sha="$(gh api --method GET \
+          publication_sha_before="$(gh api --method GET \
             "repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq .object.sha)"
-          test "$actual_sha" = "$SOURCE_SHA"
+          test "$publication_sha_before" = "$SOURCE_SHA"
           gh release edit "$RELEASE_TAG" \
             --repo "$REPOSITORY" \
             --draft=false \
             --latest
+          publication_sha_after="$(gh api --method GET \
+            "repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG" --jq .object.sha)"
+          if [ "$publication_sha_after" != "$SOURCE_SHA" ]; then
+            gh release edit "$RELEASE_TAG" \
+              --repo "$REPOSITORY" \
+              --draft=true
+            echo "release tag changed during publication; release returned to draft" >&2
+            exit 1
+          fi
+          trap - EXIT
 
   independent-public-verification:
     name: Independent public asset verification
