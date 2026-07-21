@@ -218,6 +218,19 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
         ),
     },
     {
+        "name": "test-cli-provider",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "cli_provider",
+        ),
+    },
+    {
         "name": "test-cli-report-cockpit",
         "argv": (
             "cargo",
@@ -270,7 +283,7 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
     *ao2_cli_approval_profile_commands("test-cli-approval-plugin", ("cli_plugin",)),
     *ao2_cli_approval_profile_commands(
         "test-cli-approval-pulse-provider-release",
-        ("cli_provider", "cli_release"),
+        ("cli_release"),
     ),
     *ao2_cli_approval_profile_commands(
         "test-cli-approval-workbench-core",

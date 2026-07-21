@@ -117,7 +117,7 @@ jobs:
             timeout_minutes: 20
             command: |
               cargo test -p ao2-cli --test cli_pulse
-              cargo test -p ao2-cli --test cli_approval_replay cli_provider
+              cargo test -p ao2-cli --test cli_provider
               cargo test -p ao2-cli --test cli_approval_replay cli_release
           - os: ubuntu-latest
             phase: test-cli-approval-workbench-core
@@ -286,7 +286,7 @@ jobs:
             timeout_minutes: 20
             command: |
               cargo test -p ao2-cli --test cli_pulse
-              cargo test -p ao2-cli --test cli_approval_replay cli_provider
+              cargo test -p ao2-cli --test cli_provider
               cargo test -p ao2-cli --test cli_approval_replay cli_release
           - os: macos-latest
             phase: test-cli-approval-workbench-core
@@ -429,7 +429,7 @@ jobs:
             timeout_minutes: 20
             command: |
               cargo test -p ao2-cli --test cli_pulse
-              cargo test -p ao2-cli --test cli_approval_replay cli_provider
+              cargo test -p ao2-cli --test cli_provider
               cargo test -p ao2-cli --test cli_approval_replay cli_release
           - os: windows-latest
             phase: test-cli-approval-workbench-core
