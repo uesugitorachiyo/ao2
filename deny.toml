@@ -1,13 +1,14 @@
 # cargo-deny configuration for the ao2 workspace.
 #
 # Scope (see .github/workflows/ci.yml `deny` job):
-#   - CI runs `cargo deny check bans licenses sources advisories`.
+#   - CI runs `cargo deny check -D warnings bans licenses sources advisories`.
 #
 # ao2 produces and verifies signed governance artifacts; the goal of these
 # gates is supply-chain hygiene — no copyleft creep, no surprise crate
-# sources, advisories reviewed rather than silently absorbed, duplicate
-# versions kept visible — without blocking the build on transient upstream
-# churn we don't control.
+# sources, advisories reviewed rather than silently absorbed, and duplicate
+# versions either removed or explicitly explained — without blocking the build
+# on transient upstream churn we don't control. CI runs this with
+# `-D warnings`, so an unreviewed new warning is a hard failure.
 
 [graph]
 # Evaluate the dependency graph for every target the workspace builds on (CI
@@ -16,15 +17,22 @@
 all-features = true
 
 [advisories]
-# rsa 0.9.x Marvin Attack (timing side-channel). ao2 uses `rsa` for signature
-# *verification* only (public-key modexp via the `Verifier` trait), never
-# decryption, so the side-channel is not exposed by our usage.
-ignore = ["RUSTSEC-2023-0071"]
+# rsa 0.9.x Marvin Attack (timing side-channel). AO2 does use rsa private-key
+# operations for local/offline signing and key generation when an operator
+# explicitly supplies or creates a release/contract signing key. Those
+# operations are not exposed through an inbound network service or remote timing
+# oracle; the RustSec advisory's documented workaround treats local use on a
+# non-compromised computer as acceptable until a patched rsa release exists.
+ignore = [
+    { id = "RUSTSEC-2023-0071", reason = "AO2 private-key operations are local/operator-controlled signing and key generation, not network-observable decryption; no patched rsa release is available yet." },
+    { crate = "spin@0.9.8", reason = "Transitive via lazy_static through rsa/num-bigint-dig and tiktoken-rs; no direct AO2 dependency, and replacement requires upstream dependency movement." },
+]
 
 [licenses]
-# Permissive-only allow-list. Every crate in the current tree resolves to one
-# of these via SPDX OR/AND evaluation. No copyleft (GPL/LGPL/MPL) is allowed —
-# any such crate must fail the build for a deliberate review.
+# Permissive-only allow-list. Every encountered crate in the current tree
+# resolves to one of these via SPDX OR/AND evaluation. No copyleft
+# (GPL/LGPL/MPL) is allowed; any such crate must fail the build for deliberate
+# review.
 allow = [
     "MIT",
     "Apache-2.0",
@@ -32,19 +40,17 @@ allow = [
     "BSD-2-Clause",
     "BSD-3-Clause",
     "BSL-1.0",
-    "ISC",
-    "MPL-2.0",
     "Unicode-3.0",
-    "Unicode-DFS-2016",
     "Unlicense",
     "Zlib",
 ]
 confidence-threshold = 0.85
 
 [bans]
-# Duplicate transitive versions are surfaced as warnings, not build failures:
-# they are pulled by upstream crates we don't control, and blocking on them
-# would gate the build on churn we can't unify ourselves.
+# Duplicate transitive versions are warnings by default and CI denies warnings.
+# Every current duplicate below is either target/dev-only churn or pinned by
+# upstream crates we do not directly control. A new duplicate that is not listed
+# here fails CI.
 multiple-versions = "warn"
 # Wildcard ("*") requirements are allowed. Every *external* dependency is
 # pinned with a real semver requirement in [workspace.dependencies]; the only
@@ -57,6 +63,16 @@ multiple-versions = "warn"
 # the external-dependency posture, which is what supply-chain hygiene cares
 # about.
 wildcards = "allow"
+
+skip = [
+    { crate = "getrandom@0.2.17", reason = "Retained by rand 0.8/rsa 0.9.10; AO2 cannot unify it while rsa remains on rand_core 0.6." },
+    { crate = "getrandom@0.4.2", reason = "Retained by tempfile/uuid and wasip3 while proptest/ulid use getrandom 0.3; upstream target graph cannot be unified locally." },
+    { crate = "r-efi@5.3.0", reason = "Retained through getrandom 0.3/wasip2 while getrandom 0.4 uses r-efi 6; target-specific upstream churn." },
+    { crate = "rand@0.8.6", reason = "AO2 and rsa 0.9.10 still use rand 0.8 while proptest/ulid use rand 0.9." },
+    { crate = "rand_chacha@0.3.1", reason = "Paired with rand 0.8/rand_core 0.6 through AO2/rsa; cannot be unified without changing rsa/rand consumers." },
+    { crate = "rand_core@0.6.4", reason = "Required by rand 0.8/rsa 0.9.10 while proptest/ulid use rand_core 0.9." },
+    { crate = "wit-bindgen@0.51.0", reason = "Retained by wasip3/getrandom 0.4 while getrandom 0.3 uses wasip2/wit-bindgen 0.57; target-specific upstream churn." },
+]
 
 [sources]
 # Only crates.io; no git dependencies. A new registry or git dep must be an

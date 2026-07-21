@@ -4565,7 +4565,7 @@ fn ci_workflow_runs_on_public_changes_while_release_gates_stay_manual() {
     assert!(!ci.contains("npm run verify"));
     assert!(ci.contains("timeout-minutes: 15"));
     assert!(ci.contains("timeout_minutes: 20"));
-    assert!(ci.contains("cargo deny check bans licenses sources advisories"));
+    assert!(ci.contains("cargo deny check -D warnings bans licenses sources advisories"));
     assert!(ci.contains("workbench-operator-packet-control-plane-smoke:"));
     assert!(ci.contains("name: Workbench operator packet control-plane smoke ${{ matrix.os }}"));
     assert!(ci.contains("fail-fast: false"));
