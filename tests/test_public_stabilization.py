@@ -533,6 +533,7 @@ def test_ci_reports_legacy_non_approval_required_check_names():
     assert "needs: verify" in ci
     assert "if: ${{ always() }}" in ci
     assert "cargo test -p ao2-cli --test cli_report_cockpit" in ci
+    assert "cargo test -p ao2-cli --test cli_adapter" in ci
     assert "name: Verify ${{ matrix.os }} / test-cli-non-approval" in ci
     for os_name in ["macos-latest", "windows-latest"]:
         assert f"os: {os_name}" in ci

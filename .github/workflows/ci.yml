@@ -61,7 +61,7 @@ jobs:
             phase: test-cli-approval-core
             timeout_minutes: 20
             command: |
-              cargo test -p ao2-cli --test cli_approval_replay cli_adapter
+              cargo test -p ao2-cli --test cli_adapter
               cargo test -p ao2-cli --test cli_approval_replay cli_can_pause
               cargo test -p ao2-cli --test cli_report_cockpit
               cargo test -p ao2-cli --test cli_approval_replay cli_contract
@@ -230,7 +230,7 @@ jobs:
             phase: test-cli-approval-core
             timeout_minutes: 20
             command: |
-              cargo test -p ao2-cli --test cli_approval_replay cli_adapter
+              cargo test -p ao2-cli --test cli_adapter
               cargo test -p ao2-cli --test cli_approval_replay cli_can_pause
               cargo test -p ao2-cli --test cli_report_cockpit
               cargo test -p ao2-cli --test cli_approval_replay cli_contract
@@ -373,7 +373,7 @@ jobs:
             phase: test-cli-approval-core
             timeout_minutes: 20
             command: |
-              cargo test -p ao2-cli --test cli_approval_replay cli_adapter
+              cargo test -p ao2-cli --test cli_adapter
               cargo test -p ao2-cli --test cli_approval_replay cli_can_pause
               cargo test -p ao2-cli --test cli_report_cockpit
               cargo test -p ao2-cli --test cli_approval_replay cli_contract
