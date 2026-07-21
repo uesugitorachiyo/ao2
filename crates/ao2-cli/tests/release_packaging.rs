@@ -4566,6 +4566,9 @@ fn ci_workflow_runs_on_public_changes_while_release_gates_stay_manual() {
     assert!(ci.contains("timeout-minutes: 15"));
     assert!(ci.contains("timeout_minutes: 20"));
     assert!(ci.contains("cargo deny check -D warnings bans licenses sources advisories"));
+    assert!(ci.contains("name: Rust 1.83 MSRV"));
+    assert!(ci.contains("dtolnay/rust-toolchain@1.83.0"));
+    assert!(ci.contains("cargo check --locked --workspace --all-targets"));
     assert!(ci.contains("workbench-operator-packet-control-plane-smoke:"));
     assert!(ci.contains("name: Workbench operator packet control-plane smoke ${{ matrix.os }}"));
     assert!(ci.contains("fail-fast: false"));

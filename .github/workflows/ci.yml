@@ -1875,6 +1875,16 @@ jobs:
             target/risky-pr-golden-ci/cockpit/index.report.json
           if-no-files-found: error
 
+  msrv:
+    name: Rust 1.83 MSRV
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6.0.3
+      - uses: dtolnay/rust-toolchain@1.83.0
+      - name: MSRV check
+        run: cargo check --locked --workspace --all-targets
+
   deny:
     name: Cargo deny (supply chain)
     runs-on: ubuntu-latest
