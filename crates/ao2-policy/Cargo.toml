@@ -12,6 +12,9 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 
+[lints]
+workspace = true
+
 [dev-dependencies]
 # Property-based testing for the secret-redaction engine and the action-digest
 # canonicalization. Test-only; not pulled into any shipped artifact.

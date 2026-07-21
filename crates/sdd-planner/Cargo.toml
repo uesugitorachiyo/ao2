@@ -22,5 +22,8 @@ hex.workspace        = true
 walkdir.workspace    = true
 tiktoken-rs.workspace = true
 
+[lints]
+workspace = true
+
 [dev-dependencies]
 tempfile.workspace = true
