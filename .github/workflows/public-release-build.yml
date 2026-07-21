@@ -696,17 +696,29 @@ jobs:
           publication="target/hosted-release/publication"
           notes="docs/release/v${RELEASE_VERSION}-stable.md"
           tag_object_path="target/hosted-release/created-tag-object.json"
+          draft_release_path="target/hosted-release/created-draft-release.json"
           cleanup_partial_draft() {
             rc=$?
             trap - EXIT
             if [ "$rc" -eq 0 ]; then
               return
             fi
-            release_metadata="target/hosted-release/partial-release.json"
-            if gh api --method GET \
-              "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" \
-              >"$release_metadata" 2>/dev/null; then
-              if [ "$(jq -r .draft "$release_metadata")" = "true" ]; then
+            if [ -f "$draft_release_path" ]; then
+              release_id="$(jq -r .databaseId "$draft_release_path")"
+              release_metadata="target/hosted-release/partial-release.json"
+              if [[ "$release_id" =~ ^[1-9][0-9]*$ ]] \
+                && gh api --method GET \
+                  "repos/$REPOSITORY/releases/$release_id" \
+                  >"$release_metadata" 2>/dev/null \
+                && [ "$(jq -r .tag_name "$release_metadata")" = "$RELEASE_TAG" ] \
+                && [ "$(jq -r .draft "$release_metadata")" = "true" ]; then
+                gh api --method DELETE "repos/$REPOSITORY/releases/$release_id"
+              fi
+            elif release_is_draft="$(gh release view "$RELEASE_TAG" \
+              --repo "$REPOSITORY" \
+              --json isDraft \
+              --jq .isDraft 2>/dev/null)"; then
+              if [ "$release_is_draft" = "true" ]; then
                 gh release delete "$RELEASE_TAG" --repo "$REPOSITORY" --yes
               fi
             fi
@@ -718,9 +730,8 @@ jobs:
                 >"$current_ref" 2>/dev/null \
                 && [ "$(jq -r .object.type "$current_ref")" = "tag" ] \
                 && [ "$(jq -r .object.sha "$current_ref")" = "$tag_object_sha" ] \
-                && ! gh api --method GET \
-                  "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" \
-                  >/dev/null 2>&1; then
+                && ! gh release view "$RELEASE_TAG" \
+                  --repo "$REPOSITORY" >/dev/null 2>&1; then
                   gh api --method DELETE "repos/$REPOSITORY/git/refs/tags/$RELEASE_TAG"
               fi
             fi
@@ -757,6 +768,14 @@ jobs:
             "$publication/ao2-$RELEASE_VERSION-windows-x86_64.tar.gz" \
             "$publication/promotion-plan.json" \
             "$publication/SHA256SUMS"
+          gh release view "$RELEASE_TAG" \
+            --repo "$REPOSITORY" \
+            --json databaseId,isDraft,tagName \
+            >"$draft_release_path"
+          release_id="$(jq -r .databaseId "$draft_release_path")"
+          [[ "$release_id" =~ ^[1-9][0-9]*$ ]]
+          test "$(jq -r .isDraft "$draft_release_path")" = "true"
+          test "$(jq -r .tagName "$draft_release_path")" = "$RELEASE_TAG"
           trap - EXIT
       - name: Verify draft assets and publish
         shell: bash
@@ -777,6 +796,10 @@ jobs:
           test -f "$tag_object_path"
           tag_object_sha="$(jq -r .sha "$tag_object_path")"
           [[ "$tag_object_sha" =~ ^[0-9a-f]{40}$ ]]
+          draft_release_path="target/hosted-release/created-draft-release.json"
+          test -f "$draft_release_path"
+          release_id="$(jq -r .databaseId "$draft_release_path")"
+          [[ "$release_id" =~ ^[1-9][0-9]*$ ]]
           cleanup_partial_draft() {
             rc=$?
             trap - EXIT
@@ -785,11 +808,11 @@ jobs:
             fi
             release_metadata="target/hosted-release/failed-draft-release.json"
             if gh api --method GET \
-              "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" \
-              >"$release_metadata" 2>/dev/null; then
-              if [ "$(jq -r .draft "$release_metadata")" = "true" ]; then
-                gh release delete "$RELEASE_TAG" --repo "$REPOSITORY" --yes
-              fi
+              "repos/$REPOSITORY/releases/$release_id" \
+              >"$release_metadata" 2>/dev/null \
+              && [ "$(jq -r .tag_name "$release_metadata")" = "$RELEASE_TAG" ] \
+              && [ "$(jq -r .draft "$release_metadata")" = "true" ]; then
+                gh api --method DELETE "repos/$REPOSITORY/releases/$release_id"
             fi
             current_ref="target/hosted-release/failed-tag-ref.json"
             if gh api --method GET \
@@ -797,9 +820,8 @@ jobs:
               >"$current_ref" 2>/dev/null \
               && [ "$(jq -r .object.type "$current_ref")" = "tag" ] \
               && [ "$(jq -r .object.sha "$current_ref")" = "$tag_object_sha" ] \
-              && ! gh api --method GET \
-                "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" \
-                >/dev/null 2>&1; then
+              && ! gh release view "$RELEASE_TAG" \
+                --repo "$REPOSITORY" >/dev/null 2>&1; then
                 gh api --method DELETE "repos/$REPOSITORY/git/refs/tags/$RELEASE_TAG"
             fi
             exit "$rc"
@@ -825,9 +847,11 @@ jobs:
               --source-digest "$SOURCE_SHA" \
               --deny-self-hosted-runners
           done
-          release_is_draft="$(gh api --method GET \
-            "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" --jq .draft)"
-          test "$release_is_draft" = "true"
+          gh api --method GET \
+            "repos/$REPOSITORY/releases/$release_id" \
+            >target/hosted-release/draft-release-before-publish.json
+          test "$(jq -r .tag_name target/hosted-release/draft-release-before-publish.json)" = "$RELEASE_TAG"
+          test "$(jq -r .draft target/hosted-release/draft-release-before-publish.json)" = "true"
           verify_release_tag() {
             phase="$1"
             ref_path="target/hosted-release/tag-ref-$phase.json"
@@ -850,6 +874,12 @@ jobs:
             --repo "$REPOSITORY" \
             --draft=false \
             --latest
+          gh api --method GET \
+            "repos/$REPOSITORY/releases/$release_id" \
+            >target/hosted-release/release-after-publish.json
+          test "$(jq -r .tag_name target/hosted-release/release-after-publish.json)" = "$RELEASE_TAG"
+          test "$(jq -r .draft target/hosted-release/release-after-publish.json)" = "false"
+          test "$(jq -r .published_at target/hosted-release/release-after-publish.json)" != "null"
           publication_sha_after="$(verify_release_tag after)"
           if [ "$publication_sha_after" != "$SOURCE_SHA" ]; then
             gh release edit "$RELEASE_TAG" \

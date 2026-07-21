@@ -650,6 +650,9 @@ def test_public_release_build_uses_canonical_hosted_native_dry_run_contract():
         "--verify-tag",
         "cleanup_partial_draft",
         "gh release delete",
+        "--json databaseId,isDraft,tagName",
+        'repos/$REPOSITORY/releases/$release_id',
+        "created-draft-release.json",
         '--method DELETE "repos/$REPOSITORY/git/refs/tags/$RELEASE_TAG"',
         "publication_sha_before",
         "publication_sha_after",
@@ -665,6 +668,7 @@ def test_public_release_build_uses_canonical_hosted_native_dry_run_contract():
         "gh release edit"
     )
     assert "git/matching-refs/tags/" not in workflow
+    assert "releases/tags/$RELEASE_TAG" not in workflow
     assert '-f sha="$SOURCE_SHA"' not in workflow
     mismatch = workflow.index("release tag changed during publication")
     assert workflow.rfind("trap - EXIT", 0, mismatch) > workflow.rfind(
