@@ -23,13 +23,21 @@ on:
         description: "Successful physical-Windows qualification run containing digest-bound evidence."
         required: true
         type: string
+      promotion_plan_run_id:
+        description: "For live release only: prior successful dry-run workflow containing the frozen candidates and plan."
+        required: false
+        type: string
+      promotion_plan_sha256:
+        description: "For live release only: exact SHA-256 of the frozen dry-run promotion plan."
+        required: false
+        type: string
       dry_run:
         description: "Keep release publication disabled and emit a dry-run boundary artifact."
         required: true
         default: true
         type: boolean
       live_publish_confirm:
-        description: "For live release only: publish-<release_tag>-<source sha>."
+        description: "For live release only: publish-<release_tag>-<source sha>-with-plan-<plan sha256>."
         required: false
         type: string
 
@@ -59,15 +67,35 @@ jobs:
           RELEASE_VERSION: ${{ inputs.release_version }}
           RELEASE_TAG: ${{ inputs.release_tag }}
           APPROVED_ASSET_MANIFEST_SHA256: ${{ inputs.approved_asset_manifest_sha256 }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          PROMOTION_PLAN_RUN_ID: ${{ inputs.promotion_plan_run_id }}
+          PROMOTION_PLAN_SHA256: ${{ inputs.promotion_plan_sha256 }}
+          LIVE_PUBLISH_CONFIRM: ${{ inputs.live_publish_confirm }}
         run: |
           set -euo pipefail
           test -n "$RELEASE_VERSION"
           test -n "$RELEASE_TAG"
           test -n "$APPROVED_ASSET_MANIFEST_SHA256"
-          case "$APPROVED_ASSET_MANIFEST_SHA256" in
-            ????????*) ;;
-            *) echo "approved asset manifest digest is too short" >&2; exit 1 ;;
-          esac
+          python3 - <<'PY'
+          import os
+          import re
+
+          manifest = os.environ["APPROVED_ASSET_MANIFEST_SHA256"]
+          if re.fullmatch(r"[0-9a-f]{64}", manifest) is None:
+              raise SystemExit("approved asset manifest digest must be a lowercase SHA-256")
+          dry_run = os.environ["DRY_RUN"] == "true"
+          plan_run_id = os.environ["PROMOTION_PLAN_RUN_ID"]
+          plan_sha256 = os.environ["PROMOTION_PLAN_SHA256"]
+          live_confirm = os.environ["LIVE_PUBLISH_CONFIRM"]
+          if dry_run:
+              if plan_run_id or plan_sha256 or live_confirm:
+                  raise SystemExit("dry-run dispatch must not include live publication inputs")
+          else:
+              if re.fullmatch(r"[1-9][0-9]{0,19}", plan_run_id) is None:
+                  raise SystemExit("live promotion plan run ID is invalid")
+              if re.fullmatch(r"[0-9a-f]{64}", plan_sha256) is None:
+                  raise SystemExit("live promotion plan digest must be a lowercase SHA-256")
+          PY
           test -f docs/release/READY-TO-SHIP.md
           mkdir -p target/hosted-release/bound-plan
           {
@@ -543,48 +571,354 @@ jobs:
     name: Protected public release publisher
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: [bind-release-plan, assemble-promotion-plan]
+    needs: [bind-release-plan, verify-physical-windows-qualification, assemble-promotion-plan]
     if: ${{ inputs.dry_run == false }}
     environment: public-release-publish
     permissions:
+      actions: read
+      attestations: write
+      artifact-metadata: write
       contents: write
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.3
-      - name: Download immutable promotion plan
-        uses: actions/download-artifact@v8.0.1
-        with:
-          name: ao2-hosted-release-promotion-plan-${{ github.sha }}
-          path: target/hosted-release/promotion-plan
+      - name: Authenticate frozen dry-run workflow and artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FROZEN_RUN_ID: ${{ inputs.promotion_plan_run_id }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+          REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          metadata_root="target/hosted-release/frozen-run-metadata"
+          mkdir -p "$metadata_root"
+          gh api --method GET "repos/$REPOSITORY/actions/runs/$FROZEN_RUN_ID" \
+            >"$metadata_root/run.json"
+          gh api --method GET \
+            "repos/$REPOSITORY/actions/runs/$FROZEN_RUN_ID/artifacts?per_page=100" \
+            >"$metadata_root/artifacts.json"
+          python3 scripts/hosted_release_promotion.py validate-run \
+            --run-metadata "$metadata_root/run.json" \
+            --artifacts-metadata "$metadata_root/artifacts.json" \
+            --run-id "$FROZEN_RUN_ID" \
+            --current-run-id "$CURRENT_RUN_ID" \
+            --repository "$REPOSITORY" \
+            --source-sha "$SOURCE_SHA" \
+            --out "$metadata_root/validation.json"
+      - name: Download exact frozen candidates and promotion plan
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FROZEN_RUN_ID: ${{ inputs.promotion_plan_run_id }}
+          REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          candidate_root="target/hosted-release/frozen-candidates"
+          plan_root="target/hosted-release/frozen-plan"
+          rm -rf "$candidate_root" "$plan_root"
+          mkdir -p "$candidate_root" "$plan_root"
+          for target in linux-x86_64 macos-aarch64 windows-x86_64; do
+            name="ao2-hosted-native-candidate-$target-$SOURCE_SHA"
+            gh run download "$FROZEN_RUN_ID" \
+              --repo "$REPOSITORY" \
+              --name "$name" \
+              --dir "$candidate_root/$name"
+          done
+          gh run download "$FROZEN_RUN_ID" \
+            --repo "$REPOSITORY" \
+            --name "ao2-hosted-release-promotion-plan-$SOURCE_SHA" \
+            --dir "$plan_root"
+      - name: Validate and stage immutable public assets
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.bind-release-plan.outputs.version }}
+          RELEASE_TAG: ${{ needs.bind-release-plan.outputs.tag }}
+          SOURCE_SHA: ${{ needs.bind-release-plan.outputs.source_sha }}
+          MANIFEST_SHA256: ${{ needs.bind-release-plan.outputs.manifest_sha256 }}
+          PROMOTION_PLAN_SHA256: ${{ inputs.promotion_plan_sha256 }}
+          EXPECTED_PHYSICAL_WINDOWS_EVIDENCE_SHA256: ${{ needs.verify-physical-windows-qualification.outputs.physical_evidence_sha256 }}
+        run: |
+          set -euo pipefail
+          python3 scripts/hosted_release_promotion.py stage \
+            --candidate-root target/hosted-release/frozen-candidates \
+            --plan-root target/hosted-release/frozen-plan \
+            --publication-root target/hosted-release/publication \
+            --source-sha "$SOURCE_SHA" \
+            --version "$RELEASE_VERSION" \
+            --tag "$RELEASE_TAG" \
+            --manifest-sha256 "$MANIFEST_SHA256" \
+            --plan-sha256 "$PROMOTION_PLAN_SHA256" \
+            --physical-evidence-sha256 "$EXPECTED_PHYSICAL_WINDOWS_EVIDENCE_SHA256" \
+            --out target/hosted-release/publication-validation.json
       - name: Require exact live confirmation
         shell: bash
         env:
           LIVE_PUBLISH_CONFIRM: ${{ inputs.live_publish_confirm }}
+          RELEASE_VERSION: ${{ needs.bind-release-plan.outputs.version }}
+          RELEASE_TAG: ${{ needs.bind-release-plan.outputs.tag }}
+          SOURCE_SHA: ${{ needs.bind-release-plan.outputs.source_sha }}
+          PROMOTION_PLAN_SHA256: ${{ inputs.promotion_plan_sha256 }}
           GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          required_confirm="publish-${{ inputs.release_tag }}-${{ github.sha }}"
+          required_confirm="publish-${{ inputs.release_tag }}-${{ github.sha }}-with-plan-${{ inputs.promotion_plan_sha256 }}"
           if [ "$LIVE_PUBLISH_CONFIRM" != "$required_confirm" ]; then
             echo "refusing public release because live confirmation did not match $required_confirm" >&2
             exit 1
           fi
-          test -f target/hosted-release/promotion-plan/promotion-plan.json
-          echo "live publish would use gh release with the workflow-scoped token after protected environment approval"
+          notes="docs/release/v${RELEASE_VERSION}-stable.md"
+          test -f "$notes"
+      - name: Attest exact frozen release assets
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
+        with:
+          subject-path: |
+            target/hosted-release/publication/ao2-${{ inputs.release_version }}-linux-x86_64.tar.gz
+            target/hosted-release/publication/ao2-${{ inputs.release_version }}-macos-aarch64.tar.gz
+            target/hosted-release/publication/ao2-${{ inputs.release_version }}-windows-x86_64.tar.gz
+            target/hosted-release/publication/promotion-plan.json
+            target/hosted-release/publication/SHA256SUMS
+      - name: Create approved draft release from frozen assets
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.bind-release-plan.outputs.version }}
+          RELEASE_TAG: ${{ needs.bind-release-plan.outputs.tag }}
+          SOURCE_SHA: ${{ needs.bind-release-plan.outputs.source_sha }}
+          PROMOTION_PLAN_SHA256: ${{ inputs.promotion_plan_sha256 }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          publication="target/hosted-release/publication"
+          notes="docs/release/v${RELEASE_VERSION}-stable.md"
+          tag_object_path="target/hosted-release/created-tag-object.json"
+          cleanup_partial_draft() {
+            rc=$?
+            trap - EXIT
+            if [ "$rc" -eq 0 ]; then
+              return
+            fi
+            release_metadata="target/hosted-release/partial-release.json"
+            if gh api --method GET \
+              "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" \
+              >"$release_metadata" 2>/dev/null; then
+              if [ "$(jq -r .draft "$release_metadata")" = "true" ]; then
+                gh release delete "$RELEASE_TAG" --repo "$REPOSITORY" --yes
+              fi
+            fi
+            if [ -f "$tag_object_path" ]; then
+              tag_object_sha="$(jq -r .sha "$tag_object_path")"
+              current_ref="target/hosted-release/cleanup-tag-ref.json"
+              if gh api --method GET \
+                "repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG" \
+                >"$current_ref" 2>/dev/null \
+                && [ "$(jq -r .object.type "$current_ref")" = "tag" ] \
+                && [ "$(jq -r .object.sha "$current_ref")" = "$tag_object_sha" ] \
+                && ! gh api --method GET \
+                  "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" \
+                  >/dev/null 2>&1; then
+                  gh api --method DELETE "repos/$REPOSITORY/git/refs/tags/$RELEASE_TAG"
+              fi
+            fi
+            exit "$rc"
+          }
+          trap cleanup_partial_draft EXIT
+          tag_message="AO2 hosted release $RELEASE_TAG source $SOURCE_SHA plan $PROMOTION_PLAN_SHA256 run $GITHUB_RUN_ID"
+          gh api --method POST \
+            "repos/$REPOSITORY/git/tags" \
+            -f tag="$RELEASE_TAG" \
+            -f message="$tag_message" \
+            -f object="$SOURCE_SHA" \
+            -f type=commit \
+            >"$tag_object_path"
+          tag_object_sha="$(jq -r .sha "$tag_object_path")"
+          [[ "$tag_object_sha" =~ ^[0-9a-f]{40}$ ]]
+          gh api --method POST \
+            "repos/$REPOSITORY/git/refs" \
+            -f ref="refs/tags/$RELEASE_TAG" \
+            -f sha="$tag_object_sha" \
+            >target/hosted-release/created-tag-ref.json
+          created_sha="$(jq -r .object.sha target/hosted-release/created-tag-ref.json)"
+          created_type="$(jq -r .object.type target/hosted-release/created-tag-ref.json)"
+          test "$created_type" = "tag"
+          test "$created_sha" = "$tag_object_sha"
+          gh release create "$RELEASE_TAG" \
+            --repo "$REPOSITORY" \
+            --verify-tag \
+            --title "AO2 $RELEASE_TAG" \
+            --notes-file "$notes" \
+            --draft \
+            "$publication/ao2-$RELEASE_VERSION-linux-x86_64.tar.gz" \
+            "$publication/ao2-$RELEASE_VERSION-macos-aarch64.tar.gz" \
+            "$publication/ao2-$RELEASE_VERSION-windows-x86_64.tar.gz" \
+            "$publication/promotion-plan.json" \
+            "$publication/SHA256SUMS"
+          trap - EXIT
+      - name: Verify draft assets and publish
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ needs.bind-release-plan.outputs.version }}
+          RELEASE_TAG: ${{ needs.bind-release-plan.outputs.tag }}
+          SOURCE_SHA: ${{ needs.bind-release-plan.outputs.source_sha }}
+          MANIFEST_SHA256: ${{ needs.bind-release-plan.outputs.manifest_sha256 }}
+          PROMOTION_PLAN_SHA256: ${{ inputs.promotion_plan_sha256 }}
+          EXPECTED_PHYSICAL_WINDOWS_EVIDENCE_SHA256: ${{ needs.verify-physical-windows-qualification.outputs.physical_evidence_sha256 }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          draft_root="target/hosted-release/draft-readback"
+          mkdir -p "$draft_root"
+          tag_object_path="target/hosted-release/created-tag-object.json"
+          test -f "$tag_object_path"
+          tag_object_sha="$(jq -r .sha "$tag_object_path")"
+          [[ "$tag_object_sha" =~ ^[0-9a-f]{40}$ ]]
+          cleanup_partial_draft() {
+            rc=$?
+            trap - EXIT
+            if [ "$rc" -eq 0 ]; then
+              return
+            fi
+            release_metadata="target/hosted-release/failed-draft-release.json"
+            if gh api --method GET \
+              "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" \
+              >"$release_metadata" 2>/dev/null; then
+              if [ "$(jq -r .draft "$release_metadata")" = "true" ]; then
+                gh release delete "$RELEASE_TAG" --repo "$REPOSITORY" --yes
+              fi
+            fi
+            current_ref="target/hosted-release/failed-tag-ref.json"
+            if gh api --method GET \
+              "repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG" \
+              >"$current_ref" 2>/dev/null \
+              && [ "$(jq -r .object.type "$current_ref")" = "tag" ] \
+              && [ "$(jq -r .object.sha "$current_ref")" = "$tag_object_sha" ] \
+              && ! gh api --method GET \
+                "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" \
+                >/dev/null 2>&1; then
+                gh api --method DELETE "repos/$REPOSITORY/git/refs/tags/$RELEASE_TAG"
+            fi
+            exit "$rc"
+          }
+          trap cleanup_partial_draft EXIT
+          gh release download "$RELEASE_TAG" \
+            --repo "$REPOSITORY" \
+            --dir "$draft_root"
+          python3 scripts/hosted_release_promotion.py verify-public \
+            --publication-root "$draft_root" \
+            --source-sha "$SOURCE_SHA" \
+            --version "$RELEASE_VERSION" \
+            --tag "$RELEASE_TAG" \
+            --manifest-sha256 "$MANIFEST_SHA256" \
+            --plan-sha256 "$PROMOTION_PLAN_SHA256" \
+            --physical-evidence-sha256 "$EXPECTED_PHYSICAL_WINDOWS_EVIDENCE_SHA256" \
+            --out target/hosted-release/draft-verification.json
+          for asset in "$draft_root"/*; do
+            gh attestation verify "$asset" \
+              --repo "$REPOSITORY" \
+              --signer-workflow "$REPOSITORY/.github/workflows/public-release-build.yml" \
+              --signer-digest "$SOURCE_SHA" \
+              --source-digest "$SOURCE_SHA" \
+              --deny-self-hosted-runners
+          done
+          release_is_draft="$(gh api --method GET \
+            "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" --jq .draft)"
+          test "$release_is_draft" = "true"
+          verify_release_tag() {
+            phase="$1"
+            ref_path="target/hosted-release/tag-ref-$phase.json"
+            object_path="target/hosted-release/tag-object-$phase.json"
+            gh api --method GET \
+              "repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG" >"$ref_path"
+            test "$(jq -r .object.type "$ref_path")" = "tag"
+            test "$(jq -r .object.sha "$ref_path")" = "$tag_object_sha"
+            gh api --method GET \
+              "repos/$REPOSITORY/git/tags/$tag_object_sha" >"$object_path"
+            test "$(jq -r .tag "$object_path")" = "$RELEASE_TAG"
+            test "$(jq -r .object.type "$object_path")" = "commit"
+            expected_message="AO2 hosted release $RELEASE_TAG source $SOURCE_SHA plan $PROMOTION_PLAN_SHA256 run $GITHUB_RUN_ID"
+            test "$(jq -r .message "$object_path")" = "$expected_message"
+            jq -r .object.sha "$object_path"
+          }
+          publication_sha_before="$(verify_release_tag before)"
+          test "$publication_sha_before" = "$SOURCE_SHA"
+          gh release edit "$RELEASE_TAG" \
+            --repo "$REPOSITORY" \
+            --draft=false \
+            --latest
+          publication_sha_after="$(verify_release_tag after)"
+          if [ "$publication_sha_after" != "$SOURCE_SHA" ]; then
+            gh release edit "$RELEASE_TAG" \
+              --repo "$REPOSITORY" \
+              --draft=true
+            trap - EXIT
+            echo "release tag changed during publication; release returned to draft" >&2
+            exit 1
+          fi
+          trap - EXIT
 
   independent-public-verification:
     name: Independent public asset verification
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    needs: [bind-release-plan, publish-release]
+    needs: [bind-release-plan, verify-physical-windows-qualification, publish-release]
     if: ${{ inputs.dry_run == false }}
     permissions:
+      attestations: read
       contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@v6.0.3
       - name: Download and verify public release assets
+        shell: bash
         env:
-          AO2_RELEASE_TAG: ${{ inputs.release_tag }}
-          AO2_RELEASE_DOWNLOAD_DIR: target/hosted-release/public-download
+          RELEASE_VERSION: ${{ needs.bind-release-plan.outputs.version }}
+          RELEASE_TAG: ${{ needs.bind-release-plan.outputs.tag }}
+          SOURCE_SHA: ${{ needs.bind-release-plan.outputs.source_sha }}
+          MANIFEST_SHA256: ${{ needs.bind-release-plan.outputs.manifest_sha256 }}
+          PROMOTION_PLAN_SHA256: ${{ inputs.promotion_plan_sha256 }}
+          EXPECTED_PHYSICAL_WINDOWS_EVIDENCE_SHA256: ${{ needs.verify-physical-windows-qualification.outputs.physical_evidence_sha256 }}
+          REPOSITORY: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
-        run: npm run release:download-verify
+        run: |
+          set -euo pipefail
+          download_root="target/hosted-release/public-download"
+          mkdir -p "$download_root"
+          gh release download "$RELEASE_TAG" \
+            --repo "$REPOSITORY" \
+            --dir "$download_root"
+          python3 scripts/hosted_release_promotion.py verify-public \
+            --publication-root "$download_root" \
+            --source-sha "$SOURCE_SHA" \
+            --version "$RELEASE_VERSION" \
+            --tag "$RELEASE_TAG" \
+            --manifest-sha256 "$MANIFEST_SHA256" \
+            --plan-sha256 "$PROMOTION_PLAN_SHA256" \
+            --physical-evidence-sha256 "$EXPECTED_PHYSICAL_WINDOWS_EVIDENCE_SHA256" \
+            --out target/hosted-release/public-verification.json
+          for asset in "$download_root"/*; do
+            gh attestation verify "$asset" \
+              --repo "$REPOSITORY" \
+              --signer-workflow "$REPOSITORY/.github/workflows/public-release-build.yml" \
+              --signer-digest "$SOURCE_SHA" \
+              --source-digest "$SOURCE_SHA" \
+              --deny-self-hosted-runners
+          done
+          ref_path="target/hosted-release/public-tag-ref.json"
+          gh api --method GET \
+            "repos/$REPOSITORY/git/ref/tags/$RELEASE_TAG" >"$ref_path"
+          test "$(jq -r .object.type "$ref_path")" = "tag"
+          tag_object_sha="$(jq -r .object.sha "$ref_path")"
+          [[ "$tag_object_sha" =~ ^[0-9a-f]{40}$ ]]
+          tag_object_path="target/hosted-release/public-tag-object.json"
+          gh api --method GET \
+            "repos/$REPOSITORY/git/tags/$tag_object_sha" >"$tag_object_path"
+          test "$(jq -r .tag "$tag_object_path")" = "$RELEASE_TAG"
+          test "$(jq -r .object.type "$tag_object_path")" = "commit"
+          test "$(jq -r .object.sha "$tag_object_path")" = "$SOURCE_SHA"
+          expected_message="AO2 hosted release $RELEASE_TAG source $SOURCE_SHA plan $PROMOTION_PLAN_SHA256 run $GITHUB_RUN_ID"
+          test "$(jq -r .message "$tag_object_path")" = "$expected_message"

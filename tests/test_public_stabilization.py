@@ -593,6 +593,8 @@ def test_public_release_build_uses_canonical_hosted_native_dry_run_contract():
         "physical_windows_qualification_run_id:",
         "dry_run:",
         "live_publish_confirm:",
+        "promotion_plan_run_id:",
+        "promotion_plan_sha256:",
         "bind-release-plan:",
         "verify-physical-windows-qualification:",
         "physical_evidence_sha256: ${{ steps.verify.outputs.physical_evidence_sha256 }}",
@@ -624,13 +626,52 @@ def test_public_release_build_uses_canonical_hosted_native_dry_run_contract():
         "release_creation_attempted: false",
         "public_upload_attempted: false",
         "environment: public-release-publish",
-        'required_confirm="publish-${{ inputs.release_tag }}-${{ github.sha }}"',
+        'required_confirm="publish-${{ inputs.release_tag }}-${{ github.sha }}-with-plan-${{ inputs.promotion_plan_sha256 }}"',
         "GH_TOKEN: ${{ github.token }}",
-        "npm run release:download-verify",
+        "gh release create",
+        "--draft",
+        "gh release edit",
+        "--draft=false",
+        "actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6",
+        "gh attestation verify",
+        '--signer-workflow "$REPOSITORY/.github/workflows/public-release-build.yml"',
+        '--signer-digest "$SOURCE_SHA"',
+        '--source-digest "$SOURCE_SHA"',
+        "--deny-self-hosted-runners",
+        "hosted_release_promotion.py stage",
+        "hosted_release_promotion.py verify-public",
+        "EXPECTED_PHYSICAL_WINDOWS_EVIDENCE_SHA256",
+        'repos/$REPOSITORY/git/refs',
+        'ref="refs/tags/$RELEASE_TAG"',
+        'repos/$REPOSITORY/git/tags',
+        "tag_object_sha",
+        'sha="$tag_object_sha"',
+        "AO2 hosted release $RELEASE_TAG source $SOURCE_SHA plan $PROMOTION_PLAN_SHA256 run $GITHUB_RUN_ID",
+        "--verify-tag",
+        "cleanup_partial_draft",
+        "gh release delete",
+        '--method DELETE "repos/$REPOSITORY/git/refs/tags/$RELEASE_TAG"',
+        "publication_sha_before",
+        "publication_sha_after",
+        "--draft=true",
     ]:
         assert needle in workflow
 
     assert workflow.count("contents: write") == 1
+    assert workflow.count("attestations: write") == 1
+    assert workflow.count("id-token: write") == 1
+    assert workflow.index("gh release create") < workflow.index("gh release edit")
+    assert workflow.index("hosted_release_promotion.py verify-public") < workflow.index(
+        "gh release edit"
+    )
+    assert "git/matching-refs/tags/" not in workflow
+    assert '-f sha="$SOURCE_SHA"' not in workflow
+    mismatch = workflow.index("release tag changed during publication")
+    assert workflow.rfind("trap - EXIT", 0, mismatch) > workflow.rfind(
+        "--draft=true",
+        0,
+        mismatch,
+    )
     assert "permissions: write-all" not in workflow
     assert "OPENAI_API_KEY:" not in workflow
     assert "ANTHROPIC_API_KEY:" not in workflow
