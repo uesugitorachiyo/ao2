@@ -1177,3 +1177,86 @@ fn release_support_bundle_build_generates_report_contract_verification_from_repo
     ]);
     assert!(verify.status.success(), "{}", stderr(&verify));
 }
+
+#[test]
+fn cli_release_support_bundle_verify_accepts_minimal_cp_bundle_fixture() {
+    let temp = tempfile::tempdir().unwrap();
+    let bundle_path = temp.path().join("release-support-bundle.json");
+    write_bundle(&bundle_path, serde_json::Value::Null);
+    let bundle_json: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&bundle_path).unwrap()).unwrap();
+    let bundle_sha256 = canonical_sha256(&bundle_json);
+    let checksums_path = temp.path().join("SHA256SUMS");
+    fs::write(
+        &checksums_path,
+        format!("{bundle_sha256}  release-support-bundle.json\n"),
+    )
+    .unwrap();
+
+    let verify = ao2([
+        "release",
+        "support-bundle-verify",
+        "--bundle",
+        bundle_path.to_str().unwrap(),
+        "--checksums",
+        checksums_path.to_str().unwrap(),
+        "--json",
+    ]);
+    assert!(verify.status.success(), "{}", stderr(&verify));
+    let json: serde_json::Value = serde_json::from_str(&stdout(&verify)).unwrap();
+    assert_eq!(
+        json["schema_version"],
+        "ao2.release-support-bundle-verification.v1"
+    );
+    assert_eq!(json["status"], "passed");
+    assert_eq!(json["surface_count"], 9);
+    assert_eq!(json["checksum_verified"], true);
+    assert_eq!(json["failure_count"], 0);
+    assert_eq!(
+        json["trust_boundary"]["release_acceptance_owner"],
+        "factory-v3 evaluator-closer"
+    );
+    assert_eq!(
+        json["trust_boundary"]["control_plane_role"],
+        "read_only_observer"
+    );
+    assert_eq!(
+        json["trust_boundary"]["control_plane_approves_release"],
+        false
+    );
+}
+
+#[test]
+fn cli_release_support_bundle_verify_rejects_secret_markers() {
+    let temp = tempfile::tempdir().unwrap();
+    let bundle_path = temp.path().join("release-support-bundle.json");
+    write_bundle(
+        &bundle_path,
+        serde_json::json!({
+            "operator_log": "Authorization: Bearer should-not-ship",
+            "nested": {"access_token": "should-not-ship"}
+        }),
+    );
+
+    let verify = ao2([
+        "release",
+        "support-bundle-verify",
+        "--bundle",
+        bundle_path.to_str().unwrap(),
+        "--json",
+    ]);
+    assert!(
+        !verify.status.success(),
+        "support verifier should fail on secret markers"
+    );
+    let json: serde_json::Value = serde_json::from_str(&stdout(&verify)).unwrap();
+    assert_eq!(json["status"], "failed");
+    let failures = json["failures"].as_array().unwrap();
+    assert!(failures
+        .iter()
+        .any(|failure| failure["code"] == "forbidden_secret_marker"));
+    assert!(failures
+        .iter()
+        .any(|failure| failure["code"] == "forbidden_secret_field"));
+    assert!(stderr(&verify).contains("release support bundle verification failed"));
+}
