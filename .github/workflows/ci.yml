@@ -112,6 +112,7 @@ jobs:
               cargo test -p ao2-cli --test cli_plugin_pulse
               cargo test -p ao2-cli --test cli_plugin_package
               cargo test -p ao2-cli --test cli_plugin_consumer_lifecycle
+              cargo test -p ao2-cli --test cli_plugin_release_candidate
               cargo test -p ao2-cli --test cli_approval_replay cli_plugin
           - os: ubuntu-latest
             phase: test-cli-approval-pulse-provider-release
@@ -283,6 +284,7 @@ jobs:
               cargo test -p ao2-cli --test cli_plugin_pulse
               cargo test -p ao2-cli --test cli_plugin_package
               cargo test -p ao2-cli --test cli_plugin_consumer_lifecycle
+              cargo test -p ao2-cli --test cli_plugin_release_candidate
               cargo test -p ao2-cli --test cli_approval_replay cli_plugin
           - os: macos-latest
             phase: test-cli-approval-pulse-provider-release
@@ -428,6 +430,7 @@ jobs:
               cargo test -p ao2-cli --test cli_plugin_pulse
               cargo test -p ao2-cli --test cli_plugin_package
               cargo test -p ao2-cli --test cli_plugin_consumer_lifecycle
+              cargo test -p ao2-cli --test cli_plugin_release_candidate
               cargo test -p ao2-cli --test cli_approval_replay cli_plugin
           - os: windows-latest
             phase: test-cli-approval-pulse-provider-release
