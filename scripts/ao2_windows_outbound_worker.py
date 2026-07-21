@@ -192,6 +192,19 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
         ),
     },
     {
+        "name": "test-cli-contract",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "cli_contract",
+        ),
+    },
+    {
         "name": "test-cli-report-cockpit",
         "argv": (
             "cargo",
@@ -208,7 +221,6 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
         "test-cli-approval-core",
         (
             "cli_can_pause",
-            "cli_contract",
             "cli_doctor",
             "cli_evidence",
             "cli_init",
