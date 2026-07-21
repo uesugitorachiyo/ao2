@@ -1,0 +1,379 @@
+{
+  "schema_version": "ao2.cli-contract-fixtures.v1",
+  "description": "Read-only CLI surface contract fixtures used to ratchet behavior before decomposing ao2-cli main.rs dispatch surfaces.",
+  "cases": [
+    {
+      "name": "top-level-command-index",
+      "args": ["--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 <COMMAND>",
+        "support",
+        "adapter",
+        "provider",
+        "plugin",
+        "report",
+        "runs",
+        "cockpit",
+        "pulse",
+        "workbench",
+        "control-plane",
+        "contract",
+        "memory",
+        "evidence",
+        "git",
+        "factory",
+        "sdd",
+        "issue",
+        "version",
+        "upgrade",
+        "install",
+        "release",
+        "cp"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "sdd-module-dispatch",
+      "args": ["sdd", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 sdd <COMMAND>",
+        "plan",
+        "validate",
+        "dispatch"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "support-module-dispatch",
+      "args": ["support", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 support <COMMAND>",
+        "bundle",
+        "Build a bounded, privacy-safe troubleshooting support bundle"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "issue-module-dispatch",
+      "args": ["issue", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 issue <COMMAND>",
+        "intake",
+        "acquire",
+        "draft-pr"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "github-issue-draft-module-dispatch",
+      "args": ["issue", "draft-pr", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 issue draft-pr <COMMAND>",
+        "preview",
+        "verify",
+        "fixture-publish"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "release-dispatch",
+      "args": ["release", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 release <COMMAND>",
+        "package",
+        "smoke-summary",
+        "gate",
+        "support-bundle-build",
+        "support-bundle-verify",
+        "evidence-bundle",
+        "evidence-bundle-verify",
+        "evaluator-decision-build",
+        "handoff-checklist-build",
+        "sign-provenance",
+        "verify-provenance"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "factory-dispatch",
+      "args": ["factory", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 factory <COMMAND>",
+        "plan",
+        "run",
+        "project-start",
+        "queue-submit",
+        "queue-status",
+        "queue-cancel",
+        "cancel-authority",
+        "cancel-transition",
+        "bridge",
+        "bridge-mapping",
+        "verify-bridge-evidence"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "workbench-dispatch",
+      "args": ["workbench", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 workbench <COMMAND>",
+        "export",
+        "serve",
+        "support-verify",
+        "support-import",
+        "support-inspect",
+        "support-keygen"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "control-plane-dispatch",
+      "args": ["control-plane", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 control-plane <COMMAND>",
+        "ingest",
+        "export",
+        "serve",
+        "index",
+        "health",
+        "history",
+        "bundle",
+        "bundle-verify",
+        "bundle-import",
+        "bundle-inspect"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "cp-release-evidence-dispatch",
+      "args": ["cp", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 cp <COMMAND>",
+        "probe-extended",
+        "release-snapshot",
+        "Read-only; never mutates AO artifacts"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "provider-dispatch",
+      "args": ["provider", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 provider <COMMAND>",
+        "list",
+        "registry",
+        "doctor",
+        "matrix",
+        "contract",
+        "smoke-all",
+        "gate",
+        "pilot",
+        "cost-ledger",
+        "cost-trend",
+        "score"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "plugin-dispatch",
+      "args": ["plugin", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 plugin <COMMAND>",
+        "readiness",
+        "manifest",
+        "install-smoke",
+        "package",
+        "distribution-rehearsal",
+        "release-candidate",
+        "shipment-readiness",
+        "adapter-scaffold",
+        "wrapper-harness"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "pulse-dispatch",
+      "args": ["pulse", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 pulse <COMMAND>",
+        "run",
+        "eval-loop",
+        "run-loop",
+        "auto-advance"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "adapter-dispatch",
+      "args": ["adapter", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 adapter <COMMAND>",
+        "doctor",
+        "run",
+        "prompt",
+        "patch"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "contract-dispatch",
+      "args": ["contract", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 contract <COMMAND>",
+        "extract",
+        "check",
+        "gate",
+        "sign-obligation-gate",
+        "verify-obligation-gate-signing",
+        "obligation-gate-signing-survey"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "state-and-reporting-dispatch",
+      "args": ["report", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 report [OPTIONS] [RUN_ID] [COMMAND]",
+        "verify",
+        "--target",
+        "--out"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "runs-dispatch",
+      "args": ["runs", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 runs <COMMAND>",
+        "list",
+        "show"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "cockpit-dispatch",
+      "args": ["cockpit", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 cockpit <COMMAND>",
+        "index",
+        "serve"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "memory-dispatch",
+      "args": ["memory", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 memory <COMMAND>",
+        "write",
+        "search",
+        "export",
+        "publish",
+        "link-run"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "evidence-dispatch",
+      "args": ["evidence", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 evidence <COMMAND>",
+        "publish",
+        "publish-operator-packet"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "git-dispatch",
+      "args": ["git", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 git <COMMAND>",
+        "status",
+        "diff",
+        "commit",
+        "tag"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "install-dispatch",
+      "args": ["install", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 install <COMMAND>",
+        "update",
+        "rollback"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "upgrade-dispatch",
+      "args": ["upgrade", "--help"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "Usage: ao2 upgrade <COMMAND>",
+        "check",
+        "apply"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    },
+    {
+      "name": "version-json-safe-surface",
+      "args": ["version", "--json"],
+      "expected_status": 0,
+      "stdout_contains": [
+        "\"package\": \"ao2\"",
+        "\"release_manifest_schema\": \"ao2.release-manifest.v1\"",
+        "\"release_provenance_schema\": \"ao2.release-provenance.v1\"",
+        "\"version\":"
+      ],
+      "stderr_contains": [],
+      "stderr_empty": true
+    }
+  ]
+}
