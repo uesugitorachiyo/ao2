@@ -217,7 +217,7 @@ jobs:
           - os: ubuntu-latest
             phase: clippy
             timeout_minutes: 30
-            command: cargo clippy --workspace --all-targets -- -D warnings
+            command: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
           - os: ubuntu-latest
             phase: build-release
             timeout_minutes: 20
@@ -360,7 +360,7 @@ jobs:
           - os: macos-latest
             phase: clippy
             timeout_minutes: 30
-            command: cargo clippy --workspace --all-targets -- -D warnings
+            command: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
           - os: macos-latest
             phase: build-release
             timeout_minutes: 20
@@ -504,7 +504,7 @@ jobs:
           - os: windows-latest
             phase: clippy
             timeout_minutes: 30
-            command: cargo clippy --workspace --all-targets -- -D warnings
+            command: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
           - os: windows-latest
             phase: build-release
             timeout_minutes: 20

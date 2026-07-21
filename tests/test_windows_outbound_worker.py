@@ -745,7 +745,7 @@ def test_ao2_full_profile_uses_windows_ci_partitions_instead_of_monolithic_works
     assert any("cargo.exe test -p ao2-cli" in command and "cli_adapter" in command for command in joined)
     assert any("cargo.exe test -p ao2-cli" in command and "cli_workbench_queue" in command for command in joined)
     assert any("npm.cmd run test:archive-resources" in command for command in joined)
-    assert any("cargo.exe clippy --workspace --all-targets" in command for command in joined)
+    assert any("cargo.exe clippy --locked --workspace --all-targets --all-features" in command for command in joined)
     assert any("cargo.exe build --release -p ao2-cli" in command for command in joined)
     assert not any("cargo.exe test --workspace --target-dir" in command for command in joined)
 

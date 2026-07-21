@@ -4559,7 +4559,8 @@ fn ci_workflow_runs_on_public_changes_while_release_gates_stay_manual() {
     assert!(ci.contains("actions/setup-go"));
     assert!(ci.contains("contains(matrix.phase, 'sdd')"));
     assert!(ci.contains("go-version: '1.22.x'"));
-    assert!(ci.contains("cargo clippy --workspace --all-targets -- -D warnings"));
+    assert!(ci
+        .contains("cargo clippy --locked --workspace --all-targets --all-features -- -D warnings"));
     assert!(ci.contains("cargo build --release -p ao2-cli"));
     assert!(!ci.contains("npm run verify"));
     assert!(ci.contains("timeout-minutes: 15"));
