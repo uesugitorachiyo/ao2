@@ -319,7 +319,19 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
     {"name": "cargo-fmt-check", "argv": ("cargo", "fmt", "--all", "--", "--check")},
     {
         "name": "cargo-clippy",
-        "argv": ("cargo", "clippy", "--workspace", "--all-targets", "--target-dir", "{ao2-full-target-dir}", "--", "-D", "warnings"),
+        "argv": (
+            "cargo",
+            "clippy",
+            "--locked",
+            "--workspace",
+            "--all-targets",
+            "--all-features",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--",
+            "-D",
+            "warnings",
+        ),
     },
     {"name": "cargo-build-release", "argv": ("cargo", "build", "--release", "-p", "ao2-cli", "--target-dir", "{ao2-full-target-dir}")},
 )

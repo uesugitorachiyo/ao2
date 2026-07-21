@@ -62,7 +62,7 @@ fi
 if [ -f Cargo.toml ]; then
   printf 'cargo=cargo fmt --all -- --check\n'
   printf 'cargo=cargo test --workspace\n'
-  printf 'cargo=cargo clippy --workspace --all-targets -- -D warnings\n'
+  printf 'cargo=cargo clippy --locked --workspace --all-targets --all-features -- -D warnings\n'
 fi
 if [ -d tests ]; then
   printf 'python=python3 -m pytest tests -q\n'
