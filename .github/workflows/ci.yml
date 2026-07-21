@@ -65,18 +65,15 @@ jobs:
               cargo test -p ao2-cli --test cli_approval_replay cli_can_pause
               cargo test -p ao2-cli --test cli_report_cockpit
               cargo test -p ao2-cli --test cli_contract
-              cargo test -p ao2-cli --test cli_approval_replay cli_doctor
               cargo test -p ao2-cli --test cli_approval_replay cli_evidence
               cargo test -p ao2-cli --test cli_git
               cargo test -p ao2-cli --test cli_approval_replay cli_init
-              cargo test -p ao2-cli --test cli_approval_replay cli_install
               cargo test -p ao2-cli --test cli_approval_replay cli_memory
               cargo test -p ao2-cli --test cli_approval_replay cli_repair
               cargo test -p ao2-cli --test cli_approval_replay cli_report
               cargo test -p ao2-cli --test cli_approval_replay cli_run
               cargo test -p ao2-cli --test cli_approval_replay cli_skill
               cargo test -p ao2-cli --test cli_approval_replay cli_template
-              cargo test -p ao2-cli --test cli_approval_replay cli_upgrade
               cargo test -p ao2-cli --test cli_approval_replay cli_version
           - os: ubuntu-latest
             phase: test-cli-approval-control-plane
@@ -118,6 +115,7 @@ jobs:
             command: |
               cargo test -p ao2-cli --test cli_pulse
               cargo test -p ao2-cli --test cli_provider
+              cargo test -p ao2-cli --test cli_release_install
               cargo test -p ao2-cli --test cli_approval_replay cli_release
           - os: ubuntu-latest
             phase: test-cli-approval-workbench-core
@@ -234,18 +232,15 @@ jobs:
               cargo test -p ao2-cli --test cli_approval_replay cli_can_pause
               cargo test -p ao2-cli --test cli_report_cockpit
               cargo test -p ao2-cli --test cli_contract
-              cargo test -p ao2-cli --test cli_approval_replay cli_doctor
               cargo test -p ao2-cli --test cli_approval_replay cli_evidence
               cargo test -p ao2-cli --test cli_git
               cargo test -p ao2-cli --test cli_approval_replay cli_init
-              cargo test -p ao2-cli --test cli_approval_replay cli_install
               cargo test -p ao2-cli --test cli_approval_replay cli_memory
               cargo test -p ao2-cli --test cli_approval_replay cli_repair
               cargo test -p ao2-cli --test cli_approval_replay cli_report
               cargo test -p ao2-cli --test cli_approval_replay cli_run
               cargo test -p ao2-cli --test cli_approval_replay cli_skill
               cargo test -p ao2-cli --test cli_approval_replay cli_template
-              cargo test -p ao2-cli --test cli_approval_replay cli_upgrade
               cargo test -p ao2-cli --test cli_approval_replay cli_version
           - os: macos-latest
             phase: test-cli-approval-control-plane
@@ -287,6 +282,7 @@ jobs:
             command: |
               cargo test -p ao2-cli --test cli_pulse
               cargo test -p ao2-cli --test cli_provider
+              cargo test -p ao2-cli --test cli_release_install
               cargo test -p ao2-cli --test cli_approval_replay cli_release
           - os: macos-latest
             phase: test-cli-approval-workbench-core
@@ -377,18 +373,15 @@ jobs:
               cargo test -p ao2-cli --test cli_approval_replay cli_can_pause
               cargo test -p ao2-cli --test cli_report_cockpit
               cargo test -p ao2-cli --test cli_contract
-              cargo test -p ao2-cli --test cli_approval_replay cli_doctor
               cargo test -p ao2-cli --test cli_approval_replay cli_evidence
               cargo test -p ao2-cli --test cli_git
               cargo test -p ao2-cli --test cli_approval_replay cli_init
-              cargo test -p ao2-cli --test cli_approval_replay cli_install
               cargo test -p ao2-cli --test cli_approval_replay cli_memory
               cargo test -p ao2-cli --test cli_approval_replay cli_repair
               cargo test -p ao2-cli --test cli_approval_replay cli_report
               cargo test -p ao2-cli --test cli_approval_replay cli_run
               cargo test -p ao2-cli --test cli_approval_replay cli_skill
               cargo test -p ao2-cli --test cli_approval_replay cli_template
-              cargo test -p ao2-cli --test cli_approval_replay cli_upgrade
               cargo test -p ao2-cli --test cli_approval_replay cli_version
           - os: windows-latest
             phase: test-cli-approval-control-plane
@@ -430,6 +423,7 @@ jobs:
             command: |
               cargo test -p ao2-cli --test cli_pulse
               cargo test -p ao2-cli --test cli_provider
+              cargo test -p ao2-cli --test cli_release_install
               cargo test -p ao2-cli --test cli_approval_replay cli_release
           - os: windows-latest
             phase: test-cli-approval-workbench-core
