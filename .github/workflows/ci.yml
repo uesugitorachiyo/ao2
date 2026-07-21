@@ -67,7 +67,7 @@ jobs:
               cargo test -p ao2-cli --test cli_approval_replay cli_contract
               cargo test -p ao2-cli --test cli_approval_replay cli_doctor
               cargo test -p ao2-cli --test cli_approval_replay cli_evidence
-              cargo test -p ao2-cli --test cli_approval_replay cli_git
+              cargo test -p ao2-cli --test cli_git
               cargo test -p ao2-cli --test cli_approval_replay cli_init
               cargo test -p ao2-cli --test cli_approval_replay cli_install
               cargo test -p ao2-cli --test cli_approval_replay cli_memory
@@ -236,7 +236,7 @@ jobs:
               cargo test -p ao2-cli --test cli_approval_replay cli_contract
               cargo test -p ao2-cli --test cli_approval_replay cli_doctor
               cargo test -p ao2-cli --test cli_approval_replay cli_evidence
-              cargo test -p ao2-cli --test cli_approval_replay cli_git
+              cargo test -p ao2-cli --test cli_git
               cargo test -p ao2-cli --test cli_approval_replay cli_init
               cargo test -p ao2-cli --test cli_approval_replay cli_install
               cargo test -p ao2-cli --test cli_approval_replay cli_memory
@@ -379,7 +379,7 @@ jobs:
               cargo test -p ao2-cli --test cli_approval_replay cli_contract
               cargo test -p ao2-cli --test cli_approval_replay cli_doctor
               cargo test -p ao2-cli --test cli_approval_replay cli_evidence
-              cargo test -p ao2-cli --test cli_approval_replay cli_git
+              cargo test -p ao2-cli --test cli_git
               cargo test -p ao2-cli --test cli_approval_replay cli_init
               cargo test -p ao2-cli --test cli_approval_replay cli_install
               cargo test -p ao2-cli --test cli_approval_replay cli_memory

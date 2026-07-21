@@ -179,6 +179,19 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
         ),
     },
     {
+        "name": "test-cli-git",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "cli_git",
+        ),
+    },
+    {
         "name": "test-cli-report-cockpit",
         "argv": (
             "cargo",
@@ -198,7 +211,6 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
             "cli_contract",
             "cli_doctor",
             "cli_evidence",
-            "cli_git",
             "cli_init",
             "cli_install",
             "cli_memory",
