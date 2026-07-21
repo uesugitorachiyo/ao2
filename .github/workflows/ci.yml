@@ -1888,6 +1888,6 @@ jobs:
       # allow-list (permissive-only, no copyleft), source allow-list
       # (crates.io only, no git deps), advisory review (the rsa Marvin-attack
       # disposition is recorded in deny.toml), and duplicate-version
-      # visibility (warn-only).
+      # review with unexpected warnings denied.
       - name: Deny check
-        run: cargo deny check bans licenses sources advisories
+        run: cargo deny check -D warnings bans licenses sources advisories
