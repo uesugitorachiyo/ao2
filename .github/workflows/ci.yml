@@ -860,6 +860,7 @@ jobs:
 
   release-publication-closure-artifacts:
     name: Release publication closure artifacts
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -939,6 +940,7 @@ jobs:
 
   dual-repo-release-publication-closure-index:
     name: Dual-repo release publication closure index
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     needs: release-publication-closure-artifacts
     timeout-minutes: 10
@@ -1123,6 +1125,7 @@ jobs:
 
   release-readiness-artifact-consumer:
     name: Release readiness artifact consumer
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     needs: [release-readiness-artifacts, release-readiness-hosted-artifact-gate, release-train-control-plane-bridge-artifacts, ai-task-board-control-plane-bridge-artifacts, pulse-task-board-closure-packet-artifacts, pulse-ao2-event-loop-smoke-artifacts, rsi-cross-repo-e2e-artifacts, dual-repo-installed-release-smoke-artifacts, release-publication-closure-artifacts, dual-repo-release-publication-closure-index, stable-release-evidence-packet-artifacts]
     timeout-minutes: 5
@@ -1205,6 +1208,7 @@ jobs:
 
   release-readiness-final-closure-verifier:
     name: Release readiness final closure verifier
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     needs: release-readiness-artifact-consumer
     timeout-minutes: 5
