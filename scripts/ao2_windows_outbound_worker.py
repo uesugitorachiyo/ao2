@@ -328,6 +328,19 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
             "cli_plugin_package",
         ),
     },
+    {
+        "name": "test-cli-plugin-consumer-lifecycle",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "cli_plugin_consumer_lifecycle",
+        ),
+    },
     *ao2_cli_approval_profile_commands("test-cli-approval-plugin", ("cli_plugin",)),
     *ao2_cli_approval_profile_commands(
         "test-cli-approval-pulse-provider-release",
