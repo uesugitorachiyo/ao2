@@ -55,7 +55,7 @@ mod release_handoff;
 mod risky_pr_readback;
 mod sdd_cmd;
 mod support_bundle;
-
+mod windows_input;
 use pulse_eval_loop::{
     pulse_eval_loop_handoff_json, pulse_eval_loop_run_chain_json, pulse_eval_loop_run_once_json,
 };

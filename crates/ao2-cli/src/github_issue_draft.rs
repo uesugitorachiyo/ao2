@@ -1224,7 +1224,7 @@ fn open_bounded_input(path: &Path) -> Result<fs::File> {
     {
         use std::os::windows::fs::OpenOptionsExt;
 
-        options.custom_flags(windows_input_open_flags());
+        options.custom_flags(crate::windows_input::open_flags());
     }
     options.open(path).with_context(|| {
         format!(
@@ -1236,7 +1236,7 @@ fn open_bounded_input(path: &Path) -> Result<fs::File> {
 
 fn validate_opened_input(file: &fs::File, path: &Path) -> Result<fs::Metadata> {
     #[cfg(windows)]
-    validate_windows_opened_input(file, path)?;
+    crate::windows_input::validate_disk_handle(file, path)?;
 
     let metadata = file
         .metadata()
@@ -1251,37 +1251,6 @@ fn validate_opened_input(file: &fs::File, path: &Path) -> Result<fs::Metadata> {
         );
     }
     Ok(metadata)
-}
-
-#[cfg(windows)]
-fn windows_input_open_flags() -> u32 {
-    use windows_sys::Win32::Storage::FileSystem::{
-        FILE_FLAG_OPEN_REPARSE_POINT, SECURITY_IDENTIFICATION, SECURITY_SQOS_PRESENT,
-    };
-
-    FILE_FLAG_OPEN_REPARSE_POINT | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION
-}
-
-#[cfg(windows)]
-fn validate_windows_opened_input(file: &fs::File, path: &Path) -> Result<()> {
-    use std::os::windows::io::AsRawHandle;
-    use windows_sys::Win32::Storage::FileSystem::GetFileType;
-
-    let file_type = unsafe { GetFileType(file.as_raw_handle()) };
-    validate_windows_file_type(file_type, path)
-}
-
-#[cfg(windows)]
-fn validate_windows_file_type(file_type: u32, path: &Path) -> Result<()> {
-    use windows_sys::Win32::Storage::FileSystem::FILE_TYPE_DISK;
-
-    if file_type != FILE_TYPE_DISK {
-        bail!(
-            "Windows input handle must have FILE_TYPE_DISK before read: {}",
-            path.display()
-        );
-    }
-    Ok(())
 }
 
 fn parse_fixture_endpoint(value: &str) -> Result<SocketAddr> {
@@ -1496,34 +1465,4 @@ fn emit<T: Serialize>(value: &T, json: bool) -> Result<()> {
         println!("{}", serde_json::to_string(value)?);
     }
     Ok(())
-}
-
-#[cfg(all(test, windows))]
-mod windows_tests {
-    use super::*;
-    use windows_sys::Win32::Storage::FileSystem::{
-        FILE_FLAG_OPEN_REPARSE_POINT, FILE_TYPE_CHAR, FILE_TYPE_DISK, FILE_TYPE_PIPE,
-        SECURITY_IDENTIFICATION, SECURITY_SQOS_PRESENT,
-    };
-
-    #[test]
-    fn input_open_flags_reject_reparse_traversal_and_limit_named_pipe_impersonation() {
-        let flags = windows_input_open_flags();
-
-        assert_eq!(
-            flags & FILE_FLAG_OPEN_REPARSE_POINT,
-            FILE_FLAG_OPEN_REPARSE_POINT
-        );
-        assert_eq!(flags & SECURITY_SQOS_PRESENT, SECURITY_SQOS_PRESENT);
-        assert_eq!(flags & SECURITY_IDENTIFICATION, SECURITY_IDENTIFICATION);
-    }
-
-    #[test]
-    fn input_handle_type_accepts_only_disk_files() {
-        let path = Path::new("input.json");
-
-        assert!(validate_windows_file_type(FILE_TYPE_DISK, path).is_ok());
-        assert!(validate_windows_file_type(FILE_TYPE_PIPE, path).is_err());
-        assert!(validate_windows_file_type(FILE_TYPE_CHAR, path).is_err());
-    }
 }

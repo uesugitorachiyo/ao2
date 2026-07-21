@@ -718,7 +718,7 @@ fn open_bounded_input(path: &Path) -> Result<fs::File> {
     #[cfg(windows)]
     {
         use std::os::windows::fs::OpenOptionsExt;
-        options.custom_flags(windows_input_open_flags());
+        options.custom_flags(crate::windows_input::open_flags());
     }
     options.open(path).with_context(|| {
         format!(
@@ -730,7 +730,7 @@ fn open_bounded_input(path: &Path) -> Result<fs::File> {
 
 fn validate_opened_input(file: &fs::File, path: &Path) -> Result<fs::Metadata> {
     #[cfg(windows)]
-    validate_windows_opened_input(file, path)?;
+    crate::windows_input::validate_non_reparse_disk_handle(file, path)?;
     let metadata = file
         .metadata()
         .with_context(|| format!("inspect opened input {}", path.display()))?;
@@ -744,84 +744,6 @@ fn validate_opened_input(file: &fs::File, path: &Path) -> Result<fs::Metadata> {
         );
     }
     Ok(metadata)
-}
-
-#[cfg(windows)]
-fn windows_input_open_flags() -> u32 {
-    use windows_sys::Win32::Storage::FileSystem::{
-        FILE_FLAG_OPEN_REPARSE_POINT, SECURITY_IDENTIFICATION, SECURITY_SQOS_PRESENT,
-    };
-    FILE_FLAG_OPEN_REPARSE_POINT | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION
-}
-
-#[cfg(windows)]
-fn validate_windows_opened_input(file: &fs::File, path: &Path) -> Result<()> {
-    use std::os::windows::io::AsRawHandle;
-    use windows_sys::Win32::Storage::FileSystem::{
-        FileAttributeTagInfo, GetFileInformationByHandleEx, GetFileType, FILE_ATTRIBUTE_TAG_INFO,
-    };
-
-    let file_type = unsafe { GetFileType(file.as_raw_handle()) };
-    let mut tag_info = FILE_ATTRIBUTE_TAG_INFO::default();
-    let inspected = unsafe {
-        GetFileInformationByHandleEx(
-            file.as_raw_handle(),
-            FileAttributeTagInfo,
-            std::ptr::from_mut(&mut tag_info).cast(),
-            std::mem::size_of::<FILE_ATTRIBUTE_TAG_INFO>() as u32,
-        )
-    };
-    if inspected == 0 {
-        bail!(
-            "inspect Windows input reparse attributes before read: {}",
-            path.display()
-        );
-    }
-    validate_windows_file_characteristics(file_type, tag_info.FileAttributes, path)
-}
-
-#[cfg(windows)]
-fn validate_windows_file_characteristics(
-    file_type: u32,
-    file_attributes: u32,
-    path: &Path,
-) -> Result<()> {
-    use windows_sys::Win32::Storage::FileSystem::{FILE_ATTRIBUTE_REPARSE_POINT, FILE_TYPE_DISK};
-
-    if file_type != FILE_TYPE_DISK || file_attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
-        bail!(
-            "Windows input must be a non-reparse FILE_TYPE_DISK before read: {}",
-            path.display()
-        );
-    }
-    Ok(())
-}
-
-#[cfg(all(test, windows))]
-mod windows_tests {
-    use super::*;
-    use windows_sys::Win32::Storage::FileSystem::{
-        FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_REPARSE_POINT, FILE_TYPE_DISK, FILE_TYPE_PIPE,
-    };
-
-    #[test]
-    fn input_characteristics_reject_non_disk_and_reparse_handles() {
-        let path = Path::new("support-bundle.json");
-        assert!(
-            validate_windows_file_characteristics(FILE_TYPE_DISK, FILE_ATTRIBUTE_NORMAL, path)
-                .is_ok()
-        );
-        assert!(
-            validate_windows_file_characteristics(FILE_TYPE_PIPE, FILE_ATTRIBUTE_NORMAL, path)
-                .is_err()
-        );
-        assert!(validate_windows_file_characteristics(
-            FILE_TYPE_DISK,
-            FILE_ATTRIBUTE_REPARSE_POINT,
-            path
-        )
-        .is_err());
-    }
 }
 
 fn write_exclusive(path: &Path, bytes: &[u8]) -> Result<()> {
