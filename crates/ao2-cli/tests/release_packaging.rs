@@ -4540,6 +4540,7 @@ fn ci_workflow_runs_on_public_changes_while_release_gates_stay_manual() {
     assert!(ci.contains("cargo test -p ao2-cli --test cli_approval_replay"));
     assert!(ci.contains("cargo test -p ao2-cli --test cli_adapter"));
     assert!(ci.contains("cargo test -p ao2-cli --test cli_contract"));
+    assert!(ci.contains("cargo test -p ao2-cli --test cli_control_plane"));
     assert!(ci.contains("cargo test -p ao2-cli --test cli_git"));
     assert!(ci.contains("cargo test -p ao2-cli --test cli_provider"));
     assert!(ci.contains("cargo test -p ao2-cli --test cli_pulse"));

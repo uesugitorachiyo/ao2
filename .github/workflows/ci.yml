@@ -81,7 +81,7 @@ jobs:
           - os: ubuntu-latest
             phase: test-cli-approval-control-plane
             timeout_minutes: 20
-            command: cargo test -p ao2-cli --test cli_approval_replay cli_control_plane
+            command: cargo test -p ao2-cli --test cli_control_plane
           - os: ubuntu-latest
             phase: test-cli-approval-factory-plan
             timeout_minutes: 20
@@ -250,7 +250,7 @@ jobs:
           - os: macos-latest
             phase: test-cli-approval-control-plane
             timeout_minutes: 20
-            command: cargo test -p ao2-cli --test cli_approval_replay cli_control_plane
+            command: cargo test -p ao2-cli --test cli_control_plane
           - os: macos-latest
             phase: test-cli-approval-factory-plan
             timeout_minutes: 20
@@ -393,7 +393,7 @@ jobs:
           - os: windows-latest
             phase: test-cli-approval-control-plane
             timeout_minutes: 20
-            command: cargo test -p ao2-cli --test cli_approval_replay cli_control_plane
+            command: cargo test -p ao2-cli --test cli_control_plane
           - os: windows-latest
             phase: test-cli-approval-factory-plan
             timeout_minutes: 20

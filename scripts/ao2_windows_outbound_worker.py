@@ -231,6 +231,19 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
         ),
     },
     {
+        "name": "test-cli-control-plane",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "cli_control_plane",
+        ),
+    },
+    {
         "name": "test-cli-report-cockpit",
         "argv": (
             "cargo",
@@ -261,7 +274,6 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
             "cli_version",
         ),
     ),
-    *ao2_cli_approval_profile_commands("test-cli-approval-control-plane", ("cli_control_plane",)),
     *ao2_cli_approval_profile_commands("test-cli-approval-factory-plan", ("cli_factory_plan",)),
     *ao2_cli_approval_profile_commands("test-cli-approval-factory-queue", ("cli_factory_queue",)),
     *ao2_cli_approval_profile_commands("test-cli-approval-factory-project", ("cli_factory_project",)),
