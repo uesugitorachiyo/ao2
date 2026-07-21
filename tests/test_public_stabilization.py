@@ -340,6 +340,7 @@ def test_ci_python_guard_documents_task_board_full_loop_selector():
     guard = read("scripts/ci-python-guard-artifacts.sh")
 
     assert "test_pulse_task_board_full_loop_generate_execute_validate_regenerate" in ci
+    assert "tests/test_compatibility_vectors.py" in guard
     assert "tests/test_public_stabilization.py" in guard
     assert "tests/test_phase1_promote_wrapper.py" in guard
 
@@ -8034,6 +8035,7 @@ def test_ci_runs_python_guard_tests_and_pulse_docs_reference_persistent_local_mi
     assert "phase: python-guard-tests" in ci
     assert (
         "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest "
+        "tests/test_compatibility_vectors.py "
         "tests/test_public_stabilization.py "
         "tests/test_phase1_promote_wrapper.py "
         "tests/test_ao2_native_runtime_platform_evidence.py "

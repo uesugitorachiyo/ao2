@@ -47,9 +47,9 @@ jobs:
             phase: python-guard-tests
             timeout_minutes: 5
             # Equivalent focused command:
-            # PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py tests/test_phase1_promote_wrapper.py tests/test_ao2_native_runtime_platform_evidence.py tests/test_ao2_rsi_claim_readiness.py tests/test_ao2_rsi_governed_self_change_dry_run.py tests/test_ao2_rsi_live_self_change_rehearsal.py tests/test_windows_outbound_worker.py -q
+            # PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_compatibility_vectors.py tests/test_public_stabilization.py tests/test_phase1_promote_wrapper.py tests/test_ao2_native_runtime_platform_evidence.py tests/test_ao2_rsi_claim_readiness.py tests/test_ao2_rsi_governed_self_change_dry_run.py tests/test_ao2_rsi_live_self_change_rehearsal.py tests/test_windows_outbound_worker.py -q
             # Expanded RSI readback-index command:
-            # PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_ao2_rsi_live_self_change_readback_index.py tests/test_public_stabilization.py tests/test_phase1_promote_wrapper.py tests/test_release_publish_approved_assets.py tests/test_ao2_native_runtime_platform_evidence.py tests/test_ao2_rsi_claim_readiness.py tests/test_ao2_rsi_governed_self_change_dry_run.py tests/test_ao2_rsi_live_self_change_rehearsal.py tests/test_windows_outbound_worker.py -q
+            # PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_ao2_rsi_live_self_change_readback_index.py tests/test_compatibility_vectors.py tests/test_public_stabilization.py tests/test_phase1_promote_wrapper.py tests/test_release_publish_approved_assets.py tests/test_ao2_native_runtime_platform_evidence.py tests/test_ao2_rsi_claim_readiness.py tests/test_ao2_rsi_governed_self_change_dry_run.py tests/test_ao2_rsi_live_self_change_rehearsal.py tests/test_windows_outbound_worker.py tests/test_validate_github_draft_pr_readback.py -q
             # Task-board full-loop selector:
             # PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_public_stabilization.py::test_pulse_task_board_full_loop_generate_execute_validate_regenerate -q
             command: python3 -m pip install pytest && scripts/ci-python-guard-artifacts.sh
