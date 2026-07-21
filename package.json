@@ -1,7 +1,7 @@
 {
   "name": "ao2",
   "private": false,
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Local-first governed software-delivery orchestration.",
   "license": "Apache-2.0",
   "scripts": {
