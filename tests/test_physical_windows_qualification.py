@@ -22,6 +22,7 @@ MODULE_PATH = ROOT / "scripts" / "physical_windows_qualification.py"
 IMPORT_SCRIPT_PATH = ROOT / "scripts" / "import_physical_windows_qualification.py"
 RUN_METADATA_SCRIPT_PATH = ROOT / "scripts" / "validate_physical_windows_workflow_run.py"
 HOSTED_CANDIDATE_SCRIPT_PATH = ROOT / "scripts" / "validate_hosted_release_candidates.py"
+HOSTED_PROMOTION_SCRIPT_PATH = ROOT / "scripts" / "hosted_release_promotion.py"
 WORKER_PATH = ROOT / "scripts" / "ao2_windows_outbound_worker.py"
 IMPORT_WORKFLOW_PATH = ROOT / ".github" / "workflows" / "import-physical-windows-qualification.yml"
 PUBLIC_RELEASE_WORKFLOW_PATH = ROOT / ".github" / "workflows" / "public-release-build.yml"
@@ -89,6 +90,13 @@ def load_hosted_candidate_script():
     return load_module(
         "validate_hosted_release_candidates",
         HOSTED_CANDIDATE_SCRIPT_PATH,
+    )
+
+
+def load_hosted_promotion_script():
+    return load_module(
+        "hosted_release_promotion",
+        HOSTED_PROMOTION_SCRIPT_PATH,
     )
 
 
@@ -1418,6 +1426,347 @@ def test_public_release_hosted_guard_uses_three_candidate_gate_not_signed_four_a
         and step["with"]["path"] == "target/hosted-release/native-gate/summary.json"
         for step in steps
     )
+
+
+def create_hosted_promotion_fixture(tmp_path: Path) -> tuple[Path, Path, str]:
+    candidates = create_hosted_candidate_fixture(tmp_path / "candidates")
+    validator = load_hosted_candidate_script()
+    validated = validator.validate_candidates(candidates, SOURCE_SHA, VERSION)
+    plan = {
+        "schema_version": "ao2.hosted-release-promotion-plan.v1",
+        "status": "passed",
+        "version": VERSION,
+        "tag": f"v{VERSION}",
+        "source_sha": SOURCE_SHA,
+        "approved_asset_manifest_sha256": "b" * 64,
+        "physical_windows_evidence_sha256": "c" * 64,
+        "artifacts": [
+            {
+                "target": item["target"],
+                "runner": item["runner"],
+                "target_triple": item["target_triple"],
+                "archive": f"target/hosted-release/{item['archive']}",
+                "sha256": item["archive_sha256"],
+                "canonical_public_archive": True,
+            }
+            for item in validated["artifacts"]
+        ],
+        "windows": {
+            "canonical_target_triple": "x86_64-pc-windows-msvc",
+            "canonical_runner": "windows-latest",
+            "linux_mingw_cross_build": {
+                "target_triple": "x86_64-pc-windows-gnu",
+                "classification": "non_authoritative",
+                "canonical_public_windows_archive": False,
+            },
+        },
+        "rejection_policy": [
+            "missing_artifact",
+            "duplicate_artifact",
+            "stale_source_sha",
+            "substituted_archive",
+            "unexpected_artifact",
+            "version_tag_mismatch",
+            "approved_manifest_mismatch",
+            "physical_windows_evidence_mismatch",
+            "incorrect_live_confirmation",
+        ],
+        "trust_boundary": {
+            "build_jobs_mutate_releases": False,
+            "plan_job_mutates_releases": False,
+            "stores_credentials": False,
+            "uses_workflow_scoped_github_token": True,
+        },
+    }
+    plan_root = tmp_path / "plan"
+    plan_root.mkdir()
+    plan_bytes = json.dumps(plan, indent=2, sort_keys=True).encode()
+    (plan_root / "promotion-plan.json").write_bytes(plan_bytes)
+    digest = hashlib.sha256(plan_bytes).hexdigest()
+    (plan_root / "promotion-plan.sha256").write_text(digest + "\n", encoding="utf-8")
+    (plan_root / "dry-run-boundary.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.hosted-release-dry-run-boundary.v1",
+                "status": "passed",
+                "dry_run": True,
+                "publication_status": "not_attempted",
+                "publication_status: not_attempted": True,
+                "tag_creation_attempted": False,
+                "tag_creation_attempted: false": True,
+                "release_creation_attempted": False,
+                "release_creation_attempted: false": True,
+                "public_upload_attempted": False,
+                "public_upload_attempted: false": True,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return candidates, plan_root, digest
+
+
+def test_hosted_promotion_stages_exact_frozen_publication(tmp_path: Path) -> None:
+    promotion = load_hosted_promotion_script()
+    candidates, plan_root, digest = create_hosted_promotion_fixture(tmp_path)
+
+    report = promotion.stage_publication(
+        candidates,
+        plan_root,
+        tmp_path / "publication",
+        SOURCE_SHA,
+        VERSION,
+        f"v{VERSION}",
+        "b" * 64,
+        digest,
+        "c" * 64,
+    )
+
+    expected = {
+        f"ao2-{VERSION}-linux-x86_64.tar.gz",
+        f"ao2-{VERSION}-macos-aarch64.tar.gz",
+        f"ao2-{VERSION}-windows-x86_64.tar.gz",
+        "promotion-plan.json",
+        "SHA256SUMS",
+    }
+    assert set(report["assets"]) == expected
+    assert report["promotion_plan_sha256"] == digest
+    assert report["status"] == "passed"
+    assert set(path.name for path in (tmp_path / "publication").iterdir()) == expected
+
+
+@pytest.mark.parametrize(
+    ("mutation", "error"),
+    [
+        ("digest", "promotion plan digest"),
+        ("source", "source_sha"),
+        ("version", "version"),
+        ("archive", "archive digest"),
+        ("boundary", "dry-run boundary"),
+        ("unexpected_plan_file", "promotion plan inventory"),
+    ],
+)
+def test_hosted_promotion_rejects_substitution_and_unsafe_inputs(
+    tmp_path: Path,
+    mutation: str,
+    error: str,
+) -> None:
+    promotion = load_hosted_promotion_script()
+    candidates, plan_root, digest = create_hosted_promotion_fixture(tmp_path)
+    source_sha = SOURCE_SHA
+    version = VERSION
+    if mutation == "digest":
+        digest = "d" * 64
+    elif mutation == "source":
+        source_sha = "d" * 40
+    elif mutation == "version":
+        version = "0.5.4"
+    elif mutation == "archive":
+        archive = next(candidates.rglob("*.tar.gz"))
+        archive.write_bytes(archive.read_bytes() + b"altered")
+    elif mutation == "boundary":
+        boundary_path = plan_root / "dry-run-boundary.json"
+        boundary = json.loads(boundary_path.read_text(encoding="utf-8"))
+        boundary["dry_run"] = False
+        boundary_path.write_text(json.dumps(boundary) + "\n", encoding="utf-8")
+    else:
+        (plan_root / "unexpected").write_text("unsafe\n", encoding="utf-8")
+
+    with pytest.raises(promotion.PromotionValidationError, match=error):
+        promotion.stage_publication(
+            candidates,
+            plan_root,
+            tmp_path / "publication",
+            source_sha,
+            version,
+            f"v{version}",
+            "b" * 64,
+            digest,
+            "c" * 64,
+        )
+
+
+def test_hosted_promotion_authenticates_exact_dry_run_metadata() -> None:
+    promotion = load_hosted_promotion_script()
+    run = {
+        "id": 123456789,
+        "event": "workflow_dispatch",
+        "status": "completed",
+        "conclusion": "success",
+        "head_sha": SOURCE_SHA,
+        "path": ".github/workflows/public-release-build.yml",
+        "repository": {"full_name": "uesugitorachiyo/ao2", "id": 7},
+        "head_repository": {"full_name": "uesugitorachiyo/ao2", "id": 7},
+    }
+    artifact_names = {
+        f"ao2-hosted-native-candidate-{target}-{SOURCE_SHA}"
+        for target in ("linux-x86_64", "macos-aarch64", "windows-x86_64")
+    }
+    artifact_names.add(f"ao2-hosted-release-promotion-plan-{SOURCE_SHA}")
+    artifacts = {
+        "artifacts": [
+            {
+                "name": name,
+                "expired": False,
+                "workflow_run": {
+                    "id": 123456789,
+                    "head_sha": SOURCE_SHA,
+                    "repository_id": 7,
+                    "head_repository_id": 7,
+                },
+            }
+            for name in sorted(artifact_names)
+        ]
+    }
+
+    report = promotion.validate_frozen_run(
+        run,
+        artifacts,
+        "123456789",
+        "987654321",
+        "uesugitorachiyo/ao2",
+        SOURCE_SHA,
+    )
+
+    assert report["status"] == "passed"
+    assert report["artifact_names"] == sorted(artifact_names)
+
+
+def test_hosted_promotion_rejects_wrong_physical_evidence_binding(tmp_path: Path) -> None:
+    promotion = load_hosted_promotion_script()
+    candidates, plan_root, digest = create_hosted_promotion_fixture(tmp_path)
+
+    with pytest.raises(
+        promotion.PromotionValidationError,
+        match="physical Windows evidence digest mismatch",
+    ):
+        promotion.stage_publication(
+            candidates,
+            plan_root,
+            tmp_path / "publication",
+            SOURCE_SHA,
+            VERSION,
+            f"v{VERSION}",
+            "b" * 64,
+            digest,
+            "d" * 64,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "error"),
+    [
+        ("event", "push", "workflow_dispatch"),
+        ("conclusion", "failure", "successful"),
+        ("head_sha", "d" * 40, "source SHA"),
+        ("path", ".github/workflows/other.yml", "workflow path"),
+    ],
+)
+def test_hosted_promotion_rejects_wrong_frozen_run(
+    field: str,
+    value: object,
+    error: str,
+) -> None:
+    promotion = load_hosted_promotion_script()
+    run = {
+        "id": 123456789,
+        "event": "workflow_dispatch",
+        "status": "completed",
+        "conclusion": "success",
+        "head_sha": SOURCE_SHA,
+        "path": ".github/workflows/public-release-build.yml",
+        "repository": {"full_name": "uesugitorachiyo/ao2", "id": 7},
+        "head_repository": {"full_name": "uesugitorachiyo/ao2", "id": 7},
+    }
+    run[field] = value
+    artifacts = {"artifacts": []}
+
+    with pytest.raises(promotion.PromotionValidationError, match=error):
+        promotion.validate_frozen_run(
+            run,
+            artifacts,
+            "123456789",
+            "987654321",
+            "uesugitorachiyo/ao2",
+            SOURCE_SHA,
+        )
+
+
+def test_hosted_public_verification_rebinds_archives_to_plan(tmp_path: Path) -> None:
+    promotion = load_hosted_promotion_script()
+    candidates, plan_root, digest = create_hosted_promotion_fixture(tmp_path)
+    publication = tmp_path / "publication"
+    promotion.stage_publication(
+        candidates,
+        plan_root,
+        publication,
+        SOURCE_SHA,
+        VERSION,
+        f"v{VERSION}",
+        "b" * 64,
+        digest,
+        "c" * 64,
+    )
+    plan_path = publication / "promotion-plan.json"
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    plan["artifacts"][0]["sha256"] = "d" * 64
+    plan_bytes = json.dumps(plan, indent=2, sort_keys=True).encode()
+    plan_path.write_bytes(plan_bytes)
+    altered_plan_digest = hashlib.sha256(plan_bytes).hexdigest()
+    checksum_paths = sorted(
+        path for path in publication.iterdir() if path.name != "SHA256SUMS"
+    )
+    (publication / "SHA256SUMS").write_text(
+        "\n".join(
+            f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}"
+            for path in checksum_paths
+        )
+        + "\n",
+        encoding="ascii",
+    )
+
+    with pytest.raises(promotion.PromotionValidationError, match="archive digest"):
+        promotion.verify_publication(
+            publication,
+            SOURCE_SHA,
+            VERSION,
+            f"v{VERSION}",
+            "b" * 64,
+            altered_plan_digest,
+            "c" * 64,
+        )
+
+
+def test_hosted_public_verification_accepts_exact_assets(tmp_path: Path) -> None:
+    promotion = load_hosted_promotion_script()
+    candidates, plan_root, digest = create_hosted_promotion_fixture(tmp_path)
+    publication = tmp_path / "publication"
+    promotion.stage_publication(
+        candidates,
+        plan_root,
+        publication,
+        SOURCE_SHA,
+        VERSION,
+        f"v{VERSION}",
+        "b" * 64,
+        digest,
+        "c" * 64,
+    )
+
+    report = promotion.verify_publication(
+        publication,
+        SOURCE_SHA,
+        VERSION,
+        f"v{VERSION}",
+        "b" * 64,
+        digest,
+        "c" * 64,
+    )
+
+    assert report["status"] == "passed"
+    assert report["promotion_plan_sha256"] == digest
 
 
 def test_import_script_main_materializes_exact_canonical_artifact(
