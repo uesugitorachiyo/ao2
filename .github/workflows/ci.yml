@@ -15,6 +15,22 @@ permissions:
   contents: read
 
 jobs:
+  rust-architecture:
+    name: Rust architecture guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6.0.3
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run architecture guard
+        run: python3 scripts/check-rust-architecture.py
+
   verify:
     name: Verify ${{ matrix.os }} / ${{ matrix.phase }}
     runs-on: ${{ matrix.os }}
