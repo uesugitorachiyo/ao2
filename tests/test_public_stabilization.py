@@ -643,7 +643,10 @@ def test_public_release_build_uses_canonical_hosted_native_dry_run_contract():
         "EXPECTED_PHYSICAL_WINDOWS_EVIDENCE_SHA256",
         'repos/$REPOSITORY/git/refs',
         'ref="refs/tags/$RELEASE_TAG"',
-        'sha="$SOURCE_SHA"',
+        'repos/$REPOSITORY/git/tags',
+        "tag_object_sha",
+        'sha="$tag_object_sha"',
+        "AO2 hosted release $RELEASE_TAG source $SOURCE_SHA plan $PROMOTION_PLAN_SHA256 run $GITHUB_RUN_ID",
         "--verify-tag",
         "cleanup_partial_draft",
         "gh release delete",
@@ -662,6 +665,13 @@ def test_public_release_build_uses_canonical_hosted_native_dry_run_contract():
         "gh release edit"
     )
     assert "git/matching-refs/tags/" not in workflow
+    assert '-f sha="$SOURCE_SHA"' not in workflow
+    mismatch = workflow.index("release tag changed during publication")
+    assert workflow.rfind("trap - EXIT", 0, mismatch) > workflow.rfind(
+        "--draft=true",
+        0,
+        mismatch,
+    )
     assert "permissions: write-all" not in workflow
     assert "OPENAI_API_KEY:" not in workflow
     assert "ANTHROPIC_API_KEY:" not in workflow
