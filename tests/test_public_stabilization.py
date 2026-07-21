@@ -535,6 +535,7 @@ def test_ci_reports_legacy_non_approval_required_check_names():
     assert "cargo test -p ao2-cli --test cli_report_cockpit" in ci
     assert "cargo test -p ao2-cli --test cli_adapter" in ci
     assert "cargo test -p ao2-cli --test cli_contract" in ci
+    assert "cargo test -p ao2-cli --test cli_control_plane" in ci
     assert "cargo test -p ao2-cli --test cli_git" in ci
     assert "cargo test -p ao2-cli --test cli_provider" in ci
     assert "cargo test -p ao2-cli --test cli_pulse" in ci
