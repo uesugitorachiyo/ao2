@@ -879,13 +879,20 @@ jobs:
           mkdir -p target/release-publication-provenance
           release_tag="v$(scripts/current-version.sh)"
           if gh release view "$release_tag" --repo uesugitorachiyo/ao2 >/dev/null 2>&1; then
-            gh release download "$release_tag" \
-              --repo uesugitorachiyo/ao2 \
-              --pattern ao2-release-provenance.json \
-              --pattern ao2-release-provenance.json.sig \
-              --pattern ao2-release-signing-public.pem \
-              --dir target/release-publication-provenance \
-              --clobber
+            assets="$(gh release view "$release_tag" --repo uesugitorachiyo/ao2 --json assets --jq '.assets[].name')"
+            if grep -Fxq ao2-release-provenance.json <<<"$assets" \
+              && grep -Fxq ao2-release-provenance.json.sig <<<"$assets" \
+              && grep -Fxq ao2-release-signing-public.pem <<<"$assets"; then
+              gh release download "$release_tag" \
+                --repo uesugitorachiyo/ao2 \
+                --pattern ao2-release-provenance.json \
+                --pattern ao2-release-provenance.json.sig \
+                --pattern ao2-release-signing-public.pem \
+                --dir target/release-publication-provenance \
+                --clobber
+            else
+              echo "release $release_tag provenance sidecars not found; CI-safe dry-run closure will record the candidate release gap"
+            fi
           else
             echo "release $release_tag not found; CI-safe dry-run closure will record the candidate release gap"
           fi
