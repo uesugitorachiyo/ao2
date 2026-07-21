@@ -165,12 +165,24 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
         "name": "cargo-test-workspace-non-cli",
         "argv": ("cargo", "test", "--workspace", "--exclude", "ao2-cli", "--target-dir", "{ao2-full-target-dir}"),
     },
+    {
+        "name": "test-cli-report-cockpit",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "cli_report_cockpit",
+        ),
+    },
     *ao2_cli_approval_profile_commands(
         "test-cli-approval-core",
         (
             "cli_adapter",
             "cli_can_pause",
-            "cli_cockpit",
             "cli_contract",
             "cli_doctor",
             "cli_evidence",

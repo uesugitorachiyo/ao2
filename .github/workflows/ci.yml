@@ -63,7 +63,7 @@ jobs:
             command: |
               cargo test -p ao2-cli --test cli_approval_replay cli_adapter
               cargo test -p ao2-cli --test cli_approval_replay cli_can_pause
-              cargo test -p ao2-cli --test cli_approval_replay cli_cockpit
+              cargo test -p ao2-cli --test cli_report_cockpit
               cargo test -p ao2-cli --test cli_approval_replay cli_contract
               cargo test -p ao2-cli --test cli_approval_replay cli_doctor
               cargo test -p ao2-cli --test cli_approval_replay cli_evidence
@@ -232,7 +232,7 @@ jobs:
             command: |
               cargo test -p ao2-cli --test cli_approval_replay cli_adapter
               cargo test -p ao2-cli --test cli_approval_replay cli_can_pause
-              cargo test -p ao2-cli --test cli_approval_replay cli_cockpit
+              cargo test -p ao2-cli --test cli_report_cockpit
               cargo test -p ao2-cli --test cli_approval_replay cli_contract
               cargo test -p ao2-cli --test cli_approval_replay cli_doctor
               cargo test -p ao2-cli --test cli_approval_replay cli_evidence
@@ -375,7 +375,7 @@ jobs:
             command: |
               cargo test -p ao2-cli --test cli_approval_replay cli_adapter
               cargo test -p ao2-cli --test cli_approval_replay cli_can_pause
-              cargo test -p ao2-cli --test cli_approval_replay cli_cockpit
+              cargo test -p ao2-cli --test cli_report_cockpit
               cargo test -p ao2-cli --test cli_approval_replay cli_contract
               cargo test -p ao2-cli --test cli_approval_replay cli_doctor
               cargo test -p ao2-cli --test cli_approval_replay cli_evidence
