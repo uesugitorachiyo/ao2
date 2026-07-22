@@ -130,7 +130,7 @@ jobs:
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_evidence
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_export
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_factory
-              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_greenfield
+              cargo test -p ao2-cli --test cli_workbench_greenfield
               cargo test -p ao2-cli --test cli_workbench_launch
               cargo test -p ao2-cli --test cli_workbench_lists
               cargo test -p ao2-cli --test cli_workbench_memory
@@ -302,7 +302,7 @@ jobs:
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_evidence
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_export
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_factory
-              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_greenfield
+              cargo test -p ao2-cli --test cli_workbench_greenfield
               cargo test -p ao2-cli --test cli_workbench_launch
               cargo test -p ao2-cli --test cli_workbench_lists
               cargo test -p ao2-cli --test cli_workbench_memory
@@ -448,7 +448,7 @@ jobs:
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_evidence
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_export
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_factory
-              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_greenfield
+              cargo test -p ao2-cli --test cli_workbench_greenfield
               cargo test -p ao2-cli --test cli_workbench_launch
               cargo test -p ao2-cli --test cli_workbench_lists
               cargo test -p ao2-cli --test cli_workbench_memory
