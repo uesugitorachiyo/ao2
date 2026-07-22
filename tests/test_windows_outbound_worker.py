@@ -834,6 +834,11 @@ def test_ao2_full_profile_uses_windows_ci_partitions_instead_of_monolithic_works
         for command in joined
     )
     assert not any("cli_approval_replay cli_workbench_serve" in command for command in joined)
+    assert any(
+        "cargo.exe test -p ao2-cli" in command and "cli_workbench_operator" in command
+        for command in joined
+    )
+    assert not any("cli_approval_replay cli_workbench_operator" in command for command in joined)
     assert any("cargo.exe test -p ao2-cli" in command and "cli_release_install" in command for command in joined)
     assert any("cargo.exe test -p ao2-cli" in command and "cli_workbench_queue" in command for command in joined)
     assert any("npm.cmd run test:archive-resources" in command for command in joined)
