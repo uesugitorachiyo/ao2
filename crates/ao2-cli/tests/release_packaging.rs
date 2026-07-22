@@ -4626,6 +4626,8 @@ fn ci_workflow_runs_on_public_changes_while_release_gates_stay_manual() {
     assert!(ci.contains("cargo test -p ao2-cli --test cli_report_cockpit"));
     assert!(ci.contains("cli_workbench_project_start"));
     assert!(ci.contains("cli_workbench_provider"));
+    assert!(ci.contains("cargo test -p ao2-cli --test cli_workbench_provider"));
+    assert!(!ci.contains("cargo test -p ao2-cli --test cli_approval_replay cli_workbench_provider"));
     assert!(ci.contains("cli_workbench_queue"));
     assert!(ci.contains("cli_workbench_queue -- --test-threads=1"));
     assert!(ci.contains("cli_repair"));
