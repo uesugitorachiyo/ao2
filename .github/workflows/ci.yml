@@ -98,6 +98,7 @@ jobs:
             timeout_minutes: 20
             command: |
               cargo test -p ao2-cli --test cli_factory_pack
+              cargo test -p ao2-cli --test cli_factory_verify
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_app
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_closer
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_evaluator
@@ -105,7 +106,6 @@ jobs:
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_greenfield
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_replacement
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_run
-              cargo test -p ao2-cli --test cli_approval_replay cli_factory_verify
               cargo test -p ao2-cli --test cli_approval_replay cli_greenfield
           - os: ubuntu-latest
             phase: test-cli-approval-plugin
@@ -275,6 +275,7 @@ jobs:
             timeout_minutes: 20
             command: |
               cargo test -p ao2-cli --test cli_factory_pack
+              cargo test -p ao2-cli --test cli_factory_verify
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_app
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_closer
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_evaluator
@@ -282,7 +283,6 @@ jobs:
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_greenfield
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_replacement
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_run
-              cargo test -p ao2-cli --test cli_approval_replay cli_factory_verify
               cargo test -p ao2-cli --test cli_approval_replay cli_greenfield
           - os: macos-latest
             phase: test-cli-approval-plugin
@@ -426,6 +426,7 @@ jobs:
             timeout_minutes: 20
             command: |
               cargo test -p ao2-cli --test cli_factory_pack
+              cargo test -p ao2-cli --test cli_factory_verify
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_app
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_closer
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_evaluator
@@ -433,7 +434,6 @@ jobs:
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_greenfield
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_replacement
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_run
-              cargo test -p ao2-cli --test cli_approval_replay cli_factory_verify
               cargo test -p ao2-cli --test cli_approval_replay cli_greenfield
           - os: windows-latest
             phase: test-cli-approval-plugin
