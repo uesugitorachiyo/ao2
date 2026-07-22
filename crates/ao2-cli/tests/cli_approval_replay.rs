@@ -5359,24 +5359,6 @@ printf 'Changed files: discount_service/discounts.py\n'
 }
 
 #[test]
-fn cli_workbench_lists_fleet_monitoring_commands() {
-    let temp = tempfile::tempdir().unwrap();
-    let repo = temp.path().join("discount-service");
-    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
-
-    let export = ao2(["workbench", "export", "--target", repo.to_str().unwrap()]);
-    assert!(export.status.success(), "{}", stderr(&export));
-    let output = stdout(&export);
-    let workbench_path = value_for(&output, "workbench=");
-    let html = fs::read_to_string(workbench_path).unwrap();
-
-    assert!(html.contains("Fleet Monitoring"));
-    assert!(html.contains("ao2 control-plane health --fleet"));
-    assert!(html.contains("ao2 control-plane history diff"));
-    assert!(html.contains("ao2 control-plane history export"));
-}
-
-#[test]
 fn cli_workbench_serve_once_returns_dashboard_html() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
