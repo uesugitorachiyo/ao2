@@ -4521,6 +4521,8 @@ fn ci_workflow_runs_on_public_changes_while_release_gates_stay_manual() {
     assert!(ci.contains("cargo test -p ao2-cli --test cli_factory_evaluator_closer"));
     assert!(!ci.contains("cargo test -p ao2-cli --test cli_approval_replay cli_factory_evaluator"));
     assert!(!ci.contains("cargo test -p ao2-cli --test cli_approval_replay cli_factory_closer"));
+    assert!(ci.contains("cargo test -p ao2-cli --test cli_factory_greenfield_spec_ingest"));
+    assert!(!ci.contains("cargo test -p ao2-cli --test cli_approval_replay cli_factory_greenfield"));
     for non_approval_phase in [
         "phase: test-cli-contract-support",
         "phase: test-cli-release-gate-signing-sidecars",
