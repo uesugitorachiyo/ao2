@@ -769,6 +769,8 @@ def test_ao2_full_profile_uses_windows_ci_partitions_instead_of_monolithic_works
     assert not any("cli_approval_replay cli_factory_plan" in command for command in joined)
     assert any("cargo.exe test -p ao2-cli" in command and "cli_factory_queue_core" in command for command in joined)
     assert any("cargo.exe test -p ao2-cli" in command and "cli_approval_replay cli_factory_queue" in command for command in joined)
+    assert any("cargo.exe test -p ao2-cli" in command and "cli_factory_project" in command for command in joined)
+    assert not any("cli_approval_replay cli_factory_project" in command for command in joined)
     assert any("cargo.exe test -p ao2-cli" in command and "cli_factory_pack" in command for command in joined)
     assert not any("cli_approval_replay cli_factory_pack" in command for command in joined)
     assert any("cargo.exe test -p ao2-cli" in command and "cli_factory_verify" in command for command in joined)
