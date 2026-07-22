@@ -696,10 +696,6 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
         "--",
         "--test-threads=1",
     ),
-    *ao2_cli_approval_profile_commands(
-        "test-cli-approval-workbench-release-run-support",
-        ("cli_workbench_run_evidence",),
-    ),
     {
         "name": "test-cli-workbench-release",
         "argv": (
@@ -711,6 +707,19 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
             "{ao2-full-target-dir}",
             "--test",
             "cli_workbench_release",
+        ),
+    },
+    {
+        "name": "test-cli-workbench-run-evidence",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "cli_workbench_run_evidence",
         ),
     },
     {
