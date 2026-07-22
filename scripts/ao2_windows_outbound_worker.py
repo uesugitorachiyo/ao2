@@ -536,6 +536,19 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
         "test-cli-approval-pulse-provider-release",
         ("cli_release"),
     ),
+    {
+        "name": "test-cli-workbench-memory",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "cli_workbench_memory",
+        ),
+    },
     *ao2_cli_approval_profile_commands(
         "test-cli-approval-workbench-core",
         (
@@ -546,7 +559,6 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
             "cli_workbench_greenfield",
             "cli_workbench_launch",
             "cli_workbench_lists",
-            "cli_workbench_memory",
             "cli_workbench_obligation",
             "cli_workbench_operator",
             "cli_workbench_serve",

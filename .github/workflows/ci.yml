@@ -136,7 +136,7 @@ jobs:
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_greenfield
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_launch
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_lists
-              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_memory
+              cargo test -p ao2-cli --test cli_workbench_memory
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_obligation
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_operator
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_serve
@@ -311,7 +311,7 @@ jobs:
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_greenfield
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_launch
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_lists
-              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_memory
+              cargo test -p ao2-cli --test cli_workbench_memory
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_obligation
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_operator
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_serve
@@ -460,7 +460,7 @@ jobs:
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_greenfield
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_launch
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_lists
-              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_memory
+              cargo test -p ao2-cli --test cli_workbench_memory
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_obligation
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_operator
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_serve
