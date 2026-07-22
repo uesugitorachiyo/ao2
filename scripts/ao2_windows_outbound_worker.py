@@ -702,12 +702,21 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
             "cli_workbench_provider",
         ),
     },
-    *ao2_cli_approval_profile_commands(
-        "test-cli-approval-workbench-queue",
-        ("cli_workbench_queue",),
-        "--",
-        "--test-threads=1",
-    ),
+    {
+        "name": "test-cli-workbench-queue",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "cli_workbench_queue",
+            "--",
+            "--test-threads=1",
+        ),
+    },
     {
         "name": "test-cli-workbench-release",
         "argv": (
