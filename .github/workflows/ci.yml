@@ -140,7 +140,12 @@ jobs:
           - os: ubuntu-latest
             phase: test-cli-approval-workbench-project
             timeout_minutes: 20
-            command: cargo test -p ao2-cli --test cli_approval_replay cli_workbench_project_start
+            command: |
+              cargo test -p ao2-cli --test cli_workbench_project_start
+              cargo test -p ao2-cli --test cli_workbench_project_start_recovery
+              cargo test -p ao2-cli --test cli_workbench_project_start_claim
+              cargo test -p ao2-cli --test cli_workbench_project_start_post_continuation
+              cargo test -p ao2-cli --test cli_workbench_project_start_release
           - os: ubuntu-latest
             phase: test-cli-approval-workbench-provider
             timeout_minutes: 20
@@ -312,7 +317,12 @@ jobs:
           - os: macos-latest
             phase: test-cli-approval-workbench-project
             timeout_minutes: 20
-            command: cargo test -p ao2-cli --test cli_approval_replay cli_workbench_project_start
+            command: |
+              cargo test -p ao2-cli --test cli_workbench_project_start
+              cargo test -p ao2-cli --test cli_workbench_project_start_recovery
+              cargo test -p ao2-cli --test cli_workbench_project_start_claim
+              cargo test -p ao2-cli --test cli_workbench_project_start_post_continuation
+              cargo test -p ao2-cli --test cli_workbench_project_start_release
           - os: macos-latest
             phase: test-cli-approval-workbench-provider
             timeout_minutes: 20
@@ -458,7 +468,12 @@ jobs:
           - os: windows-latest
             phase: test-cli-approval-workbench-project
             timeout_minutes: 20
-            command: cargo test -p ao2-cli --test cli_approval_replay cli_workbench_project_start
+            command: |
+              cargo test -p ao2-cli --test cli_workbench_project_start
+              cargo test -p ao2-cli --test cli_workbench_project_start_recovery
+              cargo test -p ao2-cli --test cli_workbench_project_start_claim
+              cargo test -p ao2-cli --test cli_workbench_project_start_post_continuation
+              cargo test -p ao2-cli --test cli_workbench_project_start_release
           - os: windows-latest
             phase: test-cli-approval-workbench-provider
             timeout_minutes: 20

@@ -4624,7 +4624,22 @@ fn ci_workflow_runs_on_public_changes_while_release_gates_stay_manual() {
     assert!(ci.contains("cargo test -p ao2-cli --test cli_pulse"));
     assert!(ci.contains("cargo test -p ao2-cli --test cli_release_install"));
     assert!(ci.contains("cargo test -p ao2-cli --test cli_report_cockpit"));
-    assert!(ci.contains("cli_workbench_project_start"));
+    for project_start_suite in [
+        "cli_workbench_project_start",
+        "cli_workbench_project_start_recovery",
+        "cli_workbench_project_start_claim",
+        "cli_workbench_project_start_post_continuation",
+        "cli_workbench_project_start_release",
+    ] {
+        assert!(
+            ci.contains(&format!(
+                "cargo test -p ao2-cli --test {project_start_suite}"
+            )),
+            "missing direct project-start suite {project_start_suite}"
+        );
+    }
+    assert!(!ci
+        .contains("cargo test -p ao2-cli --test cli_approval_replay cli_workbench_project_start"));
     assert!(ci.contains("cli_workbench_provider"));
     assert!(ci.contains("cargo test -p ao2-cli --test cli_workbench_provider"));
     assert!(!ci.contains("cargo test -p ao2-cli --test cli_approval_replay cli_workbench_provider"));
