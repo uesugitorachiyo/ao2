@@ -312,6 +312,19 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
     },
     *ao2_cli_approval_profile_commands("test-cli-approval-factory-queue", ("cli_factory_queue",)),
     *ao2_cli_approval_profile_commands("test-cli-approval-factory-project", ("cli_factory_project",)),
+    {
+        "name": "test-cli-approval-factory-pack",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "cli_factory_pack",
+        ),
+    },
     *ao2_cli_approval_profile_commands(
         "test-cli-approval-factory-other",
         (
@@ -320,7 +333,6 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
             "cli_factory_evaluator",
             "cli_factory_governed",
             "cli_factory_greenfield",
-            "cli_factory_pack",
             "cli_factory_replacement",
             "cli_factory_run",
             "cli_factory_verify",
