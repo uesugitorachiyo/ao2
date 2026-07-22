@@ -662,10 +662,22 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
             "cli_workbench_evidence",
         ),
     },
+    {
+        "name": "test-cli-workbench-export",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "cli_workbench_export",
+        ),
+    },
     *ao2_cli_approval_profile_commands(
         "test-cli-approval-workbench-core",
         (
-            "cli_workbench_export",
             "cli_workbench_factory",
         ),
     ),
