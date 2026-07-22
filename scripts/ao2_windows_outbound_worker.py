@@ -351,11 +351,22 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
             "cli_factory_run",
         ),
     },
+    {
+        "name": "test-cli-approval-factory-evaluator-closer",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "cli_factory_evaluator_closer",
+        ),
+    },
     *ao2_cli_approval_profile_commands(
         "test-cli-approval-factory-other",
         (
-            "cli_factory_closer",
-            "cli_factory_evaluator",
             "cli_factory_governed",
             "cli_factory_greenfield",
             "cli_factory_replacement",
