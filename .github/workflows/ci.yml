@@ -85,7 +85,7 @@ jobs:
             timeout_minutes: 20
             command: |
               cargo test -p ao2-cli --test cli_factory_queue_core
-              cargo test -p ao2-cli --test cli_approval_replay cli_factory_queue
+              cargo test -p ao2-cli --test cli_factory_queue
           - os: ubuntu-latest
             phase: test-cli-approval-factory-project
             timeout_minutes: 20
@@ -262,7 +262,7 @@ jobs:
             timeout_minutes: 20
             command: |
               cargo test -p ao2-cli --test cli_factory_queue_core
-              cargo test -p ao2-cli --test cli_approval_replay cli_factory_queue
+              cargo test -p ao2-cli --test cli_factory_queue
           - os: macos-latest
             phase: test-cli-approval-factory-project
             timeout_minutes: 20
@@ -413,7 +413,7 @@ jobs:
             timeout_minutes: 20
             command: |
               cargo test -p ao2-cli --test cli_factory_queue_core
-              cargo test -p ao2-cli --test cli_approval_replay cli_factory_queue
+              cargo test -p ao2-cli --test cli_factory_queue
           - os: windows-latest
             phase: test-cli-approval-factory-project
             timeout_minutes: 20
