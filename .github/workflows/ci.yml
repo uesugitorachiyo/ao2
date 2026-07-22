@@ -154,7 +154,7 @@ jobs:
             timeout_minutes: 20
             command: |
               cargo test -p ao2-cli --test cli_workbench_release
-              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_run_evidence
+              cargo test -p ao2-cli --test cli_workbench_run_evidence
               cargo test -p ao2-cli --test cli_workbench_support
           - os: ubuntu-latest
             phase: test-cli-contract-support
@@ -326,7 +326,7 @@ jobs:
             timeout_minutes: 20
             command: |
               cargo test -p ao2-cli --test cli_workbench_release
-              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_run_evidence
+              cargo test -p ao2-cli --test cli_workbench_run_evidence
               cargo test -p ao2-cli --test cli_workbench_support
           - os: macos-latest
             phase: test-cli-contract-gate-signing
@@ -472,7 +472,7 @@ jobs:
             timeout_minutes: 20
             command: |
               cargo test -p ao2-cli --test cli_workbench_release
-              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_run_evidence
+              cargo test -p ao2-cli --test cli_workbench_run_evidence
               cargo test -p ao2-cli --test cli_workbench_support
           - os: windows-latest
             phase: test-cli-contract-gate-signing
