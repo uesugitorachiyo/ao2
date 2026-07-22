@@ -100,8 +100,7 @@ jobs:
               cargo test -p ao2-cli --test cli_factory_pack
               cargo test -p ao2-cli --test cli_factory_verify
               cargo test -p ao2-cli --test cli_factory_run
-              cargo test -p ao2-cli --test cli_approval_replay cli_factory_closer
-              cargo test -p ao2-cli --test cli_approval_replay cli_factory_evaluator
+              cargo test -p ao2-cli --test cli_factory_evaluator_closer
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_governed
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_greenfield
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_replacement
@@ -276,8 +275,7 @@ jobs:
               cargo test -p ao2-cli --test cli_factory_pack
               cargo test -p ao2-cli --test cli_factory_verify
               cargo test -p ao2-cli --test cli_factory_run
-              cargo test -p ao2-cli --test cli_approval_replay cli_factory_closer
-              cargo test -p ao2-cli --test cli_approval_replay cli_factory_evaluator
+              cargo test -p ao2-cli --test cli_factory_evaluator_closer
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_governed
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_greenfield
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_replacement
@@ -426,8 +424,7 @@ jobs:
               cargo test -p ao2-cli --test cli_factory_pack
               cargo test -p ao2-cli --test cli_factory_verify
               cargo test -p ao2-cli --test cli_factory_run
-              cargo test -p ao2-cli --test cli_approval_replay cli_factory_closer
-              cargo test -p ao2-cli --test cli_approval_replay cli_factory_evaluator
+              cargo test -p ao2-cli --test cli_factory_evaluator_closer
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_governed
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_greenfield
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_replacement
