@@ -148,7 +148,7 @@ jobs:
           - os: ubuntu-latest
             phase: test-cli-approval-workbench-queue
             timeout_minutes: 20
-            command: cargo test -p ao2-cli --test cli_approval_replay cli_workbench_queue -- --test-threads=1
+            command: cargo test -p ao2-cli --test cli_workbench_queue -- --test-threads=1
           - os: ubuntu-latest
             phase: test-cli-approval-workbench-release-run-support
             timeout_minutes: 20
@@ -320,7 +320,7 @@ jobs:
           - os: macos-latest
             phase: test-cli-approval-workbench-queue
             timeout_minutes: 20
-            command: cargo test -p ao2-cli --test cli_approval_replay cli_workbench_queue -- --test-threads=1
+            command: cargo test -p ao2-cli --test cli_workbench_queue -- --test-threads=1
           - os: macos-latest
             phase: test-cli-approval-workbench-release-run-support
             timeout_minutes: 20
@@ -466,7 +466,7 @@ jobs:
           - os: windows-latest
             phase: test-cli-approval-workbench-queue
             timeout_minutes: 20
-            command: cargo test -p ao2-cli --test cli_approval_replay cli_workbench_queue -- --test-threads=1
+            command: cargo test -p ao2-cli --test cli_workbench_queue -- --test-threads=1
           - os: windows-latest
             phase: test-cli-approval-workbench-release-run-support
             timeout_minutes: 20
