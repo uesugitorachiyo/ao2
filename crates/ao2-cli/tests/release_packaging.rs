@@ -4535,6 +4535,15 @@ fn ci_workflow_runs_on_public_changes_while_release_gates_stay_manual() {
     assert!(!ci.contains("cargo test -p ao2-cli --test cli_approval_replay cli_memory"));
     assert!(ci.contains("cargo test -p ao2-cli --test cli_evidence"));
     assert!(!ci.contains("cargo test -p ao2-cli --test cli_approval_replay cli_evidence"));
+    assert!(ci.contains("cargo test -p ao2-cli --test cli_core"));
+    for old_core_filter in ["cli_can_pause", "cli_report", "cli_template", "cli_version"] {
+        assert!(
+            !ci.contains(&format!(
+                "cargo test -p ao2-cli --test cli_approval_replay {old_core_filter}"
+            )),
+            "core route should not use cli_approval_replay filter {old_core_filter}"
+        );
+    }
     assert!(ci.contains("cargo test -p ao2-cli --test cli_workbench_memory"));
     assert!(!ci.contains("cargo test -p ao2-cli --test cli_approval_replay cli_workbench_memory"));
     for non_approval_phase in [
@@ -4588,7 +4597,6 @@ fn ci_workflow_runs_on_public_changes_while_release_gates_stay_manual() {
     assert!(ci.contains("cli_workbench_queue"));
     assert!(ci.contains("cli_workbench_queue -- --test-threads=1"));
     assert!(ci.contains("cli_repair"));
-    assert!(ci.contains("cli_report"));
     assert!(ci.contains("cli_run"));
     assert!(!ci.contains("phase: test-cli-approval-replay"));
     assert!(!ci.contains("phase: test-cli-other"));
