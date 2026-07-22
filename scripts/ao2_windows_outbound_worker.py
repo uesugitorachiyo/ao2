@@ -377,12 +377,24 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
             "cli_factory_greenfield_spec_ingest",
         ),
     },
+    {
+        "name": "test-cli-approval-greenfield-three-os",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "cli_greenfield_three_os",
+        ),
+    },
     *ao2_cli_approval_profile_commands(
         "test-cli-approval-factory-other",
         (
             "cli_factory_governed",
             "cli_factory_replacement",
-            "cli_greenfield",
         ),
     ),
     {
