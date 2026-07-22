@@ -543,6 +543,7 @@ def test_ci_reports_legacy_non_approval_required_check_names():
     assert "cargo test -p ao2-cli --test cli_plugin_release_candidate" in ci
     assert "cargo test -p ao2-cli --test cli_plugin_distribution" in ci
     assert "cargo test -p ao2-cli --test cli_plugin_adapter" in ci
+    assert "cargo test -p ao2-cli --test cli_plugin_wrapper_harness" in ci
     assert "cargo test -p ao2-cli --test cli_provider" in ci
     assert "cargo test -p ao2-cli --test cli_pulse" in ci
     assert "cargo test -p ao2-cli --test cli_release_install" in ci
