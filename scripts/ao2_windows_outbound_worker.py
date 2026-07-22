@@ -584,6 +584,19 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
             "cli_workbench_api",
         ),
     },
+    {
+        "name": "test-cli-workbench-serve",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "cli_workbench_serve",
+        ),
+    },
     *ao2_cli_approval_profile_commands(
         "test-cli-approval-workbench-core",
         (
@@ -594,7 +607,6 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
             "cli_workbench_launch",
             "cli_workbench_obligation",
             "cli_workbench_operator",
-            "cli_workbench_serve",
         ),
     ),
     *ao2_cli_approval_profile_commands("test-cli-approval-workbench-project", ("cli_workbench_project_start",)),
