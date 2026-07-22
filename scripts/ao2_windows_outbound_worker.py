@@ -403,12 +403,19 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
             "cli_factory_governed",
         ),
     },
-    *ao2_cli_approval_profile_commands(
-        "test-cli-approval-factory-other",
-        (
+    {
+        "name": "test-cli-approval-factory-replacement",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
             "cli_factory_replacement",
         ),
-    ),
+    },
     {
         "name": "test-cli-plugin-pulse",
         "argv": (
