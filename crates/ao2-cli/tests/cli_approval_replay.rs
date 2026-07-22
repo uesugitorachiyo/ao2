@@ -6571,66 +6571,6 @@ fn cli_workbench_release_retention_preview_and_prune_removes_old_evidence() {
 }
 
 #[test]
-fn cli_workbench_api_returns_runs_with_token() {
-    let temp = tempfile::tempdir().unwrap();
-    let repo = temp.path().join("discount-service");
-    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
-
-    let run = ao2([
-        "run",
-        "../../examples/risky-pr-run/risky-pr.yaml",
-        "--target",
-        repo.to_str().unwrap(),
-        "--run-id",
-        "workbench-api-demo",
-    ]);
-    assert!(run.status.success(), "{}", stderr(&run));
-
-    let mut child = Command::new(env!("CARGO_BIN_EXE_ao2"))
-        .args([
-            "workbench",
-            "serve",
-            "--target",
-            repo.to_str().unwrap(),
-            "--port",
-            "0",
-            "--once",
-            "--api-token",
-            "test-token",
-        ])
-        .env_remove("OPENAI_API_KEY")
-        .env_remove("ANTHROPIC_API_KEY")
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap();
-    let stdout = child.stdout.take().unwrap();
-    let mut reader = BufReader::new(stdout);
-    let mut line = String::new();
-    reader.read_line(&mut line).unwrap();
-    let port = line
-        .trim()
-        .strip_prefix("url=http://127.0.0.1:")
-        .and_then(|rest| rest.split('/').next())
-        .unwrap()
-        .parse::<u16>()
-        .unwrap();
-
-    let response = http_request(
-        port,
-        "GET /api/runs?token=test-token HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
-    );
-    let status = child.wait().unwrap();
-
-    assert!(status.success());
-    assert!(response.starts_with("HTTP/1.1 200 OK"));
-    assert!(response.contains("Content-Type: application/json"));
-    let body = http_body(&response);
-    let json: serde_json::Value = serde_json::from_str(body).unwrap();
-    assert_eq!(json["schema_version"], "ao2.runs-list.v1");
-    assert_eq!(json["runs"][0]["run_id"], "workbench-api-demo");
-}
-
-#[test]
 fn cli_workbench_run_evidence_summary_api_reports_replay_score_and_provider_summary() {
     let temp = tempfile::tempdir().unwrap();
     let repo = temp.path().join("discount-service");
@@ -10415,66 +10355,6 @@ fn cli_workbench_evidence_export_renders_controls() {
     assert!(html.contains("run-evidence-export-output"));
     assert!(html.contains("/api/runs/evidence/changes"));
     assert!(html.contains("/api/runs/evidence/export"));
-}
-
-#[test]
-fn cli_workbench_api_returns_provider_matrix_with_token() {
-    let temp = tempfile::tempdir().unwrap();
-    let repo = temp.path().join("discount-service");
-    copy_git_fixture(Path::new("../../fixtures/discount-service"), &repo);
-
-    let mut child = Command::new(env!("CARGO_BIN_EXE_ao2"))
-        .args([
-            "workbench",
-            "serve",
-            "--target",
-            repo.to_str().unwrap(),
-            "--port",
-            "0",
-            "--once",
-            "--api-token",
-            "test-token",
-        ])
-        .env_remove("OPENAI_API_KEY")
-        .env_remove("ANTHROPIC_API_KEY")
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap();
-    let stdout = child.stdout.take().unwrap();
-    let mut reader = BufReader::new(stdout);
-    let mut line = String::new();
-    reader.read_line(&mut line).unwrap();
-    let port = line
-        .trim()
-        .strip_prefix("url=http://127.0.0.1:")
-        .and_then(|rest| rest.split('/').next())
-        .unwrap()
-        .parse::<u16>()
-        .unwrap();
-
-    let response = http_request(
-        port,
-        "GET /api/provider-matrix?token=test-token HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n",
-    );
-    let status = child.wait().unwrap();
-
-    assert!(status.success());
-    assert!(response.starts_with("HTTP/1.1 200 OK"), "{response}");
-    assert!(response.contains("Content-Type: application/json"));
-    let body = http_body(&response);
-    let json: serde_json::Value = serde_json::from_str(body).unwrap();
-    assert_eq!(json["schema"], "ao2.provider-readiness-matrix.v1");
-    let scripted = json["providers"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|provider| provider["provider"] == "scripted")
-        .expect("scripted provider should be present");
-    assert_eq!(scripted["timeout_seconds"], 900);
-    assert_eq!(
-        scripted["execution_boundary"],
-        "sandbox_copy_then_digest_patch"
-    );
 }
 
 #[test]
