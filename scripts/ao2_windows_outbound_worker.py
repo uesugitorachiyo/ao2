@@ -390,10 +390,22 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
             "cli_greenfield_three_os",
         ),
     },
+    {
+        "name": "test-cli-approval-factory-governed",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "cli_factory_governed",
+        ),
+    },
     *ao2_cli_approval_profile_commands(
         "test-cli-approval-factory-other",
         (
-            "cli_factory_governed",
             "cli_factory_replacement",
         ),
     ),

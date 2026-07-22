@@ -103,7 +103,7 @@ jobs:
               cargo test -p ao2-cli --test cli_factory_evaluator_closer
               cargo test -p ao2-cli --test cli_factory_greenfield_spec_ingest
               cargo test -p ao2-cli --test cli_greenfield_three_os
-              cargo test -p ao2-cli --test cli_approval_replay cli_factory_governed
+              cargo test -p ao2-cli --test cli_factory_governed
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_replacement
           - os: ubuntu-latest
             phase: test-cli-approval-plugin
@@ -278,7 +278,7 @@ jobs:
               cargo test -p ao2-cli --test cli_factory_evaluator_closer
               cargo test -p ao2-cli --test cli_factory_greenfield_spec_ingest
               cargo test -p ao2-cli --test cli_greenfield_three_os
-              cargo test -p ao2-cli --test cli_approval_replay cli_factory_governed
+              cargo test -p ao2-cli --test cli_factory_governed
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_replacement
           - os: macos-latest
             phase: test-cli-approval-plugin
@@ -427,7 +427,7 @@ jobs:
               cargo test -p ao2-cli --test cli_factory_evaluator_closer
               cargo test -p ao2-cli --test cli_factory_greenfield_spec_ingest
               cargo test -p ao2-cli --test cli_greenfield_three_os
-              cargo test -p ao2-cli --test cli_approval_replay cli_factory_governed
+              cargo test -p ao2-cli --test cli_factory_governed
               cargo test -p ao2-cli --test cli_approval_replay cli_factory_replacement
           - os: windows-latest
             phase: test-cli-approval-plugin
