@@ -13715,7 +13715,7 @@ def test_no_archaeology_workbench_audit_contract():
 
 def test_workbench_operator_evidence_packet_export_contract():
     source = read("crates/ao2-cli/src/main.rs")
-    rust_tests = read("crates/ao2-cli/tests/cli_approval_replay.rs")
+    rust_tests = read("crates/ao2-cli/tests/cli_workbench_evidence.rs")
     verification = read("docs/VERIFICATION.md")
     ci = read(".github/workflows/ci.yml")
 
@@ -13763,7 +13763,8 @@ def test_workbench_operator_evidence_packet_export_contract():
 
     for os_name in ["ubuntu-latest", "macos-latest", "windows-latest"]:
         assert os_name in ci
-    assert "cargo test -p ao2-cli --test cli_approval_replay cli_workbench_evidence" in ci
+    assert "cargo test -p ao2-cli --test cli_workbench_evidence" in ci
+    assert "cargo test -p ao2-cli --test cli_approval_replay cli_workbench_evidence" not in ci
 
 
 def test_control_plane_observer_hardening_contract():

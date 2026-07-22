@@ -127,7 +127,7 @@ jobs:
             timeout_minutes: 20
             command: |
               cargo test -p ao2-cli --test cli_workbench_api
-              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_evidence
+              cargo test -p ao2-cli --test cli_workbench_evidence
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_export
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_factory
               cargo test -p ao2-cli --test cli_workbench_greenfield
@@ -299,7 +299,7 @@ jobs:
             timeout_minutes: 20
             command: |
               cargo test -p ao2-cli --test cli_workbench_api
-              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_evidence
+              cargo test -p ao2-cli --test cli_workbench_evidence
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_export
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_factory
               cargo test -p ao2-cli --test cli_workbench_greenfield
@@ -445,7 +445,7 @@ jobs:
             timeout_minutes: 20
             command: |
               cargo test -p ao2-cli --test cli_workbench_api
-              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_evidence
+              cargo test -p ao2-cli --test cli_workbench_evidence
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_export
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_factory
               cargo test -p ao2-cli --test cli_workbench_greenfield
