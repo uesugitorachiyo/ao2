@@ -282,11 +282,23 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
             "cli_memory",
         ),
     },
+    {
+        "name": "test-cli-evidence",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "cli_evidence",
+        ),
+    },
     *ao2_cli_approval_profile_commands(
         "test-cli-approval-core",
         (
             "cli_can_pause",
-            "cli_evidence",
             "cli_init",
             "cli_repair",
             "cli_report",
