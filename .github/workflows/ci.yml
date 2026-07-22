@@ -136,7 +136,7 @@ jobs:
               cargo test -p ao2-cli --test cli_workbench_memory
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_obligation
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_operator
-              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_serve
+              cargo test -p ao2-cli --test cli_workbench_serve
           - os: ubuntu-latest
             phase: test-cli-approval-workbench-project
             timeout_minutes: 20
@@ -308,7 +308,7 @@ jobs:
               cargo test -p ao2-cli --test cli_workbench_memory
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_obligation
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_operator
-              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_serve
+              cargo test -p ao2-cli --test cli_workbench_serve
           - os: macos-latest
             phase: test-cli-approval-workbench-project
             timeout_minutes: 20
@@ -454,7 +454,7 @@ jobs:
               cargo test -p ao2-cli --test cli_workbench_memory
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_obligation
               cargo test -p ao2-cli --test cli_approval_replay cli_workbench_operator
-              cargo test -p ao2-cli --test cli_approval_replay cli_workbench_serve
+              cargo test -p ao2-cli --test cli_workbench_serve
           - os: windows-latest
             phase: test-cli-approval-workbench-project
             timeout_minutes: 20
