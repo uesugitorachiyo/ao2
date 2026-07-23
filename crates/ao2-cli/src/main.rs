@@ -40,7 +40,6 @@ use rsa::pkcs8::{
     DecodePrivateKey, DecodePublicKey, EncodePrivateKey, EncodePublicKey, LineEnding,
 };
 use rsa::{RsaPrivateKey, RsaPublicKey};
-use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use signature::{SignatureEncoding, Signer, Verifier};
@@ -67,7 +66,9 @@ mod support_bundle;
 mod windows_input;
 use cli_util::{
     base64_standard, binary_name_for_target, canonical_json_sha256, canonical_json_string,
-    create_tar_gz, hex_lower, sha256_bytes_hex, sha256_file,
+    concerns_text, create_tar_gz, escape_html, hex_lower, json_array, json_bool, json_f64,
+    json_string, json_u64, json_value_text, pills, pills_from_strings, read_json_file,
+    sha256_bytes_hex, sha256_file, string_array_text, usage_text,
 };
 use control_plane_http::{
     control_plane_endpoint, get_json_http, get_text_http, parse_http_endpoint, post_json_http,
@@ -59996,132 +59997,6 @@ fn render_markers(html: &mut String, pack: &serde_json::Value) -> Result<()> {
     html.push_str(&pills(json_array(pack, "markers")));
     html.push_str("</p>\n</section>\n");
     Ok(())
-}
-
-fn json_array<'a>(value: &'a serde_json::Value, key: &str) -> &'a [serde_json::Value] {
-    value
-        .get(key)
-        .and_then(serde_json::Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or(&[])
-}
-
-fn json_string(value: &serde_json::Value, key: &str) -> String {
-    match value.get(key) {
-        Some(serde_json::Value::String(text)) => text.clone(),
-        Some(serde_json::Value::Null) | None => String::new(),
-        Some(other) => other.to_string(),
-    }
-}
-
-fn read_json_file<T: DeserializeOwned>(path: &Path) -> Result<T> {
-    let text = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
-    let json = text.strip_prefix('\u{feff}').unwrap_or(&text);
-    serde_json::from_str(json).with_context(|| format!("parse {}", path.display()))
-}
-
-fn json_bool(value: &serde_json::Value, key: &str) -> bool {
-    value
-        .get(key)
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or_default()
-}
-
-fn json_u64(value: &serde_json::Value, key: &str) -> u64 {
-    value
-        .get(key)
-        .and_then(serde_json::Value::as_u64)
-        .unwrap_or_default()
-}
-
-fn json_f64(value: &serde_json::Value, key: &str) -> f64 {
-    value
-        .get(key)
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or_default()
-}
-
-fn string_array_text(values: &[serde_json::Value]) -> String {
-    values
-        .iter()
-        .map(json_value_text)
-        .collect::<Vec<_>>()
-        .join("; ")
-}
-
-fn concerns_text(values: &[serde_json::Value]) -> String {
-    values
-        .iter()
-        .map(|value| {
-            if value.is_object() {
-                let severity = json_string(value, "severity");
-                let message = json_string(value, "message");
-                if severity.is_empty() {
-                    message
-                } else {
-                    format!("{severity}: {message}")
-                }
-            } else {
-                json_value_text(value)
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("; ")
-}
-
-fn usage_text(value: Option<&serde_json::Value>) -> String {
-    let Some(value) = value else {
-        return String::new();
-    };
-    let mut parts = Vec::new();
-    for key in ["input_tokens", "output_tokens", "total_tokens", "cost_usd"] {
-        if let Some(metric) = value.get(key) {
-            if !metric.is_null() {
-                parts.push(format!("{key}: {}", json_value_text(metric)));
-            }
-        }
-    }
-    parts.join(", ")
-}
-
-fn pills(values: &[serde_json::Value]) -> String {
-    values
-        .iter()
-        .map(json_value_text)
-        .map(|text| format!("<span class=\"pill\">{}</span>", escape_html(&text)))
-        .collect::<Vec<_>>()
-        .join("")
-}
-
-fn pills_from_strings(values: &[String]) -> String {
-    values
-        .iter()
-        .map(|text| format!("<span class=\"pill\">{}</span>", escape_html(text)))
-        .collect::<Vec<_>>()
-        .join("")
-}
-
-fn json_value_text(value: &serde_json::Value) -> String {
-    match value {
-        serde_json::Value::String(text) => text.clone(),
-        serde_json::Value::Null => String::new(),
-        other => other.to_string(),
-    }
-}
-
-fn escape_html(input: &str) -> String {
-    let mut escaped = String::with_capacity(input.len());
-    for ch in input.chars() {
-        match ch {
-            '&' => escaped.push_str("&amp;"),
-            '<' => escaped.push_str("&lt;"),
-            '>' => escaped.push_str("&gt;"),
-            '"' => escaped.push_str("&quot;"),
-            '\'' => escaped.push_str("&#39;"),
-            _ => escaped.push(ch),
-        }
-    }
-    escaped
 }
 
 fn adapter(command: AdapterCommand) -> Result<()> {
