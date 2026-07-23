@@ -1,6 +1,6 @@
 {
   "baseline_source": {
-    "head": "1ce9ca5d15745ec4f86e51a7f1a5519a345e5f87",
+    "head": "f351f7ef813ec98973352b487bc9d0f26281f5f7",
     "v0_5_3_tag_target": "947e566bd3f54ed902f3c14fc0c90e21a24359bc"
   },
   "budgets": {
@@ -23,7 +23,7 @@
         "crates/ao2-cli/src/git_cmd.rs": 336,
         "crates/ao2-cli/src/github_issue_draft.rs": 1468,
         "crates/ao2-cli/src/github_issue_intake.rs": 281,
-        "crates/ao2-cli/src/main.rs": 65107,
+        "crates/ao2-cli/src/main.rs": 65067,
         "crates/ao2-cli/src/memory_store.rs": 194,
         "crates/ao2-cli/src/provider_contract.rs": 239,
         "crates/ao2-cli/src/pulse_eval_loop.rs": 443,
@@ -39,13 +39,14 @@
         "crates/ao2-cli/src/support_bundle.rs": 767,
         "crates/ao2-cli/src/windows_input.rs": 120,
         "crates/ao2-cli/src/workbench_memory.rs": 168,
+        "crates/ao2-cli/src/workbench_provider_pilot.rs": 59,
         "crates/ao2-cli/src/workbench_release.rs": 246,
         "crates/ao2-cli/src/workbench_release_latest.rs": 72
       },
-      "main_rs_lines": 65107,
-      "main_rs_source_concentration_percent": 83.8608,
-      "main_rs_top_level_functions": 767,
-      "main_rs_top_level_types": 139,
+      "main_rs_lines": 65067,
+      "main_rs_source_concentration_percent": 83.7888,
+      "main_rs_top_level_functions": 759,
+      "main_rs_top_level_types": 138,
       "module_declarations": [
         "crates/ao2-cli/src/main.rs::cli_util",
         "crates/ao2-cli/src/main.rs::control_plane_http",
@@ -72,10 +73,11 @@
         "crates/ao2-cli/src/main.rs::support_bundle",
         "crates/ao2-cli/src/main.rs::windows_input",
         "crates/ao2-cli/src/main.rs::workbench_memory",
+        "crates/ao2-cli/src/main.rs::workbench_provider_pilot",
         "crates/ao2-cli/src/main.rs::workbench_release",
         "crates/ao2-cli/src/main.rs::workbench_release_latest"
       ],
-      "production_total_lines": 77637
+      "production_total_lines": 77656
     },
     "tests": {
       "cli_approval_replay_line_concentration_percent": 0.0,
