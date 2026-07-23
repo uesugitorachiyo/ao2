@@ -1725,8 +1725,11 @@ fn provider_pilot_acceptance_preservation_script_copies_live_codex_and_claude_bu
 #[test]
 fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let source =
+    let main_source =
         fs::read_to_string(root.join("crates/ao2-cli/src/main.rs")).expect("cli source exists");
+    let release_crypto_source =
+        fs::read_to_string(root.join("crates/ao2-cli/src/release_crypto.rs"))
+            .expect("release crypto source exists");
     let provider_run_repair_tests =
         fs::read_to_string(root.join("crates/ao2-cli/tests/cli_provider_run_repair.rs"))
             .expect("cli provider run/repair tests exist");
@@ -1735,16 +1738,26 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
         "derive_public_key_from_private_key",
         "sign_file_with_private_key",
         "verify_file_signature",
-        "verify_release_provenance_signature",
     ] {
-        let function_source = function_body_source(&source, function_name);
+        let function_source = function_body_source(&release_crypto_source, function_name);
         assert!(
             !function_source.contains("ProcessCommand::new(\"openssl\")"),
             "{function_name} must not shell out to openssl"
         );
     }
-    assert!(source.contains("RsaPrivateKey"));
-    assert!(source.contains("RsaPublicKey"));
+    let function_source = function_body_source(&main_source, "verify_release_provenance_signature");
+    assert!(
+        !function_source.contains("ProcessCommand::new(\"openssl\")"),
+        "verify_release_provenance_signature must not shell out to openssl"
+    );
+    for source in [&main_source, &release_crypto_source] {
+        assert!(
+            !source.contains("ProcessCommand::new(\"openssl\")"),
+            "CLI release signing sources must not shell out to openssl"
+        );
+    }
+    assert!(release_crypto_source.contains("RsaPrivateKey"));
+    assert!(release_crypto_source.contains("RsaPublicKey"));
     assert!(
         !provider_run_repair_tests.contains("Command::new(\"openssl\")"),
         "integration tests must generate signing keys through native AO2 helpers"
