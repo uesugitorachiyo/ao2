@@ -63,6 +63,7 @@ mod sdd_cmd;
 mod support_bundle;
 mod windows_input;
 mod workbench_memory;
+mod workbench_release;
 use cli_util::{
     base64_standard, binary_name_for_target, canonical_json_sha256, canonical_json_string,
     concerns_text, create_tar_gz, escape_html, hex_lower, json_array, json_bool, json_f64,
@@ -131,6 +132,11 @@ use workbench_memory::{
     workbench_memory_control_plane_dashboard_json, workbench_memory_export_json,
     workbench_memory_link_run_json, workbench_memory_publish_latest_json,
     workbench_memory_recent_json, workbench_memory_search_json,
+};
+use workbench_release::{
+    workbench_release_comparison_json, workbench_release_comparison_verification_json,
+    workbench_release_gate_artifact_json, workbench_release_health_json,
+    workbench_release_history_json,
 };
 
 #[derive(Debug, Parser)]
@@ -53196,89 +53202,6 @@ fn templates_json() -> serde_json::Value {
     })
 }
 
-fn workbench_release_health_json(
-    query: &str,
-    default_provenance_dir: &Path,
-) -> Result<serde_json::Value> {
-    let release = query_value_owned(query, "release")
-        .unwrap_or_else(|| format!("v{}", env!("CARGO_PKG_VERSION")));
-    let provenance_dir = query_value_owned(query, "provenance_dir")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| default_provenance_dir.to_path_buf());
-    let release_asset_dir = query_value_owned(query, "release_asset_dir").map(PathBuf::from);
-    let release_repo = query_value_owned(query, "release_repo")
-        .unwrap_or_else(|| "uesugitorachiyo/ao2".to_string());
-    doctor_report_json(
-        None,
-        provenance_dir,
-        Some(release),
-        release_asset_dir,
-        release_repo,
-    )
-}
-
-fn workbench_release_history_json(query: &str) -> Result<serde_json::Value> {
-    let release_download_dir = query_value_owned(query, "release_download_dir")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("target/release-download"));
-    workbench_release_history_for_dir(release_download_dir)
-}
-
-fn workbench_release_gate_artifact_json(query: &str) -> Result<serde_json::Value> {
-    let path = query_value_owned(query, "path")
-        .map(PathBuf::from)
-        .context("path is required")?;
-    let body = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-    let artifact: serde_json::Value =
-        serde_json::from_str(&body).with_context(|| format!("parse {}", path.display()))?;
-    Ok(serde_json::json!({
-        "schema": "ao2.workbench-release-gate-artifact.v1",
-        "path": path,
-        "artifact": artifact
-    }))
-}
-
-fn workbench_release_comparison_json(
-    form: &std::collections::BTreeMap<String, String>,
-    signing: &WorkbenchSupportSigning,
-) -> Result<serde_json::Value> {
-    let release_download_dir = form
-        .get("release_download_dir")
-        .filter(|value| !value.trim().is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("target/release-download"));
-    let out_dir = form
-        .get("out_dir")
-        .filter(|value| !value.trim().is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("target/release-comparison-bundles"));
-    let release_comparison = release_comparison_bundle_json(
-        release_download_dir,
-        out_dir,
-        Some(signing.key_path.as_path()),
-        &signing.signer_id,
-    )?;
-    let bundle_dir = PathBuf::from(json_string(&release_comparison, "bundle_dir"));
-    let verification = release_comparison_bundle_verification_json(&bundle_dir)?;
-    Ok(serde_json::json!({
-        "schema_version": "ao2.workbench-release-comparison.v1",
-        "release_comparison": release_comparison,
-        "verification": verification
-    }))
-}
-
-fn workbench_release_comparison_verification_json(query: &str) -> Result<serde_json::Value> {
-    let bundle_dir = query_value_owned(query, "bundle_dir")
-        .map(PathBuf::from)
-        .context("bundle_dir is required")?;
-    let verification = release_comparison_bundle_verification_json(&bundle_dir)?;
-    Ok(serde_json::json!({
-        "schema_version": "ao2.workbench-release-comparison-verification.v1",
-        "bundle_dir": bundle_dir,
-        "verification": verification
-    }))
-}
-
 fn workbench_latest_release_comparison_json(query: &str) -> Result<serde_json::Value> {
     let bundle_root = query_value_owned(query, "bundle_root")
         .map(PathBuf::from)
@@ -53892,7 +53815,9 @@ fn release_comparison_dir_sort_key(path: &Path) -> Vec<u64> {
         .unwrap_or_default()
 }
 
-fn workbench_release_history_for_dir(release_download_dir: PathBuf) -> Result<serde_json::Value> {
+pub(crate) fn workbench_release_history_for_dir(
+    release_download_dir: PathBuf,
+) -> Result<serde_json::Value> {
     let mut entries = Vec::new();
     if release_download_dir.is_dir() {
         for entry in fs::read_dir(&release_download_dir)
@@ -61206,7 +61131,7 @@ fn release_compare(
     Ok(())
 }
 
-fn release_comparison_bundle_json(
+pub(crate) fn release_comparison_bundle_json(
     release_download_dir: PathBuf,
     out_dir: PathBuf,
     signing_key: Option<&Path>,
@@ -63054,7 +62979,9 @@ fn release_compare_verify(bundle_dir: PathBuf, json: bool) -> Result<()> {
     Ok(())
 }
 
-fn release_comparison_bundle_verification_json(bundle_dir: &Path) -> Result<serde_json::Value> {
+pub(crate) fn release_comparison_bundle_verification_json(
+    bundle_dir: &Path,
+) -> Result<serde_json::Value> {
     let comparison_path = bundle_dir.join("release-comparison.json");
     let release_history_path = bundle_dir.join("release-history.json");
     let sha256_path = bundle_dir.join("SHA256SUMS");
