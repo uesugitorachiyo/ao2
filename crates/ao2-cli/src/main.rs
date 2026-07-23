@@ -64,6 +64,7 @@ mod support_bundle;
 mod windows_input;
 mod workbench_memory;
 mod workbench_release;
+mod workbench_release_latest;
 use cli_util::{
     base64_standard, binary_name_for_target, canonical_json_sha256, canonical_json_string,
     concerns_text, create_tar_gz, escape_html, hex_lower, json_array, json_bool, json_f64,
@@ -139,6 +140,7 @@ use workbench_release::{
     workbench_release_health_json, workbench_release_history_json,
     workbench_release_retention_prune_json, workbench_release_summary_enrich_json,
 };
+use workbench_release_latest::workbench_latest_release_comparison_json;
 
 #[derive(Debug, Parser)]
 #[command(name = "ao2")]
@@ -53201,71 +53203,6 @@ fn templates_json() -> serde_json::Value {
             .map(|profile| profile.name)
             .collect::<Vec<_>>()
     })
-}
-
-fn workbench_latest_release_comparison_json(query: &str) -> Result<serde_json::Value> {
-    let bundle_root = query_value_owned(query, "bundle_root")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("target/release-comparison-bundles"));
-    if !bundle_root.is_dir() {
-        anyhow::bail!(
-            "release comparison bundle root does not exist: {}",
-            bundle_root.display()
-        );
-    }
-    let mut bundle_dirs = fs::read_dir(&bundle_root)
-        .with_context(|| format!("read {}", bundle_root.display()))?
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|path| {
-            path.is_dir()
-                && path
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .is_some_and(|name| name.starts_with("release-comparison-"))
-        })
-        .collect::<Vec<_>>();
-    bundle_dirs.sort_by(|left, right| {
-        right
-            .file_name()
-            .cmp(&left.file_name())
-            .then_with(|| right.cmp(left))
-    });
-
-    let mut candidates_checked = 0_u64;
-    let mut failed_candidates = Vec::new();
-    for bundle_dir in bundle_dirs {
-        candidates_checked += 1;
-        match release_comparison_bundle_verification_json(&bundle_dir) {
-            Ok(verification) if json_string(&verification, "status") == "verified" => {
-                return Ok(serde_json::json!({
-                    "schema_version": "ao2.workbench-latest-release-comparison.v1",
-                    "bundle_root": bundle_root,
-                    "bundle_dir": bundle_dir,
-                    "candidates_checked": candidates_checked,
-                    "failed_candidates": failed_candidates,
-                    "verification": verification
-                }));
-            }
-            Ok(verification) => {
-                failed_candidates.push(serde_json::json!({
-                    "bundle_dir": bundle_dir,
-                    "status": json_string(&verification, "status"),
-                    "reasons": json_array(&verification, "reasons")
-                }));
-            }
-            Err(error) => {
-                failed_candidates.push(serde_json::json!({
-                    "bundle_dir": bundle_dir,
-                    "status": "error",
-                    "error": error.to_string()
-                }));
-            }
-        }
-    }
-    anyhow::bail!(
-        "no verified release comparison bundle found under {}",
-        bundle_root.display()
-    )
 }
 
 fn workbench_latest_provider_pilot_acceptance_json(query: &str) -> Result<serde_json::Value> {
