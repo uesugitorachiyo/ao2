@@ -48,6 +48,7 @@ mod factory_queue;
 mod git_cmd;
 mod github_issue_draft;
 mod github_issue_intake;
+mod memory_store;
 mod provider_contract;
 mod pulse_eval_loop;
 mod pulse_run;
@@ -95,6 +96,10 @@ use factory_queue::{
 };
 use git_cmd::git;
 use github_issue_intake::issue;
+use memory_store::{
+    append_jsonl, memory_link_run_json, memory_recent_json, memory_records_path,
+    memory_run_links_path, memory_search_json, memory_write_record_json, read_jsonl_values,
+};
 use provider_contract::{provider_contract, provider_contract_json, provider_contract_verify_json};
 use pulse_eval_loop::{
     pulse_eval_loop_handoff_json, pulse_eval_loop_run_chain_json, pulse_eval_loop_run_once_json,
@@ -24956,73 +24961,6 @@ fn normalize_factory_verdict(value: &str) -> Option<String> {
     }
 }
 
-fn memory_write_record_json(
-    target: &Path,
-    kind: String,
-    title: String,
-    body: String,
-    tags: Vec<String>,
-    source_run_id: Option<String>,
-    source_path: Option<String>,
-) -> Result<serde_json::Value> {
-    let kind = trimmed_required("--kind", &kind)?;
-    let title = trimmed_required("--title", &title)?;
-    let body = trimmed_required("--body", &body)?;
-    let generated_at_ms = now_unix_ms();
-    let normalized_tags = tags
-        .into_iter()
-        .map(|tag| tag.trim().to_string())
-        .filter(|tag| !tag.is_empty())
-        .collect::<Vec<_>>();
-    let source = memory_source_json(target, source_run_id, source_path)?;
-    let digest_input = serde_json::json!({
-        "generated_at_ms": generated_at_ms,
-        "kind": kind,
-        "title": title,
-        "body": body,
-        "tags": normalized_tags,
-        "source": source
-    });
-    let digest = sha256_hex(serde_json::to_string(&digest_input)?.as_bytes());
-    Ok(serde_json::json!({
-        "schema_version": "ao2.memory-record.v1",
-        "id": format!("mem-{generated_at_ms}-{}", &digest[..12]),
-        "created_at_ms": generated_at_ms,
-        "kind": kind,
-        "title": title,
-        "body": body,
-        "tags": normalized_tags,
-        "source": source
-    }))
-}
-
-fn memory_source_json(
-    target: &Path,
-    source_run_id: Option<String>,
-    source_path: Option<String>,
-) -> Result<serde_json::Value> {
-    let source_path_sha256 = match source_path.as_deref() {
-        Some(path) if !path.trim().is_empty() => {
-            let candidate = target.join(path);
-            if candidate.is_file() {
-                Some(sha256_file(&candidate)?)
-            } else {
-                None
-            }
-        }
-        _ => None,
-    };
-    Ok(serde_json::json!({
-        "run_id": source_run_id
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty()),
-        "path": source_path
-            .map(|value| value.trim().to_string())
-            .filter(|value| !value.is_empty()),
-        "path_sha256": source_path_sha256
-    }))
-}
-
 fn memory_export_json(
     target: &Path,
     query: Option<&str>,
@@ -26767,112 +26705,6 @@ fn enrich_evidence_pack_with_obligation_gates(
         object.insert("obligation_gates".to_string(), gates);
     }
     Ok(evidence_pack)
-}
-
-fn memory_search_json(target: &Path, query: &str, limit: usize) -> Result<serde_json::Value> {
-    if limit == 0 {
-        return Err(anyhow!("--limit must be greater than 0"));
-    }
-    let query = trimmed_required("--query", query)?;
-    let query_lc = query.to_lowercase();
-    let mut matches = Vec::new();
-    for record in read_jsonl_values(&memory_records_path(target))? {
-        if memory_record_matches(&record, &query_lc) {
-            matches.push(record);
-            if matches.len() >= limit {
-                break;
-            }
-        }
-    }
-    Ok(serde_json::json!({
-        "schema_version": "ao2.memory-search.v1",
-        "query": query,
-        "limit": limit,
-        "matches": matches
-    }))
-}
-
-fn memory_recent_json(target: &Path, limit: usize) -> Result<serde_json::Value> {
-    if limit == 0 {
-        return Err(anyhow!("--limit must be greater than 0"));
-    }
-    let mut records = read_jsonl_values(&memory_records_path(target))?;
-    records.reverse();
-    records.truncate(limit);
-    Ok(serde_json::json!({
-        "schema_version": "ao2.memory-recent.v1",
-        "limit": limit,
-        "records": records
-    }))
-}
-
-fn memory_link_run_json(
-    target: &Path,
-    memory_id: String,
-    run_id: String,
-    relationship: String,
-) -> Result<serde_json::Value> {
-    let memory_id = trimmed_required("--memory-id", &memory_id)?;
-    let run_id = trimmed_required("--run-id", &run_id)?;
-    let relationship = trimmed_required("--relationship", &relationship)?;
-    let records = read_jsonl_values(&memory_records_path(target))?;
-    if !records.iter().any(|record| record["id"] == memory_id) {
-        return Err(anyhow!("unknown memory id: {memory_id}"));
-    }
-    Ok(serde_json::json!({
-        "schema_version": "ao2.memory-run-link.v1",
-        "created_at_ms": now_unix_ms(),
-        "memory_id": memory_id,
-        "run_id": run_id,
-        "relationship": relationship
-    }))
-}
-
-fn memory_record_matches(record: &serde_json::Value, query_lc: &str) -> bool {
-    let haystack = serde_json::to_string(record)
-        .unwrap_or_default()
-        .to_lowercase();
-    haystack.contains(query_lc)
-}
-
-fn memory_records_path(target: &Path) -> PathBuf {
-    target.join(".ao2").join("memory").join("records.jsonl")
-}
-
-fn memory_run_links_path(target: &Path) -> PathBuf {
-    target.join(".ao2").join("memory").join("run-links.jsonl")
-}
-
-fn read_jsonl_values(path: &Path) -> Result<Vec<serde_json::Value>> {
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-    let content = fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
-    let mut values = Vec::new();
-    for (index, line) in content.lines().enumerate() {
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        let value = serde_json::from_str(line)
-            .with_context(|| format!("parse {} line {}", path.display(), index + 1))?;
-        values.push(value);
-    }
-    Ok(values)
-}
-
-fn append_jsonl(path: &Path, value: &serde_json::Value) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
-    }
-    let mut file = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-        .with_context(|| format!("open {}", path.display()))?;
-    writeln!(file, "{}", serde_json::to_string(value)?)
-        .with_context(|| format!("write {}", path.display()))?;
-    Ok(())
 }
 
 pub(crate) fn trimmed_required(flag: &str, value: &str) -> Result<String> {
