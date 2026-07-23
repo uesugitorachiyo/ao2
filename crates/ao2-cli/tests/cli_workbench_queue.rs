@@ -5,7 +5,7 @@ use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::time::Duration;
 
 use flate2::read::GzDecoder;
@@ -35,6 +35,36 @@ struct ProjectAppStepFixture {
     spec: PathBuf,
     target: PathBuf,
     prompt: PathBuf,
+}
+
+struct ChildGuard {
+    child: Option<Child>,
+}
+
+impl ChildGuard {
+    fn new(child: Child) -> Self {
+        Self { child: Some(child) }
+    }
+
+    fn as_mut(&mut self) -> &mut Child {
+        self.child.as_mut().expect("child already consumed")
+    }
+
+    fn stop(mut self) {
+        if let Some(mut child) = self.child.take() {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+impl Drop for ChildGuard {
+    fn drop(&mut self) {
+        if let Some(child) = &mut self.child {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
 }
 
 fn write_project_app_step_fixture(root: &Path, label: &str) -> ProjectAppStepFixture {
@@ -1217,27 +1247,29 @@ printf 'Changed files: discount_service/discounts.py\n'
 "#,
     )
     .unwrap();
-    let mut child = Command::new(env!("CARGO_BIN_EXE_ao2"))
-        .args([
-            "workbench",
-            "serve",
-            "--target",
-            repo.to_str().unwrap(),
-            "--port",
-            "0",
-            "--api-token",
-            "test-token",
-            "--enable-execution",
-        ])
-        .env_remove("OPENAI_API_KEY")
-        .env_remove("ANTHROPIC_API_KEY")
-        .stdout(Stdio::piped())
-        .spawn()
-        .unwrap();
-    let port = read_server_port(&mut child);
+    let mut child = ChildGuard::new(
+        Command::new(env!("CARGO_BIN_EXE_ao2"))
+            .args([
+                "workbench",
+                "serve",
+                "--target",
+                repo.to_str().unwrap(),
+                "--port",
+                "0",
+                "--api-token",
+                "test-token",
+                "--enable-execution",
+            ])
+            .env_remove("OPENAI_API_KEY")
+            .env_remove("ANTHROPIC_API_KEY")
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap(),
+    );
+    let port = read_server_port(child.as_mut());
     let start_json = start_queue_job(port, "queue-detail-page", &prompt_path);
     let job_id = start_json["job_id"].as_str().unwrap();
-    let job = wait_for_queue_job_status(port, "queue-detail-page", "accepted");
+    let job = wait_for_workbench_support_fixture_job(port, "queue-detail-page");
     assert_eq!(job["job_id"], job_id);
 
     let detail_response = http_request(
@@ -1255,8 +1287,7 @@ printf 'Changed files: discount_service/discounts.py\n'
     assert!(detail_response.contains("Duration"));
     assert!(detail_response.contains("Exit Code"));
     assert!(detail_response.contains("Retry Count"));
-    let _ = child.kill();
-    let _ = child.wait();
+    child.stop();
 }
 
 #[test]

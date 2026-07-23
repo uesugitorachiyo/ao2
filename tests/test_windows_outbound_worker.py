@@ -905,6 +905,8 @@ def test_ao2_full_profile_uses_windows_ci_partitions_instead_of_monolithic_works
         ), f"missing direct project-start suite {project_start_suite}"
     assert not any("cli_approval_replay cli_workbench_project_start" in command for command in joined)
     assert any("cargo.exe test -p ao2-cli" in command and "cli_release_install" in command for command in joined)
+    assert any("cargo.exe test -p ao2-cli" in command and "cli_release_phase1" in command for command in joined)
+    assert not any("cli_approval_replay cli_release" in command for command in joined)
     assert any("cargo.exe test -p ao2-cli" in command and "cli_workbench_queue" in command for command in joined)
     assert any(
         "cargo.exe test -p ao2-cli" in command
