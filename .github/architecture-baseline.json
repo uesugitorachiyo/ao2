@@ -1,6 +1,6 @@
 {
   "baseline_source": {
-    "head": "860119eb8cbb5fd39f13b3a042434a92ad66f6f2",
+    "head": "3767b439cf34cca6e15f2e9d8ce3b7df96612518",
     "v0_5_3_tag_target": "947e566bd3f54ed902f3c14fc0c90e21a24359bc"
   },
   "budgets": {
@@ -14,6 +14,7 @@
     "source": {
       "file_lines": {
         "crates/ao2-cli/src/cli_util.rs": 231,
+        "crates/ao2-cli/src/doctor_cmd.rs": 394,
         "crates/ao2-cli/src/factory_bridge.rs": 1743,
         "crates/ao2-cli/src/factory_compat.rs": 1134,
         "crates/ao2-cli/src/factory_project_start_summary.rs": 275,
@@ -21,7 +22,7 @@
         "crates/ao2-cli/src/git_cmd.rs": 336,
         "crates/ao2-cli/src/github_issue_draft.rs": 1468,
         "crates/ao2-cli/src/github_issue_intake.rs": 281,
-        "crates/ao2-cli/src/main.rs": 67006,
+        "crates/ao2-cli/src/main.rs": 66631,
         "crates/ao2-cli/src/provider_contract.rs": 239,
         "crates/ao2-cli/src/pulse_eval_loop.rs": 443,
         "crates/ao2-cli/src/pulse_run.rs": 216,
@@ -32,12 +33,13 @@
         "crates/ao2-cli/src/support_bundle.rs": 767,
         "crates/ao2-cli/src/windows_input.rs": 120
       },
-      "main_rs_lines": 67006,
-      "main_rs_source_concentration_percent": 86.5062,
-      "main_rs_top_level_functions": 866,
+      "main_rs_lines": 66631,
+      "main_rs_source_concentration_percent": 86.001,
+      "main_rs_top_level_functions": 858,
       "main_rs_top_level_types": 143,
       "module_declarations": [
         "crates/ao2-cli/src/main.rs::cli_util",
+        "crates/ao2-cli/src/main.rs::doctor_cmd",
         "crates/ao2-cli/src/main.rs::factory_bridge",
         "crates/ao2-cli/src/main.rs::factory_compat",
         "crates/ao2-cli/src/main.rs::factory_project_start_summary",
@@ -55,7 +57,7 @@
         "crates/ao2-cli/src/main.rs::support_bundle",
         "crates/ao2-cli/src/main.rs::windows_input"
       ],
-      "production_total_lines": 77458
+      "production_total_lines": 77477
     },
     "tests": {
       "cli_approval_replay_line_concentration_percent": 0.0,
