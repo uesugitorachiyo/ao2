@@ -62,6 +62,7 @@ mod risky_pr_readback;
 mod sdd_cmd;
 mod support_bundle;
 mod windows_input;
+mod workbench_memory;
 use cli_util::{
     base64_standard, binary_name_for_target, canonical_json_sha256, canonical_json_string,
     concerns_text, create_tar_gz, escape_html, hex_lower, json_array, json_bool, json_f64,
@@ -97,8 +98,8 @@ use factory_queue::{
 use git_cmd::git;
 use github_issue_intake::issue;
 use memory_store::{
-    append_jsonl, memory_link_run_json, memory_recent_json, memory_records_path,
-    memory_run_links_path, memory_search_json, memory_write_record_json, read_jsonl_values,
+    append_jsonl, memory_link_run_json, memory_records_path, memory_run_links_path,
+    memory_search_json, memory_write_record_json, read_jsonl_values,
 };
 use provider_contract::{provider_contract, provider_contract_json, provider_contract_verify_json};
 use pulse_eval_loop::{
@@ -125,6 +126,11 @@ use release_handoff::{
 use release_support_bundle_ci::release_support_bundle_ci_evidence_index;
 use risky_pr_readback::{
     render_report_index_for_run, report_contract_verification_json, report_index_path,
+};
+use workbench_memory::{
+    workbench_memory_control_plane_dashboard_json, workbench_memory_export_json,
+    workbench_memory_link_run_json, workbench_memory_publish_latest_json,
+    workbench_memory_recent_json, workbench_memory_search_json,
 };
 
 #[derive(Debug, Parser)]
@@ -24961,7 +24967,7 @@ fn normalize_factory_verdict(value: &str) -> Option<String> {
     }
 }
 
-fn memory_export_json(
+pub(crate) fn memory_export_json(
     target: &Path,
     query: Option<&str>,
     limit: usize,
@@ -25050,7 +25056,7 @@ fn memory_export_json(
     Ok(result)
 }
 
-fn memory_publish_to_control_plane_json(
+pub(crate) fn memory_publish_to_control_plane_json(
     export_path: &Path,
     control_plane_url: &str,
     api_token: &str,
@@ -53125,126 +53131,13 @@ fn workbench_factory_project_start_operator_record_json(
     )
 }
 
-fn query_value_owned(query: &str, key: &str) -> Option<String> {
+pub(crate) fn query_value_owned(query: &str, key: &str) -> Option<String> {
     query.split('&').find_map(|part| {
         let (query_key, value) = part.split_once('=')?;
         (query_key == key)
             .then(|| percent_decode(value).trim().to_string())
             .filter(|value| !value.is_empty())
     })
-}
-
-fn workbench_memory_search_json(target: &Path, query: &str) -> Result<serde_json::Value> {
-    let memory_query = query_value_owned(query, "query")
-        .or_else(|| query_value_owned(query, "q"))
-        .context("query is required")?;
-    let limit = query_value_owned(query, "limit")
-        .and_then(|value| value.parse::<usize>().ok())
-        .unwrap_or(10);
-    memory_search_json(target, &memory_query, limit)
-}
-
-fn workbench_memory_recent_json(target: &Path, query: &str) -> Result<serde_json::Value> {
-    let limit = query_value_owned(query, "limit")
-        .and_then(|value| value.parse::<usize>().ok())
-        .unwrap_or(10);
-    memory_recent_json(target, limit)
-}
-
-fn workbench_memory_export_json(
-    target: &Path,
-    form: &std::collections::BTreeMap<String, String>,
-    support_signing: Option<&WorkbenchSupportSigning>,
-) -> Result<serde_json::Value> {
-    let query = form
-        .get("query")
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty());
-    let limit = form
-        .get("limit")
-        .and_then(|value| value.trim().parse::<usize>().ok())
-        .unwrap_or(50);
-    let generated_at_ms = now_unix_ms();
-    let out = form
-        .get("out")
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            target
-                .join(".ao2")
-                .join("workbench")
-                .join("memory-exports")
-                .join(format!("memory-export-{generated_at_ms}.json"))
-        });
-    let signing_key = support_signing.map(|signing| signing.key_path.clone());
-    let signer_id = support_signing
-        .map(|signing| signing.signer_id.clone())
-        .unwrap_or_else(|| "ao2-memory".to_string());
-    memory_export_json(
-        target,
-        query.as_deref(),
-        limit,
-        &out,
-        signing_key,
-        signer_id,
-    )
-}
-
-fn workbench_memory_publish_latest_json(
-    target: &Path,
-    form: &std::collections::BTreeMap<String, String>,
-) -> Result<serde_json::Value> {
-    let control_plane_url = form
-        .get("control_plane_url")
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        .context("control_plane_url is required")?;
-    let api_token = form
-        .get("api_token")
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        .context("api_token is required")?;
-    // Slice 19: producer-side default-on signed-memory-export upload for the
-    // workbench HTTP surface, mirroring the CLI flip on `ao2 memory publish`.
-    // When the latest export under .ao2/workbench/memory-exports/ does not
-    // have sibling `.json.sig` + `memory-export-signing-public.pem` files,
-    // refuse to upload unless the operator explicitly opts out via the
-    // `allow_unsigned_memory_export` form param.
-    let allow_unsigned_memory_export = form
-        .get("allow_unsigned_memory_export")
-        .map(|value| matches!(value.trim(), "1" | "true" | "yes" | "on"))
-        .unwrap_or(false);
-    let require_signed_export = !allow_unsigned_memory_export;
-    let export_path = latest_workbench_memory_export_path(target)?;
-    memory_publish_to_control_plane_json(
-        &export_path,
-        &control_plane_url,
-        &api_token,
-        require_signed_export,
-    )
-}
-
-fn workbench_memory_control_plane_dashboard_json(
-    form: &std::collections::BTreeMap<String, String>,
-) -> Result<serde_json::Value> {
-    let control_plane_url = form
-        .get("control_plane_url")
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        .context("control_plane_url is required")?;
-    let api_token = form
-        .get("api_token")
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-        .context("api_token is required")?;
-    let endpoint = control_plane_endpoint(&control_plane_url, "/api/v1/memory/export/dashboard")?;
-    let dashboard_html = get_text_http(&endpoint, &api_token)?;
-    Ok(serde_json::json!({
-        "schema_version": "ao2.memory-control-plane-dashboard.v1",
-        "endpoint": endpoint,
-        "dashboard_html": dashboard_html
-    }))
 }
 
 fn workbench_evidence_control_plane_dashboard_json(
@@ -53281,44 +53174,6 @@ fn workbench_evidence_control_plane_dashboard_json(
         "gate": gate,
         "dashboard_html": dashboard_html
     }))
-}
-
-fn latest_workbench_memory_export_path(target: &Path) -> Result<PathBuf> {
-    let export_dir = target.join(".ao2").join("workbench").join("memory-exports");
-    let mut exports = fs::read_dir(&export_dir)
-        .with_context(|| format!("read {}", export_dir.display()))?
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .filter(|path| {
-            path.is_file()
-                && path
-                    .extension()
-                    .and_then(|ext| ext.to_str())
-                    .is_some_and(|ext| ext == "json")
-        })
-        .collect::<Vec<_>>();
-    exports.sort();
-    exports
-        .pop()
-        .ok_or_else(|| anyhow!("no memory exports found under {}", export_dir.display()))
-}
-
-fn workbench_memory_link_run_json(
-    target: &Path,
-    form: &std::collections::BTreeMap<String, String>,
-) -> Result<serde_json::Value> {
-    let memory_id = form
-        .get("memory_id")
-        .cloned()
-        .context("memory_id is required")?;
-    let run_id = form.get("run_id").cloned().context("run_id is required")?;
-    let relationship = form
-        .get("relationship")
-        .cloned()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| "related".to_string());
-    let link = memory_link_run_json(target, memory_id, run_id, relationship)?;
-    append_jsonl(&memory_run_links_path(target), &link)?;
-    Ok(link)
 }
 
 fn templates_json() -> serde_json::Value {
@@ -54610,9 +54465,9 @@ struct WorkbenchQueue {
 }
 
 #[derive(Clone)]
-struct WorkbenchSupportSigning {
-    key_path: PathBuf,
-    signer_id: String,
+pub(crate) struct WorkbenchSupportSigning {
+    pub(crate) key_path: PathBuf,
+    pub(crate) signer_id: String,
 }
 
 struct WorkbenchQueueState {
@@ -55718,7 +55573,7 @@ fn default_workbench_job_kind() -> String {
     "run".to_string()
 }
 
-fn now_unix_ms() -> u64 {
+pub(crate) fn now_unix_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
