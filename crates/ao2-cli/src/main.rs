@@ -63,6 +63,7 @@ mod sdd_cmd;
 mod support_bundle;
 mod windows_input;
 mod workbench_memory;
+mod workbench_provider_pilot;
 mod workbench_release;
 mod workbench_release_latest;
 use cli_util::{
@@ -133,6 +134,11 @@ use workbench_memory::{
     workbench_memory_control_plane_dashboard_json, workbench_memory_export_json,
     workbench_memory_link_run_json, workbench_memory_publish_latest_json,
     workbench_memory_recent_json, workbench_memory_search_json,
+};
+use workbench_provider_pilot::{
+    workbench_export_latest_provider_pilot_acceptance_json,
+    workbench_latest_provider_pilot_acceptance_json, workbench_provider_pilot_cost_ledger_json,
+    workbench_provider_pilot_cost_trend_json,
 };
 use workbench_release::{
     workbench_release_comparison_json, workbench_release_comparison_verification_json,
@@ -29345,7 +29351,7 @@ fn workbench_evidence_export_path(target: &Path, generated_at_ms: u64, kind: &st
         .join(format!("evidence-export-{generated_at_ms}-{kind}.json"))
 }
 
-fn workbench_evidence_export_json(
+pub(crate) fn workbench_evidence_export_json(
     target: &Path,
     form: &BTreeMap<String, String>,
 ) -> Result<serde_json::Value> {
@@ -45286,7 +45292,7 @@ struct ProviderCostTrendAccumulator {
     totals: ProviderCostAccumulator,
 }
 
-fn provider_cost_ledger_json(acceptance_root: &Path) -> Result<serde_json::Value> {
+pub(crate) fn provider_cost_ledger_json(acceptance_root: &Path) -> Result<serde_json::Value> {
     if !acceptance_root.is_dir() {
         anyhow::bail!(
             "provider pilot acceptance root does not exist: {}",
@@ -45384,7 +45390,7 @@ fn provider_cost_ledger_json(acceptance_root: &Path) -> Result<serde_json::Value
     }))
 }
 
-fn provider_cost_trend_json(acceptance_root: &Path) -> Result<serde_json::Value> {
+pub(crate) fn provider_cost_trend_json(acceptance_root: &Path) -> Result<serde_json::Value> {
     let ledger = provider_cost_ledger_json(acceptance_root)?;
     let mut releases = BTreeMap::<String, ProviderCostTrendRelease>::new();
     let mut provider_totals = BTreeMap::<String, ProviderCostTrendAccumulator>::new();
@@ -53205,30 +53211,8 @@ fn templates_json() -> serde_json::Value {
     })
 }
 
-fn workbench_latest_provider_pilot_acceptance_json(query: &str) -> Result<serde_json::Value> {
-    let acceptance_root = query_value_owned(query, "acceptance_root")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("target/provider-pilot-acceptance"));
-    let filter = WorkbenchProviderPilotAcceptanceFilter::from_query(query);
-    workbench_latest_provider_pilot_acceptance_for(acceptance_root, filter)
-}
-
-fn workbench_provider_pilot_cost_ledger_json(query: &str) -> Result<serde_json::Value> {
-    let acceptance_root = query_value_owned(query, "acceptance_root")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("target/provider-pilot-acceptance"));
-    provider_cost_ledger_json(&acceptance_root)
-}
-
-fn workbench_provider_pilot_cost_trend_json(query: &str) -> Result<serde_json::Value> {
-    let acceptance_root = query_value_owned(query, "acceptance_root")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("target/provider-pilot-acceptance"));
-    provider_cost_trend_json(&acceptance_root)
-}
-
 #[derive(Clone, Debug)]
-struct WorkbenchProviderPilotAcceptanceFilter {
+pub(crate) struct WorkbenchProviderPilotAcceptanceFilter {
     provider: Option<String>,
     status: Option<String>,
     replay_status: Option<String>,
@@ -53239,7 +53223,7 @@ struct WorkbenchProviderPilotAcceptanceFilter {
 }
 
 impl WorkbenchProviderPilotAcceptanceFilter {
-    fn from_query(query: &str) -> Self {
+    pub(crate) fn from_query(query: &str) -> Self {
         Self {
             provider: query_value_owned(query, "provider"),
             status: query_value_owned(query, "history_status"),
@@ -53254,7 +53238,7 @@ impl WorkbenchProviderPilotAcceptanceFilter {
         }
     }
 
-    fn from_form(form: &BTreeMap<String, String>) -> Self {
+    pub(crate) fn from_form(form: &BTreeMap<String, String>) -> Self {
         Self {
             provider: form_value_owned(form, "provider"),
             status: form_value_owned(form, "history_status"),
@@ -53320,7 +53304,7 @@ impl WorkbenchProviderPilotAcceptanceFilter {
     }
 }
 
-fn workbench_latest_provider_pilot_acceptance_for(
+pub(crate) fn workbench_latest_provider_pilot_acceptance_for(
     acceptance_root: PathBuf,
     filter: WorkbenchProviderPilotAcceptanceFilter,
 ) -> Result<serde_json::Value> {
@@ -53527,30 +53511,6 @@ fn workbench_provider_pilot_acceptance_history_entry(
         "evidence_pack": json_string(acceptance, "evidence_pack"),
         "cockpit": json_string(acceptance, "cockpit")
     })
-}
-
-fn workbench_export_latest_provider_pilot_acceptance_json(
-    target: &Path,
-    form: &BTreeMap<String, String>,
-) -> Result<serde_json::Value> {
-    let acceptance_root = form_value_owned(form, "acceptance_root")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("target/provider-pilot-acceptance"));
-    let filter = WorkbenchProviderPilotAcceptanceFilter::from_form(form);
-    let latest = workbench_latest_provider_pilot_acceptance_for(acceptance_root, filter)?;
-    let acceptance_bundle = json_string(&latest, "acceptance_bundle");
-    if acceptance_bundle.is_empty() {
-        anyhow::bail!("latest provider pilot acceptance did not include acceptance_bundle");
-    }
-    let mut export_form = BTreeMap::new();
-    export_form.insert("kind".to_string(), "provider-pilot-acceptance".to_string());
-    export_form.insert("acceptance_bundle".to_string(), acceptance_bundle);
-    let export = workbench_evidence_export_json(target, &export_form)?;
-    Ok(serde_json::json!({
-        "schema_version": "ao2.workbench-provider-pilot-acceptance-export-latest.v1",
-        "latest": latest,
-        "export": export
-    }))
 }
 
 pub(crate) fn release_retention_plan_dirs<P, F>(
