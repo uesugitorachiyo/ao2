@@ -1,6 +1,6 @@
 {
   "baseline_source": {
-    "head": "eaa2cd305441dfd99dbe10d3bba39b7b5eaad2d0",
+    "head": "f8391bd78116a36344b36f62689fd6981b371957",
     "v0_5_3_tag_target": "947e566bd3f54ed902f3c14fc0c90e21a24359bc"
   },
   "budgets": {
@@ -23,11 +23,12 @@
         "crates/ao2-cli/src/git_cmd.rs": 336,
         "crates/ao2-cli/src/github_issue_draft.rs": 1468,
         "crates/ao2-cli/src/github_issue_intake.rs": 281,
-        "crates/ao2-cli/src/main.rs": 65930,
+        "crates/ao2-cli/src/main.rs": 65702,
         "crates/ao2-cli/src/provider_contract.rs": 239,
         "crates/ao2-cli/src/pulse_eval_loop.rs": 443,
         "crates/ao2-cli/src/pulse_run.rs": 216,
         "crates/ao2-cli/src/release_archive_contract.rs": 203,
+        "crates/ao2-cli/src/release_assets.rs": 246,
         "crates/ao2-cli/src/release_crypto.rs": 175,
         "crates/ao2-cli/src/release_handoff.rs": 1122,
         "crates/ao2-cli/src/release_support_bundle_ci.rs": 111,
@@ -37,9 +38,9 @@
         "crates/ao2-cli/src/support_bundle.rs": 767,
         "crates/ao2-cli/src/windows_input.rs": 120
       },
-      "main_rs_lines": 65930,
-      "main_rs_source_concentration_percent": 85.0337,
-      "main_rs_top_level_functions": 819,
+      "main_rs_lines": 65702,
+      "main_rs_source_concentration_percent": 84.7199,
+      "main_rs_top_level_functions": 806,
       "main_rs_top_level_types": 140,
       "module_declarations": [
         "crates/ao2-cli/src/main.rs::cli_util",
@@ -56,6 +57,7 @@
         "crates/ao2-cli/src/main.rs::pulse_eval_loop",
         "crates/ao2-cli/src/main.rs::pulse_run",
         "crates/ao2-cli/src/main.rs::release_archive_contract",
+        "crates/ao2-cli/src/main.rs::release_assets",
         "crates/ao2-cli/src/main.rs::release_crypto",
         "crates/ao2-cli/src/main.rs::release_handoff",
         "crates/ao2-cli/src/main.rs::release_support_bundle_ci",
@@ -65,7 +67,7 @@
         "crates/ao2-cli/src/main.rs::support_bundle",
         "crates/ao2-cli/src/main.rs::windows_input"
       ],
-      "production_total_lines": 77534
+      "production_total_lines": 77552
     },
     "tests": {
       "cli_approval_replay_line_concentration_percent": 0.0,
