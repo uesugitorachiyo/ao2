@@ -138,7 +138,7 @@ use workbench_memory::{
 use workbench_provider_pilot::{
     workbench_export_latest_provider_pilot_acceptance_json,
     workbench_latest_provider_pilot_acceptance_json, workbench_provider_pilot_cost_ledger_json,
-    workbench_provider_pilot_cost_trend_json,
+    workbench_provider_pilot_cost_trend_json, WorkbenchProviderPilotAcceptanceFilter,
 };
 use workbench_release::{
     workbench_release_comparison_json, workbench_release_comparison_verification_json,
@@ -53209,99 +53209,6 @@ fn templates_json() -> serde_json::Value {
             .map(|profile| profile.name)
             .collect::<Vec<_>>()
     })
-}
-
-#[derive(Clone, Debug)]
-pub(crate) struct WorkbenchProviderPilotAcceptanceFilter {
-    provider: Option<String>,
-    status: Option<String>,
-    replay_status: Option<String>,
-    verdict: Option<String>,
-    min_score: Option<u64>,
-    limit: Option<usize>,
-    sort: String,
-}
-
-impl WorkbenchProviderPilotAcceptanceFilter {
-    pub(crate) fn from_query(query: &str) -> Self {
-        Self {
-            provider: query_value_owned(query, "provider"),
-            status: query_value_owned(query, "history_status"),
-            replay_status: query_value_owned(query, "history_replay_status"),
-            verdict: query_value_owned(query, "history_verdict"),
-            min_score: query_value_owned(query, "history_min_score")
-                .and_then(|value| value.parse::<u64>().ok()),
-            limit: query_value_owned(query, "history_limit")
-                .and_then(|value| value.parse::<usize>().ok())
-                .filter(|limit| *limit > 0),
-            sort: query_value_owned(query, "history_sort").unwrap_or_else(|| "newest".to_string()),
-        }
-    }
-
-    pub(crate) fn from_form(form: &BTreeMap<String, String>) -> Self {
-        Self {
-            provider: form_value_owned(form, "provider"),
-            status: form_value_owned(form, "history_status"),
-            replay_status: form_value_owned(form, "history_replay_status"),
-            verdict: form_value_owned(form, "history_verdict"),
-            min_score: form_value_owned(form, "history_min_score")
-                .and_then(|value| value.parse::<u64>().ok()),
-            limit: form_value_owned(form, "history_limit")
-                .and_then(|value| value.parse::<usize>().ok())
-                .filter(|limit| *limit > 0),
-            sort: form_value_owned(form, "history_sort").unwrap_or_else(|| "newest".to_string()),
-        }
-    }
-
-    fn matches(&self, acceptance: &serde_json::Value) -> bool {
-        if self
-            .provider
-            .as_deref()
-            .is_some_and(|provider| json_string(acceptance, "provider") != provider)
-        {
-            return false;
-        }
-        if self
-            .status
-            .as_deref()
-            .is_some_and(|status| json_string(acceptance, "status") != status)
-        {
-            return false;
-        }
-        if self
-            .replay_status
-            .as_deref()
-            .is_some_and(|status| json_string(&acceptance["replay"], "status") != status)
-        {
-            return false;
-        }
-        if self
-            .verdict
-            .as_deref()
-            .is_some_and(|verdict| json_string(&acceptance["score"], "verdict") != verdict)
-        {
-            return false;
-        }
-        if self
-            .min_score
-            .is_some_and(|min_score| json_u64(&acceptance["score"], "score") < min_score)
-        {
-            return false;
-        }
-        true
-    }
-
-    fn to_json(&self) -> serde_json::Value {
-        serde_json::json!({
-            "provider": self.provider,
-            "status": self.status,
-            "replay_status": self.replay_status,
-            "verdict": self.verdict,
-            "min_score": self.min_score,
-            "limit": self.limit,
-            "sort": self.sort
-        })
-    }
 }
 
 pub(crate) fn workbench_latest_provider_pilot_acceptance_for(
