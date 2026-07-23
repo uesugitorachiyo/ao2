@@ -27,6 +27,12 @@ def physical_lines(path: Path) -> int:
     return len(path.read_text(encoding="utf-8").splitlines())
 
 
+def physical_lines_if_exists(path: Path) -> int:
+    if not path.exists():
+        return 0
+    return physical_lines(path)
+
+
 def count_pattern(path: Path, pattern: str) -> int:
     return len(re.findall(pattern, path.read_text(encoding="utf-8"), re.MULTILINE))
 
@@ -90,6 +96,7 @@ def measure() -> dict[str, Any]:
     test_files = rust_files(TEST_DIR)
     main_rs = PROD_DIR / "main.rs"
     approval_replay = TEST_DIR / "cli_approval_replay.rs"
+    provider_run_repair = TEST_DIR / "cli_provider_run_repair.rs"
     prod_lines = {relative(path): physical_lines(path) for path in prod_files}
     test_lines = {relative(path): physical_lines(path) for path in test_files}
     test_counts = {
@@ -117,10 +124,15 @@ def measure() -> dict[str, Any]:
         "tests": {
             "integration_test_file_total_lines": total_tests,
             "integration_test_static_count": sum(test_counts.values()),
-            "cli_approval_replay_rs_lines": physical_lines(approval_replay),
+            "cli_approval_replay_rs_lines": physical_lines_if_exists(approval_replay),
             "cli_approval_replay_tests": test_counts.get(relative(approval_replay), 0),
             "cli_approval_replay_line_concentration_percent": round(
-                physical_lines(approval_replay) / total_tests * 100, 4
+                physical_lines_if_exists(approval_replay) / total_tests * 100, 4
+            ),
+            "cli_provider_run_repair_rs_lines": physical_lines(provider_run_repair),
+            "cli_provider_run_repair_tests": test_counts.get(relative(provider_run_repair), 0),
+            "cli_provider_run_repair_line_concentration_percent": round(
+                physical_lines(provider_run_repair) / total_tests * 100, 4
             ),
             "file_lines": test_lines,
             "file_tests": test_counts,

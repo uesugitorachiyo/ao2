@@ -810,7 +810,16 @@ def test_ao2_full_profile_uses_windows_ci_partitions_instead_of_monolithic_works
     assert any("cargo.exe test -p ao2-cli" in command and "cli_evidence" in command for command in joined)
     assert not any("cli_approval_replay cli_evidence" in command for command in joined)
     assert any("cargo.exe test -p ao2-cli" in command and "cli_core" in command for command in joined)
+    assert any(
+        "cargo.exe test -p ao2-cli" in command and "cli_provider_run_repair" in command
+        for command in joined
+    )
+    assert not any("cli_approval_replay" in command for command in joined)
     for old_core_filter in [
+        "cli_init",
+        "cli_repair",
+        "cli_run",
+        "cli_skill",
         "cli_can_pause",
         "cli_report",
         "cli_template",

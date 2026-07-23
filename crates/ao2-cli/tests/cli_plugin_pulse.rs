@@ -576,7 +576,7 @@ fn write_pulse_eval_loop_fixture(root: &Path, platform: &str) -> PathBuf {
                 }
             },
             "verification": {
-                "command": "cargo test --package ao2-cli --test cli_approval_replay --release pulse",
+                "command": "cargo test --package ao2-cli --test cli_plugin_pulse --release pulse",
                 "status": "passed",
                 "required_for_recommendation": true
             },

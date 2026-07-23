@@ -130,31 +130,6 @@ FIXED_TOOL_VERSION_ARGS = {
 ProfileCommand = dict[str, Any]
 
 
-def ao2_cli_approval_profile_commands(
-    group_name: str,
-    filters: tuple[str, ...],
-    *extra_args: str,
-) -> tuple[ProfileCommand, ...]:
-    return tuple(
-        {
-            "name": f"{group_name}-{test_filter}",
-            "argv": (
-                "cargo",
-                "test",
-                "-p",
-                "ao2-cli",
-                "--target-dir",
-                "{ao2-full-target-dir}",
-                "--test",
-                "cli_approval_replay",
-                test_filter,
-                *extra_args,
-            ),
-        }
-        for test_filter in filters
-    )
-
-
 DIAGNOSTIC_PROFILE: tuple[ProfileCommand, ...] = (
     {"name": "git-head-readback", "argv": ("git", "rev-parse", "HEAD")},
     {"name": "git-clean-readback", "argv": ("git", "status", "--porcelain=v1")},
@@ -308,15 +283,19 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
             "cli_core",
         ),
     },
-    *ao2_cli_approval_profile_commands(
-        "test-cli-approval-core",
-        (
-            "cli_init",
-            "cli_repair",
-            "cli_run",
-            "cli_skill",
+    {
+        "name": "test-cli-provider-run-repair",
+        "argv": (
+            "cargo",
+            "test",
+            "-p",
+            "ao2-cli",
+            "--target-dir",
+            "{ao2-full-target-dir}",
+            "--test",
+            "cli_provider_run_repair",
         ),
-    ),
+    },
     {
         "name": "test-cli-approval-factory-plan",
         "argv": (
@@ -564,7 +543,6 @@ AO2_FULL_WINDOWS_PROFILE: tuple[ProfileCommand, ...] = (
             "cli_plugin_wrapper_harness",
         ),
     },
-    *ao2_cli_approval_profile_commands("test-cli-approval-plugin", ("cli_plugin",)),
     {
         "name": "test-cli-approval-pulse-provider-release",
         "argv": (

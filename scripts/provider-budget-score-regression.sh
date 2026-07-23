@@ -47,10 +47,10 @@ else
 fi
 
 run_step provider_cost_tests \
-  cargo test -p ao2-cli provider_cost --test cli_approval_replay
+  cargo test -p ao2-cli provider_cost --test cli_provider
 
 run_step provider_score_tests \
-  cargo test -p ao2-cli cli_provider_score --test cli_approval_replay
+  cargo test -p ao2-cli cli_provider_score --test cli_provider
 
 python3 - "$OUT_ROOT" "$SUMMARY" <<'PY'
 import json

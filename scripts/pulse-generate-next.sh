@@ -594,7 +594,7 @@ if selection["id"] == "risky-pr-product-mvp" and not local_only_while_pr_blocked
         ),
         "files": [
             "crates/ao2-cli/src/main.rs",
-            "crates/ao2-cli/tests/cli_approval_replay.rs",
+            "crates/ao2-cli/tests/cli_report_cockpit.rs",
             "docs/VERIFICATION.md",
         ],
         "acceptance": [

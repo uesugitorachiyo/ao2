@@ -67,11 +67,8 @@ jobs:
               cargo test -p ao2-cli --test cli_contract
               cargo test -p ao2-cli --test cli_evidence
               cargo test -p ao2-cli --test cli_git
-              cargo test -p ao2-cli --test cli_approval_replay cli_init
+              cargo test -p ao2-cli --test cli_provider_run_repair
               cargo test -p ao2-cli --test cli_memory
-              cargo test -p ao2-cli --test cli_approval_replay cli_repair
-              cargo test -p ao2-cli --test cli_approval_replay cli_run
-              cargo test -p ao2-cli --test cli_approval_replay cli_skill
           - os: ubuntu-latest
             phase: test-cli-approval-control-plane
             timeout_minutes: 20
@@ -113,7 +110,6 @@ jobs:
               cargo test -p ao2-cli --test cli_plugin_distribution
               cargo test -p ao2-cli --test cli_plugin_adapter
               cargo test -p ao2-cli --test cli_plugin_wrapper_harness
-              cargo test -p ao2-cli --test cli_approval_replay cli_plugin
           - os: ubuntu-latest
             phase: test-cli-approval-pulse-provider-release
             timeout_minutes: 20
@@ -244,11 +240,8 @@ jobs:
               cargo test -p ao2-cli --test cli_contract
               cargo test -p ao2-cli --test cli_evidence
               cargo test -p ao2-cli --test cli_git
-              cargo test -p ao2-cli --test cli_approval_replay cli_init
+              cargo test -p ao2-cli --test cli_provider_run_repair
               cargo test -p ao2-cli --test cli_memory
-              cargo test -p ao2-cli --test cli_approval_replay cli_repair
-              cargo test -p ao2-cli --test cli_approval_replay cli_run
-              cargo test -p ao2-cli --test cli_approval_replay cli_skill
           - os: macos-latest
             phase: test-cli-approval-control-plane
             timeout_minutes: 20
@@ -290,7 +283,6 @@ jobs:
               cargo test -p ao2-cli --test cli_plugin_distribution
               cargo test -p ao2-cli --test cli_plugin_adapter
               cargo test -p ao2-cli --test cli_plugin_wrapper_harness
-              cargo test -p ao2-cli --test cli_approval_replay cli_plugin
           - os: macos-latest
             phase: test-cli-approval-pulse-provider-release
             timeout_minutes: 20
@@ -395,11 +387,8 @@ jobs:
               cargo test -p ao2-cli --test cli_contract
               cargo test -p ao2-cli --test cli_evidence
               cargo test -p ao2-cli --test cli_git
-              cargo test -p ao2-cli --test cli_approval_replay cli_init
+              cargo test -p ao2-cli --test cli_provider_run_repair
               cargo test -p ao2-cli --test cli_memory
-              cargo test -p ao2-cli --test cli_approval_replay cli_repair
-              cargo test -p ao2-cli --test cli_approval_replay cli_run
-              cargo test -p ao2-cli --test cli_approval_replay cli_skill
           - os: windows-latest
             phase: test-cli-approval-control-plane
             timeout_minutes: 20
@@ -441,7 +430,6 @@ jobs:
               cargo test -p ao2-cli --test cli_plugin_distribution
               cargo test -p ao2-cli --test cli_plugin_adapter
               cargo test -p ao2-cli --test cli_plugin_wrapper_harness
-              cargo test -p ao2-cli --test cli_approval_replay cli_plugin
           - os: windows-latest
             phase: test-cli-approval-pulse-provider-release
             timeout_minutes: 20
