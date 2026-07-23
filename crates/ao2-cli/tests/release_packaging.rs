@@ -1727,8 +1727,9 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let source =
         fs::read_to_string(root.join("crates/ao2-cli/src/main.rs")).expect("cli source exists");
-    let replay_tests = fs::read_to_string(root.join("crates/ao2-cli/tests/cli_approval_replay.rs"))
-        .expect("cli approval replay tests exist");
+    let provider_run_repair_tests =
+        fs::read_to_string(root.join("crates/ao2-cli/tests/cli_provider_run_repair.rs"))
+            .expect("cli provider run/repair tests exist");
     for function_name in [
         "verify_release_archive_signature",
         "derive_public_key_from_private_key",
@@ -1745,7 +1746,7 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
     assert!(source.contains("RsaPrivateKey"));
     assert!(source.contains("RsaPublicKey"));
     assert!(
-        !replay_tests.contains("Command::new(\"openssl\")"),
+        !provider_run_repair_tests.contains("Command::new(\"openssl\")"),
         "integration tests must generate signing keys through native AO2 helpers"
     );
 }
@@ -4611,7 +4612,8 @@ fn ci_workflow_runs_on_public_changes_while_release_gates_stay_manual() {
     assert!(ci.contains("phase: test-workspace-non-cli"));
     assert!(ci.contains("cargo fmt --all -- --check"));
     assert!(ci.contains("cargo test --workspace --exclude ao2-cli"));
-    assert!(ci.contains("cargo test -p ao2-cli --test cli_approval_replay"));
+    assert!(ci.contains("cargo test -p ao2-cli --test cli_provider_run_repair"));
+    assert!(!ci.contains("cargo test -p ao2-cli --test cli_approval_replay"));
     assert!(ci.contains("cargo test -p ao2-cli --test cli_adapter"));
     assert!(ci.contains("cargo test -p ao2-cli --test cli_contract"));
     assert!(ci.contains("cargo test -p ao2-cli --test cli_control_plane"));
@@ -4652,8 +4654,7 @@ fn ci_workflow_runs_on_public_changes_while_release_gates_stay_manual() {
     assert!(ci.contains("cargo test -p ao2-cli --test cli_workbench_queue -- --test-threads=1"));
     assert!(!ci.contains("cargo test -p ao2-cli --test cli_approval_replay cli_workbench_queue"));
     assert!(ci.contains("cli_workbench_queue -- --test-threads=1"));
-    assert!(ci.contains("cli_repair"));
-    assert!(ci.contains("cli_run"));
+    assert!(ci.contains("cli_provider_run_repair"));
     assert!(!ci.contains("phase: test-cli-approval-replay"));
     assert!(!ci.contains("phase: test-cli-other"));
     assert!(!ci.contains("command: cargo test -p ao2-cli --test cli_approval_replay\n"));

@@ -43,13 +43,13 @@ run_step replacement_parity \
   npm run verify:replacement
 
 run_step provider_contract_tests \
-  cargo test -p ao2-cli cli_provider_contract --test cli_approval_replay
+  cargo test -p ao2-cli cli_provider_contract --test cli_provider
 
 run_step adapter_patch_digest_tests \
-  cargo test -p ao2-cli cli_adapter_patch_preview_and_apply_promotes_exact_digest --test cli_approval_replay
+  cargo test -p ao2-cli cli_adapter_patch_preview_and_apply_promotes_exact_digest --test cli_adapter
 
 run_step provider_score_tests \
-  cargo test -p ao2-cli cli_provider_score --test cli_approval_replay
+  cargo test -p ao2-cli cli_provider_score --test cli_provider
 
 run_step adapter_transcript_tests \
   cargo test -p ao2-adapters
