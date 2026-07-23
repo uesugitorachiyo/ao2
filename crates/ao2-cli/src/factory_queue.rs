@@ -6,6 +6,7 @@ use ao2_core::sha256_hex;
 use chrono::{SecondsFormat, Utc};
 
 use crate::factory_compat::{factory_ensure_target_repo, read_factory_compat_value};
+use crate::sanitize_greenfield_id;
 
 fn atomic_write_text(path: &Path, content: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
@@ -607,6 +608,287 @@ pub(crate) fn factory_queue_verify_entry_file_digest(
         ));
     }
     Ok(())
+}
+
+fn factory_project_start_completion_summary_artifact(
+    entry: &serde_json::Value,
+    path_key: &str,
+    sha_key: Option<&str>,
+    status_key: Option<&str>,
+) -> Result<serde_json::Value> {
+    let path_value = json_string(entry, path_key);
+    if path_value.trim().is_empty() {
+        anyhow::bail!("completed project-start entry missing artifact path {path_key}");
+    }
+    let path = PathBuf::from(&path_value);
+    if !path.is_file() {
+        anyhow::bail!(
+            "completed project-start artifact {path_key} missing at {}",
+            path.display()
+        );
+    }
+    let sha256 = sha256_file(&path)?;
+    let expected_sha256 = sha_key
+        .map(|key| json_string(entry, key))
+        .filter(|value| !value.trim().is_empty());
+    let digest_matches_expected = expected_sha256
+        .as_ref()
+        .map(|expected| expected == &sha256)
+        .unwrap_or(true);
+    if !digest_matches_expected {
+        anyhow::bail!(
+            "completed project-start artifact {path_key} digest mismatch: expected {}, got {sha256}",
+            expected_sha256.unwrap_or_default()
+        );
+    }
+    let status = status_key
+        .map(|key| json_string(entry, key))
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "present".to_string());
+    Ok(serde_json::json!({
+        "path": path.display().to_string(),
+        "sha256": sha256,
+        "expected_sha256": expected_sha256,
+        "digest_matches_expected": digest_matches_expected,
+        "exists": true,
+        "status": status
+    }))
+}
+
+fn factory_project_start_completion_summary_optional_artifact(
+    entry: &serde_json::Value,
+    path_key: &str,
+    sha_key: Option<&str>,
+    status_key: Option<&str>,
+) -> Result<serde_json::Value> {
+    let path_value = json_string(entry, path_key);
+    if path_value.trim().is_empty() {
+        return Ok(serde_json::json!({
+            "path": serde_json::Value::Null,
+            "sha256": serde_json::Value::Null,
+            "expected_sha256": serde_json::Value::Null,
+            "digest_matches_expected": false,
+            "exists": false,
+            "status": "missing"
+        }));
+    }
+    factory_project_start_completion_summary_artifact(entry, path_key, sha_key, status_key)
+}
+
+pub(crate) fn factory_queue_project_start_completion_summary_json(
+    target: &Path,
+    run_id: &str,
+) -> Result<serde_json::Value> {
+    factory_ensure_target_repo(target)?;
+    let target_root = fs::canonicalize(target)
+        .with_context(|| format!("canonicalize factory target {}", target.display()))?;
+    let run_id = sanitize_greenfield_id(run_id);
+    if run_id.trim().is_empty() {
+        anyhow::bail!("--run-id must not be empty");
+    }
+    let queue = factory_queue_load(&target_root)?;
+    let queue_path = factory_queue_path(&target_root);
+    let queue_sha256 = sha256_file(&queue_path)?;
+    let entries = queue
+        .get("entries")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let entry = entries
+        .iter()
+        .find(|entry| json_string(entry, "run_id") == run_id)
+        .cloned()
+        .ok_or_else(|| anyhow!("factory queue has no project-start entry for run_id {run_id}"))?;
+    if json_string(&entry, "job_kind") != "factory_project_start" {
+        anyhow::bail!(
+            "factory queue entry {run_id} is {}, not factory_project_start",
+            json_string(&entry, "job_kind")
+        );
+    }
+    if json_string(&entry, "status") != "accepted" {
+        anyhow::bail!(
+            "factory project-start completion summary requires accepted entry; run_id {run_id} status is {}",
+            json_string(&entry, "status")
+        );
+    }
+
+    let artifacts = serde_json::json!({
+        "project_start": factory_project_start_completion_summary_artifact(
+            &entry,
+            "project_start",
+            None,
+            Some("project_start_status"),
+        )?,
+        "project_acceptance_review": factory_project_start_completion_summary_artifact(
+            &entry,
+            "project_acceptance_review",
+            Some("project_acceptance_review_sha256"),
+            Some("project_acceptance_review_status"),
+        )?,
+        "project_start_bundle": factory_project_start_completion_summary_artifact(
+            &entry,
+            "project_start_bundle",
+            Some("project_start_bundle_sha256"),
+            Some("project_start_status"),
+        )?,
+        "project_start_bundle_verification": factory_project_start_completion_summary_artifact(
+            &entry,
+            "project_start_bundle_verification",
+            Some("project_start_bundle_verification_sha256"),
+            Some("project_start_bundle_verification_status"),
+        )?,
+        "project_start_operator_summary": factory_project_start_completion_summary_artifact(
+            &entry,
+            "project_start_operator_summary",
+            Some("project_start_operator_summary_sha256"),
+            Some("project_start_operator_summary_status"),
+        )?,
+        "project_start_closure": factory_project_start_completion_summary_artifact(
+            &entry,
+            "project_start_closure",
+            Some("project_start_closure_sha256"),
+            Some("project_start_closure_status"),
+        )?,
+        "project_start_closure_verification": factory_project_start_completion_summary_artifact(
+            &entry,
+            "project_start_closure_verification",
+            Some("project_start_closure_verification_sha256"),
+            Some("project_start_closure_verification_status"),
+        )?,
+        "replacement_packet": factory_project_start_completion_summary_optional_artifact(
+            &entry,
+            "replacement_packet",
+            Some("replacement_packet_sha256"),
+            Some("replacement_packet_status"),
+        )?,
+        "replacement_packet_archive": factory_project_start_completion_summary_optional_artifact(
+            &entry,
+            "replacement_packet_archive",
+            Some("replacement_packet_archive_sha256"),
+            Some("replacement_packet_status"),
+        )?,
+        "replacement_packet_verification": factory_project_start_completion_summary_optional_artifact(
+            &entry,
+            "replacement_packet_verification",
+            Some("replacement_packet_verification_sha256"),
+            Some("replacement_packet_verification_status"),
+        )?
+    });
+    let replacement_packet_checks = entry["replacement_packet_verification_checks"].clone();
+    let replacement_packet_ready = artifacts["replacement_packet"]["exists"].as_bool()
+        == Some(true)
+        && artifacts["replacement_packet_archive"]["exists"].as_bool() == Some(true)
+        && artifacts["replacement_packet_verification"]["exists"].as_bool() == Some(true)
+        && json_string(&entry, "replacement_packet_status") == "packaged"
+        && json_string(&entry, "replacement_packet_verification_status") == "accepted"
+        && replacement_packet_checks["checksums_verified"].as_bool() == Some(true)
+        && replacement_packet_checks["trust_boundary_verified"].as_bool() == Some(true)
+        && replacement_packet_checks["ao2_replacement_driver_verified"].as_bool() == Some(true)
+        && replacement_packet_checks["factory_v3_evaluator_closer_verified"].as_bool()
+            == Some(true);
+    let replacement_packet_handoff_status = if replacement_packet_ready {
+        "ready_for_operator_review"
+    } else {
+        "missing_or_unverified"
+    };
+    let replacement_packet_next_action = if replacement_packet_ready {
+        "record_replacement_packet_completion_summary"
+    } else {
+        "package_and_verify_replacement_packet"
+    };
+
+    Ok(serde_json::json!({
+        "schema_version": "ao2.factory-project-start-completion-summary.v1",
+        "status": "accepted",
+        "run_id": run_id,
+        "job_kind": "factory_project_start",
+        "read_only": true,
+        "queue": {
+            "path": queue_path.display().to_string(),
+            "sha256": queue_sha256,
+            "status": entry["status"].clone(),
+            "updated_at": entry["updated_at"].clone()
+        },
+        "artifacts": artifacts,
+        "checks": {
+            "project_acceptance_review_status": entry["project_acceptance_review_status"].clone(),
+            "project_acceptance_review_recommended_decision": entry["project_acceptance_review_recommended_decision"].clone(),
+            "project_start_bundle_verification_status": entry["project_start_bundle_verification_status"].clone(),
+            "project_start_operator_summary_status": entry["project_start_operator_summary_status"].clone(),
+            "project_start_closure_status": entry["project_start_closure_status"].clone(),
+            "project_start_closure_verification_status": entry["project_start_closure_verification_status"].clone(),
+            "replacement_packet_status": entry["replacement_packet_status"].clone(),
+            "replacement_packet_verification_status": entry["replacement_packet_verification_status"].clone(),
+            "replacement_packet_verification_checks": replacement_packet_checks.clone()
+        },
+        "replacement_packet_handoff": {
+            "schema_version": "ao2.factory-replacement-packet-handoff-summary.v1",
+            "status": replacement_packet_handoff_status,
+            "run_id": run_id,
+            "single_operator_handoff": replacement_packet_ready,
+            "requires_manual_packet_command": false,
+            "requires_manual_packet_verify_command": false,
+            "packet": artifacts["replacement_packet"]["path"].clone(),
+            "packet_sha256": artifacts["replacement_packet"]["sha256"].clone(),
+            "archive": artifacts["replacement_packet_archive"]["path"].clone(),
+            "archive_sha256": artifacts["replacement_packet_archive"]["sha256"].clone(),
+            "verification": artifacts["replacement_packet_verification"]["path"].clone(),
+            "verification_sha256": artifacts["replacement_packet_verification"]["sha256"].clone(),
+            "checksums_verified": replacement_packet_checks["checksums_verified"].as_bool().unwrap_or(false),
+            "trust_boundary_verified": replacement_packet_checks["trust_boundary_verified"].as_bool().unwrap_or(false),
+            "ao2_replaces_factory_v3_workflow_driver": replacement_packet_checks["ao2_replacement_driver_verified"].as_bool().unwrap_or(false),
+            "factory_v3_evaluator_closer_verified": replacement_packet_checks["factory_v3_evaluator_closer_verified"].as_bool().unwrap_or(false),
+            "factory_v3_role": "evaluator_closer_and_sampling_auditor",
+            "control_plane_role": "read_only_observer_after_signed_evidence",
+            "release_acceptance_owner": "factory-v3 evaluator-closer",
+            "next_recommended_action": replacement_packet_next_action
+        },
+        "hermes_memory": {
+            "single_record_for_bookkeeping": true,
+            "summary_is_compact": true,
+            "raw_queue_json_scrape_required": false,
+            "full_run_next_receipt_required": false,
+            "replacement_packet_single_operator_handoff": replacement_packet_ready,
+            "next_recommended_action": replacement_packet_next_action
+        },
+        "side_effects": {
+            "would_execute_queue": false,
+            "would_submit_queue_entry": false,
+            "would_rebuild_wrappers": false,
+            "would_mutate_control_plane": false,
+            "would_execute_provider": false,
+            "would_write_files": false
+        },
+        "trust_boundary": {
+            "hermes_role": "front_end_queue_cron_memory_bookkeeping",
+            "ao2_role": "trusted_execution_queue_memory_replay_signed_evidence_producer",
+            "execution_owner": "ao2",
+            "factory_v3_role": "parity_oracle_only",
+            "factory_v3_drives_workflow": false,
+            "release_acceptance_owner": "factory-v3 evaluator-closer",
+            "control_plane_role": "read_only_observer_after_signed_evidence",
+            "control_plane_approves_release": false,
+            "mutates_ao_artifacts": false,
+            "provider_auth": "local OAuth CLI only; API-key provider auth forbidden"
+        },
+        "ao2_decision_owner": "ao2-workbench-queue"
+    }))
+}
+
+pub(crate) fn factory_project_start_completion_summary_memory_trust_boundary() -> serde_json::Value
+{
+    serde_json::json!({
+        "hermes_role": "front_end_queue_cron_memory_bookkeeping",
+        "ao2_role": "trusted_execution_queue_memory_replay_signed_evidence_producer",
+        "execution_owner": "ao2",
+        "factory_v3_role": "parity_oracle_only",
+        "factory_v3_drives_workflow": false,
+        "release_acceptance_owner": "factory-v3 evaluator-closer",
+        "control_plane_role": "read_only_observer_after_signed_evidence",
+        "control_plane_approves_release": false,
+        "mutates_ao_artifacts": false,
+        "provider_auth": "local OAuth CLI only; API-key provider auth forbidden"
+    })
 }
 
 pub(crate) fn factory_queue_status_is_terminal(status: &str) -> bool {
