@@ -1,6 +1,6 @@
 {
   "baseline_source": {
-    "head": "0621923811abb6551275b0c60ca3dea2afa34917",
+    "head": "8429172e9c6ec4843812c6bdfc16c4fe6a510edb",
     "v0_5_3_tag_target": "947e566bd3f54ed902f3c14fc0c90e21a24359bc"
   },
   "budgets": {
@@ -18,18 +18,19 @@
         "crates/ao2-cli/src/factory_project_start_summary.rs": 275,
         "crates/ao2-cli/src/factory_queue.rs": 1281,
         "crates/ao2-cli/src/github_issue_draft.rs": 1468,
-        "crates/ao2-cli/src/main.rs": 68169,
+        "crates/ao2-cli/src/main.rs": 68059,
         "crates/ao2-cli/src/pulse_eval_loop.rs": 443,
         "crates/ao2-cli/src/pulse_run.rs": 216,
         "crates/ao2-cli/src/release_handoff.rs": 1122,
+        "crates/ao2-cli/src/release_support_bundle_ci.rs": 111,
         "crates/ao2-cli/src/risky_pr_readback.rs": 318,
         "crates/ao2-cli/src/sdd_cmd.rs": 367,
         "crates/ao2-cli/src/support_bundle.rs": 767,
         "crates/ao2-cli/src/windows_input.rs": 120
       },
-      "main_rs_lines": 68169,
-      "main_rs_source_concentration_percent": 88.0475,
-      "main_rs_top_level_functions": 903,
+      "main_rs_lines": 68059,
+      "main_rs_source_concentration_percent": 87.9043,
+      "main_rs_top_level_functions": 901,
       "main_rs_top_level_types": 148,
       "module_declarations": [
         "crates/ao2-cli/src/main.rs::factory_bridge",
@@ -40,12 +41,13 @@
         "crates/ao2-cli/src/main.rs::pulse_eval_loop",
         "crates/ao2-cli/src/main.rs::pulse_run",
         "crates/ao2-cli/src/main.rs::release_handoff",
+        "crates/ao2-cli/src/main.rs::release_support_bundle_ci",
         "crates/ao2-cli/src/main.rs::risky_pr_readback",
         "crates/ao2-cli/src/main.rs::sdd_cmd",
         "crates/ao2-cli/src/main.rs::support_bundle",
         "crates/ao2-cli/src/main.rs::windows_input"
       ],
-      "production_total_lines": 77423
+      "production_total_lines": 77424
     },
     "tests": {
       "cli_approval_replay_line_concentration_percent": 0.0,
