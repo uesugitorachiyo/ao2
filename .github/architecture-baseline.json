@@ -1,6 +1,6 @@
 {
   "baseline_source": {
-    "head": "316f8361e510f519a77c7e441625b8b68a04b08d",
+    "head": "0472c55a6d57155477615018424146e2d9e606d7",
     "v0_5_3_tag_target": "947e566bd3f54ed902f3c14fc0c90e21a24359bc"
   },
   "budgets": {
@@ -15,6 +15,7 @@
       "file_lines": {
         "crates/ao2-cli/src/cli_util.rs": 358,
         "crates/ao2-cli/src/control_plane_http.rs": 136,
+        "crates/ao2-cli/src/control_plane_snapshot.rs": 237,
         "crates/ao2-cli/src/doctor_cmd.rs": 394,
         "crates/ao2-cli/src/factory_bridge.rs": 1743,
         "crates/ao2-cli/src/factory_compat.rs": 1134,
@@ -25,7 +26,7 @@
         "crates/ao2-cli/src/github_issue_intake.rs": 281,
         "crates/ao2-cli/src/install_cmd.rs": 225,
         "crates/ao2-cli/src/install_paths.rs": 79,
-        "crates/ao2-cli/src/main.rs": 63245,
+        "crates/ao2-cli/src/main.rs": 63004,
         "crates/ao2-cli/src/memory_store.rs": 194,
         "crates/ao2-cli/src/provider_contract.rs": 239,
         "crates/ao2-cli/src/pulse_eval_loop.rs": 443,
@@ -54,13 +55,14 @@
         "crates/ao2-cli/src/workbench_release.rs": 247,
         "crates/ao2-cli/src/workbench_release_latest.rs": 72
       },
-      "main_rs_lines": 63245,
-      "main_rs_source_concentration_percent": 81.3116,
-      "main_rs_top_level_functions": 712,
+      "main_rs_lines": 63004,
+      "main_rs_source_concentration_percent": 81.006,
+      "main_rs_top_level_functions": 709,
       "main_rs_top_level_types": 136,
       "module_declarations": [
         "crates/ao2-cli/src/main.rs::cli_util",
         "crates/ao2-cli/src/main.rs::control_plane_http",
+        "crates/ao2-cli/src/main.rs::control_plane_snapshot",
         "crates/ao2-cli/src/main.rs::doctor_cmd",
         "crates/ao2-cli/src/main.rs::factory_bridge",
         "crates/ao2-cli/src/main.rs::factory_compat",
@@ -99,7 +101,7 @@
         "crates/ao2-cli/src/main.rs::workbench_release",
         "crates/ao2-cli/src/main.rs::workbench_release_latest"
       ],
-      "production_total_lines": 77781
+      "production_total_lines": 77777
     },
     "tests": {
       "cli_approval_replay_line_concentration_percent": 0.0,
