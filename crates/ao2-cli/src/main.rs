@@ -59,6 +59,7 @@ mod release_assets;
 mod release_crypto;
 mod release_handoff;
 mod release_installer_scripts;
+mod release_package;
 mod release_support_bundle_ci;
 mod release_verifier_scripts;
 mod release_versioning;
@@ -74,10 +75,10 @@ mod workbench_provider_pilot_history;
 mod workbench_release;
 mod workbench_release_latest;
 use cli_util::{
-    base64_standard, binary_name_for_target, canonical_json_sha256, canonical_json_string,
-    concerns_text, create_tar_gz, escape_html, hex_lower, json_array, json_bool, json_f64,
-    json_string, json_u64, json_value_text, pills, pills_from_strings, read_json_file,
-    sha256_bytes_hex, sha256_file, string_array_text, usage_text,
+    base64_standard, canonical_json_sha256, canonical_json_string, concerns_text, create_tar_gz,
+    escape_html, hex_lower, json_array, json_bool, json_f64, json_string, json_u64,
+    json_value_text, pills, pills_from_strings, read_json_file, sha256_bytes_hex, sha256_file,
+    string_array_text, usage_text,
 };
 use control_plane_http::{
     control_plane_endpoint, get_json_http, get_text_http, parse_http_endpoint, post_json_http,
@@ -126,9 +127,8 @@ use release_handoff::{
     release_evaluator_decision_build, release_evaluator_decision_markdown,
     release_handoff_checklist_build, release_handoff_checklist_markdown,
 };
-use release_installer_scripts::write_installer_scripts;
+use release_package::package_release;
 use release_support_bundle_ci::release_support_bundle_ci_evidence_index;
-use release_verifier_scripts::write_release_verifier_scripts;
 use risky_pr_readback::{
     render_report_index_for_run, report_contract_verification_json, report_index_path,
 };
@@ -63660,209 +63660,6 @@ fn release_obligation_gate_signing_verification_json(
         "reasons": reasons,
         "ao2_decision_owner": "ao2-native-obligation-gate-signing-auditor"
     })
-}
-
-fn package_release(
-    out_dir: PathBuf,
-    version: String,
-    binary: Option<PathBuf>,
-    target_label: Option<String>,
-) -> Result<()> {
-    fs::create_dir_all(&out_dir).with_context(|| format!("create {}", out_dir.display()))?;
-
-    let source_binary = match binary {
-        Some(path) => path,
-        None => std::env::current_exe().context("resolve current executable")?,
-    };
-    if !source_binary.is_file() {
-        anyhow::bail!("release binary is not a file: {}", source_binary.display());
-    }
-    let target = target_label.unwrap_or_else(runtime_target_label);
-    let packaged_git_commit =
-        std::env::var("AO2_PACKAGED_GIT_COMMIT").unwrap_or_else(|_| runtime_git_commit());
-    let packaged_build_profile = std::env::var("AO2_PACKAGED_BUILD_PROFILE").unwrap_or_else(|_| {
-        option_env!("AO2_BUILD_PROFILE")
-            .unwrap_or("unknown")
-            .to_string()
-    });
-    if packaged_build_profile == "release" && version != env!("CARGO_PKG_VERSION") {
-        anyhow::bail!(
-            "requested release version {version} does not match compiled binary {}",
-            env!("CARGO_PKG_VERSION")
-        );
-    }
-    let binary_name = binary_name_for_target(&target);
-    let package_name = format!("ao2-{version}-{target}");
-    let stage_dir = out_dir.join(format!(".{package_name}.stage"));
-    if stage_dir.exists() {
-        fs::remove_dir_all(&stage_dir)
-            .with_context(|| format!("remove stale {}", stage_dir.display()))?;
-    }
-    fs::create_dir_all(stage_dir.join("bin"))?;
-    let staged_binary = stage_dir.join("bin").join(binary_name);
-    fs::copy(&source_binary, &staged_binary).with_context(|| {
-        format!(
-            "copy {} to {}",
-            source_binary.display(),
-            staged_binary.display()
-        )
-    })?;
-    let binary_sha256 = sha256_file(&staged_binary)?;
-    write_installer_scripts(&stage_dir, binary_name)?;
-    write_release_verifier_scripts(&stage_dir)?;
-    fs::copy(release_legal_file("LICENSE")?, stage_dir.join("LICENSE"))
-        .context("copy LICENSE into release stage")?;
-    fs::copy(release_legal_file("NOTICE")?, stage_dir.join("NOTICE"))
-        .context("copy NOTICE into release stage")?;
-    fs::write(stage_dir.join("VERSION"), format!("{version}\n"))?;
-    fs::write(
-        stage_dir.join("BUILD-PROVENANCE.json"),
-        serde_json::to_string_pretty(&serde_json::json!({
-            "schema_version": "ao2.build-provenance.v1",
-            "package": "ao2",
-            "version": env!("CARGO_PKG_VERSION"),
-            "git_commit": packaged_git_commit,
-            "build_profile": packaged_build_profile,
-            "target": target
-        }))?,
-    )?;
-    fs::write(
-        stage_dir.join("SBOM.cdx.json"),
-        include_str!(concat!(env!("OUT_DIR"), "/ao2.cdx.json")),
-    )?;
-    fs::write(
-        stage_dir.join("UNINSTALL.txt"),
-        "AO2 uninstall\n\nRemove the installed ao2 binary, its rollback copy, and its install-verification sidecar from the install directory.\n\nUnix default:\n  rm -f \"$HOME/.local/bin/ao2\" \"$HOME/.local/bin/ao2.rollback\" \"$HOME/.local/bin/ao2.install-verification.json\"\n\nWindows PowerShell default:\n  Remove-Item -Force -ErrorAction SilentlyContinue \"$env:LOCALAPPDATA\\AO2\\bin\\ao2.exe\", \"$env:LOCALAPPDATA\\AO2\\bin\\ao2.exe.rollback\", \"$env:LOCALAPPDATA\\AO2\\bin\\ao2.exe.install-verification.json\"\n\nUse the same custom AO2_INSTALL_DIR supplied during installation when applicable. Runtime state is not removed automatically.\n",
-    )?;
-    fs::write(
-        stage_dir.join("README.txt"),
-        format!(
-            "AO2 {version}\n\nVerify this archive offline before installing:\n  sh verify-release.sh\n\nAdd this package's bin directory to PATH, then run:\n  ao2 --help\n\nUninstall instructions:\n  See UNINSTALL.txt\n"
-        ),
-    )?;
-
-    let checksum_paths = vec![
-        format!("bin/{binary_name}"),
-        "BUILD-PROVENANCE.json".to_string(),
-        "LICENSE".to_string(),
-        "NOTICE".to_string(),
-        "README.txt".to_string(),
-        "RELEASE-MANIFEST.json".to_string(),
-        "RELEASE-VERIFICATION.json".to_string(),
-        "SBOM.cdx.json".to_string(),
-        "UNINSTALL.txt".to_string(),
-        "VERSION".to_string(),
-        "Verify-Release.ps1".to_string(),
-        "install.ps1".to_string(),
-        "install.sh".to_string(),
-        "verify-release.sh".to_string(),
-    ];
-    let mut archive_files = checksum_paths.clone();
-    archive_files.push("SHA256SUMS".to_string());
-    archive_files.sort();
-
-    let manifest = serde_json::json!({
-        "schema_version": "ao2.release-manifest.v1",
-        "package": package_name,
-        "version": version,
-        "target": target,
-        "binary": binary_name,
-        "binary_path": format!("bin/{binary_name}"),
-        "binary_sha256": binary_sha256,
-        "installers": ["install.sh", "install.ps1"],
-        "verifiers": ["verify-release.sh", "Verify-Release.ps1"],
-        "verification_report": "RELEASE-VERIFICATION.json",
-        "build_provenance": "BUILD-PROVENANCE.json",
-        "sbom": "SBOM.cdx.json",
-        "uninstall": "UNINSTALL.txt",
-        "checksum_file": "SHA256SUMS",
-        "legal_files": ["LICENSE", "NOTICE"],
-        "files": archive_files
-    });
-    fs::write(
-        stage_dir.join("RELEASE-MANIFEST.json"),
-        serde_json::to_string_pretty(&manifest)?,
-    )?;
-
-    let verification_report = serde_json::json!({
-        "schema_version": "ao2.release-archive-offline-verification.v1",
-        "status": "packaged",
-        "package": package_name,
-        "version": version,
-        "target": target,
-        "binary": binary_name,
-        "binary_path": format!("bin/{binary_name}"),
-        "checksum_file": "SHA256SUMS",
-        "checksum_coverage": checksum_paths,
-        "verifiers": ["verify-release.sh", "Verify-Release.ps1"],
-        "provider_api_keys_required": false,
-        "control_plane_role": "read_only_observer_after_signed_evidence",
-        "control_plane_approves_release": false,
-        "mutates_ao_artifacts": false,
-        "release_acceptance_owner": "factory-v3 evaluator-closer"
-    });
-    fs::write(
-        stage_dir.join("RELEASE-VERIFICATION.json"),
-        serde_json::to_string_pretty(&verification_report)?,
-    )?;
-
-    let mut checksum_text = String::new();
-    for relative_path in checksum_paths {
-        let digest = sha256_file(&stage_dir.join(&relative_path))?;
-        checksum_text.push_str(&format!("{digest}  {relative_path}\n"));
-    }
-    fs::write(stage_dir.join("SHA256SUMS"), checksum_text)?;
-
-    let archive_path = out_dir.join(format!("{package_name}.tar.gz"));
-    create_tar_gz(&stage_dir, &archive_path)?;
-    fs::remove_dir_all(&stage_dir).with_context(|| format!("remove {}", stage_dir.display()))?;
-
-    let sha256 = sha256_file(&archive_path)?;
-    let checksum_path = out_dir.join("SHA256SUMS");
-    fs::write(
-        &checksum_path,
-        format!(
-            "{}  {}\n",
-            sha256,
-            archive_path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .context("archive filename is utf8")?
-        ),
-    )?;
-
-    let result = serde_json::json!({
-        "binary": binary_name,
-        "version": version,
-        "target": target,
-        "archive": archive_path,
-        "sha256": sha256,
-        "checksum_file": checksum_path,
-        "install_hint": "extract the archive and add its bin directory to PATH"
-    });
-    println!("{}", serde_json::to_string_pretty(&result)?);
-    Ok(())
-}
-
-fn release_legal_file(name: &str) -> Result<PathBuf> {
-    let mut candidates = Vec::new();
-    if let Ok(current_dir) = std::env::current_dir() {
-        candidates.push(current_dir.join(name));
-        candidates.push(current_dir.join("../..").join(name));
-    }
-    candidates.push(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .join(name),
-    );
-
-    for candidate in candidates {
-        if candidate.is_file() {
-            return Ok(candidate);
-        }
-    }
-
-    anyhow::bail!("release legal file {name} not found; run from the repository root")
 }
 
 fn open_report_target(path: &Path) -> Result<()> {
