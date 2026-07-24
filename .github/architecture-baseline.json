@@ -1,6 +1,6 @@
 {
   "baseline_source": {
-    "head": "269f200942b50c7255a9e189f759fe8d9a7e41db",
+    "head": "1495dd2160e8d3f273e6c0f2eef05a71e95eca98",
     "v0_5_3_tag_target": "947e566bd3f54ed902f3c14fc0c90e21a24359bc"
   },
   "budgets": {
@@ -26,13 +26,14 @@
         "crates/ao2-cli/src/github_issue_intake.rs": 281,
         "crates/ao2-cli/src/install_cmd.rs": 225,
         "crates/ao2-cli/src/install_paths.rs": 79,
-        "crates/ao2-cli/src/main.rs": 62728,
+        "crates/ao2-cli/src/main.rs": 60509,
         "crates/ao2-cli/src/memory_store.rs": 194,
         "crates/ao2-cli/src/provider_contract.rs": 239,
         "crates/ao2-cli/src/pulse_eval_loop.rs": 443,
         "crates/ao2-cli/src/pulse_run.rs": 216,
         "crates/ao2-cli/src/release_archive_contract.rs": 203,
         "crates/ao2-cli/src/release_assets.rs": 246,
+        "crates/ao2-cli/src/release_comparison.rs": 2247,
         "crates/ao2-cli/src/release_crypto.rs": 175,
         "crates/ao2-cli/src/release_handoff.rs": 1122,
         "crates/ao2-cli/src/release_history.rs": 284,
@@ -53,13 +54,13 @@
         "crates/ao2-cli/src/workbench_provider_pilot.rs": 250,
         "crates/ao2-cli/src/workbench_provider_pilot_acceptance.rs": 109,
         "crates/ao2-cli/src/workbench_provider_pilot_history.rs": 110,
-        "crates/ao2-cli/src/workbench_release.rs": 249,
-        "crates/ao2-cli/src/workbench_release_latest.rs": 72
+        "crates/ao2-cli/src/workbench_release.rs": 252,
+        "crates/ao2-cli/src/workbench_release_latest.rs": 73
       },
-      "main_rs_lines": 62728,
-      "main_rs_source_concentration_percent": 80.6397,
-      "main_rs_top_level_functions": 704,
-      "main_rs_top_level_types": 136,
+      "main_rs_lines": 60509,
+      "main_rs_source_concentration_percent": 77.7551,
+      "main_rs_top_level_functions": 676,
+      "main_rs_top_level_types": 135,
       "module_declarations": [
         "crates/ao2-cli/src/main.rs::cli_util",
         "crates/ao2-cli/src/main.rs::control_plane_http",
@@ -80,6 +81,7 @@
         "crates/ao2-cli/src/main.rs::pulse_run",
         "crates/ao2-cli/src/main.rs::release_archive_contract",
         "crates/ao2-cli/src/main.rs::release_assets",
+        "crates/ao2-cli/src/main.rs::release_comparison",
         "crates/ao2-cli/src/main.rs::release_crypto",
         "crates/ao2-cli/src/main.rs::release_handoff",
         "crates/ao2-cli/src/main.rs::release_history",
@@ -103,7 +105,7 @@
         "crates/ao2-cli/src/main.rs::workbench_release",
         "crates/ao2-cli/src/main.rs::workbench_release_latest"
       ],
-      "production_total_lines": 77788
+      "production_total_lines": 77820
     },
     "tests": {
       "cli_approval_replay_line_concentration_percent": 0.0,
