@@ -48881,12 +48881,14 @@ fn default_workbench_job_kind() -> String {
 }
 
 pub(crate) fn now_unix_ms() -> u64 {
-    SystemTime::now()
+    let duration = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis()
-        .try_into()
-        .unwrap_or(u64::MAX)
+        .unwrap_or_default();
+    unix_ms_from_duration(duration)
+}
+
+fn unix_ms_from_duration(duration: Duration) -> u64 {
+    duration.as_millis().try_into().unwrap_or(u64::MAX)
 }
 
 fn prune_workbench_jobs(jobs: &mut Vec<WorkbenchJob>, retention_limit: usize) -> bool {
@@ -53666,6 +53668,19 @@ fn open_report_target(path: &Path) -> Result<()> {
 
 pub(crate) fn runtime_target_label() -> String {
     format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH)
+}
+
+#[cfg(test)]
+mod unix_ms_conversion_tests {
+    use super::unix_ms_from_duration;
+    use std::time::Duration;
+
+    #[test]
+    fn saturates_millisecond_values_that_exceed_u64() {
+        let duration = Duration::new(u64::MAX, 999_999_999);
+
+        assert_eq!(unix_ms_from_duration(duration), u64::MAX);
+    }
 }
 
 #[cfg(test)]

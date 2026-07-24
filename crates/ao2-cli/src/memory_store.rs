@@ -385,7 +385,7 @@ pub(crate) fn memory_export_json(
                 .unwrap_or(false)
         })
         .collect::<Vec<_>>();
-    let generated_at_ms = now_unix_ms();
+    let generated_at_ms = crate::now_unix_ms();
     let export = serde_json::json!({
         "schema_version": "ao2.memory-export.v1",
         "generated_at_ms": generated_at_ms,
