@@ -5,7 +5,8 @@ use anyhow::{Context, Result};
 use chrono::{SecondsFormat, Utc};
 
 use crate::cli_util::{json_array, json_string, json_u64, sha256_file};
-use crate::{atomic_write_text, runs_list_json, workbench_run_evidence_summary_json};
+use crate::workbench_run_evidence::workbench_run_evidence_summary_json;
+use crate::{atomic_write_text, runs_list_json};
 
 pub(crate) fn release_summary_enrich(
     summary: PathBuf,
