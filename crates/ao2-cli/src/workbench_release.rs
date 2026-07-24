@@ -9,15 +9,13 @@ use crate::doctor_cmd::doctor_report_json;
 use crate::release_comparison::{
     release_comparison_bundle_json, release_comparison_bundle_verification_json,
 };
+use crate::release_gate::release_gate_report_json;
 use crate::release_history::{
     release_comparison_dir_sort_key, release_dir_sort_key, release_retention_plan_dirs,
     workbench_release_history_for_dir,
 };
 use crate::release_summary_enrich::release_summary_enrich_report_json;
-use crate::{
-    atomic_write_text, form_value_owned, query_value_owned, release_gate_report_json,
-    WorkbenchSupportSigning,
-};
+use crate::{atomic_write_text, form_value_owned, query_value_owned, WorkbenchSupportSigning};
 
 pub(crate) fn workbench_release_health_json(
     query: &str,
