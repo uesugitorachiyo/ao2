@@ -2,6 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use clap::Subcommand;
 
 use crate::cli_util::{binary_name_for_target, sha256_file};
 use crate::install_paths::{
@@ -15,6 +16,30 @@ use crate::release_assets::download_release_assets;
 use crate::release_crypto::{extract_tar_gz, verify_release_archive_signature};
 use crate::{atomic_write_text, runtime_target_label};
 
+#[derive(Debug, Subcommand)]
+pub(crate) enum InstallCommand {
+    Update {
+        #[arg(long)]
+        archive: Option<PathBuf>,
+        #[arg(long)]
+        release_base_url: Option<String>,
+        #[arg(long, default_value = env!("CARGO_PKG_VERSION"))]
+        version: String,
+        #[arg(long)]
+        target_label: Option<String>,
+        #[arg(long, default_value = "dist-provenance")]
+        provenance_dir: PathBuf,
+        #[arg(long)]
+        install_dir: Option<PathBuf>,
+    },
+    Rollback {
+        #[arg(long)]
+        install_dir: Option<PathBuf>,
+        #[arg(long)]
+        target_label: Option<String>,
+    },
+}
+
 pub(crate) struct InstallUpdateOptions {
     pub(crate) archive: Option<PathBuf>,
     pub(crate) release_base_url: Option<String>,
@@ -22,6 +47,30 @@ pub(crate) struct InstallUpdateOptions {
     pub(crate) target_label: Option<String>,
     pub(crate) provenance_dir: PathBuf,
     pub(crate) install_dir: Option<PathBuf>,
+}
+
+pub(crate) fn install(command: InstallCommand) -> Result<()> {
+    match command {
+        InstallCommand::Update {
+            archive,
+            release_base_url,
+            version,
+            target_label,
+            provenance_dir,
+            install_dir,
+        } => install_update(InstallUpdateOptions {
+            archive,
+            release_base_url,
+            version,
+            target_label,
+            provenance_dir,
+            install_dir,
+        }),
+        InstallCommand::Rollback {
+            install_dir,
+            target_label,
+        } => rollback_install(install_dir, target_label),
+    }
 }
 
 pub(crate) fn install_update(options: InstallUpdateOptions) -> Result<()> {

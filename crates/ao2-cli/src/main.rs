@@ -32,7 +32,7 @@ use ao2_runtime::{
     ProviderRunOptions, RepairSourceContext, ReplayOptions, ResumeOptions, RunOptions,
 };
 use chrono::{SecondsFormat, Utc};
-use clap::{Args, Parser, Subcommand};
+use clap::{Parser, Subcommand};
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 
@@ -122,7 +122,7 @@ use factory_queue::{
 };
 use git_cmd::git;
 use github_issue_intake::issue;
-use install_cmd::{install_update, rollback_install, InstallUpdateOptions};
+use install_cmd::{install, InstallCommand};
 use memory_store::{
     append_jsonl, memory_link_run_json, memory_records_path, memory_run_links_path,
     memory_search_json, memory_write_record_json, read_jsonl_values,
@@ -170,7 +170,7 @@ use release_summary_enrich::release_summary_enrich;
 use risky_pr_readback::{
     render_report_index_for_run, report_contract_verification_json, report_index_path,
 };
-use upgrade_cmd::{upgrade_apply, upgrade_check, UpgradeApplyOptions};
+use upgrade_cmd::{upgrade, UpgradeCommand};
 use workbench_memory::{
     workbench_memory_control_plane_dashboard_json, workbench_memory_export_json,
     workbench_memory_link_run_json, workbench_memory_publish_latest_json,
@@ -452,65 +452,6 @@ enum RepairCommand {
         #[arg(long)]
         json: bool,
     },
-}
-
-#[derive(Debug, Subcommand)]
-enum InstallCommand {
-    Update {
-        #[arg(long)]
-        archive: Option<PathBuf>,
-        #[arg(long)]
-        release_base_url: Option<String>,
-        #[arg(long, default_value = env!("CARGO_PKG_VERSION"))]
-        version: String,
-        #[arg(long)]
-        target_label: Option<String>,
-        #[arg(long, default_value = "dist-provenance")]
-        provenance_dir: PathBuf,
-        #[arg(long)]
-        install_dir: Option<PathBuf>,
-    },
-    Rollback {
-        #[arg(long)]
-        install_dir: Option<PathBuf>,
-        #[arg(long)]
-        target_label: Option<String>,
-    },
-}
-
-#[derive(Debug, Subcommand)]
-enum UpgradeCommand {
-    Check {
-        #[arg(long)]
-        release_file: Option<PathBuf>,
-        #[arg(long)]
-        release_url: Option<String>,
-    },
-    Apply(Box<UpgradeApplyCommand>),
-}
-
-#[derive(Debug, Args)]
-struct UpgradeApplyCommand {
-    #[arg(long)]
-    release_file: Option<PathBuf>,
-    #[arg(long)]
-    release_url: Option<String>,
-    #[arg(long)]
-    github_release: Option<String>,
-    #[arg(long, default_value = "uesugitorachiyo/ao2")]
-    repo: String,
-    #[arg(long)]
-    asset_dir: Option<PathBuf>,
-    #[arg(long)]
-    release_base_url: Option<String>,
-    #[arg(long, default_value = "target/ao2-upgrade")]
-    download_dir: PathBuf,
-    #[arg(long)]
-    provenance_dir: Option<PathBuf>,
-    #[arg(long)]
-    install_dir: Option<PathBuf>,
-    #[arg(long)]
-    target_label: Option<String>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -53587,54 +53528,6 @@ fn runtime_git_commit() -> String {
     option_env!("AO2_GIT_COMMIT")
         .unwrap_or("unknown")
         .to_string()
-}
-
-fn install(command: InstallCommand) -> Result<()> {
-    match command {
-        InstallCommand::Update {
-            archive,
-            release_base_url,
-            version,
-            target_label,
-            provenance_dir,
-            install_dir,
-        } => install_update(InstallUpdateOptions {
-            archive,
-            release_base_url,
-            version,
-            target_label,
-            provenance_dir,
-            install_dir,
-        }),
-        InstallCommand::Rollback {
-            install_dir,
-            target_label,
-        } => rollback_install(install_dir, target_label),
-    }
-}
-
-fn upgrade(command: UpgradeCommand) -> Result<()> {
-    match command {
-        UpgradeCommand::Check {
-            release_file,
-            release_url,
-        } => upgrade_check(release_file, release_url),
-        UpgradeCommand::Apply(options) => {
-            let options = *options;
-            upgrade_apply(UpgradeApplyOptions {
-                release_file: options.release_file,
-                release_url: options.release_url,
-                github_release: options.github_release,
-                repo: options.repo,
-                asset_dir: options.asset_dir,
-                release_base_url: options.release_base_url,
-                download_dir: options.download_dir,
-                provenance_dir: options.provenance_dir,
-                install_dir: options.install_dir,
-                target_label: options.target_label,
-            })
-        }
-    }
 }
 
 fn release(command: ReleaseCommand) -> Result<()> {

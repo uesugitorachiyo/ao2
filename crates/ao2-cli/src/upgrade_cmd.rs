@@ -2,6 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
+use clap::{Args, Subcommand};
 
 use crate::install_cmd::{install_update_result, InstallUpdateOptions};
 use crate::release_assets::{
@@ -10,6 +11,41 @@ use crate::release_assets::{
     release_metadata_from_asset_dir, required_provenance_asset_names, upgrade_check_report,
 };
 use crate::runtime_target_label;
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum UpgradeCommand {
+    Check {
+        #[arg(long)]
+        release_file: Option<PathBuf>,
+        #[arg(long)]
+        release_url: Option<String>,
+    },
+    Apply(Box<UpgradeApplyCommand>),
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct UpgradeApplyCommand {
+    #[arg(long)]
+    release_file: Option<PathBuf>,
+    #[arg(long)]
+    release_url: Option<String>,
+    #[arg(long)]
+    github_release: Option<String>,
+    #[arg(long, default_value = "uesugitorachiyo/ao2")]
+    repo: String,
+    #[arg(long)]
+    asset_dir: Option<PathBuf>,
+    #[arg(long)]
+    release_base_url: Option<String>,
+    #[arg(long, default_value = "target/ao2-upgrade")]
+    download_dir: PathBuf,
+    #[arg(long)]
+    provenance_dir: Option<PathBuf>,
+    #[arg(long)]
+    install_dir: Option<PathBuf>,
+    #[arg(long)]
+    target_label: Option<String>,
+}
 
 pub(crate) struct UpgradeApplyOptions {
     pub(crate) release_file: Option<PathBuf>,
@@ -22,6 +58,30 @@ pub(crate) struct UpgradeApplyOptions {
     pub(crate) provenance_dir: Option<PathBuf>,
     pub(crate) install_dir: Option<PathBuf>,
     pub(crate) target_label: Option<String>,
+}
+
+pub(crate) fn upgrade(command: UpgradeCommand) -> Result<()> {
+    match command {
+        UpgradeCommand::Check {
+            release_file,
+            release_url,
+        } => upgrade_check(release_file, release_url),
+        UpgradeCommand::Apply(options) => {
+            let options = *options;
+            upgrade_apply(UpgradeApplyOptions {
+                release_file: options.release_file,
+                release_url: options.release_url,
+                github_release: options.github_release,
+                repo: options.repo,
+                asset_dir: options.asset_dir,
+                release_base_url: options.release_base_url,
+                download_dir: options.download_dir,
+                provenance_dir: options.provenance_dir,
+                install_dir: options.install_dir,
+                target_label: options.target_label,
+            })
+        }
+    }
 }
 
 pub(crate) fn upgrade_apply(options: UpgradeApplyOptions) -> Result<()> {
