@@ -13714,7 +13714,12 @@ def test_no_archaeology_workbench_audit_contract():
 
 
 def test_workbench_operator_evidence_packet_export_contract():
-    source = read("crates/ao2-cli/src/main.rs")
+    source = "\n".join(
+        [
+            read("crates/ao2-cli/src/main.rs"),
+            read("crates/ao2-cli/src/control_plane_ops.rs"),
+        ]
+    )
     rust_tests = read("crates/ao2-cli/tests/cli_workbench_evidence.rs")
     verification = read("docs/VERIFICATION.md")
     ci = read(".github/workflows/ci.yml")
