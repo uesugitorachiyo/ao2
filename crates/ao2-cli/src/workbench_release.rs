@@ -6,11 +6,12 @@ use anyhow::{Context, Result};
 
 use crate::cli_util::json_string;
 use crate::doctor_cmd::doctor_report_json;
+use crate::release_summary_enrich::release_summary_enrich_report_json;
 use crate::{
     atomic_write_text, form_value_owned, query_value_owned, release_comparison_bundle_json,
     release_comparison_bundle_verification_json, release_comparison_dir_sort_key,
     release_dir_sort_key, release_gate_report_json, release_retention_plan_dirs,
-    release_summary_enrich_report_json, workbench_release_history_for_dir, WorkbenchSupportSigning,
+    workbench_release_history_for_dir, WorkbenchSupportSigning,
 };
 
 pub(crate) fn workbench_release_health_json(
