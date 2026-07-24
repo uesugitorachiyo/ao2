@@ -1,6 +1,6 @@
 {
   "baseline_source": {
-    "head": "14539078d3c3a1d426b8d2b62fd9b96a103c9a76",
+    "head": "3ca1faf3f9bb71e130050ac79c22f24505f3a4ca",
     "v0_5_3_tag_target": "947e566bd3f54ed902f3c14fc0c90e21a24359bc"
   },
   "budgets": {
@@ -25,7 +25,7 @@
         "crates/ao2-cli/src/github_issue_intake.rs": 281,
         "crates/ao2-cli/src/install_cmd.rs": 225,
         "crates/ao2-cli/src/install_paths.rs": 79,
-        "crates/ao2-cli/src/main.rs": 63821,
+        "crates/ao2-cli/src/main.rs": 63608,
         "crates/ao2-cli/src/memory_store.rs": 194,
         "crates/ao2-cli/src/provider_contract.rs": 239,
         "crates/ao2-cli/src/pulse_eval_loop.rs": 443,
@@ -36,6 +36,7 @@
         "crates/ao2-cli/src/release_handoff.rs": 1122,
         "crates/ao2-cli/src/release_installer_scripts.rs": 182,
         "crates/ao2-cli/src/release_package.rs": 212,
+        "crates/ao2-cli/src/release_summary.rs": 227,
         "crates/ao2-cli/src/release_support_bundle_ci.rs": 111,
         "crates/ao2-cli/src/release_verifier_scripts.rs": 110,
         "crates/ao2-cli/src/release_versioning.rs": 117,
@@ -51,9 +52,9 @@
         "crates/ao2-cli/src/workbench_release.rs": 246,
         "crates/ao2-cli/src/workbench_release_latest.rs": 72
       },
-      "main_rs_lines": 63821,
-      "main_rs_source_concentration_percent": 82.0944,
-      "main_rs_top_level_functions": 727,
+      "main_rs_lines": 63608,
+      "main_rs_source_concentration_percent": 81.8057,
+      "main_rs_top_level_functions": 720,
       "main_rs_top_level_types": 136,
       "module_declarations": [
         "crates/ao2-cli/src/main.rs::cli_util",
@@ -78,6 +79,7 @@
         "crates/ao2-cli/src/main.rs::release_handoff",
         "crates/ao2-cli/src/main.rs::release_installer_scripts",
         "crates/ao2-cli/src/main.rs::release_package",
+        "crates/ao2-cli/src/main.rs::release_summary",
         "crates/ao2-cli/src/main.rs::release_support_bundle_ci",
         "crates/ao2-cli/src/main.rs::release_verifier_scripts",
         "crates/ao2-cli/src/main.rs::release_versioning",
@@ -93,7 +95,7 @@
         "crates/ao2-cli/src/main.rs::workbench_release",
         "crates/ao2-cli/src/main.rs::workbench_release_latest"
       ],
-      "production_total_lines": 77741
+      "production_total_lines": 77755
     },
     "tests": {
       "cli_approval_replay_line_concentration_percent": 0.0,
