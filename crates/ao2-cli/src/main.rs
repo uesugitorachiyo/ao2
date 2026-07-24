@@ -65,6 +65,7 @@ mod release_versioning;
 mod risky_pr_readback;
 mod sdd_cmd;
 mod support_bundle;
+mod upgrade_cmd;
 mod windows_input;
 mod workbench_memory;
 mod workbench_provider_pilot;
@@ -106,7 +107,7 @@ use factory_queue::{
 };
 use git_cmd::git;
 use github_issue_intake::issue;
-use install_cmd::{install_update, install_update_result, rollback_install, InstallUpdateOptions};
+use install_cmd::{install_update, rollback_install, InstallUpdateOptions};
 use memory_store::{
     append_jsonl, memory_link_run_json, memory_records_path, memory_run_links_path,
     memory_search_json, memory_write_record_json, read_jsonl_values,
@@ -116,11 +117,6 @@ use pulse_eval_loop::{
     pulse_eval_loop_handoff_json, pulse_eval_loop_run_chain_json, pulse_eval_loop_run_once_json,
 };
 use pulse_run::{pulse_run_chain_json, pulse_run_once_json};
-use release_assets::{
-    copy_release_asset, download_github_release_assets, download_release_asset_from_metadata,
-    download_release_assets, read_release_metadata, release_asset_name,
-    release_metadata_from_asset_dir, required_provenance_asset_names, upgrade_check_report,
-};
 use release_crypto::{
     copy_dir_recursive, derive_public_key_from_private_key, extract_tar_gz,
     public_key_pem_from_private_key, read_rsa_private_key, sign_bytes_with_private_key,
@@ -136,6 +132,7 @@ use release_verifier_scripts::write_release_verifier_scripts;
 use risky_pr_readback::{
     render_report_index_for_run, report_contract_verification_json, report_index_path,
 };
+use upgrade_cmd::{upgrade_apply, upgrade_check, UpgradeApplyOptions};
 use workbench_memory::{
     workbench_memory_control_plane_dashboard_json, workbench_memory_export_json,
     workbench_memory_link_run_json, workbench_memory_publish_latest_json,
@@ -59185,103 +59182,6 @@ fn upgrade(command: UpgradeCommand) -> Result<()> {
             })
         }
     }
-}
-
-struct UpgradeApplyOptions {
-    release_file: Option<PathBuf>,
-    release_url: Option<String>,
-    github_release: Option<String>,
-    repo: String,
-    asset_dir: Option<PathBuf>,
-    release_base_url: Option<String>,
-    download_dir: PathBuf,
-    provenance_dir: Option<PathBuf>,
-    install_dir: Option<PathBuf>,
-    target_label: Option<String>,
-}
-
-fn upgrade_apply(options: UpgradeApplyOptions) -> Result<()> {
-    let UpgradeApplyOptions {
-        release_file,
-        release_url,
-        github_release,
-        repo,
-        mut asset_dir,
-        release_base_url,
-        download_dir,
-        provenance_dir,
-        install_dir,
-        target_label,
-    } = options;
-    let release = if let Some(tag) = github_release {
-        if release_file.is_some()
-            || release_url.is_some()
-            || asset_dir.is_some()
-            || release_base_url.is_some()
-        {
-            anyhow::bail!(
-                "--github-release cannot be combined with release metadata or asset source flags"
-            );
-        }
-        download_github_release_assets(&repo, &tag, &download_dir)?;
-        asset_dir = Some(download_dir.clone());
-        release_metadata_from_asset_dir(&download_dir, &tag)?
-    } else {
-        read_release_metadata(release_file, release_url)?
-    };
-    let check = upgrade_check_report(&release)?;
-    let latest_version = check["latest_version"]
-        .as_str()
-        .context("upgrade check missing latest_version")?
-        .to_string();
-    let target = target_label.unwrap_or_else(runtime_target_label);
-    let archive_name = release_asset_name(&release, &target, &latest_version)
-        .with_context(|| format!("release is missing archive asset for target {target}"))?;
-    let provenance_dir = provenance_dir.unwrap_or_else(|| download_dir.join("provenance"));
-    fs::create_dir_all(&download_dir)
-        .with_context(|| format!("create {}", download_dir.display()))?;
-    fs::create_dir_all(&provenance_dir)
-        .with_context(|| format!("create {}", provenance_dir.display()))?;
-
-    let archive = if let Some(asset_dir) = asset_dir {
-        copy_release_asset(&asset_dir, &archive_name, &download_dir)?;
-        for name in required_provenance_asset_names(&archive_name) {
-            copy_release_asset(&asset_dir, &name, &provenance_dir)?;
-        }
-        download_dir.join(&archive_name)
-    } else if let Some(base_url) = release_base_url {
-        download_release_assets(&base_url, &latest_version, &target, &provenance_dir)?
-    } else {
-        download_release_asset_from_metadata(&release, &archive_name, &download_dir)?;
-        for name in required_provenance_asset_names(&archive_name) {
-            download_release_asset_from_metadata(&release, &name, &provenance_dir)?;
-        }
-        download_dir.join(&archive_name)
-    };
-
-    let install = install_update_result(InstallUpdateOptions {
-        archive: Some(archive),
-        release_base_url: None,
-        version: latest_version,
-        target_label: Some(target),
-        provenance_dir,
-        install_dir,
-    })?;
-    let result = serde_json::json!({
-        "schema_version": "ao2.upgrade-apply.v1",
-        "status": "upgraded",
-        "check": check,
-        "install": install,
-    });
-    println!("{}", serde_json::to_string_pretty(&result)?);
-    Ok(())
-}
-
-fn upgrade_check(release_file: Option<PathBuf>, release_url: Option<String>) -> Result<()> {
-    let release = read_release_metadata(release_file, release_url)?;
-    let result = upgrade_check_report(&release)?;
-    println!("{}", serde_json::to_string_pretty(&result)?);
-    Ok(())
 }
 
 fn release(command: ReleaseCommand) -> Result<()> {
