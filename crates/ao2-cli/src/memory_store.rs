@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::fs;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
@@ -6,8 +7,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::{anyhow, Context, Result};
 use clap::Subcommand;
 
-use crate::cli_util::{json_array, json_string, json_u64, sha256_file};
-use crate::{memory_export_json, memory_publish_to_control_plane_json, trimmed_required};
+use crate::cli_util::{base64_standard, hex_lower, json_array, json_string, json_u64, sha256_file};
+use crate::control_plane_http::{control_plane_endpoint, post_json_http};
+use crate::release_crypto::{
+    derive_public_key_from_private_key, sign_file_with_private_key, verify_file_signature,
+};
+use crate::{atomic_write_text, trimmed_required};
 use ao2_core::sha256_hex;
 
 #[derive(Debug, Subcommand)]
@@ -344,6 +349,178 @@ pub(crate) fn memory_link_run_json(
         "run_id": run_id,
         "relationship": relationship
     }))
+}
+
+pub(crate) fn memory_export_json(
+    target: &Path,
+    query: Option<&str>,
+    limit: usize,
+    out: &Path,
+    signing_key: Option<PathBuf>,
+    signer_id: String,
+) -> Result<serde_json::Value> {
+    if limit == 0 {
+        return Err(anyhow!("--limit must be greater than 0"));
+    }
+    let records = match query {
+        Some(query) if !query.trim().is_empty() => {
+            json_array(&memory_search_json(target, query, limit)?, "matches").to_vec()
+        }
+        _ => read_jsonl_values(&memory_records_path(target))?
+            .into_iter()
+            .take(limit)
+            .collect(),
+    };
+    let record_ids = records
+        .iter()
+        .filter_map(|record| record.get("id").and_then(serde_json::Value::as_str))
+        .map(str::to_string)
+        .collect::<BTreeSet<_>>();
+    let links = read_jsonl_values(&memory_run_links_path(target))?
+        .into_iter()
+        .filter(|link| {
+            link.get("memory_id")
+                .and_then(serde_json::Value::as_str)
+                .map(|id| record_ids.contains(id))
+                .unwrap_or(false)
+        })
+        .collect::<Vec<_>>();
+    let generated_at_ms = now_unix_ms();
+    let export = serde_json::json!({
+        "schema_version": "ao2.memory-export.v1",
+        "generated_at_ms": generated_at_ms,
+        "target": target,
+        "query": query.unwrap_or(""),
+        "limit": limit,
+        "record_count": records.len(),
+        "link_count": links.len(),
+        "records": records,
+        "links": links
+    });
+    atomic_write_text(out, &serde_json::to_string_pretty(&export)?)?;
+    let export_sha256 = sha256_file(out)?;
+    let signing = match signing_key {
+        Some(key_path) => {
+            let signer_id = trimmed_required("--signer-id", &signer_id)?;
+            let signature_path = out.with_extension("json.sig");
+            let public_key_path = out
+                .parent()
+                .unwrap_or_else(|| Path::new("."))
+                .join("memory-export-signing-public.pem");
+            derive_public_key_from_private_key(&key_path, &public_key_path)?;
+            sign_file_with_private_key(&key_path, out, &signature_path)?;
+            let signature_verified = verify_file_signature(out, &signature_path, &public_key_path)?;
+            serde_json::json!({
+                "present": true,
+                "signature_verified": signature_verified,
+                "signer_id": signer_id,
+                "signature_algorithm": "RSA/SHA-256",
+                "signature_path": signature_path,
+                "public_key_path": public_key_path,
+                "public_key_sha256": sha256_file(&public_key_path)?
+            })
+        }
+        None => serde_json::json!({
+            "present": false,
+            "signature_verified": false
+        }),
+    };
+    let mut result = export;
+    result["export_path"] = serde_json::json!(out);
+    result["sha256"] = serde_json::json!(export_sha256);
+    result["signing"] = signing.clone();
+    result["signature_path"] = signing
+        .get("signature_path")
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
+    result["public_key_path"] = signing
+        .get("public_key_path")
+        .cloned()
+        .unwrap_or(serde_json::Value::Null);
+    Ok(result)
+}
+
+pub(crate) fn memory_publish_to_control_plane_json(
+    export_path: &Path,
+    control_plane_url: &str,
+    api_token: &str,
+    require_signed_export: bool,
+) -> Result<serde_json::Value> {
+    let api_token = trimmed_required("--api-token", api_token)?;
+    let content = fs::read_to_string(export_path)
+        .with_context(|| format!("read {}", export_path.display()))?;
+    let export: serde_json::Value = serde_json::from_str(&content)
+        .with_context(|| format!("parse {}", export_path.display()))?;
+    let schema_version = json_string(&export, "schema_version");
+    if schema_version != "ao2.memory-export.v1" {
+        return Err(anyhow!(
+            "memory publish requires ao2.memory-export.v1, got {schema_version}"
+        ));
+    }
+    let signed_metadata = memory_export_signature_metadata(export_path)?;
+    if require_signed_export && signed_metadata.is_none() {
+        return Err(anyhow!(
+            "memory publish requires a signed export by default (slice 19 producer-side \
+             default-on, mirroring slice 11/17/18 obligation-gate signing flips); export \
+             at {} has no sibling `.json.sig` + `memory-export-signing-public.pem` so the \
+             signed control-plane endpoint cannot be reached. Sign the export at \
+             `ao2 memory export` time via `--signing-key`, or pass \
+             `--allow-unsigned-memory-export` to opt out and upload the plain export via \
+             `/api/v1/memory/export`",
+            export_path.display()
+        ));
+    }
+    let (endpoint, post_body, signed) = match signed_metadata {
+        Some(signature) => (
+            control_plane_endpoint(control_plane_url, "/api/v1/memory/export/signed")?,
+            serde_json::to_string(&serde_json::json!({
+                "schema_version": "ao2.cp-memory-export-signed-upload.v1",
+                "export": export,
+                // Exact bytes the sibling `.json.sig` signs: the verbatim export-file
+                // content. Lets the control plane verify over these, not a lossy
+                // re-serialization of `export`.
+                "export_b64": base64_standard(content.as_bytes()),
+                "signature": signature
+            }))?,
+            true,
+        ),
+        None => (
+            control_plane_endpoint(control_plane_url, "/api/v1/memory/export")?,
+            content,
+            false,
+        ),
+    };
+    let receipt = post_json_http(&endpoint, &api_token, &post_body)?;
+    Ok(serde_json::json!({
+        "schema_version": "ao2.memory-control-plane-publish.v1",
+        "export_path": export_path,
+        "endpoint": endpoint,
+        "signed": signed,
+        "receipt": receipt
+    }))
+}
+
+fn memory_export_signature_metadata(export_path: &Path) -> Result<Option<serde_json::Value>> {
+    let signature_path = export_path.with_extension("json.sig");
+    let public_key_path = export_path
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join("memory-export-signing-public.pem");
+    if !signature_path.is_file() || !public_key_path.is_file() {
+        return Ok(None);
+    }
+    Ok(Some(serde_json::json!({
+        "present": true,
+        "signature_algorithm": "RSA/SHA-256",
+        "signature_path": signature_path,
+        "signature_sha256": sha256_file(&signature_path)?,
+        "signature_hex": hex_lower(&fs::read(&signature_path)
+            .with_context(|| format!("read {}", signature_path.display()))?),
+        "public_key_path": public_key_path,
+        "public_key_sha256": sha256_file(&public_key_path)?,
+        "public_key_pem": fs::read_to_string(&public_key_path)
+            .with_context(|| format!("read {}", public_key_path.display()))?
+    })))
 }
 
 pub(crate) fn memory_records_path(target: &Path) -> PathBuf {
