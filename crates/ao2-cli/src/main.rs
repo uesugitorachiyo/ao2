@@ -48,6 +48,7 @@ mod factory_queue;
 mod git_cmd;
 mod github_issue_draft;
 mod github_issue_intake;
+mod install_cmd;
 mod install_paths;
 mod memory_store;
 mod provider_contract;
@@ -105,10 +106,7 @@ use factory_queue::{
 };
 use git_cmd::git;
 use github_issue_intake::issue;
-use install_paths::{
-    default_install_dir, install_verification_evidence_path, make_executable,
-    rollback_path_for_binary,
-};
+use install_cmd::{install_update, install_update_result, rollback_install, InstallUpdateOptions};
 use memory_store::{
     append_jsonl, memory_link_run_json, memory_records_path, memory_run_links_path,
     memory_search_json, memory_write_record_json, read_jsonl_values,
@@ -118,9 +116,6 @@ use pulse_eval_loop::{
     pulse_eval_loop_handoff_json, pulse_eval_loop_run_chain_json, pulse_eval_loop_run_once_json,
 };
 use pulse_run::{pulse_run_chain_json, pulse_run_once_json};
-use release_archive_contract::{
-    ensure_safe_release_archive_path, verify_release_archive_offline_contract,
-};
 use release_assets::{
     copy_release_asset, download_github_release_assets, download_release_asset_from_metadata,
     download_release_assets, read_release_metadata, release_asset_name,
@@ -59192,205 +59187,6 @@ fn upgrade(command: UpgradeCommand) -> Result<()> {
     }
 }
 
-struct InstallUpdateOptions {
-    archive: Option<PathBuf>,
-    release_base_url: Option<String>,
-    version: String,
-    target_label: Option<String>,
-    provenance_dir: PathBuf,
-    install_dir: Option<PathBuf>,
-}
-
-fn install_update(options: InstallUpdateOptions) -> Result<()> {
-    let result = install_update_result(options)?;
-    println!("{}", serde_json::to_string_pretty(&result)?);
-    Ok(())
-}
-
-fn install_update_result(options: InstallUpdateOptions) -> Result<serde_json::Value> {
-    let target = options.target_label.unwrap_or_else(runtime_target_label);
-    let binary_name = binary_name_for_target(&target);
-    let archive = match options.archive {
-        Some(archive) => archive,
-        None => {
-            let base_url = options
-                .release_base_url
-                .context("--archive or --release-base-url is required")?;
-            download_release_assets(
-                &base_url,
-                &options.version,
-                &target,
-                &options.provenance_dir,
-            )?
-        }
-    };
-    verify_release_archive_signature(&archive, &options.provenance_dir)?;
-
-    let work_dir = std::env::temp_dir().join(format!(
-        "ao2-install-update-{}-{}",
-        std::process::id(),
-        chrono_like_timestamp()
-    ));
-    let extract_dir = work_dir.join("extract");
-    fs::create_dir_all(&extract_dir)
-        .with_context(|| format!("create {}", extract_dir.display()))?;
-    extract_tar_gz(&archive, &extract_dir)?;
-
-    let manifest_path = extract_dir.join("RELEASE-MANIFEST.json");
-    let manifest_text = fs::read_to_string(&manifest_path)
-        .with_context(|| format!("read {}", manifest_path.display()))?;
-    let manifest: serde_json::Value = serde_json::from_str(&manifest_text)
-        .with_context(|| format!("parse {}", manifest_path.display()))?;
-    if manifest["schema_version"] != "ao2.release-manifest.v1" {
-        anyhow::bail!("unexpected release manifest schema");
-    }
-    if manifest["binary"] != binary_name {
-        anyhow::bail!("archive binary does not match target {target}");
-    }
-    let binary_path = manifest["binary_path"]
-        .as_str()
-        .context("release manifest missing binary_path")?;
-    ensure_safe_release_archive_path(binary_path, "release manifest binary_path")?;
-    let source_binary = extract_dir.join(binary_path);
-    let expected_binary_sha = manifest["binary_sha256"]
-        .as_str()
-        .context("release manifest missing binary_sha256")?;
-    let actual_binary_sha = sha256_file(&source_binary)?;
-    if actual_binary_sha != expected_binary_sha {
-        anyhow::bail!("packaged binary checksum mismatch");
-    }
-    let offline_verification =
-        verify_release_archive_offline_contract(&extract_dir, &manifest, &target, binary_name)?;
-
-    let install_dir = options.install_dir.unwrap_or_else(default_install_dir);
-    fs::create_dir_all(&install_dir)
-        .with_context(|| format!("create {}", install_dir.display()))?;
-    let installed_binary = install_dir.join(binary_name);
-    let rollback_binary = rollback_path_for_binary(&installed_binary);
-    let rollback_created = if installed_binary.exists() {
-        fs::copy(&installed_binary, &rollback_binary).with_context(|| {
-            format!(
-                "copy rollback {} to {}",
-                installed_binary.display(),
-                rollback_binary.display()
-            )
-        })?;
-        true
-    } else {
-        false
-    };
-    fs::copy(&source_binary, &installed_binary).with_context(|| {
-        format!(
-            "copy {} to {}",
-            source_binary.display(),
-            installed_binary.display()
-        )
-    })?;
-    make_executable(&installed_binary)?;
-
-    let evidence_path = install_verification_evidence_path(&installed_binary);
-    let evidence = serde_json::json!({
-        "schema_version": "ao2.install-verification-evidence.v1",
-        "status": "verified",
-        "install_status": "installed",
-        "version": manifest["version"],
-        "target": target,
-        "installed_binary": installed_binary,
-        "rollback_binary": rollback_created.then_some(rollback_binary),
-        "signature_verified": true,
-        "offline_verification": offline_verification,
-        "archive": archive
-    });
-    let mut evidence_text = serde_json::to_string_pretty(&evidence)?;
-    evidence_text.push('\n');
-    atomic_write_text(&evidence_path, &evidence_text)?;
-
-    let _ = fs::remove_dir_all(&work_dir);
-    let mut result = evidence;
-    result["status"] = serde_json::json!("installed");
-    result["install_verification_evidence"] = serde_json::json!(evidence_path);
-    Ok(result)
-}
-
-fn rollback_install(install_dir: Option<PathBuf>, target_label: Option<String>) -> Result<()> {
-    let target = target_label.unwrap_or_else(runtime_target_label);
-    let binary_name = binary_name_for_target(&target);
-    let install_dir = install_dir.unwrap_or_else(default_install_dir);
-    let installed_binary = install_dir.join(binary_name);
-    let rollback_binary = rollback_path_for_binary(&installed_binary);
-    if !rollback_binary.is_file() {
-        anyhow::bail!("rollback binary not found: {}", rollback_binary.display());
-    }
-    block_windows_active_executable_rollback(
-        &installed_binary,
-        &rollback_binary,
-        &install_dir,
-        &target,
-    )?;
-    fs::copy(&rollback_binary, &installed_binary).with_context(|| {
-        format!(
-            "copy rollback {} to {}",
-            rollback_binary.display(),
-            installed_binary.display()
-        )
-    })?;
-    make_executable(&installed_binary)?;
-    let result = serde_json::json!({
-        "status": "rolled_back",
-        "target": target,
-        "installed_binary": installed_binary,
-        "rollback_binary": rollback_binary,
-    });
-    println!("{}", serde_json::to_string_pretty(&result)?);
-    Ok(())
-}
-
-#[cfg(windows)]
-fn block_windows_active_executable_rollback(
-    installed_binary: &Path,
-    rollback_binary: &Path,
-    install_dir: &Path,
-    target: &str,
-) -> Result<()> {
-    let current_exe = std::env::current_exe().context("resolve current ao2 executable")?;
-    let current_exe = canonicalize_for_comparison(&current_exe);
-    let installed_binary = canonicalize_for_comparison(installed_binary);
-    if current_exe != installed_binary {
-        return Ok(());
-    }
-
-    eprintln!("Windows-safe rollback runner required");
-    eprintln!("rollback_status=blocked_active_executable");
-    eprintln!("installed_binary={}", installed_binary.display());
-    eprintln!("rollback_binary={}", rollback_binary.display());
-    eprintln!(
-        "safe_command=Use an extracted or alternate ao2.exe runner: <extracted-or-alternate>\\bin\\ao2.exe install rollback --install-dir \"{}\" --target-label {}",
-        install_dir.display(),
-        target
-    );
-    eprintln!(
-        "recovery=Windows cannot replace the running ao2.exe. Use an extracted or alternate ao2.exe runner from the verified archive."
-    );
-    anyhow::bail!(
-        "Windows cannot replace the running ao2.exe; rollback_status=blocked_active_executable"
-    );
-}
-
-#[cfg(not(windows))]
-fn block_windows_active_executable_rollback(
-    _installed_binary: &Path,
-    _rollback_binary: &Path,
-    _install_dir: &Path,
-    _target: &str,
-) -> Result<()> {
-    Ok(())
-}
-
-#[cfg(windows)]
-fn canonicalize_for_comparison(path: &Path) -> PathBuf {
-    path.canonicalize().unwrap_or_else(|_| path.to_path_buf())
-}
-
 struct UpgradeApplyOptions {
     release_file: Option<PathBuf>,
     release_url: Option<String>,
@@ -59486,13 +59282,6 @@ fn upgrade_check(release_file: Option<PathBuf>, release_url: Option<String>) -> 
     let result = upgrade_check_report(&release)?;
     println!("{}", serde_json::to_string_pretty(&result)?);
     Ok(())
-}
-
-fn chrono_like_timestamp() -> String {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_nanos().to_string())
-        .unwrap_or_else(|_| "0".to_string())
 }
 
 fn release(command: ReleaseCommand) -> Result<()> {
@@ -64210,7 +63999,7 @@ fn verify_release_provenance_signature(
     verify_file_signature(provenance_json, provenance_signature, public_key).unwrap_or(false)
 }
 
-fn runtime_target_label() -> String {
+pub(crate) fn runtime_target_label() -> String {
     format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH)
 }
 
