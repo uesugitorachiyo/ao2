@@ -12,11 +12,9 @@ use crate::cli_util::binary_name_for_target;
 use crate::install_paths::{
     command_exists, default_install_dir, install_verification_evidence_path, is_binary_on_path,
 };
+use crate::release_provenance::verify_release_provenance_signature;
 
-use super::{
-    json_string, read_json_file, runtime_target_label, terminate_workbench_child,
-    verify_release_provenance_signature,
-};
+use super::{json_string, read_json_file, runtime_target_label, terminate_workbench_child};
 
 pub(crate) fn doctor(
     json: bool,

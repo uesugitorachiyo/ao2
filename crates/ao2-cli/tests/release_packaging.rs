@@ -1730,6 +1730,9 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
     let release_crypto_source =
         fs::read_to_string(root.join("crates/ao2-cli/src/release_crypto.rs"))
             .expect("release crypto source exists");
+    let release_provenance_source =
+        fs::read_to_string(root.join("crates/ao2-cli/src/release_provenance.rs"))
+            .expect("release provenance source exists");
     let provider_run_repair_tests =
         fs::read_to_string(root.join("crates/ao2-cli/tests/cli_provider_run_repair.rs"))
             .expect("cli provider run/repair tests exist");
@@ -1745,12 +1748,19 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
             "{function_name} must not shell out to openssl"
         );
     }
-    let function_source = function_body_source(&main_source, "verify_release_provenance_signature");
+    let function_source = function_body_source(
+        &release_provenance_source,
+        "verify_release_provenance_signature",
+    );
     assert!(
         !function_source.contains("ProcessCommand::new(\"openssl\")"),
         "verify_release_provenance_signature must not shell out to openssl"
     );
-    for source in [&main_source, &release_crypto_source] {
+    for source in [
+        &main_source,
+        &release_crypto_source,
+        &release_provenance_source,
+    ] {
         assert!(
             !source.contains("ProcessCommand::new(\"openssl\")"),
             "CLI release signing sources must not shell out to openssl"
