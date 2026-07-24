@@ -3,7 +3,7 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::make_executable;
+use crate::install_paths::make_executable;
 
 pub(crate) fn write_release_verifier_scripts(stage_dir: &Path) -> Result<()> {
     let verify_sh = stage_dir.join("verify-release.sh");

@@ -3,7 +3,7 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::make_executable;
+use crate::install_paths::make_executable;
 
 pub(crate) fn write_installer_scripts(stage_dir: &Path, binary_name: &str) -> Result<()> {
     let install_sh = stage_dir.join("install.sh");

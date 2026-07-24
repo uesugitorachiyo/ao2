@@ -48,6 +48,7 @@ mod factory_queue;
 mod git_cmd;
 mod github_issue_draft;
 mod github_issue_intake;
+mod install_paths;
 mod memory_store;
 mod provider_contract;
 mod pulse_eval_loop;
@@ -104,6 +105,10 @@ use factory_queue::{
 };
 use git_cmd::git;
 use github_issue_intake::issue;
+use install_paths::{
+    default_install_dir, install_verification_evidence_path, make_executable,
+    rollback_path_for_binary,
+};
 use memory_store::{
     append_jsonl, memory_link_run_json, memory_records_path, memory_run_links_path,
     memory_search_json, memory_write_record_json, read_jsonl_values,
@@ -59307,14 +59312,6 @@ fn install_update_result(options: InstallUpdateOptions) -> Result<serde_json::Va
     Ok(result)
 }
 
-fn install_verification_evidence_path(installed_binary: &Path) -> PathBuf {
-    let file_name = installed_binary
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("ao2");
-    installed_binary.with_file_name(format!("{file_name}.install-verification.json"))
-}
-
 fn rollback_install(install_dir: Option<PathBuf>, target_label: Option<String>) -> Result<()> {
     let target = target_label.unwrap_or_else(runtime_target_label);
     let binary_name = binary_name_for_target(&target);
@@ -59489,26 +59486,6 @@ fn upgrade_check(release_file: Option<PathBuf>, release_url: Option<String>) -> 
     let result = upgrade_check_report(&release)?;
     println!("{}", serde_json::to_string_pretty(&result)?);
     Ok(())
-}
-
-fn default_install_dir() -> PathBuf {
-    if cfg!(windows) {
-        std::env::var_os("LOCALAPPDATA")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                std::env::var_os("USERPROFILE")
-                    .map(PathBuf::from)
-                    .unwrap_or_else(|| PathBuf::from("."))
-            })
-            .join("AO2")
-            .join("bin")
-    } else {
-        std::env::var_os("HOME")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join(".local")
-            .join("bin")
-    }
 }
 
 fn chrono_like_timestamp() -> String {
@@ -64222,30 +64199,6 @@ fn open_report_target(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn command_exists(command: &str) -> bool {
-    let path = std::env::var_os("PATH").unwrap_or_default();
-    std::env::split_paths(&path).any(|dir| {
-        let candidate = dir.join(command);
-        if candidate.is_file() {
-            return true;
-        }
-        cfg!(windows) && dir.join(format!("{command}.exe")).is_file()
-    })
-}
-
-fn is_binary_on_path(binary_name: &str, installed_binary: &Path) -> bool {
-    let Ok(expected) = fs::canonicalize(installed_binary) else {
-        return false;
-    };
-    let path = std::env::var_os("PATH").unwrap_or_default();
-    std::env::split_paths(&path).any(|dir| {
-        let candidate = dir.join(binary_name);
-        fs::canonicalize(candidate)
-            .map(|candidate| candidate == expected)
-            .unwrap_or(false)
-    })
-}
-
 fn verify_release_provenance_signature(
     provenance_json: &Path,
     provenance_signature: &Path,
@@ -64255,29 +64208,6 @@ fn verify_release_provenance_signature(
         return false;
     }
     verify_file_signature(provenance_json, provenance_signature, public_key).unwrap_or(false)
-}
-
-fn rollback_path_for_binary(installed_binary: &Path) -> PathBuf {
-    let filename = installed_binary
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or("ao2");
-    installed_binary.with_file_name(format!("{filename}.rollback"))
-}
-
-#[cfg(unix)]
-pub(crate) fn make_executable(path: &Path) -> Result<()> {
-    use std::os::unix::fs::PermissionsExt;
-
-    let mut permissions = fs::metadata(path)?.permissions();
-    permissions.set_mode(0o755);
-    fs::set_permissions(path, permissions)?;
-    Ok(())
-}
-
-#[cfg(not(unix))]
-pub(crate) fn make_executable(_path: &Path) -> Result<()> {
-    Ok(())
 }
 
 fn runtime_target_label() -> String {

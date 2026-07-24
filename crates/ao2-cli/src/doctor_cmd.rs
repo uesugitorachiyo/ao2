@@ -9,9 +9,11 @@ use anyhow::Result;
 use ao2_adapters::{doctor_provider, parse_provider};
 
 use crate::cli_util::binary_name_for_target;
+use crate::install_paths::{
+    command_exists, default_install_dir, install_verification_evidence_path, is_binary_on_path,
+};
 
 use super::{
-    command_exists, default_install_dir, install_verification_evidence_path, is_binary_on_path,
     json_string, read_json_file, runtime_target_label, terminate_workbench_child,
     verify_release_provenance_signature,
 };
