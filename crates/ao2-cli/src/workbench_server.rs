@@ -1,4 +1,8 @@
 use super::*;
+use crate::workbench_render::{
+    latest_workbench_support_packet_json, render_workbench, workbench_provider_contracts_json,
+    WorkbenchRenderOptions,
+};
 
 pub(super) fn serve_cockpit(
     target: PathBuf,

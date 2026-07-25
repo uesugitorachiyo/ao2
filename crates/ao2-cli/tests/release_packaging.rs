@@ -2191,6 +2191,9 @@ fn release_operational_scripts_cover_three_os_ci_and_download_verification() {
     let package_json = fs::read_to_string(root.join("package.json")).expect("package json exists");
     let cli_source =
         fs::read_to_string(root.join("crates/ao2-cli/src/main.rs")).expect("cli source exists");
+    let workbench_render_source =
+        fs::read_to_string(root.join("crates/ao2-cli/src/workbench_render.rs"))
+            .expect("Workbench render source exists");
 
     assert!(three_os.contains("AO2_WINDOWS_SSH_TARGET"));
     assert!(three_os.contains("AO2_UBUNTU_SSH_TARGET"));
@@ -2707,9 +2710,9 @@ fn release_operational_scripts_cover_three_os_ci_and_download_verification() {
     assert!(release_retention_preflight.contains("-mindepth 1"));
     assert!(release_retention_preflight.contains("rm -rf -- \"$path\""));
     assert!(release_retention_preflight.contains("case \"$path\" in"));
-    assert!(cli_source
+    assert!(workbench_render_source
         .contains("Keep Releases<input id=\"release-retention-keep-releases\" value=\"3\">"));
-    assert!(cli_source
+    assert!(workbench_render_source
         .contains("Keep Bundles<input id=\"release-retention-keep-bundles\" value=\"3\">"));
 
     assert!(package_json.contains("\"smoke:three-os\""));
