@@ -2,6 +2,10 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 
+use super::plugin_consumer::{
+    plugin_consumer_lifecycle, plugin_consumer_lifecycle_observer_bundle,
+    plugin_consumer_lifecycle_observer_bundle_verify, plugin_consumer_lifecycle_windows_recovery,
+};
 use super::plugin_distribution::{
     plugin_distribution_rehearsal, plugin_install_smoke, plugin_manifest, plugin_manifest_verify,
     plugin_package, plugin_package_verify, plugin_readiness, PluginDistributionRehearsalOptions,
@@ -11,12 +15,10 @@ use super::plugin_distribution::{
 use super::{
     plugin_adapter_install_smoke, plugin_adapter_install_smoke_observer_bundle,
     plugin_adapter_install_smoke_verify, plugin_adapter_observer_bundle, plugin_adapter_scaffold,
-    plugin_adapter_scaffold_verify, plugin_clean_package_operator_index, plugin_consumer_lifecycle,
-    plugin_consumer_lifecycle_observer_bundle, plugin_consumer_lifecycle_observer_bundle_verify,
-    plugin_consumer_lifecycle_windows_recovery, plugin_control_plane_fixture_handoff,
-    plugin_control_plane_fixture_handoff_verify, plugin_distribution_observer_bundle,
-    plugin_final_install_transcript, plugin_final_install_transcript_observer_bundle,
-    plugin_packaged_replacement_observer_bundle,
+    plugin_adapter_scaffold_verify, plugin_clean_package_operator_index,
+    plugin_control_plane_fixture_handoff, plugin_control_plane_fixture_handoff_verify,
+    plugin_distribution_observer_bundle, plugin_final_install_transcript,
+    plugin_final_install_transcript_observer_bundle, plugin_packaged_replacement_observer_bundle,
     plugin_packaged_replacement_observer_bundle_verify, plugin_pulse_apply_observer_bundle,
     plugin_pulse_apply_observer_bundle_verify, plugin_pulse_apply_windows_recovery,
     plugin_pulse_chain_observer_bundle, plugin_pulse_chain_observer_bundle_verify,
