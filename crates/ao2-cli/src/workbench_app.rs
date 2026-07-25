@@ -4,96 +4,26 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Context, Result};
 
 use crate::cli_util::json_string;
-use crate::control_plane_http::{control_plane_endpoint, get_text_http, parse_http_endpoint};
-use crate::control_plane_ops::{
-    workbench_support_bundle_import, workbench_support_bundle_inspect,
-    workbench_support_bundle_verify, workbench_support_keygen,
-};
+use crate::control_plane_http::{control_plane_endpoint, get_text_http};
 use crate::provider_ops::{
-    provider_pilot_json, provider_profiles, provider_warning_strings, ProviderPilotOptions,
+    provider_pilot_json, provider_profiles, provider_score_json, provider_warning_strings,
+    ProviderPilotOptions,
 };
-use crate::workbench_queue::{
-    form_value_owned, parse_optional_budget_form, start_workbench_queue,
-    validate_minimum_provider_score, WorkbenchQueue, WorkbenchSupportSigning,
+use crate::workbench_contract::{
+    WorkbenchOperator, WorkbenchOperatorRole, WorkbenchSupportSigning,
 };
-use crate::workbench_render::{render_workbench, WorkbenchRenderOptions};
-use crate::workbench_server::serve_workbench_app;
 use crate::{
-    factory_plan_json, generate_api_token, open_report_target, percent_decode, percent_encode,
-    shell_quote, validate_factory_replacement_smoke_run_id, FactoryPlanSigning, WorkbenchCommand,
+    factory_plan_json, form_value_owned, generate_api_token, open_report_target, percent_decode,
+    percent_encode, shell_quote, validate_factory_replacement_smoke_run_id, FactoryPlanSigning,
     TASK_TEMPLATES,
 };
 
-pub(super) fn workbench(command: WorkbenchCommand) -> Result<()> {
-    match command {
-        WorkbenchCommand::Export {
-            target,
-            out,
-            open,
-            provenance_dir,
-        } => workbench_export(target, out, open, provenance_dir),
-        WorkbenchCommand::Serve {
-            target,
-            host,
-            port,
-            once,
-            provenance_dir,
-            api_token,
-            operator_tokens,
-            enable_execution,
-            queue_retention,
-            control_plane_url,
-            support_signing_key,
-            support_signer_id,
-        } => serve_workbench(ServeWorkbenchOptions {
-            target,
-            host,
-            port,
-            once,
-            provenance_dir,
-            api_token,
-            operator_tokens,
-            enable_execution,
-            queue_retention,
-            control_plane_url,
-            support_signing_key,
-            support_signer_id,
-        }),
-        WorkbenchCommand::SupportVerify { bundle_dir, json } => {
-            workbench_support_bundle_verify(bundle_dir, json)
-        }
-        WorkbenchCommand::SupportImport {
-            bundle_dir,
-            out_dir,
-            json,
-        } => workbench_support_bundle_import(bundle_dir, out_dir, json),
-        WorkbenchCommand::SupportInspect { bundle_dir, json } => {
-            workbench_support_bundle_inspect(bundle_dir, json)
-        }
-        WorkbenchCommand::SupportKeygen { out, bits, json } => {
-            workbench_support_keygen(out, bits, json)
-        }
-    }
-}
-
-fn workbench_export(
+pub(super) fn workbench_export(
     target: PathBuf,
     out: Option<PathBuf>,
     open: bool,
-    provenance_dir: PathBuf,
+    html: String,
 ) -> Result<()> {
-    let html = render_workbench(
-        &target,
-        &provenance_dir,
-        WorkbenchRenderOptions {
-            operator: None,
-            execution_enabled: false,
-            can_operate: false,
-            release_comparison_signing_enabled: false,
-            control_plane_url: None,
-            release_gate_artifact_path: None,
-        },
-    )?;
     let path = out.unwrap_or_else(|| target.join(".ao2").join("workbench").join("index.html"));
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
@@ -107,70 +37,7 @@ fn workbench_export(
     Ok(())
 }
 
-struct ServeWorkbenchOptions {
-    target: PathBuf,
-    host: String,
-    port: u16,
-    once: bool,
-    provenance_dir: PathBuf,
-    api_token: Option<String>,
-    operator_tokens: Vec<String>,
-    enable_execution: bool,
-    queue_retention: usize,
-    control_plane_url: Option<String>,
-    support_signing_key: Option<PathBuf>,
-    support_signer_id: String,
-}
-
-pub(super) struct WorkbenchAppOptions {
-    pub(super) host: String,
-    pub(super) port: u16,
-    pub(super) once: bool,
-    pub(super) target: PathBuf,
-    pub(super) provenance_dir: PathBuf,
-    pub(super) operators: Vec<WorkbenchOperator>,
-    pub(super) support_signing: Option<WorkbenchSupportSigning>,
-    pub(super) queue: Option<WorkbenchQueue>,
-    pub(super) control_plane_url: Option<String>,
-}
-
-#[derive(Clone, Debug)]
-pub(super) struct WorkbenchOperator {
-    pub(super) id: String,
-    pub(super) role: WorkbenchOperatorRole,
-    pub(super) token: String,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum WorkbenchOperatorRole {
-    Viewer,
-    Operator,
-    Admin,
-}
-
-impl WorkbenchOperatorRole {
-    pub(super) fn as_str(self) -> &'static str {
-        match self {
-            WorkbenchOperatorRole::Viewer => "viewer",
-            WorkbenchOperatorRole::Operator => "operator",
-            WorkbenchOperatorRole::Admin => "admin",
-        }
-    }
-
-    fn level(self) -> u8 {
-        match self {
-            WorkbenchOperatorRole::Viewer => 1,
-            WorkbenchOperatorRole::Operator => 2,
-            WorkbenchOperatorRole::Admin => 3,
-        }
-    }
-
-    pub(super) fn can(self, required: WorkbenchOperatorRole) -> bool {
-        self.level() >= required.level()
-    }
-}
-
-fn build_workbench_operators(
+pub(super) fn build_workbench_operators(
     admin_token: String,
     operator_tokens: Vec<String>,
 ) -> Result<Vec<WorkbenchOperator>> {
@@ -212,72 +79,6 @@ fn parse_workbench_operator_token(value: &str) -> Result<WorkbenchOperator> {
         id: fields[0].trim().to_string(),
         role,
         token: fields[2].trim().to_string(),
-    })
-}
-
-fn serve_workbench(options: ServeWorkbenchOptions) -> Result<()> {
-    let ServeWorkbenchOptions {
-        target,
-        host,
-        port,
-        once,
-        provenance_dir,
-        api_token,
-        operator_tokens,
-        enable_execution,
-        queue_retention,
-        control_plane_url,
-        support_signing_key,
-        support_signer_id,
-    } = options;
-    let api_token = api_token.unwrap_or_else(generate_api_token);
-    let control_plane_url = normalize_workbench_control_plane_url(control_plane_url)?;
-    let operators = build_workbench_operators(api_token.clone(), operator_tokens)?;
-    let support_signing = support_signing_key.map(|key_path| WorkbenchSupportSigning {
-        key_path,
-        signer_id: support_signer_id,
-    });
-    let queue = if enable_execution {
-        Some(start_workbench_queue(
-            &target,
-            queue_retention,
-            support_signing.clone(),
-        )?)
-    } else {
-        None
-    };
-    serve_workbench_app(WorkbenchAppOptions {
-        host,
-        port,
-        once,
-        target,
-        provenance_dir,
-        operators,
-        support_signing,
-        queue,
-        control_plane_url,
-    })
-}
-
-fn normalize_workbench_control_plane_url(value: Option<String>) -> Result<Option<String>> {
-    let Some(value) = value else {
-        return Ok(None);
-    };
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return Ok(None);
-    }
-    parse_http_endpoint(trimmed)
-        .with_context(|| format!("validate --control-plane-url {trimmed}"))?;
-    Ok(Some(trimmed.trim_end_matches('/').to_string()))
-}
-
-pub(crate) fn query_value_owned(query: &str, key: &str) -> Option<String> {
-    query.split('&').find_map(|part| {
-        let (query_key, value) = part.split_once('=')?;
-        (query_key == key)
-            .then(|| percent_decode(value).trim().to_string())
-            .filter(|value| !value.is_empty())
     })
 }
 
@@ -537,6 +338,66 @@ fn write_workbench_governed_runspec(path: &Path, run_id: &str) -> Result<()> {
         "run_id: {run_id}\nverifier_command: python -m pytest -q\nsuccess_criteria:\n  - governed-run status is accepted\n  - evaluator decision signature verifies\n  - evidence pack digest is recorded\n"
     );
     fs::write(path, content).with_context(|| format!("write {}", path.display()))
+}
+
+#[derive(Debug)]
+pub(super) struct WorkbenchMinimumScoreError {
+    pub(super) run_id: String,
+    pub(super) minimum_score: u64,
+    pub(super) score: u64,
+    pub(super) verdict: String,
+}
+
+impl std::fmt::Display for WorkbenchMinimumScoreError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "minimum_provider_score_not_met")
+    }
+}
+
+impl std::error::Error for WorkbenchMinimumScoreError {}
+
+pub(super) fn parse_optional_budget_form(
+    form: &std::collections::BTreeMap<String, String>,
+    key: &str,
+) -> Result<Option<f64>> {
+    let Some(value) = form_value_owned(form, key) else {
+        return Ok(None);
+    };
+    let budget = value
+        .parse::<f64>()
+        .with_context(|| format!("{key} must be a number"))?;
+    if !budget.is_finite() || budget <= 0.0 {
+        anyhow::bail!("{key} must be a positive finite number");
+    }
+    Ok(Some(budget))
+}
+
+pub(super) fn validate_minimum_provider_score(
+    target: &Path,
+    run_id: &str,
+    minimum_score: u64,
+) -> Result<serde_json::Value> {
+    if minimum_score == 0 {
+        return Ok(serde_json::Value::Null);
+    }
+    let scorecard =
+        provider_score_json(target, run_id).map_err(|_| WorkbenchMinimumScoreError {
+            run_id: run_id.to_string(),
+            minimum_score,
+            score: 0,
+            verdict: "missing".to_string(),
+        })?;
+    let score = crate::cli_util::json_u64(&scorecard, "score");
+    if score < minimum_score {
+        return Err(WorkbenchMinimumScoreError {
+            run_id: run_id.to_string(),
+            minimum_score,
+            score,
+            verdict: json_string(&scorecard, "verdict"),
+        }
+        .into());
+    }
+    Ok(scorecard)
 }
 
 pub(super) fn workbench_provider_pilot_json(

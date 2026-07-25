@@ -77,6 +77,7 @@ mod support_bundle;
 mod upgrade_cmd;
 mod windows_input;
 mod workbench_app;
+mod workbench_contract;
 mod workbench_factory_api;
 mod workbench_memory;
 mod workbench_provider_pilot;
@@ -90,11 +91,16 @@ mod workbench_run_evidence;
 mod workbench_server;
 mod workbench_support;
 
-pub(crate) use workbench_app::query_value_owned;
-use workbench_app::{workbench, WorkbenchOperator};
+use workbench_app::workbench_export;
+use workbench_contract::{WorkbenchOperator, WorkbenchSupportSigning};
 use workbench_queue::*;
-use workbench_render::latest_workbench_support_packet_json;
-use workbench_server::{parse_http_request_line, serve_cockpit, split_path_query};
+use workbench_render::{
+    latest_workbench_support_packet_json, render_workbench, WorkbenchRenderOptions,
+};
+use workbench_server::{
+    parse_http_request_line, serve_cockpit, serve_workbench, split_path_query,
+    ServeWorkbenchOptions,
+};
 
 use workbench_factory_api::{
     workbench_factory_compat_plan_json, workbench_factory_greenfield_spec_ingest_json,
@@ -144,8 +150,10 @@ use cli_util::{
 use control_plane_http::{control_plane_endpoint, get_json_http, get_text_http, post_json_http};
 use control_plane_ops::{
     control_plane, render_workbench_queue_failure_diagnostics_table,
-    render_workbench_redaction_audit_section, workbench_support_bundle_verify_json,
-    workbench_support_evidence_export_subject, write_workbench_support_metadata,
+    render_workbench_redaction_audit_section, workbench_support_bundle_import,
+    workbench_support_bundle_inspect, workbench_support_bundle_verify,
+    workbench_support_bundle_verify_json, workbench_support_evidence_export_subject,
+    workbench_support_keygen, write_workbench_support_metadata,
 };
 use control_plane_snapshot::cp;
 use doctor_cmd::{doctor, doctor_report_json};
@@ -43507,6 +43515,72 @@ fn cockpit(command: CockpitCommand) -> Result<()> {
     }
 }
 
+fn workbench(command: WorkbenchCommand) -> Result<()> {
+    match command {
+        WorkbenchCommand::Export {
+            target,
+            out,
+            open,
+            provenance_dir,
+        } => {
+            let html = render_workbench(
+                &target,
+                &provenance_dir,
+                WorkbenchRenderOptions {
+                    operator: None,
+                    execution_enabled: false,
+                    can_operate: false,
+                    release_comparison_signing_enabled: false,
+                    control_plane_url: None,
+                    release_gate_artifact_path: None,
+                },
+            )?;
+            workbench_export(target, out, open, html)
+        }
+        WorkbenchCommand::Serve {
+            target,
+            host,
+            port,
+            once,
+            provenance_dir,
+            api_token,
+            operator_tokens,
+            enable_execution,
+            queue_retention,
+            control_plane_url,
+            support_signing_key,
+            support_signer_id,
+        } => serve_workbench(ServeWorkbenchOptions {
+            target,
+            host,
+            port,
+            once,
+            provenance_dir,
+            api_token,
+            operator_tokens,
+            enable_execution,
+            queue_retention,
+            control_plane_url,
+            support_signing_key,
+            support_signer_id,
+        }),
+        WorkbenchCommand::SupportVerify { bundle_dir, json } => {
+            workbench_support_bundle_verify(bundle_dir, json)
+        }
+        WorkbenchCommand::SupportImport {
+            bundle_dir,
+            out_dir,
+            json,
+        } => workbench_support_bundle_import(bundle_dir, out_dir, json),
+        WorkbenchCommand::SupportInspect { bundle_dir, json } => {
+            workbench_support_bundle_inspect(bundle_dir, json)
+        }
+        WorkbenchCommand::SupportKeygen { out, bits, json } => {
+            workbench_support_keygen(out, bits, json)
+        }
+    }
+}
+
 fn cockpit_index(target: PathBuf, out: Option<PathBuf>, open: bool) -> Result<()> {
     let html = render_cockpit_index(&target)?;
     let path = out.unwrap_or_else(|| target.join(".ao2").join("cockpit").join("index.html"));
@@ -43520,6 +43594,24 @@ fn cockpit_index(target: PathBuf, out: Option<PathBuf>, open: bool) -> Result<()
         println!("open_target={}", path.display());
     }
     Ok(())
+}
+
+pub(crate) fn query_value_owned(query: &str, key: &str) -> Option<String> {
+    query.split('&').find_map(|part| {
+        let (query_key, value) = part.split_once('=')?;
+        (query_key == key)
+            .then(|| percent_decode(value).trim().to_string())
+            .filter(|value| !value.is_empty())
+    })
+}
+
+pub(crate) fn form_value_owned(
+    form: &std::collections::BTreeMap<String, String>,
+    key: &str,
+) -> Option<String> {
+    form.get(key)
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 fn shell_quote(input: &str) -> String {
