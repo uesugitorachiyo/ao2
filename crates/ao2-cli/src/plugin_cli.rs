@@ -12,27 +12,29 @@ use super::plugin_distribution::{
     PluginInstallSmokeOptions, PluginManifestVerifyOptions, PluginPackageOptions,
     PluginPackageVerifyOptions,
 };
+use super::plugin_release::{
+    plugin_final_install_transcript, plugin_final_install_transcript_observer_bundle,
+    plugin_release_candidate, plugin_release_candidate_control_plane_fixture_handoff,
+    plugin_release_candidate_control_plane_fixture_handoff_verify,
+    plugin_release_candidate_observer_bundle, plugin_release_candidate_observer_bundle_verify,
+    plugin_release_candidate_verify, plugin_release_candidate_windows_recovery,
+    plugin_release_candidate_windows_recovery_verify,
+    plugin_release_candidate_windows_transfer_bundle, plugin_shipment_readiness,
+};
 use super::{
     plugin_adapter_install_smoke, plugin_adapter_install_smoke_observer_bundle,
     plugin_adapter_install_smoke_verify, plugin_adapter_observer_bundle, plugin_adapter_scaffold,
     plugin_adapter_scaffold_verify, plugin_clean_package_operator_index,
     plugin_control_plane_fixture_handoff, plugin_control_plane_fixture_handoff_verify,
-    plugin_distribution_observer_bundle, plugin_final_install_transcript,
-    plugin_final_install_transcript_observer_bundle, plugin_packaged_replacement_observer_bundle,
+    plugin_distribution_observer_bundle, plugin_packaged_replacement_observer_bundle,
     plugin_packaged_replacement_observer_bundle_verify, plugin_pulse_apply_observer_bundle,
     plugin_pulse_apply_observer_bundle_verify, plugin_pulse_apply_windows_recovery,
     plugin_pulse_chain_observer_bundle, plugin_pulse_chain_observer_bundle_verify,
     plugin_pulse_eval_loop_observer_bundle, plugin_pulse_eval_loop_observer_bundle_verify,
     plugin_pulse_executor_observer_bundle, plugin_pulse_executor_observer_bundle_verify,
     plugin_pulse_once_observer_bundle, plugin_pulse_once_observer_bundle_verify,
-    plugin_release_candidate, plugin_release_candidate_control_plane_fixture_handoff,
-    plugin_release_candidate_control_plane_fixture_handoff_verify,
-    plugin_release_candidate_observer_bundle, plugin_release_candidate_observer_bundle_verify,
-    plugin_release_candidate_verify, plugin_release_candidate_windows_recovery,
-    plugin_release_candidate_windows_recovery_verify,
-    plugin_release_candidate_windows_transfer_bundle,
-    plugin_release_gate_with_replacement_observer_bundle, plugin_shipment_readiness,
-    plugin_wrapper_harness, plugin_wrapper_harness_verify, PluginCommand,
+    plugin_release_gate_with_replacement_observer_bundle, plugin_wrapper_harness,
+    plugin_wrapper_harness_verify, PluginCommand,
 };
 
 pub(super) fn plugin(command: PluginCommand) -> Result<()> {
