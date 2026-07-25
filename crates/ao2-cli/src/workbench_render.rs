@@ -1,4 +1,5 @@
 use super::*;
+use crate::workbench_app::WorkbenchOperator;
 
 pub(super) struct WorkbenchRenderOptions<'a> {
     pub(super) operator: Option<&'a WorkbenchOperator>,
