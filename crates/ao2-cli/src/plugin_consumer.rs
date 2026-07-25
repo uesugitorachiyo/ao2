@@ -5,6 +5,10 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 use super::cli_util::{canonical_json_sha256, json_u64};
+use super::plugin_adapter::{
+    validate_plugin_adapter_install_smoke_contract, validate_plugin_adapter_scaffold_summary,
+    validate_plugin_control_plane_observation, validate_plugin_side_effects_false,
+};
 use super::plugin_cli::{
     PluginConsumerLifecycleObserverBundleOptions,
     PluginConsumerLifecycleObserverBundleVerifyOptions, PluginConsumerLifecycleOptions,
@@ -20,9 +24,7 @@ use super::{
     atomic_write_text, create_tar_gz, factory_app_run_bundle_reject_secret_markers,
     fail_if_provider_api_key_env_present, is_sha256_hex, json_bool, json_string,
     resolve_cli_artifact_reference, run_current_ao2_json_command, sha256_file,
-    validate_plugin_adapter_install_smoke_contract, validate_plugin_adapter_scaffold_summary,
-    validate_plugin_control_plane_observation, validate_plugin_readiness_contract,
-    validate_plugin_side_effects_false,
+    validate_plugin_readiness_contract,
 };
 
 pub(super) fn plugin_consumer_lifecycle(options: PluginConsumerLifecycleOptions) -> Result<()> {
