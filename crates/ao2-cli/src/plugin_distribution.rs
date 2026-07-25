@@ -12,8 +12,7 @@ use super::{
     factory_project_plan_init_app_step_repo, fail_if_provider_api_key_env_present, json_bool,
     json_string, read_json_file, run_current_ao2_json_command, sha256_bytes_hex, sha256_file,
     validate_plugin_readiness_contract, validate_plugin_wrapper_args,
-    validate_plugin_wrapper_harness_summary, write_plugin_installation_from_archive,
-    PluginWrapperArgsFile,
+    validate_plugin_wrapper_harness_summary, PluginWrapperArgsFile,
 };
 
 pub(super) struct PluginManifestVerifyOptions {
@@ -1113,7 +1112,7 @@ pub(super) fn plugin_distribution_rehearsal(
             .join("installations")
             .join(target)
             .join("ao2-governed-execution");
-        write_plugin_installation_from_archive(
+        write_plugin_package_installation(
             &archive_files,
             &installed_root,
             &options.summary,
@@ -1398,6 +1397,49 @@ pub(super) fn read_plugin_package_archive_files(
         files.insert(normalized, bytes);
     }
     Ok(files)
+}
+
+pub(super) fn write_plugin_package_installation(
+    archive_files: &BTreeMap<String, Vec<u8>>,
+    installed_root: &Path,
+    final_summary: &Path,
+    archive: &Path,
+) -> Result<()> {
+    if installed_root.exists() {
+        fs::remove_dir_all(installed_root)
+            .with_context(|| format!("remove {}", installed_root.display()))?;
+    }
+    fs::create_dir_all(installed_root)
+        .with_context(|| format!("create {}", installed_root.display()))?;
+    for (relative_path, bytes) in archive_files {
+        let path = installed_root.join(relative_path);
+        if !path.starts_with(installed_root) {
+            anyhow::bail!("plugin package archive path escapes install root: {relative_path}");
+        }
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+        }
+        fs::write(&path, bytes).with_context(|| format!("write {}", path.display()))?;
+    }
+    fs::copy(
+        final_summary,
+        installed_root.join("ao2-plugin-package.json"),
+    )
+    .with_context(|| {
+        format!(
+            "copy {} to {}",
+            final_summary.display(),
+            installed_root.join("ao2-plugin-package.json").display()
+        )
+    })?;
+    fs::copy(archive, installed_root.join("ao2-plugin-package.tar.gz")).with_context(|| {
+        format!(
+            "copy {} to {}",
+            archive.display(),
+            installed_root.join("ao2-plugin-package.tar.gz").display()
+        )
+    })?;
+    Ok(())
 }
 
 pub(super) fn plugin_package_normalized_archive_path(path: &Path) -> Result<String> {
