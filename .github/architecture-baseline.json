@@ -1,6 +1,6 @@
 {
   "baseline_source": {
-    "head": "09909c2753749095fdb575a22963a88da80c3f7f",
+    "head": "897b8459a7fe15a808f091a3cbe128a3ac0060b5",
     "v0_5_3_tag_target": "947e566bd3f54ed902f3c14fc0c90e21a24359bc"
   },
   "budgets": {
@@ -13,6 +13,7 @@
   "measurements": {
     "source": {
       "file_lines": {
+        "crates/ao2-cli/src/artifact_safety.rs": 57,
         "crates/ao2-cli/src/cli_util.rs": 387,
         "crates/ao2-cli/src/control_plane_http.rs": 136,
         "crates/ao2-cli/src/control_plane_ops.rs": 3476,
@@ -29,7 +30,7 @@
         "crates/ao2-cli/src/greenfield_workflow.rs": 735,
         "crates/ao2-cli/src/install_cmd.rs": 274,
         "crates/ao2-cli/src/install_paths.rs": 79,
-        "crates/ao2-cli/src/main.rs": 26578,
+        "crates/ao2-cli/src/main.rs": 26534,
         "crates/ao2-cli/src/memory_store.rs": 578,
         "crates/ao2-cli/src/phase1_promotion.rs": 1441,
         "crates/ao2-cli/src/plugin_adapter.rs": 2050,
@@ -84,11 +85,12 @@
         "crates/ao2-cli/src/workbench_server.rs": 1644,
         "crates/ao2-cli/src/workbench_support.rs": 132
       },
-      "main_rs_lines": 26578,
-      "main_rs_source_concentration_percent": 33.8388,
-      "main_rs_top_level_functions": 204,
+      "main_rs_lines": 26534,
+      "main_rs_source_concentration_percent": 33.7772,
+      "main_rs_top_level_functions": 202,
       "main_rs_top_level_types": 55,
       "module_declarations": [
+        "crates/ao2-cli/src/main.rs::artifact_safety",
         "crates/ao2-cli/src/main.rs::cli_util",
         "crates/ao2-cli/src/main.rs::control_plane_http",
         "crates/ao2-cli/src/main.rs::control_plane_ops",
@@ -159,7 +161,7 @@
         "crates/ao2-cli/src/main.rs::workbench_server",
         "crates/ao2-cli/src/main.rs::workbench_support"
       ],
-      "production_total_lines": 78543
+      "production_total_lines": 78556
     },
     "tests": {
       "cli_approval_replay_line_concentration_percent": 0.0,
