@@ -20,14 +20,14 @@ use crate::control_plane_http::{control_plane_endpoint, post_json_http};
 use crate::provider_contract::provider_contract;
 use crate::release_crypto::{public_key_pem_from_private_key, sign_bytes_with_private_key};
 use crate::release_history::release_tag_sort_key;
+use crate::run_resume::approve_and_resume_persisted_sandbox_patches;
 use crate::workbench_provider_pilot_acceptance::{
     collect_provider_pilot_acceptance_bundles, provider_cost_ledger_release_tag,
     provider_pilot_acceptance_verification_json,
 };
 use crate::{
-    approve_and_resume_persisted_sandbox_patches, atomic_write_text, format_budget_usd,
-    generate_api_token, now_unix_ms, resolve_api_token, shell_quote, trimmed_required,
-    ProviderCommand, TASK_TEMPLATES,
+    atomic_write_text, format_budget_usd, generate_api_token, now_unix_ms, resolve_api_token,
+    shell_quote, trimmed_required, ProviderCommand, TASK_TEMPLATES,
 };
 
 pub(crate) fn provider(command: ProviderCommand) -> Result<()> {

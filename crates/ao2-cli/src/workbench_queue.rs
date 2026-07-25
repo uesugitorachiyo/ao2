@@ -1,6 +1,7 @@
 use super::*;
 use crate::cli_util::run_dir;
 use crate::run_reporting::{render_report_for_run, run_summary_json};
+use crate::run_resume::approve_and_resume_persisted_sandbox_patches;
 use crate::workbench_app::{
     parse_optional_budget_form, validate_minimum_provider_score, workbench_provider_pilot_json,
 };
