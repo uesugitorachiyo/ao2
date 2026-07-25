@@ -6,7 +6,7 @@ use ao2_core::sha256_hex;
 
 use crate::factory_compat::{read_factory_compat_value, reject_factory_provider_api_key_auth};
 use crate::factory_project_contract::factory_project_start_bundle_verify_trust_boundary;
-use crate::factory_project_start_bundle_raw_path;
+use crate::factory_project_start::factory_project_start_bundle_raw_path;
 
 fn sha256_file(path: &Path) -> Result<String> {
     let bytes = fs::read(path).with_context(|| format!("open {}", path.display()))?;
