@@ -5,8 +5,8 @@ use anyhow::{anyhow, Context, Result};
 use chrono::{SecondsFormat, Utc};
 
 use crate::cli_util::{
-    base64_standard, canonical_json_sha256, hex_lower, json_string, json_u64, sha256_bytes_hex,
-    sha256_file,
+    atomic_write_text, base64_standard, canonical_json_sha256, hex_lower, json_string, json_u64,
+    sha256_bytes_hex, sha256_file,
 };
 use crate::control_plane_http::{control_plane_endpoint, get_json_http, post_json_http};
 use crate::factory_compat::read_factory_compat_value;
@@ -20,7 +20,6 @@ use crate::release_gate::{
     release_replacement_smoke_gate_verification_json,
 };
 use crate::release_summary::release_smoke_summary_verification_json;
-use crate::workbench_queue::atomic_write_text;
 use crate::{resolve_api_token, trimmed_required};
 
 #[allow(clippy::too_many_arguments)]

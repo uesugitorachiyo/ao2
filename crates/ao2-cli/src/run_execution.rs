@@ -9,14 +9,12 @@ use ao2_runtime::{
     start_risky_pr_provider_free, ProviderRunOptions, ResumeOptions, RunOptions,
 };
 
-use crate::cli_util::{json_array, json_string, sha256_bytes_hex};
+use crate::cli_util::{
+    atomic_write_text, json_array, json_string, sanitize_greenfield_id, sha256_bytes_hex,
+};
 use crate::provider_ops::{materialize_template_workflow, read_optional_json};
 use crate::run_resume::approve_and_resume_persisted_sandbox_patches;
-use crate::workbench_queue::atomic_write_text;
-use crate::{
-    pending_approval_recovery_context, print_approval_recovery_context, read_prompt,
-    sanitize_greenfield_id,
-};
+use crate::{pending_approval_recovery_context, print_approval_recovery_context, read_prompt};
 
 pub(crate) struct CliRunOptions {
     pub(crate) workflow: Option<PathBuf>,

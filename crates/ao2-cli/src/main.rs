@@ -177,8 +177,9 @@ use workbench_factory_api::{
 };
 
 use cli_util::{
-    canonical_json_sha256, create_tar_gz, escape_html, json_array, json_bool, json_string,
-    json_u64, json_value_text, read_json_file, sha256_bytes_hex, sha256_file,
+    atomic_write_text, canonical_json_sha256, create_tar_gz, escape_html, json_array, json_bool,
+    json_string, json_u64, json_value_text, now_unix_ms, read_json_file, sanitize_greenfield_id,
+    sha256_bytes_hex, sha256_file,
 };
 use control_plane_ops::{
     control_plane, render_workbench_queue_failure_diagnostics_table,
@@ -8053,39 +8054,6 @@ struct FactoryProjectAcceptanceReviewOptions<'a> {
     signing_key: Option<PathBuf>,
     signer_id: String,
     out: &'a Path,
-}
-
-pub(crate) fn sanitize_greenfield_id(candidate: &str) -> String {
-    let mut out = String::new();
-    let mut last_dash = false;
-    for ch in candidate.trim().chars() {
-        let normalized = if ch.is_ascii_alphanumeric() {
-            Some(ch.to_ascii_lowercase())
-        } else if ch == '-' || ch == '_' || ch.is_whitespace() {
-            Some('-')
-        } else {
-            None
-        };
-        if let Some(ch) = normalized {
-            if ch == '-' {
-                if !last_dash && !out.is_empty() {
-                    out.push(ch);
-                    last_dash = true;
-                }
-            } else {
-                out.push(ch);
-                last_dash = false;
-            }
-        }
-    }
-    while out.ends_with('-') {
-        out.pop();
-    }
-    if out.is_empty() {
-        "greenfield-run".to_string()
-    } else {
-        out
-    }
 }
 
 fn factory_app_run_json(options: FactoryAppRunOptions<'_>) -> Result<serde_json::Value> {
@@ -26401,7 +26369,7 @@ pub(crate) fn runtime_target_label() -> String {
 
 #[cfg(test)]
 mod unix_ms_conversion_tests {
-    use super::unix_ms_from_duration;
+    use crate::cli_util::unix_ms_from_duration;
     use std::time::Duration;
 
     #[test]
