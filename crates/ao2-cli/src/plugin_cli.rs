@@ -2,6 +2,12 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 
+use super::plugin_distribution::{
+    plugin_distribution_rehearsal, plugin_install_smoke, plugin_manifest, plugin_manifest_verify,
+    plugin_package, plugin_package_verify, plugin_readiness, PluginDistributionRehearsalOptions,
+    PluginInstallSmokeOptions, PluginManifestVerifyOptions, PluginPackageOptions,
+    PluginPackageVerifyOptions,
+};
 use super::{
     plugin_adapter_install_smoke, plugin_adapter_install_smoke_observer_bundle,
     plugin_adapter_install_smoke_verify, plugin_adapter_observer_bundle, plugin_adapter_scaffold,
@@ -9,16 +15,14 @@ use super::{
     plugin_consumer_lifecycle_observer_bundle, plugin_consumer_lifecycle_observer_bundle_verify,
     plugin_consumer_lifecycle_windows_recovery, plugin_control_plane_fixture_handoff,
     plugin_control_plane_fixture_handoff_verify, plugin_distribution_observer_bundle,
-    plugin_distribution_rehearsal, plugin_final_install_transcript,
-    plugin_final_install_transcript_observer_bundle, plugin_install_smoke, plugin_manifest,
-    plugin_manifest_verify, plugin_package, plugin_package_verify,
+    plugin_final_install_transcript, plugin_final_install_transcript_observer_bundle,
     plugin_packaged_replacement_observer_bundle,
     plugin_packaged_replacement_observer_bundle_verify, plugin_pulse_apply_observer_bundle,
     plugin_pulse_apply_observer_bundle_verify, plugin_pulse_apply_windows_recovery,
     plugin_pulse_chain_observer_bundle, plugin_pulse_chain_observer_bundle_verify,
     plugin_pulse_eval_loop_observer_bundle, plugin_pulse_eval_loop_observer_bundle_verify,
     plugin_pulse_executor_observer_bundle, plugin_pulse_executor_observer_bundle_verify,
-    plugin_pulse_once_observer_bundle, plugin_pulse_once_observer_bundle_verify, plugin_readiness,
+    plugin_pulse_once_observer_bundle, plugin_pulse_once_observer_bundle_verify,
     plugin_release_candidate, plugin_release_candidate_control_plane_fixture_handoff,
     plugin_release_candidate_control_plane_fixture_handoff_verify,
     plugin_release_candidate_observer_bundle, plugin_release_candidate_observer_bundle_verify,
@@ -947,47 +951,6 @@ pub(super) struct PluginWrapperHarnessOptions {
     pub(super) args_file: PathBuf,
     pub(super) args_sha256: String,
     pub(super) run_kind: String,
-    pub(super) out_dir: PathBuf,
-    pub(super) json_output: bool,
-}
-
-pub(super) struct PluginManifestVerifyOptions {
-    pub(super) manifest_dir: PathBuf,
-    pub(super) manifest_sha256: String,
-    pub(super) json_output: bool,
-}
-
-pub(super) struct PluginInstallSmokeOptions {
-    pub(super) manifest_dir: PathBuf,
-    pub(super) verification: PathBuf,
-    pub(super) verification_sha256: String,
-    pub(super) out: Option<PathBuf>,
-    pub(super) json_output: bool,
-}
-
-pub(super) struct PluginPackageOptions {
-    pub(super) manifest_dir: PathBuf,
-    pub(super) manifest_verification: PathBuf,
-    pub(super) manifest_verification_sha256: String,
-    pub(super) install_smoke: PathBuf,
-    pub(super) install_smoke_sha256: String,
-    pub(super) out_dir: PathBuf,
-    pub(super) json_output: bool,
-}
-
-pub(super) struct PluginPackageVerifyOptions {
-    pub(super) summary: PathBuf,
-    pub(super) summary_sha256: String,
-    pub(super) archive: PathBuf,
-    pub(super) archive_sha256: String,
-    pub(super) json_output: bool,
-}
-
-pub(super) struct PluginDistributionRehearsalOptions {
-    pub(super) summary: PathBuf,
-    pub(super) summary_sha256: String,
-    pub(super) archive: PathBuf,
-    pub(super) archive_sha256: String,
     pub(super) out_dir: PathBuf,
     pub(super) json_output: bool,
 }
