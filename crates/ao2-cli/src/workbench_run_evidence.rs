@@ -4,10 +4,12 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Context, Result};
 use ao2_runtime::{replay_run, ReplayOptions};
 
+use crate::cli_util::run_dir;
 use crate::cli_util::{json_array, json_string, json_u64};
 use crate::evidence_publish::obligation_gate_history_json;
 use crate::provider_ops::provider_score_json;
-use crate::{query_value_owned, run_dir, run_summary_json, runs_list_json};
+use crate::query_value_owned;
+use crate::run_reporting::{run_summary_json, runs_list_json};
 
 pub(crate) fn workbench_run_evidence_summary_json(
     target: &Path,

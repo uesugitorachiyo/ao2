@@ -7,21 +7,23 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 
-use crate::cli_util::{create_tar_gz, escape_html, json_array, json_string, json_u64, sha256_file};
+use crate::cli_util::{
+    create_tar_gz, escape_html, json_array, json_string, json_u64, open_report_target, sha256_file,
+};
 use crate::provider_ops::read_provider_smoke_history;
 use crate::release_crypto::{
     copy_dir_recursive, derive_public_key_from_private_key, extract_tar_gz,
     sign_file_with_private_key, verify_file_signature,
 };
 use crate::release_provenance::ensure_rsa_private_key;
+use crate::run_reporting::runs_list_json;
 use crate::workbench_support::empty_workbench_redaction_audit;
 use crate::{
     atomic_write_text, generate_api_token, http_html_response, http_json_response,
-    http_text_response, now_unix_ms, open_report_target, parse_http_request_line,
-    query_value_owned, read_workbench_audit_events, read_workbench_queue_file, runs_list_json,
-    runtime_git_commit, runtime_target_label, split_path_query, workbench_audit_path_for_target,
-    ControlPlaneCommand, ControlPlaneHistoryCommand, ControlPlaneSourcesCommand,
-    WorkbenchSupportSigning,
+    http_text_response, now_unix_ms, parse_http_request_line, query_value_owned,
+    read_workbench_audit_events, read_workbench_queue_file, runtime_git_commit,
+    runtime_target_label, split_path_query, workbench_audit_path_for_target, ControlPlaneCommand,
+    ControlPlaneHistoryCommand, ControlPlaneSourcesCommand, WorkbenchSupportSigning,
 };
 
 pub(crate) fn workbench_support_keygen(out: PathBuf, bits: usize, json: bool) -> Result<()> {

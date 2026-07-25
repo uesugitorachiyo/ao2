@@ -1,6 +1,8 @@
+use std::ffi::OsString;
 use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command as ProcessCommand;
 
 use anyhow::{Context, Result};
 use ao2_core::sha256_hex;
@@ -14,6 +16,33 @@ pub(crate) fn binary_name_for_target(target: &str) -> &'static str {
     } else {
         "ao2"
     }
+}
+
+pub(crate) fn run_dir(target: &Path, run_id: &str) -> PathBuf {
+    target.join(".ao2").join("runs").join(run_id)
+}
+
+pub(crate) fn open_report_target(path: &Path) -> Result<()> {
+    if std::env::var_os("AO2_TEST_NO_OPEN").is_some() {
+        return Ok(());
+    }
+    let status = if cfg!(windows) {
+        ProcessCommand::new("cmd")
+            .arg("/C")
+            .arg("start")
+            .arg(OsString::from(""))
+            .arg(path)
+            .status()
+    } else if cfg!(target_os = "macos") {
+        ProcessCommand::new("open").arg(path).status()
+    } else {
+        ProcessCommand::new("xdg-open").arg(path).status()
+    }
+    .with_context(|| format!("open report {}", path.display()))?;
+    if !status.success() {
+        anyhow::bail!("open report failed: {}", path.display());
+    }
+    Ok(())
 }
 
 pub(crate) fn create_tar_gz(stage_dir: &Path, archive_path: &Path) -> Result<()> {

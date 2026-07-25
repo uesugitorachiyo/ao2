@@ -13,7 +13,8 @@ use ao2_runtime::{
 };
 
 use crate::cli_util::{
-    base64_standard, hex_lower, json_array, json_f64, json_string, json_u64, sha256_bytes_hex,
+    base64_standard, hex_lower, json_array, json_f64, json_string, json_u64, run_dir,
+    sha256_bytes_hex,
 };
 use crate::control_plane_http::{control_plane_endpoint, post_json_http};
 use crate::provider_contract::provider_contract;
@@ -25,7 +26,7 @@ use crate::workbench_provider_pilot_acceptance::{
 };
 use crate::{
     approve_and_resume_persisted_sandbox_patches, atomic_write_text, format_budget_usd,
-    generate_api_token, now_unix_ms, resolve_api_token, run_dir, shell_quote, trimmed_required,
+    generate_api_token, now_unix_ms, resolve_api_token, shell_quote, trimmed_required,
     ProviderCommand, TASK_TEMPLATES,
 };
 
