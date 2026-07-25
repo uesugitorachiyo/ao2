@@ -1,6 +1,6 @@
 {
   "baseline_source": {
-    "head": "c90b53d6463c03dc761624250d6c5066f3e906b8",
+    "head": "99e4c47be2a330afc9a1671f168d9234b1bbfbc1",
     "v0_5_3_tag_target": "947e566bd3f54ed902f3c14fc0c90e21a24359bc"
   },
   "budgets": {
@@ -28,10 +28,11 @@
         "crates/ao2-cli/src/github_issue_intake.rs": 281,
         "crates/ao2-cli/src/install_cmd.rs": 274,
         "crates/ao2-cli/src/install_paths.rs": 79,
-        "crates/ao2-cli/src/main.rs": 40921,
+        "crates/ao2-cli/src/main.rs": 39603,
         "crates/ao2-cli/src/memory_store.rs": 578,
-        "crates/ao2-cli/src/plugin_cli.rs": 1408,
-        "crates/ao2-cli/src/plugin_distribution.rs": 2108,
+        "crates/ao2-cli/src/plugin_cli.rs": 1410,
+        "crates/ao2-cli/src/plugin_consumer.rs": 1314,
+        "crates/ao2-cli/src/plugin_distribution.rs": 2150,
         "crates/ao2-cli/src/provider_contract.rs": 239,
         "crates/ao2-cli/src/provider_ops.rs": 1890,
         "crates/ao2-cli/src/pulse_eval_loop.rs": 443,
@@ -73,9 +74,9 @@
         "crates/ao2-cli/src/workbench_server.rs": 1643,
         "crates/ao2-cli/src/workbench_support.rs": 132
       },
-      "main_rs_lines": 40921,
-      "main_rs_source_concentration_percent": 52.2752,
-      "main_rs_top_level_functions": 366,
+      "main_rs_lines": 39603,
+      "main_rs_source_concentration_percent": 50.5656,
+      "main_rs_top_level_functions": 356,
       "main_rs_top_level_types": 63,
       "module_declarations": [
         "crates/ao2-cli/src/main.rs::cli_util",
@@ -95,6 +96,7 @@
         "crates/ao2-cli/src/main.rs::install_paths",
         "crates/ao2-cli/src/main.rs::memory_store",
         "crates/ao2-cli/src/main.rs::plugin_cli",
+        "crates/ao2-cli/src/main.rs::plugin_consumer",
         "crates/ao2-cli/src/main.rs::plugin_distribution",
         "crates/ao2-cli/src/main.rs::provider_contract",
         "crates/ao2-cli/src/main.rs::provider_ops",
@@ -137,7 +139,7 @@
         "crates/ao2-cli/src/main.rs::workbench_server",
         "crates/ao2-cli/src/main.rs::workbench_support"
       ],
-      "production_total_lines": 78280
+      "production_total_lines": 78320
     },
     "tests": {
       "cli_approval_replay_line_concentration_percent": 0.0,
