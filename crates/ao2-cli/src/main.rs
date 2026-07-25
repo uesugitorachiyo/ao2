@@ -53,6 +53,7 @@ mod memory_store;
 mod plugin_adapter;
 mod plugin_cli;
 mod plugin_consumer;
+mod plugin_contract;
 mod plugin_distribution;
 mod plugin_pulse;
 mod plugin_release;

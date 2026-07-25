@@ -6,10 +6,10 @@ use anyhow::{anyhow, Context, Result};
 use chrono::{SecondsFormat, Utc};
 
 use super::cli_util::json_u64;
-use super::plugin_adapter::{
+use super::plugin_cli;
+use super::plugin_contract::{
     validate_plugin_control_plane_observation, validate_plugin_side_effects_false,
 };
-use super::plugin_cli;
 use super::plugin_distribution::{
     plugin_package_archive_json, read_plugin_package_archive_files, sha256_archive_file,
 };

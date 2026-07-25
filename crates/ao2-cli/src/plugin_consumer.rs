@@ -4,25 +4,25 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use super::cli_util::{canonical_json_sha256, json_u64};
-use super::plugin_adapter::{
-    validate_plugin_adapter_install_smoke_contract, validate_plugin_adapter_scaffold_summary,
-    validate_plugin_control_plane_observation, validate_plugin_side_effects_false,
-};
+use super::cli_util::canonical_json_sha256;
 use super::plugin_cli::{
     PluginConsumerLifecycleObserverBundleOptions,
     PluginConsumerLifecycleObserverBundleVerifyOptions, PluginConsumerLifecycleOptions,
     PluginConsumerLifecycleWindowsRecoveryOptions,
 };
+use super::plugin_contract::{
+    validate_plugin_adapter_install_smoke_contract, validate_plugin_adapter_scaffold_summary,
+    validate_plugin_consumer_lifecycle_contract,
+    validate_plugin_consumer_lifecycle_observer_bundle_summary,
+};
 use super::plugin_distribution::{
     plugin_package_archive_json, read_plugin_package_archive_files, sha256_archive_file,
-    validate_plugin_install_smoke_contract, validate_plugin_observer_trust_boundary,
-    validate_plugin_package_contract, validate_plugin_provider_auth,
+    validate_plugin_install_smoke_contract, validate_plugin_package_contract,
     write_plugin_package_installation,
 };
 use super::{
     atomic_write_text, create_tar_gz, factory_app_run_bundle_reject_secret_markers,
-    fail_if_provider_api_key_env_present, is_sha256_hex, json_bool, json_string,
+    fail_if_provider_api_key_env_present, is_sha256_hex, json_string,
     resolve_cli_artifact_reference, run_current_ao2_json_command, sha256_file,
     validate_plugin_readiness_contract,
 };
@@ -768,176 +768,6 @@ pub(super) fn plugin_consumer_lifecycle_observer_bundle_verify(
             "schema_version=ao2.k37-plugin-consumer-lifecycle-observer-bundle-verification.v1"
         );
         println!("archive_sha256={actual_archive_sha256}");
-    }
-    Ok(())
-}
-
-pub(super) fn validate_plugin_consumer_lifecycle_observer_bundle_summary(
-    summary: &serde_json::Value,
-    actual_archive_sha256: &str,
-) -> Result<()> {
-    if json_string(summary, "schema_version")
-        != "ao2.k37-plugin-consumer-lifecycle-observer-bundle.v1"
-    {
-        anyhow::bail!(
-            "consumer lifecycle observer bundle requires ao2.k37-plugin-consumer-lifecycle-observer-bundle.v1, got {}",
-            json_string(summary, "schema_version")
-        );
-    }
-    if json_string(summary, "status") != "ready_for_k37_observation" {
-        anyhow::bail!(
-            "consumer lifecycle observer bundle status must be ready_for_k37_observation"
-        );
-    }
-    if json_string(summary, "producer") != "ao2" {
-        anyhow::bail!("consumer lifecycle observer bundle producer must be ao2");
-    }
-    if summary.get("platforms") != Some(&serde_json::json!(["macos", "ubuntu", "windows"]))
-        || json_u64(summary, "platform_count") != 3
-    {
-        anyhow::bail!("consumer lifecycle observer bundle must cover macos, ubuntu, and windows");
-    }
-    if summary.get("observed_evidence_scope")
-        != Some(&serde_json::json!(["ao2.plugin-consumer-lifecycle.v1"]))
-    {
-        anyhow::bail!("consumer lifecycle observer bundle observed evidence scope is invalid");
-    }
-    if json_string(summary, "archive_sha256") != actual_archive_sha256 {
-        anyhow::bail!(
-            "consumer lifecycle observer bundle summary archive sha256 mismatch: summary {}, actual {}",
-            json_string(summary, "archive_sha256"),
-            actual_archive_sha256
-        );
-    }
-    let platform_lifecycles = summary
-        .get("platform_lifecycles")
-        .context("consumer lifecycle observer bundle missing platform_lifecycles")?;
-    if json_string(summary, "platform_lifecycles_sha256")
-        != canonical_json_sha256(platform_lifecycles)
-    {
-        anyhow::bail!("consumer lifecycle observer bundle platform lifecycle digest mismatch");
-    }
-    validate_plugin_observer_trust_boundary(
-        summary
-            .get("trust_boundary")
-            .context("consumer lifecycle observer bundle missing trust_boundary")?,
-        "consumer lifecycle observer bundle",
-    )?;
-    validate_plugin_control_plane_observation(
-        summary
-            .get("control_plane_observation")
-            .context("consumer lifecycle observer bundle missing control_plane_observation")?,
-        "consumer lifecycle observer bundle",
-    )?;
-    validate_plugin_side_effects_false(
-        summary
-            .get("side_effects")
-            .context("consumer lifecycle observer bundle missing side_effects")?,
-        "consumer lifecycle observer bundle",
-    )?;
-    if !json_bool(summary, "token_safe_output_verified") {
-        anyhow::bail!("consumer lifecycle observer bundle token_safe_output_verified must be true");
-    }
-    if json_string(summary, "factory_v3_role") != "parity_auditor" {
-        anyhow::bail!("consumer lifecycle observer bundle factory_v3_role must be parity_auditor");
-    }
-    Ok(())
-}
-
-pub(super) fn validate_plugin_consumer_lifecycle_contract(
-    lifecycle: &serde_json::Value,
-    platform: &str,
-) -> Result<()> {
-    if json_string(lifecycle, "schema_version") != "ao2.plugin-consumer-lifecycle.v1" {
-        anyhow::bail!(
-            "{platform} consumer lifecycle requires ao2.plugin-consumer-lifecycle.v1, got {}",
-            json_string(lifecycle, "schema_version")
-        );
-    }
-    if json_string(lifecycle, "status") != "passed" {
-        anyhow::bail!("{platform} consumer lifecycle status must be passed");
-    }
-    if lifecycle.get("targets") != Some(&serde_json::json!(["codex", "claude"])) {
-        anyhow::bail!("{platform} consumer lifecycle must target codex and claude");
-    }
-    validate_plugin_provider_auth(
-        lifecycle
-            .get("provider_auth")
-            .context("plugin consumer lifecycle missing provider_auth")?,
-        &format!("{platform} consumer lifecycle"),
-    )?;
-    validate_plugin_observer_trust_boundary(
-        lifecycle
-            .get("trust_boundary")
-            .context("plugin consumer lifecycle missing trust_boundary")?,
-        &format!("{platform} consumer lifecycle"),
-    )?;
-    validate_plugin_control_plane_observation(
-        lifecycle
-            .get("control_plane_observation")
-            .context("plugin consumer lifecycle missing control_plane_observation")?,
-        &format!("{platform} consumer lifecycle"),
-    )?;
-    validate_plugin_side_effects_false(
-        lifecycle
-            .get("side_effects")
-            .context("plugin consumer lifecycle missing side_effects")?,
-        &format!("{platform} consumer lifecycle"),
-    )?;
-    if !json_bool(lifecycle, "token_safe_output_verified") {
-        anyhow::bail!("{platform} consumer lifecycle token_safe_output_verified must be true");
-    }
-    if json_string(lifecycle, "factory_v3_role") != "parity_auditor" {
-        anyhow::bail!("{platform} consumer lifecycle factory_v3_role must be parity_auditor");
-    }
-
-    let package = lifecycle
-        .get("package")
-        .context("plugin consumer lifecycle missing package")?;
-    for field in ["summary_sha256", "archive_sha256"] {
-        if !is_sha256_hex(&json_string(package, field)) {
-            anyhow::bail!("{platform} consumer lifecycle package.{field} must be a digest");
-        }
-    }
-    let adapter_scaffold = lifecycle
-        .get("adapter_scaffold")
-        .context("plugin consumer lifecycle missing adapter_scaffold")?;
-    if !is_sha256_hex(&json_string(adapter_scaffold, "summary_sha256")) {
-        anyhow::bail!(
-            "{platform} consumer lifecycle adapter_scaffold.summary_sha256 must be a digest"
-        );
-    }
-
-    let target_results = lifecycle
-        .get("target_results")
-        .and_then(serde_json::Value::as_object)
-        .context("plugin consumer lifecycle missing target_results")?;
-    for target in ["codex", "claude"] {
-        let result = target_results
-            .get(target)
-            .with_context(|| format!("{platform} consumer lifecycle missing {target} result"))?;
-        if json_string(result, "status") != "passed" {
-            anyhow::bail!("{platform} consumer lifecycle {target} result must pass");
-        }
-        if !json_bool(result, "installed_package_paths_only") {
-            anyhow::bail!(
-                "{platform} consumer lifecycle {target} must use installed package paths only"
-            );
-        }
-        for field in [
-            "provider_execution_started",
-            "queue_mutated",
-            "memory_written",
-            "control_plane_mutated",
-            "ao_artifacts_mutated",
-            "release_approved",
-        ] {
-            if json_bool(result, field) {
-                anyhow::bail!(
-                    "{platform} consumer lifecycle {target} side-effect field must be false: {field}"
-                );
-            }
-        }
     }
     Ok(())
 }

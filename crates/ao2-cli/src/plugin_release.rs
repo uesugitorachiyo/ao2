@@ -3,10 +3,10 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
-use super::plugin_adapter::{
+use super::plugin_cli;
+use super::plugin_contract::{
     validate_plugin_control_plane_observation, validate_plugin_side_effects_false,
 };
-use super::plugin_cli;
 use super::plugin_distribution::{
     plugin_package_archive_json, read_plugin_package_archive_files, sha256_archive_file,
     validate_plugin_observer_trust_boundary, validate_plugin_provider_auth,
