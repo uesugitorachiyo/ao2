@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use flate2::read::GzDecoder;
 
+use super::factory_project_planning::factory_project_plan_init_app_step_repo;
 use super::plugin_wrapper::{
     validate_plugin_readiness_contract, validate_plugin_wrapper_args,
     validate_plugin_wrapper_harness_summary, PluginWrapperArgsFile,
@@ -13,8 +14,8 @@ use super::plugin_wrapper::{
 use super::{
     atomic_write_text, copy_dir_recursive, create_tar_gz, ensure_rsa_private_key,
     factory_app_run_bundle_reject_secret_fields, factory_app_run_bundle_reject_secret_markers,
-    factory_project_plan_init_app_step_repo, fail_if_provider_api_key_env_present, json_bool,
-    json_string, read_json_file, run_current_ao2_json_command, sha256_bytes_hex, sha256_file,
+    fail_if_provider_api_key_env_present, json_bool, json_string, read_json_file,
+    run_current_ao2_json_command, sha256_bytes_hex, sha256_file,
 };
 
 pub(super) struct PluginManifestVerifyOptions {
