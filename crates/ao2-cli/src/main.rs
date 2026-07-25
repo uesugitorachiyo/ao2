@@ -51,6 +51,7 @@ mod github_issue_intake;
 mod install_cmd;
 mod install_paths;
 mod memory_store;
+mod plugin_cli;
 mod provider_contract;
 mod provider_ops;
 mod pulse_eval_loop;
@@ -92,6 +93,7 @@ mod workbench_run_evidence;
 mod workbench_server;
 mod workbench_support;
 
+use plugin_cli::plugin;
 use workbench_app::workbench_export;
 use workbench_contract::WorkbenchSupportSigning;
 use workbench_queue::*;
@@ -28673,1421 +28675,6 @@ fn skill_contract_manifest_find_entry<'a>(
         .find(|entry| json_string(entry, "name") == wanted_name)
 }
 
-fn plugin(command: PluginCommand) -> Result<()> {
-    match command {
-        PluginCommand::Readiness { out, json } => plugin_readiness(out, json),
-        PluginCommand::Manifest { out_dir, json } => plugin_manifest(out_dir, json),
-        PluginCommand::ManifestVerify {
-            manifest_dir,
-            manifest_sha256,
-            json,
-        } => plugin_manifest_verify(PluginManifestVerifyOptions {
-            manifest_dir,
-            manifest_sha256,
-            json_output: json,
-        }),
-        PluginCommand::InstallSmoke {
-            manifest_dir,
-            verification,
-            verification_sha256,
-            out,
-            json,
-        } => plugin_install_smoke(PluginInstallSmokeOptions {
-            manifest_dir,
-            verification,
-            verification_sha256,
-            out,
-            json_output: json,
-        }),
-        PluginCommand::Package {
-            manifest_dir,
-            manifest_verification,
-            manifest_verification_sha256,
-            install_smoke,
-            install_smoke_sha256,
-            out_dir,
-            json,
-        } => plugin_package(PluginPackageOptions {
-            manifest_dir,
-            manifest_verification,
-            manifest_verification_sha256,
-            install_smoke,
-            install_smoke_sha256,
-            out_dir,
-            json_output: json,
-        }),
-        PluginCommand::PackageVerify {
-            summary,
-            summary_sha256,
-            archive,
-            archive_sha256,
-            json,
-        } => plugin_package_verify(PluginPackageVerifyOptions {
-            summary,
-            summary_sha256,
-            archive,
-            archive_sha256,
-            json_output: json,
-        }),
-        PluginCommand::DistributionRehearsal {
-            summary,
-            summary_sha256,
-            archive,
-            archive_sha256,
-            out_dir,
-            json,
-        } => plugin_distribution_rehearsal(PluginDistributionRehearsalOptions {
-            summary,
-            summary_sha256,
-            archive,
-            archive_sha256,
-            out_dir,
-            json_output: json,
-        }),
-        PluginCommand::ConsumerLifecycle {
-            package_summary,
-            package_summary_sha256,
-            package_archive,
-            package_archive_sha256,
-            adapter_scaffold,
-            adapter_scaffold_sha256,
-            out_dir,
-            json,
-        } => plugin_consumer_lifecycle(PluginConsumerLifecycleOptions {
-            package_summary,
-            package_summary_sha256,
-            package_archive,
-            package_archive_sha256,
-            adapter_scaffold,
-            adapter_scaffold_sha256,
-            out_dir,
-            json_output: json,
-        }),
-        PluginCommand::ConsumerLifecycleWindowsRecovery {
-            package_summary,
-            package_summary_sha256,
-            package_archive,
-            package_archive_sha256,
-            adapter_scaffold,
-            adapter_scaffold_sha256,
-            out_dir,
-            json,
-        } => plugin_consumer_lifecycle_windows_recovery(
-            PluginConsumerLifecycleWindowsRecoveryOptions {
-                package_summary,
-                package_summary_sha256,
-                package_archive,
-                package_archive_sha256,
-                adapter_scaffold,
-                adapter_scaffold_sha256,
-                out_dir,
-                json_output: json,
-            },
-        ),
-        PluginCommand::ConsumerLifecycleObserverBundle {
-            macos_lifecycle,
-            macos_sha256,
-            ubuntu_lifecycle,
-            ubuntu_sha256,
-            windows_lifecycle,
-            windows_sha256,
-            out_dir,
-            json,
-        } => plugin_consumer_lifecycle_observer_bundle(
-            PluginConsumerLifecycleObserverBundleOptions {
-                macos_lifecycle,
-                macos_sha256,
-                ubuntu_lifecycle,
-                ubuntu_sha256,
-                windows_lifecycle,
-                windows_sha256,
-                out_dir,
-                json_output: json,
-            },
-        ),
-        PluginCommand::ConsumerLifecycleObserverBundleVerify {
-            summary,
-            summary_sha256,
-            archive,
-            archive_sha256,
-            json,
-        } => plugin_consumer_lifecycle_observer_bundle_verify(
-            PluginConsumerLifecycleObserverBundleVerifyOptions {
-                summary,
-                summary_sha256,
-                archive,
-                archive_sha256,
-                json_output: json,
-            },
-        ),
-        PluginCommand::ReleaseCandidate {
-            package_summary,
-            package_summary_sha256,
-            package_archive,
-            package_archive_sha256,
-            distribution_rehearsal,
-            distribution_rehearsal_sha256,
-            adapter_observer_bundle,
-            adapter_observer_bundle_sha256,
-            adapter_observer_archive,
-            adapter_observer_archive_sha256,
-            adapter_install_smoke_observer_bundle,
-            adapter_install_smoke_observer_bundle_sha256,
-            adapter_install_smoke_observer_archive,
-            adapter_install_smoke_observer_archive_sha256,
-            consumer_lifecycle_observer_bundle,
-            consumer_lifecycle_observer_bundle_sha256,
-            consumer_lifecycle_observer_archive,
-            consumer_lifecycle_observer_archive_sha256,
-            release_gate_with_replacement_observer_bundle,
-            release_gate_with_replacement_observer_bundle_sha256,
-            release_gate_with_replacement_observer_archive,
-            release_gate_with_replacement_observer_archive_sha256,
-            control_plane_fixture_handoff_verification,
-            control_plane_fixture_handoff_verification_sha256,
-            control_plane_readback_commit,
-            out_dir,
-            json,
-        } => plugin_release_candidate(PluginReleaseCandidateOptions {
-            package_summary,
-            package_summary_sha256,
-            package_archive,
-            package_archive_sha256,
-            distribution_rehearsal,
-            distribution_rehearsal_sha256,
-            adapter_observer_bundle,
-            adapter_observer_bundle_sha256,
-            adapter_observer_archive,
-            adapter_observer_archive_sha256,
-            adapter_install_smoke_observer_bundle,
-            adapter_install_smoke_observer_bundle_sha256,
-            adapter_install_smoke_observer_archive,
-            adapter_install_smoke_observer_archive_sha256,
-            consumer_lifecycle_observer_bundle,
-            consumer_lifecycle_observer_bundle_sha256,
-            consumer_lifecycle_observer_archive,
-            consumer_lifecycle_observer_archive_sha256,
-            release_gate_with_replacement_observer_bundle,
-            release_gate_with_replacement_observer_bundle_sha256,
-            release_gate_with_replacement_observer_archive,
-            release_gate_with_replacement_observer_archive_sha256,
-            control_plane_fixture_handoff_verification,
-            control_plane_fixture_handoff_verification_sha256,
-            control_plane_readback_commit,
-            out_dir,
-            json_output: json,
-        }),
-        PluginCommand::ReleaseCandidateVerify {
-            summary,
-            summary_sha256,
-            json,
-        } => plugin_release_candidate_verify(PluginReleaseCandidateVerifyOptions {
-            summary,
-            summary_sha256,
-            json_output: json,
-        }),
-        PluginCommand::ReleaseCandidateWindowsRecovery {
-            package_summary,
-            package_summary_sha256,
-            package_archive,
-            package_archive_sha256,
-            distribution_rehearsal,
-            distribution_rehearsal_sha256,
-            adapter_observer_bundle,
-            adapter_observer_bundle_sha256,
-            adapter_observer_archive,
-            adapter_observer_archive_sha256,
-            adapter_install_smoke_observer_bundle,
-            adapter_install_smoke_observer_bundle_sha256,
-            adapter_install_smoke_observer_archive,
-            adapter_install_smoke_observer_archive_sha256,
-            consumer_lifecycle_observer_bundle,
-            consumer_lifecycle_observer_bundle_sha256,
-            consumer_lifecycle_observer_archive,
-            consumer_lifecycle_observer_archive_sha256,
-            release_gate_with_replacement_observer_bundle,
-            release_gate_with_replacement_observer_bundle_sha256,
-            release_gate_with_replacement_observer_archive,
-            release_gate_with_replacement_observer_archive_sha256,
-            control_plane_fixture_handoff_verification,
-            control_plane_fixture_handoff_verification_sha256,
-            control_plane_readback_commit,
-            out_dir,
-            json,
-        } => plugin_release_candidate_windows_recovery(
-            PluginReleaseCandidateWindowsRecoveryOptions {
-                package_summary,
-                package_summary_sha256,
-                package_archive,
-                package_archive_sha256,
-                distribution_rehearsal,
-                distribution_rehearsal_sha256,
-                adapter_observer_bundle,
-                adapter_observer_bundle_sha256,
-                adapter_observer_archive,
-                adapter_observer_archive_sha256,
-                adapter_install_smoke_observer_bundle,
-                adapter_install_smoke_observer_bundle_sha256,
-                adapter_install_smoke_observer_archive,
-                adapter_install_smoke_observer_archive_sha256,
-                consumer_lifecycle_observer_bundle,
-                consumer_lifecycle_observer_bundle_sha256,
-                consumer_lifecycle_observer_archive,
-                consumer_lifecycle_observer_archive_sha256,
-                release_gate_with_replacement_observer_bundle,
-                release_gate_with_replacement_observer_bundle_sha256,
-                release_gate_with_replacement_observer_archive,
-                release_gate_with_replacement_observer_archive_sha256,
-                control_plane_fixture_handoff_verification,
-                control_plane_fixture_handoff_verification_sha256,
-                control_plane_readback_commit,
-                out_dir,
-                json_output: json,
-            },
-        ),
-        PluginCommand::ReleaseCandidateWindowsRecoveryVerify {
-            recovery,
-            recovery_sha256,
-            out,
-            json,
-        } => plugin_release_candidate_windows_recovery_verify(
-            PluginReleaseCandidateWindowsRecoveryVerifyOptions {
-                recovery,
-                recovery_sha256,
-                out,
-                json_output: json,
-            },
-        ),
-        PluginCommand::ReleaseCandidateWindowsTransferBundle {
-            ao2_source_archive,
-            ao2_source_archive_sha256,
-            recovery_dir,
-            recovery,
-            recovery_sha256,
-            recovery_verification,
-            recovery_verification_sha256,
-            out_dir,
-            json,
-        } => plugin_release_candidate_windows_transfer_bundle(
-            PluginReleaseCandidateWindowsTransferBundleOptions {
-                ao2_source_archive,
-                ao2_source_archive_sha256,
-                recovery_dir,
-                recovery,
-                recovery_sha256,
-                recovery_verification,
-                recovery_verification_sha256,
-                out_dir,
-                json_output: json,
-            },
-        ),
-        PluginCommand::ReleaseCandidateObserverBundle {
-            macos_verification,
-            macos_sha256,
-            ubuntu_verification,
-            ubuntu_sha256,
-            windows_verification,
-            windows_sha256,
-            out_dir,
-            json,
-        } => {
-            plugin_release_candidate_observer_bundle(PluginReleaseCandidateObserverBundleOptions {
-                macos_verification,
-                macos_sha256,
-                ubuntu_verification,
-                ubuntu_sha256,
-                windows_verification,
-                windows_sha256,
-                out_dir,
-                json_output: json,
-            })
-        }
-        PluginCommand::ReleaseCandidateObserverBundleVerify {
-            summary,
-            summary_sha256,
-            archive,
-            archive_sha256,
-            json,
-        } => plugin_release_candidate_observer_bundle_verify(
-            PluginReleaseCandidateObserverBundleVerifyOptions {
-                summary,
-                summary_sha256,
-                archive,
-                archive_sha256,
-                json_output: json,
-            },
-        ),
-        PluginCommand::PulseApplyObserverBundle {
-            macos_apply_result,
-            macos_sha256,
-            ubuntu_apply_result,
-            ubuntu_sha256,
-            windows_apply_result,
-            windows_sha256,
-            windows_unavailable_reason,
-            out_dir,
-            json,
-        } => plugin_pulse_apply_observer_bundle(PluginPulseApplyObserverBundleOptions {
-            macos_apply_result,
-            macos_sha256,
-            ubuntu_apply_result,
-            ubuntu_sha256,
-            windows_apply_result,
-            windows_sha256,
-            windows_unavailable_reason,
-            out_dir,
-            json_output: json,
-        }),
-        PluginCommand::PulseApplyObserverBundleVerify {
-            summary,
-            summary_sha256,
-            archive,
-            archive_sha256,
-            json,
-        } => {
-            plugin_pulse_apply_observer_bundle_verify(PluginPulseApplyObserverBundleVerifyOptions {
-                summary,
-                summary_sha256,
-                archive,
-                archive_sha256,
-                json_output: json,
-            })
-        }
-        PluginCommand::PulseOnceObserverBundle {
-            macos_once,
-            macos_sha256,
-            ubuntu_once,
-            ubuntu_sha256,
-            windows_once,
-            windows_sha256,
-            out_dir,
-            json,
-        } => plugin_pulse_once_observer_bundle(PluginPulseOnceObserverBundleOptions {
-            macos_once,
-            macos_sha256,
-            ubuntu_once,
-            ubuntu_sha256,
-            windows_once,
-            windows_sha256,
-            out_dir,
-            json_output: json,
-        }),
-        PluginCommand::PulseOnceObserverBundleVerify {
-            summary,
-            summary_sha256,
-            archive,
-            archive_sha256,
-            json,
-        } => plugin_pulse_once_observer_bundle_verify(PluginPulseOnceObserverBundleVerifyOptions {
-            summary,
-            summary_sha256,
-            archive,
-            archive_sha256,
-            json_output: json,
-        }),
-        PluginCommand::PulseChainObserverBundle {
-            macos_chain,
-            macos_sha256,
-            ubuntu_chain,
-            ubuntu_sha256,
-            windows_chain,
-            windows_sha256,
-            out_dir,
-            json,
-        } => plugin_pulse_chain_observer_bundle(PluginPulseChainObserverBundleOptions {
-            macos_chain,
-            macos_sha256,
-            ubuntu_chain,
-            ubuntu_sha256,
-            windows_chain,
-            windows_sha256,
-            out_dir,
-            json_output: json,
-        }),
-        PluginCommand::PulseChainObserverBundleVerify {
-            summary,
-            summary_sha256,
-            archive,
-            archive_sha256,
-            json,
-        } => {
-            plugin_pulse_chain_observer_bundle_verify(PluginPulseChainObserverBundleVerifyOptions {
-                summary,
-                summary_sha256,
-                archive,
-                archive_sha256,
-                json_output: json,
-            })
-        }
-        PluginCommand::PulseEvalLoopObserverBundle {
-            macos_eval_loop,
-            macos_sha256,
-            ubuntu_eval_loop,
-            ubuntu_sha256,
-            windows_eval_loop,
-            windows_sha256,
-            out_dir,
-            json,
-        } => plugin_pulse_eval_loop_observer_bundle(PluginPulseEvalLoopObserverBundleOptions {
-            macos_eval_loop,
-            macos_sha256,
-            ubuntu_eval_loop,
-            ubuntu_sha256,
-            windows_eval_loop,
-            windows_sha256,
-            out_dir,
-            json_output: json,
-        }),
-        PluginCommand::PulseEvalLoopObserverBundleVerify {
-            summary,
-            summary_sha256,
-            archive,
-            archive_sha256,
-            json,
-        } => plugin_pulse_eval_loop_observer_bundle_verify(
-            PluginPulseEvalLoopObserverBundleVerifyOptions {
-                summary,
-                summary_sha256,
-                archive,
-                archive_sha256,
-                json_output: json,
-            },
-        ),
-        PluginCommand::PulseExecutorObserverBundle {
-            macos_executor,
-            macos_sha256,
-            ubuntu_executor,
-            ubuntu_sha256,
-            windows_executor,
-            windows_sha256,
-            out_dir,
-            json,
-        } => plugin_pulse_executor_observer_bundle(PluginPulseExecutorObserverBundleOptions {
-            macos_executor,
-            macos_sha256,
-            ubuntu_executor,
-            ubuntu_sha256,
-            windows_executor,
-            windows_sha256,
-            out_dir,
-            json_output: json,
-        }),
-        PluginCommand::PulseExecutorObserverBundleVerify {
-            summary,
-            summary_sha256,
-            archive,
-            archive_sha256,
-            json,
-        } => plugin_pulse_executor_observer_bundle_verify(
-            PluginPulseExecutorObserverBundleVerifyOptions {
-                summary,
-                summary_sha256,
-                archive,
-                archive_sha256,
-                json_output: json,
-            },
-        ),
-        PluginCommand::PulseApplyWindowsRecovery {
-            apply_result,
-            apply_result_sha256,
-            observer_bundle,
-            observer_bundle_sha256,
-            observer_archive,
-            observer_archive_sha256,
-            out_dir,
-            json,
-        } => plugin_pulse_apply_windows_recovery(PluginPulseApplyWindowsRecoveryOptions {
-            apply_result,
-            apply_result_sha256,
-            observer_bundle,
-            observer_bundle_sha256,
-            observer_archive,
-            observer_archive_sha256,
-            out_dir,
-            json_output: json,
-        }),
-        PluginCommand::ReleaseCandidateControlPlaneFixtureHandoff {
-            summary,
-            summary_sha256,
-            archive,
-            archive_sha256,
-            out_dir,
-            json,
-        } => plugin_release_candidate_control_plane_fixture_handoff(
-            PluginReleaseCandidateControlPlaneFixtureHandoffOptions {
-                summary,
-                summary_sha256,
-                archive,
-                archive_sha256,
-                out_dir,
-                json_output: json,
-            },
-        ),
-        PluginCommand::ReleaseCandidateControlPlaneFixtureHandoffVerify {
-            handoff,
-            handoff_sha256,
-            out,
-            json,
-        } => plugin_release_candidate_control_plane_fixture_handoff_verify(
-            PluginReleaseCandidateControlPlaneFixtureHandoffVerifyOptions {
-                handoff,
-                handoff_sha256,
-                out,
-                json_output: json,
-            },
-        ),
-        PluginCommand::FinalInstallTranscript {
-            summary,
-            summary_sha256,
-            archive,
-            archive_sha256,
-            out_dir,
-            json,
-        } => plugin_final_install_transcript(PluginFinalInstallTranscriptOptions {
-            summary,
-            summary_sha256,
-            archive,
-            archive_sha256,
-            out_dir,
-            json_output: json,
-        }),
-        PluginCommand::FinalInstallTranscriptObserverBundle {
-            macos_codex_transcript,
-            macos_codex_sha256,
-            macos_claude_transcript,
-            macos_claude_sha256,
-            ubuntu_codex_transcript,
-            ubuntu_codex_sha256,
-            ubuntu_claude_transcript,
-            ubuntu_claude_sha256,
-            windows_codex_transcript,
-            windows_codex_sha256,
-            windows_claude_transcript,
-            windows_claude_sha256,
-            out_dir,
-            json,
-        } => plugin_final_install_transcript_observer_bundle(
-            PluginFinalInstallTranscriptObserverBundleOptions {
-                macos_codex_transcript,
-                macos_codex_sha256,
-                macos_claude_transcript,
-                macos_claude_sha256,
-                ubuntu_codex_transcript,
-                ubuntu_codex_sha256,
-                ubuntu_claude_transcript,
-                ubuntu_claude_sha256,
-                windows_codex_transcript,
-                windows_codex_sha256,
-                windows_claude_transcript,
-                windows_claude_sha256,
-                out_dir,
-                json_output: json,
-            },
-        ),
-        PluginCommand::ShipmentReadiness {
-            package_summary,
-            package_summary_sha256,
-            package_archive,
-            package_archive_sha256,
-            adapter_observer_bundle,
-            adapter_observer_bundle_sha256,
-            adapter_observer_archive,
-            adapter_observer_archive_sha256,
-            adapter_install_smoke_observer_bundle,
-            adapter_install_smoke_observer_bundle_sha256,
-            adapter_install_smoke_observer_archive,
-            adapter_install_smoke_observer_archive_sha256,
-            consumer_lifecycle_observer_bundle,
-            consumer_lifecycle_observer_bundle_sha256,
-            consumer_lifecycle_observer_archive,
-            consumer_lifecycle_observer_archive_sha256,
-            release_candidate_observer_bundle,
-            release_candidate_observer_bundle_sha256,
-            release_candidate_observer_archive,
-            release_candidate_observer_archive_sha256,
-            final_install_transcript_observer_bundle,
-            final_install_transcript_observer_bundle_sha256,
-            final_install_transcript_observer_archive,
-            final_install_transcript_observer_archive_sha256,
-            control_plane_readback_commit,
-            out_dir,
-            json,
-        } => plugin_shipment_readiness(PluginShipmentReadinessOptions {
-            package_summary,
-            package_summary_sha256,
-            package_archive,
-            package_archive_sha256,
-            adapter_observer_bundle,
-            adapter_observer_bundle_sha256,
-            adapter_observer_archive,
-            adapter_observer_archive_sha256,
-            adapter_install_smoke_observer_bundle,
-            adapter_install_smoke_observer_bundle_sha256,
-            adapter_install_smoke_observer_archive,
-            adapter_install_smoke_observer_archive_sha256,
-            consumer_lifecycle_observer_bundle,
-            consumer_lifecycle_observer_bundle_sha256,
-            consumer_lifecycle_observer_archive,
-            consumer_lifecycle_observer_archive_sha256,
-            release_candidate_observer_bundle,
-            release_candidate_observer_bundle_sha256,
-            release_candidate_observer_archive,
-            release_candidate_observer_archive_sha256,
-            final_install_transcript_observer_bundle,
-            final_install_transcript_observer_bundle_sha256,
-            final_install_transcript_observer_archive,
-            final_install_transcript_observer_archive_sha256,
-            control_plane_readback_commit,
-            out_dir,
-            json_output: json,
-        }),
-        PluginCommand::ControlPlaneFixtureHandoff {
-            summary,
-            summary_sha256,
-            archive,
-            archive_sha256,
-            out_dir,
-            json,
-        } => plugin_control_plane_fixture_handoff(PluginControlPlaneFixtureHandoffOptions {
-            summary,
-            summary_sha256,
-            archive,
-            archive_sha256,
-            out_dir,
-            json_output: json,
-        }),
-        PluginCommand::ControlPlaneFixtureHandoffVerify {
-            handoff,
-            handoff_sha256,
-            out,
-            json,
-        } => plugin_control_plane_fixture_handoff_verify(
-            PluginControlPlaneFixtureHandoffVerifyOptions {
-                handoff,
-                handoff_sha256,
-                out,
-                json_output: json,
-            },
-        ),
-        PluginCommand::DistributionObserverBundle {
-            macos_observer,
-            macos_sha256,
-            ubuntu_observer,
-            ubuntu_sha256,
-            windows_observer,
-            windows_sha256,
-            out_dir,
-            json,
-        } => plugin_distribution_observer_bundle(PluginDistributionObserverBundleOptions {
-            macos_observer,
-            macos_sha256,
-            ubuntu_observer,
-            ubuntu_sha256,
-            windows_observer,
-            windows_sha256,
-            out_dir,
-            json_output: json,
-        }),
-        PluginCommand::CleanPackageOperatorIndex {
-            macos_rehearsal,
-            macos_sha256,
-            ubuntu_rehearsal,
-            ubuntu_sha256,
-            windows_rehearsal,
-            windows_sha256,
-            out_dir,
-            json,
-        } => plugin_clean_package_operator_index(PluginCleanPackageOperatorIndexOptions {
-            macos_rehearsal,
-            macos_sha256,
-            ubuntu_rehearsal,
-            ubuntu_sha256,
-            windows_rehearsal,
-            windows_sha256,
-            out_dir,
-            json_output: json,
-        }),
-        PluginCommand::PackagedReplacementObserverBundle {
-            macos_proof,
-            macos_sha256,
-            ubuntu_proof,
-            ubuntu_sha256,
-            windows_proof,
-            windows_sha256,
-            out_dir,
-            json,
-        } => plugin_packaged_replacement_observer_bundle(
-            PluginPackagedReplacementObserverBundleOptions {
-                macos_proof,
-                macos_sha256,
-                ubuntu_proof,
-                ubuntu_sha256,
-                windows_proof,
-                windows_sha256,
-                out_dir,
-                json_output: json,
-            },
-        ),
-        PluginCommand::PackagedReplacementObserverBundleVerify {
-            summary,
-            summary_sha256,
-            archive,
-            archive_sha256,
-            json,
-        } => plugin_packaged_replacement_observer_bundle_verify(
-            PluginPackagedReplacementObserverBundleVerifyOptions {
-                summary,
-                summary_sha256,
-                archive,
-                archive_sha256,
-                json_output: json,
-            },
-        ),
-        PluginCommand::ReleaseGateWithReplacementObserverBundle {
-            macos_rollup,
-            macos_sha256,
-            ubuntu_rollup,
-            ubuntu_sha256,
-            windows_rollup,
-            windows_sha256,
-            out_dir,
-            json,
-        } => plugin_release_gate_with_replacement_observer_bundle(
-            PluginReleaseGateWithReplacementObserverBundleOptions {
-                macos_rollup,
-                macos_sha256,
-                ubuntu_rollup,
-                ubuntu_sha256,
-                windows_rollup,
-                windows_sha256,
-                out_dir,
-                json_output: json,
-            },
-        ),
-        PluginCommand::AdapterScaffold {
-            package_summary,
-            package_summary_sha256,
-            package_archive,
-            package_archive_sha256,
-            k37_bundle,
-            k37_bundle_sha256,
-            k37_archive,
-            k37_archive_sha256,
-            out_dir,
-            json,
-        } => plugin_adapter_scaffold(PluginAdapterScaffoldOptions {
-            package_summary,
-            package_summary_sha256,
-            package_archive,
-            package_archive_sha256,
-            k37_bundle,
-            k37_bundle_sha256,
-            k37_archive,
-            k37_archive_sha256,
-            out_dir,
-            json_output: json,
-        }),
-        PluginCommand::AdapterScaffoldVerify {
-            summary,
-            summary_sha256,
-            json,
-        } => plugin_adapter_scaffold_verify(PluginAdapterScaffoldVerifyOptions {
-            summary,
-            summary_sha256,
-            json_output: json,
-        }),
-        PluginCommand::AdapterInstallSmoke {
-            summary,
-            summary_sha256,
-            out,
-            json,
-        } => plugin_adapter_install_smoke(PluginAdapterInstallSmokeOptions {
-            summary,
-            summary_sha256,
-            out,
-            json_output: json,
-        }),
-        PluginCommand::AdapterInstallSmokeVerify {
-            smoke,
-            smoke_sha256,
-            json,
-        } => plugin_adapter_install_smoke_verify(PluginAdapterInstallSmokeVerifyOptions {
-            smoke,
-            smoke_sha256,
-            json_output: json,
-        }),
-        PluginCommand::AdapterInstallSmokeObserverBundle {
-            macos_verification,
-            macos_sha256,
-            ubuntu_verification,
-            ubuntu_sha256,
-            windows_verification,
-            windows_sha256,
-            out_dir,
-            json,
-        } => plugin_adapter_install_smoke_observer_bundle(
-            PluginAdapterInstallSmokeObserverBundleOptions {
-                macos_verification,
-                macos_sha256,
-                ubuntu_verification,
-                ubuntu_sha256,
-                windows_verification,
-                windows_sha256,
-                out_dir,
-                json_output: json,
-            },
-        ),
-        PluginCommand::AdapterObserverBundle {
-            macos_verification,
-            macos_sha256,
-            ubuntu_verification,
-            ubuntu_sha256,
-            windows_verification,
-            windows_sha256,
-            out_dir,
-            json,
-        } => plugin_adapter_observer_bundle(PluginAdapterObserverBundleOptions {
-            macos_verification,
-            macos_sha256,
-            ubuntu_verification,
-            ubuntu_sha256,
-            windows_verification,
-            windows_sha256,
-            out_dir,
-            json_output: json,
-        }),
-        PluginCommand::WrapperHarness {
-            readiness,
-            readiness_sha256,
-            args_file,
-            args_sha256,
-            run_kind,
-            out_dir,
-            json,
-        } => plugin_wrapper_harness(PluginWrapperHarnessOptions {
-            readiness,
-            readiness_sha256,
-            args_file,
-            args_sha256,
-            run_kind,
-            out_dir,
-            json_output: json,
-        }),
-        PluginCommand::WrapperHarnessVerify {
-            evidence_dir,
-            summary_sha256,
-            json,
-        } => plugin_wrapper_harness_verify(PluginWrapperHarnessVerifyOptions {
-            evidence_dir,
-            summary_sha256,
-            json_output: json,
-        }),
-    }
-}
-
-struct PluginWrapperHarnessOptions {
-    readiness: PathBuf,
-    readiness_sha256: String,
-    args_file: PathBuf,
-    args_sha256: String,
-    run_kind: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginManifestVerifyOptions {
-    manifest_dir: PathBuf,
-    manifest_sha256: String,
-    json_output: bool,
-}
-
-struct PluginInstallSmokeOptions {
-    manifest_dir: PathBuf,
-    verification: PathBuf,
-    verification_sha256: String,
-    out: Option<PathBuf>,
-    json_output: bool,
-}
-
-struct PluginPackageOptions {
-    manifest_dir: PathBuf,
-    manifest_verification: PathBuf,
-    manifest_verification_sha256: String,
-    install_smoke: PathBuf,
-    install_smoke_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginPackageVerifyOptions {
-    summary: PathBuf,
-    summary_sha256: String,
-    archive: PathBuf,
-    archive_sha256: String,
-    json_output: bool,
-}
-
-struct PluginDistributionRehearsalOptions {
-    summary: PathBuf,
-    summary_sha256: String,
-    archive: PathBuf,
-    archive_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginConsumerLifecycleOptions {
-    package_summary: PathBuf,
-    package_summary_sha256: String,
-    package_archive: PathBuf,
-    package_archive_sha256: String,
-    adapter_scaffold: PathBuf,
-    adapter_scaffold_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginConsumerLifecycleWindowsRecoveryOptions {
-    package_summary: PathBuf,
-    package_summary_sha256: String,
-    package_archive: PathBuf,
-    package_archive_sha256: String,
-    adapter_scaffold: PathBuf,
-    adapter_scaffold_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginConsumerLifecycleObserverBundleOptions {
-    macos_lifecycle: PathBuf,
-    macos_sha256: String,
-    ubuntu_lifecycle: PathBuf,
-    ubuntu_sha256: String,
-    windows_lifecycle: PathBuf,
-    windows_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginConsumerLifecycleObserverBundleVerifyOptions {
-    summary: PathBuf,
-    summary_sha256: String,
-    archive: PathBuf,
-    archive_sha256: String,
-    json_output: bool,
-}
-
-struct PluginReleaseCandidateOptions {
-    package_summary: PathBuf,
-    package_summary_sha256: String,
-    package_archive: PathBuf,
-    package_archive_sha256: String,
-    distribution_rehearsal: PathBuf,
-    distribution_rehearsal_sha256: String,
-    adapter_observer_bundle: PathBuf,
-    adapter_observer_bundle_sha256: String,
-    adapter_observer_archive: PathBuf,
-    adapter_observer_archive_sha256: String,
-    adapter_install_smoke_observer_bundle: PathBuf,
-    adapter_install_smoke_observer_bundle_sha256: String,
-    adapter_install_smoke_observer_archive: PathBuf,
-    adapter_install_smoke_observer_archive_sha256: String,
-    consumer_lifecycle_observer_bundle: PathBuf,
-    consumer_lifecycle_observer_bundle_sha256: String,
-    consumer_lifecycle_observer_archive: PathBuf,
-    consumer_lifecycle_observer_archive_sha256: String,
-    release_gate_with_replacement_observer_bundle: PathBuf,
-    release_gate_with_replacement_observer_bundle_sha256: String,
-    release_gate_with_replacement_observer_archive: PathBuf,
-    release_gate_with_replacement_observer_archive_sha256: String,
-    control_plane_fixture_handoff_verification: PathBuf,
-    control_plane_fixture_handoff_verification_sha256: String,
-    control_plane_readback_commit: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginReleaseCandidateVerifyOptions {
-    summary: PathBuf,
-    summary_sha256: String,
-    json_output: bool,
-}
-
-struct PluginReleaseCandidateWindowsRecoveryOptions {
-    package_summary: PathBuf,
-    package_summary_sha256: String,
-    package_archive: PathBuf,
-    package_archive_sha256: String,
-    distribution_rehearsal: PathBuf,
-    distribution_rehearsal_sha256: String,
-    adapter_observer_bundle: PathBuf,
-    adapter_observer_bundle_sha256: String,
-    adapter_observer_archive: PathBuf,
-    adapter_observer_archive_sha256: String,
-    adapter_install_smoke_observer_bundle: PathBuf,
-    adapter_install_smoke_observer_bundle_sha256: String,
-    adapter_install_smoke_observer_archive: PathBuf,
-    adapter_install_smoke_observer_archive_sha256: String,
-    consumer_lifecycle_observer_bundle: PathBuf,
-    consumer_lifecycle_observer_bundle_sha256: String,
-    consumer_lifecycle_observer_archive: PathBuf,
-    consumer_lifecycle_observer_archive_sha256: String,
-    release_gate_with_replacement_observer_bundle: PathBuf,
-    release_gate_with_replacement_observer_bundle_sha256: String,
-    release_gate_with_replacement_observer_archive: PathBuf,
-    release_gate_with_replacement_observer_archive_sha256: String,
-    control_plane_fixture_handoff_verification: PathBuf,
-    control_plane_fixture_handoff_verification_sha256: String,
-    control_plane_readback_commit: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginReleaseCandidateWindowsRecoveryVerifyOptions {
-    recovery: PathBuf,
-    recovery_sha256: String,
-    out: PathBuf,
-    json_output: bool,
-}
-
-struct PluginReleaseCandidateWindowsTransferBundleOptions {
-    ao2_source_archive: PathBuf,
-    ao2_source_archive_sha256: String,
-    recovery_dir: PathBuf,
-    recovery: PathBuf,
-    recovery_sha256: String,
-    recovery_verification: PathBuf,
-    recovery_verification_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginReleaseCandidateObserverBundleOptions {
-    macos_verification: PathBuf,
-    macos_sha256: String,
-    ubuntu_verification: PathBuf,
-    ubuntu_sha256: String,
-    windows_verification: PathBuf,
-    windows_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginReleaseCandidateObserverBundleVerifyOptions {
-    summary: PathBuf,
-    summary_sha256: String,
-    archive: PathBuf,
-    archive_sha256: String,
-    json_output: bool,
-}
-
-struct PluginPulseApplyObserverBundleOptions {
-    macos_apply_result: PathBuf,
-    macos_sha256: String,
-    ubuntu_apply_result: PathBuf,
-    ubuntu_sha256: String,
-    windows_apply_result: Option<PathBuf>,
-    windows_sha256: Option<String>,
-    windows_unavailable_reason: Option<String>,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginPulseApplyObserverBundleVerifyOptions {
-    summary: PathBuf,
-    summary_sha256: String,
-    archive: PathBuf,
-    archive_sha256: String,
-    json_output: bool,
-}
-
-struct PluginPulseOnceObserverBundleOptions {
-    macos_once: PathBuf,
-    macos_sha256: String,
-    ubuntu_once: PathBuf,
-    ubuntu_sha256: String,
-    windows_once: PathBuf,
-    windows_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginPulseOnceObserverBundleVerifyOptions {
-    summary: PathBuf,
-    summary_sha256: String,
-    archive: PathBuf,
-    archive_sha256: String,
-    json_output: bool,
-}
-
-struct PluginPulseChainObserverBundleOptions {
-    macos_chain: PathBuf,
-    macos_sha256: String,
-    ubuntu_chain: PathBuf,
-    ubuntu_sha256: String,
-    windows_chain: PathBuf,
-    windows_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginPulseChainObserverBundleVerifyOptions {
-    summary: PathBuf,
-    summary_sha256: String,
-    archive: PathBuf,
-    archive_sha256: String,
-    json_output: bool,
-}
-
-struct PluginPulseEvalLoopObserverBundleOptions {
-    macos_eval_loop: PathBuf,
-    macos_sha256: String,
-    ubuntu_eval_loop: PathBuf,
-    ubuntu_sha256: String,
-    windows_eval_loop: PathBuf,
-    windows_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginPulseEvalLoopObserverBundleVerifyOptions {
-    summary: PathBuf,
-    summary_sha256: String,
-    archive: PathBuf,
-    archive_sha256: String,
-    json_output: bool,
-}
-
-struct PluginPulseExecutorObserverBundleOptions {
-    macos_executor: PathBuf,
-    macos_sha256: String,
-    ubuntu_executor: PathBuf,
-    ubuntu_sha256: String,
-    windows_executor: PathBuf,
-    windows_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginPulseExecutorObserverBundleVerifyOptions {
-    summary: PathBuf,
-    summary_sha256: String,
-    archive: PathBuf,
-    archive_sha256: String,
-    json_output: bool,
-}
-
-struct PluginPulseApplyWindowsRecoveryOptions {
-    apply_result: PathBuf,
-    apply_result_sha256: String,
-    observer_bundle: PathBuf,
-    observer_bundle_sha256: String,
-    observer_archive: PathBuf,
-    observer_archive_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginReleaseCandidateControlPlaneFixtureHandoffOptions {
-    summary: PathBuf,
-    summary_sha256: String,
-    archive: PathBuf,
-    archive_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginReleaseCandidateControlPlaneFixtureHandoffVerifyOptions {
-    handoff: PathBuf,
-    handoff_sha256: String,
-    out: PathBuf,
-    json_output: bool,
-}
-
-struct PluginFinalInstallTranscriptOptions {
-    summary: PathBuf,
-    summary_sha256: String,
-    archive: PathBuf,
-    archive_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginFinalInstallTranscriptObserverBundleOptions {
-    macos_codex_transcript: PathBuf,
-    macos_codex_sha256: String,
-    macos_claude_transcript: PathBuf,
-    macos_claude_sha256: String,
-    ubuntu_codex_transcript: PathBuf,
-    ubuntu_codex_sha256: String,
-    ubuntu_claude_transcript: PathBuf,
-    ubuntu_claude_sha256: String,
-    windows_codex_transcript: PathBuf,
-    windows_codex_sha256: String,
-    windows_claude_transcript: PathBuf,
-    windows_claude_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginShipmentReadinessOptions {
-    package_summary: PathBuf,
-    package_summary_sha256: String,
-    package_archive: PathBuf,
-    package_archive_sha256: String,
-    adapter_observer_bundle: PathBuf,
-    adapter_observer_bundle_sha256: String,
-    adapter_observer_archive: PathBuf,
-    adapter_observer_archive_sha256: String,
-    adapter_install_smoke_observer_bundle: PathBuf,
-    adapter_install_smoke_observer_bundle_sha256: String,
-    adapter_install_smoke_observer_archive: PathBuf,
-    adapter_install_smoke_observer_archive_sha256: String,
-    consumer_lifecycle_observer_bundle: PathBuf,
-    consumer_lifecycle_observer_bundle_sha256: String,
-    consumer_lifecycle_observer_archive: PathBuf,
-    consumer_lifecycle_observer_archive_sha256: String,
-    release_candidate_observer_bundle: PathBuf,
-    release_candidate_observer_bundle_sha256: String,
-    release_candidate_observer_archive: PathBuf,
-    release_candidate_observer_archive_sha256: String,
-    final_install_transcript_observer_bundle: PathBuf,
-    final_install_transcript_observer_bundle_sha256: String,
-    final_install_transcript_observer_archive: PathBuf,
-    final_install_transcript_observer_archive_sha256: String,
-    control_plane_readback_commit: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginControlPlaneFixtureHandoffOptions {
-    summary: PathBuf,
-    summary_sha256: String,
-    archive: PathBuf,
-    archive_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginControlPlaneFixtureHandoffVerifyOptions {
-    handoff: PathBuf,
-    handoff_sha256: String,
-    out: PathBuf,
-    json_output: bool,
-}
-
-struct PluginDistributionObserverBundleOptions {
-    macos_observer: PathBuf,
-    macos_sha256: String,
-    ubuntu_observer: PathBuf,
-    ubuntu_sha256: String,
-    windows_observer: PathBuf,
-    windows_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginCleanPackageOperatorIndexOptions {
-    macos_rehearsal: PathBuf,
-    macos_sha256: String,
-    ubuntu_rehearsal: PathBuf,
-    ubuntu_sha256: String,
-    windows_rehearsal: PathBuf,
-    windows_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginPackagedReplacementObserverBundleOptions {
-    macos_proof: PathBuf,
-    macos_sha256: String,
-    ubuntu_proof: PathBuf,
-    ubuntu_sha256: String,
-    windows_proof: PathBuf,
-    windows_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginPackagedReplacementObserverBundleVerifyOptions {
-    summary: PathBuf,
-    summary_sha256: String,
-    archive: PathBuf,
-    archive_sha256: String,
-    json_output: bool,
-}
-
-struct PluginReleaseGateWithReplacementObserverBundleOptions {
-    macos_rollup: PathBuf,
-    macos_sha256: String,
-    ubuntu_rollup: PathBuf,
-    ubuntu_sha256: String,
-    windows_rollup: PathBuf,
-    windows_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginAdapterScaffoldOptions {
-    package_summary: PathBuf,
-    package_summary_sha256: String,
-    package_archive: PathBuf,
-    package_archive_sha256: String,
-    k37_bundle: PathBuf,
-    k37_bundle_sha256: String,
-    k37_archive: PathBuf,
-    k37_archive_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginAdapterScaffoldVerifyOptions {
-    summary: PathBuf,
-    summary_sha256: String,
-    json_output: bool,
-}
-
-struct PluginAdapterInstallSmokeOptions {
-    summary: PathBuf,
-    summary_sha256: String,
-    out: Option<PathBuf>,
-    json_output: bool,
-}
-
-struct PluginAdapterInstallSmokeVerifyOptions {
-    smoke: PathBuf,
-    smoke_sha256: String,
-    json_output: bool,
-}
-
-struct PluginAdapterInstallSmokeObserverBundleOptions {
-    macos_verification: PathBuf,
-    macos_sha256: String,
-    ubuntu_verification: PathBuf,
-    ubuntu_sha256: String,
-    windows_verification: PathBuf,
-    windows_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginAdapterObserverBundleOptions {
-    macos_verification: PathBuf,
-    macos_sha256: String,
-    ubuntu_verification: PathBuf,
-    ubuntu_sha256: String,
-    windows_verification: PathBuf,
-    windows_sha256: String,
-    out_dir: PathBuf,
-    json_output: bool,
-}
-
-struct PluginWrapperHarnessVerifyOptions {
-    evidence_dir: PathBuf,
-    summary_sha256: String,
-    json_output: bool,
-}
-
 fn plugin_readiness(out: Option<PathBuf>, json_output: bool) -> Result<()> {
     let readiness = plugin_readiness_value();
 
@@ -30491,7 +29078,7 @@ fn plugin_manifest(out_dir: PathBuf, json_output: bool) -> Result<()> {
     Ok(())
 }
 
-fn plugin_manifest_verify(options: PluginManifestVerifyOptions) -> Result<()> {
+fn plugin_manifest_verify(options: plugin_cli::PluginManifestVerifyOptions) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
     let manifest_path = options.manifest_dir.join("ao2-plugin-manifest.json");
@@ -30619,7 +29206,7 @@ fn plugin_manifest_verify(options: PluginManifestVerifyOptions) -> Result<()> {
     Ok(())
 }
 
-fn plugin_install_smoke(options: PluginInstallSmokeOptions) -> Result<()> {
+fn plugin_install_smoke(options: plugin_cli::PluginInstallSmokeOptions) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
     let supplied_verification_sha256 = options.verification_sha256.trim();
@@ -30760,7 +29347,7 @@ fn plugin_install_smoke(options: PluginInstallSmokeOptions) -> Result<()> {
     Ok(())
 }
 
-fn plugin_package(options: PluginPackageOptions) -> Result<()> {
+fn plugin_package(options: plugin_cli::PluginPackageOptions) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
     let manifest_path = options.manifest_dir.join("ao2-plugin-manifest.json");
@@ -30932,7 +29519,7 @@ fn plugin_package(options: PluginPackageOptions) -> Result<()> {
     Ok(())
 }
 
-fn plugin_package_verify(options: PluginPackageVerifyOptions) -> Result<()> {
+fn plugin_package_verify(options: plugin_cli::PluginPackageVerifyOptions) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
     let supplied_summary_sha256 = options.summary_sha256.trim();
@@ -31087,7 +29674,9 @@ fn plugin_package_verify(options: PluginPackageVerifyOptions) -> Result<()> {
     Ok(())
 }
 
-fn plugin_distribution_rehearsal(options: PluginDistributionRehearsalOptions) -> Result<()> {
+fn plugin_distribution_rehearsal(
+    options: plugin_cli::PluginDistributionRehearsalOptions,
+) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
     let supplied_summary_sha256 = options.summary_sha256.trim();
@@ -31239,7 +29828,7 @@ fn plugin_distribution_rehearsal(options: PluginDistributionRehearsalOptions) ->
     Ok(())
 }
 
-fn plugin_consumer_lifecycle(options: PluginConsumerLifecycleOptions) -> Result<()> {
+fn plugin_consumer_lifecycle(options: plugin_cli::PluginConsumerLifecycleOptions) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
     let supplied_package_summary_sha256 = options.package_summary_sha256.trim();
@@ -31423,7 +30012,7 @@ fn plugin_consumer_lifecycle(options: PluginConsumerLifecycleOptions) -> Result<
 }
 
 fn plugin_consumer_lifecycle_windows_recovery(
-    options: PluginConsumerLifecycleWindowsRecoveryOptions,
+    options: plugin_cli::PluginConsumerLifecycleWindowsRecoveryOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -31718,7 +30307,7 @@ if ($LASTEXITCODE -ne 0) {{
 }
 
 fn plugin_consumer_lifecycle_observer_bundle(
-    options: PluginConsumerLifecycleObserverBundleOptions,
+    options: plugin_cli::PluginConsumerLifecycleObserverBundleOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -31882,7 +30471,7 @@ fn plugin_consumer_lifecycle_observer_bundle(
 }
 
 fn plugin_consumer_lifecycle_observer_bundle_verify(
-    options: PluginConsumerLifecycleObserverBundleVerifyOptions,
+    options: plugin_cli::PluginConsumerLifecycleObserverBundleVerifyOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -31984,7 +30573,7 @@ fn plugin_consumer_lifecycle_observer_bundle_verify(
     Ok(())
 }
 
-fn plugin_release_candidate(options: PluginReleaseCandidateOptions) -> Result<()> {
+fn plugin_release_candidate(options: plugin_cli::PluginReleaseCandidateOptions) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
     if !is_git_sha_prefix(&options.control_plane_readback_commit) {
@@ -32218,7 +30807,9 @@ fn plugin_release_candidate(options: PluginReleaseCandidateOptions) -> Result<()
     Ok(())
 }
 
-fn plugin_release_candidate_verify(options: PluginReleaseCandidateVerifyOptions) -> Result<()> {
+fn plugin_release_candidate_verify(
+    options: plugin_cli::PluginReleaseCandidateVerifyOptions,
+) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
     let supplied_summary_sha256 = options.summary_sha256.trim();
@@ -32270,7 +30861,7 @@ fn plugin_release_candidate_verify(options: PluginReleaseCandidateVerifyOptions)
 }
 
 fn plugin_release_candidate_windows_recovery(
-    options: PluginReleaseCandidateWindowsRecoveryOptions,
+    options: plugin_cli::PluginReleaseCandidateWindowsRecoveryOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
     if !is_git_sha_prefix(&options.control_plane_readback_commit) {
@@ -32655,7 +31246,7 @@ if ($LASTEXITCODE -ne 0) {{
 }
 
 fn plugin_release_candidate_windows_recovery_verify(
-    options: PluginReleaseCandidateWindowsRecoveryVerifyOptions,
+    options: plugin_cli::PluginReleaseCandidateWindowsRecoveryVerifyOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -32722,7 +31313,7 @@ fn plugin_release_candidate_windows_recovery_verify(
 }
 
 fn plugin_release_candidate_windows_transfer_bundle(
-    options: PluginReleaseCandidateWindowsTransferBundleOptions,
+    options: plugin_cli::PluginReleaseCandidateWindowsTransferBundleOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -32956,7 +31547,7 @@ fn plugin_release_candidate_windows_transfer_bundle(
 }
 
 fn plugin_release_candidate_observer_bundle(
-    options: PluginReleaseCandidateObserverBundleOptions,
+    options: plugin_cli::PluginReleaseCandidateObserverBundleOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -33124,7 +31715,7 @@ fn plugin_release_candidate_observer_bundle(
 }
 
 fn plugin_release_candidate_observer_bundle_verify(
-    options: PluginReleaseCandidateObserverBundleVerifyOptions,
+    options: plugin_cli::PluginReleaseCandidateObserverBundleVerifyOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -33230,7 +31821,7 @@ fn plugin_release_candidate_observer_bundle_verify(
 }
 
 fn plugin_pulse_apply_observer_bundle(
-    options: PluginPulseApplyObserverBundleOptions,
+    options: plugin_cli::PluginPulseApplyObserverBundleOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -33423,7 +32014,7 @@ fn plugin_pulse_apply_observer_bundle(
 }
 
 fn plugin_pulse_apply_observer_bundle_verify(
-    options: PluginPulseApplyObserverBundleVerifyOptions,
+    options: plugin_cli::PluginPulseApplyObserverBundleVerifyOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -33531,7 +32122,9 @@ fn plugin_pulse_apply_observer_bundle_verify(
     Ok(())
 }
 
-fn plugin_pulse_once_observer_bundle(options: PluginPulseOnceObserverBundleOptions) -> Result<()> {
+fn plugin_pulse_once_observer_bundle(
+    options: plugin_cli::PluginPulseOnceObserverBundleOptions,
+) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
     fs::create_dir_all(&options.out_dir)
@@ -33718,7 +32311,7 @@ fn plugin_pulse_once_observer_bundle(options: PluginPulseOnceObserverBundleOptio
 }
 
 fn plugin_pulse_once_observer_bundle_verify(
-    options: PluginPulseOnceObserverBundleVerifyOptions,
+    options: plugin_cli::PluginPulseOnceObserverBundleVerifyOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -33825,7 +32418,7 @@ fn plugin_pulse_once_observer_bundle_verify(
 }
 
 fn plugin_pulse_chain_observer_bundle(
-    options: PluginPulseChainObserverBundleOptions,
+    options: plugin_cli::PluginPulseChainObserverBundleOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -34014,7 +32607,7 @@ fn plugin_pulse_chain_observer_bundle(
 }
 
 fn plugin_pulse_chain_observer_bundle_verify(
-    options: PluginPulseChainObserverBundleVerifyOptions,
+    options: plugin_cli::PluginPulseChainObserverBundleVerifyOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -34121,7 +32714,7 @@ fn plugin_pulse_chain_observer_bundle_verify(
 }
 
 fn plugin_pulse_eval_loop_observer_bundle(
-    options: PluginPulseEvalLoopObserverBundleOptions,
+    options: plugin_cli::PluginPulseEvalLoopObserverBundleOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -34316,7 +32909,7 @@ fn plugin_pulse_eval_loop_observer_bundle(
 }
 
 fn plugin_pulse_eval_loop_observer_bundle_verify(
-    options: PluginPulseEvalLoopObserverBundleVerifyOptions,
+    options: plugin_cli::PluginPulseEvalLoopObserverBundleVerifyOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -34424,7 +33017,7 @@ fn plugin_pulse_eval_loop_observer_bundle_verify(
 }
 
 fn plugin_pulse_executor_observer_bundle(
-    options: PluginPulseExecutorObserverBundleOptions,
+    options: plugin_cli::PluginPulseExecutorObserverBundleOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -34733,7 +33326,7 @@ fn plugin_pulse_executor_observer_bundle(
 }
 
 fn plugin_pulse_executor_observer_bundle_verify(
-    options: PluginPulseExecutorObserverBundleVerifyOptions,
+    options: plugin_cli::PluginPulseExecutorObserverBundleVerifyOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -35588,7 +34181,7 @@ fn current_git_head_string() -> Result<String> {
 }
 
 fn plugin_pulse_apply_windows_recovery(
-    options: PluginPulseApplyWindowsRecoveryOptions,
+    options: plugin_cli::PluginPulseApplyWindowsRecoveryOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -36039,7 +34632,7 @@ fn validate_pulse_apply_result_artifact(
 }
 
 fn plugin_release_candidate_control_plane_fixture_handoff(
-    options: PluginReleaseCandidateControlPlaneFixtureHandoffOptions,
+    options: plugin_cli::PluginReleaseCandidateControlPlaneFixtureHandoffOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -36232,7 +34825,7 @@ fn plugin_release_candidate_control_plane_fixture_handoff(
 }
 
 fn plugin_release_candidate_control_plane_fixture_handoff_verify(
-    options: PluginReleaseCandidateControlPlaneFixtureHandoffVerifyOptions,
+    options: plugin_cli::PluginReleaseCandidateControlPlaneFixtureHandoffVerifyOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -36374,7 +34967,9 @@ fn plugin_release_candidate_control_plane_fixture_handoff_verify(
     Ok(())
 }
 
-fn plugin_final_install_transcript(options: PluginFinalInstallTranscriptOptions) -> Result<()> {
+fn plugin_final_install_transcript(
+    options: plugin_cli::PluginFinalInstallTranscriptOptions,
+) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
     let supplied_summary_sha256 = options.summary_sha256.trim();
@@ -36602,7 +35197,7 @@ Trust boundary: control plane remains read-only observer; no provider execution,
 }
 
 fn plugin_final_install_transcript_observer_bundle(
-    options: PluginFinalInstallTranscriptObserverBundleOptions,
+    options: plugin_cli::PluginFinalInstallTranscriptObserverBundleOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -36804,7 +35399,7 @@ fn plugin_final_install_transcript_observer_bundle(
     Ok(())
 }
 
-fn plugin_shipment_readiness(options: PluginShipmentReadinessOptions) -> Result<()> {
+fn plugin_shipment_readiness(options: plugin_cli::PluginShipmentReadinessOptions) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
     if !is_git_sha_prefix(&options.control_plane_readback_commit) {
@@ -37722,7 +36317,7 @@ fn is_git_sha_prefix(value: &str) -> bool {
 }
 
 fn plugin_control_plane_fixture_handoff(
-    options: PluginControlPlaneFixtureHandoffOptions,
+    options: plugin_cli::PluginControlPlaneFixtureHandoffOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -37904,7 +36499,7 @@ fn plugin_control_plane_fixture_handoff(
 }
 
 fn plugin_control_plane_fixture_handoff_verify(
-    options: PluginControlPlaneFixtureHandoffVerifyOptions,
+    options: plugin_cli::PluginControlPlaneFixtureHandoffVerifyOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -38129,7 +36724,7 @@ fn validate_plugin_control_plane_fixture_handoff(handoff: &serde_json::Value) ->
 }
 
 fn plugin_distribution_observer_bundle(
-    options: PluginDistributionObserverBundleOptions,
+    options: plugin_cli::PluginDistributionObserverBundleOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -38280,7 +36875,7 @@ fn plugin_distribution_observer_bundle(
 }
 
 fn plugin_clean_package_operator_index(
-    options: PluginCleanPackageOperatorIndexOptions,
+    options: plugin_cli::PluginCleanPackageOperatorIndexOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -38456,7 +37051,7 @@ fn plugin_clean_package_operator_index(
 }
 
 fn plugin_packaged_replacement_observer_bundle(
-    options: PluginPackagedReplacementObserverBundleOptions,
+    options: plugin_cli::PluginPackagedReplacementObserverBundleOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -38637,7 +37232,7 @@ fn plugin_packaged_replacement_observer_bundle(
 }
 
 fn plugin_packaged_replacement_observer_bundle_verify(
-    options: PluginPackagedReplacementObserverBundleVerifyOptions,
+    options: plugin_cli::PluginPackagedReplacementObserverBundleVerifyOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -38758,7 +37353,7 @@ fn plugin_packaged_replacement_observer_bundle_verify(
 }
 
 fn plugin_release_gate_with_replacement_observer_bundle(
-    options: PluginReleaseGateWithReplacementObserverBundleOptions,
+    options: plugin_cli::PluginReleaseGateWithReplacementObserverBundleOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -38921,7 +37516,7 @@ fn plugin_release_gate_with_replacement_observer_bundle(
     Ok(())
 }
 
-fn plugin_adapter_scaffold(options: PluginAdapterScaffoldOptions) -> Result<()> {
+fn plugin_adapter_scaffold(options: plugin_cli::PluginAdapterScaffoldOptions) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
     let supplied_package_summary_sha256 = options.package_summary_sha256.trim();
@@ -39187,7 +37782,9 @@ fn plugin_adapter_scaffold(options: PluginAdapterScaffoldOptions) -> Result<()> 
     Ok(())
 }
 
-fn plugin_adapter_scaffold_verify(options: PluginAdapterScaffoldVerifyOptions) -> Result<()> {
+fn plugin_adapter_scaffold_verify(
+    options: plugin_cli::PluginAdapterScaffoldVerifyOptions,
+) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
     let supplied_summary_sha256 = options.summary_sha256.trim();
@@ -39268,7 +37865,9 @@ fn plugin_adapter_scaffold_verify(options: PluginAdapterScaffoldVerifyOptions) -
     Ok(())
 }
 
-fn plugin_adapter_install_smoke(options: PluginAdapterInstallSmokeOptions) -> Result<()> {
+fn plugin_adapter_install_smoke(
+    options: plugin_cli::PluginAdapterInstallSmokeOptions,
+) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
     let supplied_summary_sha256 = options.summary_sha256.trim();
@@ -39439,7 +38038,7 @@ fn plugin_adapter_install_smoke(options: PluginAdapterInstallSmokeOptions) -> Re
 }
 
 fn plugin_adapter_install_smoke_verify(
-    options: PluginAdapterInstallSmokeVerifyOptions,
+    options: plugin_cli::PluginAdapterInstallSmokeVerifyOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -39494,7 +38093,7 @@ fn plugin_adapter_install_smoke_verify(
 }
 
 fn plugin_adapter_install_smoke_observer_bundle(
-    options: PluginAdapterInstallSmokeObserverBundleOptions,
+    options: plugin_cli::PluginAdapterInstallSmokeObserverBundleOptions,
 ) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
@@ -39657,7 +38256,9 @@ fn plugin_adapter_install_smoke_observer_bundle(
     Ok(())
 }
 
-fn plugin_adapter_observer_bundle(options: PluginAdapterObserverBundleOptions) -> Result<()> {
+fn plugin_adapter_observer_bundle(
+    options: plugin_cli::PluginAdapterObserverBundleOptions,
+) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
     fs::create_dir_all(&options.out_dir)
@@ -42267,7 +40868,7 @@ fn validate_plugin_observer_trust_boundary(
     Ok(())
 }
 
-fn plugin_wrapper_harness(options: PluginWrapperHarnessOptions) -> Result<()> {
+fn plugin_wrapper_harness(options: plugin_cli::PluginWrapperHarnessOptions) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
     let supplied_readiness_sha256 = options.readiness_sha256.trim();
@@ -42409,7 +41010,9 @@ fn plugin_wrapper_harness(options: PluginWrapperHarnessOptions) -> Result<()> {
     }
 }
 
-fn plugin_wrapper_harness_verify(options: PluginWrapperHarnessVerifyOptions) -> Result<()> {
+fn plugin_wrapper_harness_verify(
+    options: plugin_cli::PluginWrapperHarnessVerifyOptions,
+) -> Result<()> {
     fail_if_provider_api_key_env_present()?;
 
     let summary_path = options.evidence_dir.join("plugin-wrapper-harness.json");
