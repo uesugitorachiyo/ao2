@@ -1,6 +1,6 @@
 {
   "baseline_source": {
-    "head": "05e44594e0638bb67f7c201dd20602fb7316ab6e",
+    "head": "80f26d1e60b28634e73de6842d9eb47f876e0145",
     "v0_5_3_tag_target": "947e566bd3f54ed902f3c14fc0c90e21a24359bc"
   },
   "budgets": {
@@ -28,7 +28,7 @@
         "crates/ao2-cli/src/github_issue_intake.rs": 281,
         "crates/ao2-cli/src/install_cmd.rs": 274,
         "crates/ao2-cli/src/install_paths.rs": 79,
-        "crates/ao2-cli/src/main.rs": 53154,
+        "crates/ao2-cli/src/main.rs": 51629,
         "crates/ao2-cli/src/memory_store.rs": 578,
         "crates/ao2-cli/src/provider_contract.rs": 239,
         "crates/ao2-cli/src/provider_ops.rs": 1890,
@@ -54,6 +54,7 @@
         "crates/ao2-cli/src/support_bundle.rs": 767,
         "crates/ao2-cli/src/upgrade_cmd.rs": 172,
         "crates/ao2-cli/src/windows_input.rs": 120,
+        "crates/ao2-cli/src/workbench_factory_api.rs": 1619,
         "crates/ao2-cli/src/workbench_memory.rs": 165,
         "crates/ao2-cli/src/workbench_provider_pilot.rs": 248,
         "crates/ao2-cli/src/workbench_provider_pilot_acceptance.rs": 109,
@@ -63,9 +64,9 @@
         "crates/ao2-cli/src/workbench_run_evidence.rs": 258,
         "crates/ao2-cli/src/workbench_support.rs": 132
       },
-      "main_rs_lines": 53154,
-      "main_rs_source_concentration_percent": 68.1488,
-      "main_rs_top_level_functions": 531,
+      "main_rs_lines": 51629,
+      "main_rs_source_concentration_percent": 66.1139,
+      "main_rs_top_level_functions": 493,
       "main_rs_top_level_types": 122,
       "module_declarations": [
         "crates/ao2-cli/src/main.rs::cli_util",
@@ -108,6 +109,7 @@
         "crates/ao2-cli/src/main.rs::support_bundle",
         "crates/ao2-cli/src/main.rs::upgrade_cmd",
         "crates/ao2-cli/src/main.rs::windows_input",
+        "crates/ao2-cli/src/main.rs::workbench_factory_api",
         "crates/ao2-cli/src/main.rs::workbench_memory",
         "crates/ao2-cli/src/main.rs::workbench_provider_pilot",
         "crates/ao2-cli/src/main.rs::workbench_provider_pilot_acceptance",
@@ -117,7 +119,7 @@
         "crates/ao2-cli/src/main.rs::workbench_run_evidence",
         "crates/ao2-cli/src/main.rs::workbench_support"
       ],
-      "production_total_lines": 77997
+      "production_total_lines": 78091
     },
     "tests": {
       "cli_approval_replay_line_concentration_percent": 0.0,
