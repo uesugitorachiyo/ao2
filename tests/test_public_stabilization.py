@@ -13718,6 +13718,7 @@ def test_workbench_operator_evidence_packet_export_contract():
         [
             read("crates/ao2-cli/src/main.rs"),
             read("crates/ao2-cli/src/control_plane_ops.rs"),
+            read("crates/ao2-cli/src/workbench_evidence_delivery.rs"),
         ]
     )
     rust_tests = read("crates/ao2-cli/tests/cli_workbench_evidence.rs")
