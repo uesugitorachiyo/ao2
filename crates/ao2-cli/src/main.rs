@@ -33,6 +33,7 @@ use chrono::{SecondsFormat, Utc};
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
 
+mod artifact_safety;
 mod cli_util;
 mod control_plane_http;
 mod control_plane_ops;
@@ -103,6 +104,9 @@ mod workbench_run_evidence;
 mod workbench_server;
 mod workbench_support;
 
+pub(crate) use artifact_safety::{
+    factory_app_run_bundle_reject_secret_fields, factory_app_run_bundle_reject_secret_markers,
+};
 use greenfield_workflow::{
     factory_greenfield_run_json, factory_greenfield_spec_ingest_json,
     factory_greenfield_spec_ingest_submit_json, greenfield_governed_run_json,
@@ -8485,54 +8489,6 @@ fn factory_app_run_bundle_validate(app_run: &serde_json::Value) -> Result<()> {
             != "factory-v3 evaluator-closer"
     {
         anyhow::bail!("release acceptance owner must be factory-v3 evaluator-closer");
-    }
-    Ok(())
-}
-
-fn factory_app_run_bundle_reject_secret_markers(path: &Path, relative_path: &str) -> Result<()> {
-    let bytes = fs::read(path).with_context(|| format!("read {}", path.display()))?;
-    let text = String::from_utf8_lossy(&bytes);
-    for marker in [
-        "Authorization: Bearer ",
-        "AO2_CP_API_TOKEN=",
-        "OPENAI_API_KEY=",
-        "ANTHROPIC_API_KEY=",
-    ] {
-        if text.contains(marker) {
-            anyhow::bail!("factory app-run bundle contains forbidden secret marker {marker:?} in {relative_path}");
-        }
-    }
-    if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
-        factory_app_run_bundle_reject_secret_fields(&value, relative_path)?;
-    }
-    Ok(())
-}
-
-fn factory_app_run_bundle_reject_secret_fields(
-    value: &serde_json::Value,
-    path: &str,
-) -> Result<()> {
-    match value {
-        serde_json::Value::Object(map) => {
-            for (key, child) in map {
-                let key_lower = key.to_ascii_lowercase();
-                if matches!(
-                    key_lower.as_str(),
-                    "token" | "access_token" | "refresh_token"
-                ) {
-                    anyhow::bail!(
-                        "factory app-run bundle contains forbidden secret field at {path}.{key}"
-                    );
-                }
-                factory_app_run_bundle_reject_secret_fields(child, &format!("{path}.{key}"))?;
-            }
-        }
-        serde_json::Value::Array(items) => {
-            for (index, child) in items.iter().enumerate() {
-                factory_app_run_bundle_reject_secret_fields(child, &format!("{path}[{index}]"))?;
-            }
-        }
-        _ => {}
     }
     Ok(())
 }
