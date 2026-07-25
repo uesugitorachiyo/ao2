@@ -1,6 +1,6 @@
 {
   "baseline_source": {
-    "head": "b70b89d24370b783c3af40d4de336ed310658443",
+    "head": "78717bb1fbef4dedd814c3fb20100ec93a9c58b7",
     "v0_5_3_tag_target": "947e566bd3f54ed902f3c14fc0c90e21a24359bc"
   },
   "budgets": {
@@ -28,13 +28,15 @@
         "crates/ao2-cli/src/github_issue_intake.rs": 281,
         "crates/ao2-cli/src/install_cmd.rs": 274,
         "crates/ao2-cli/src/install_paths.rs": 79,
-        "crates/ao2-cli/src/main.rs": 33869,
+        "crates/ao2-cli/src/main.rs": 30867,
         "crates/ao2-cli/src/memory_store.rs": 578,
+        "crates/ao2-cli/src/plugin_adapter.rs": 2050,
         "crates/ao2-cli/src/plugin_cli.rs": 1415,
-        "crates/ao2-cli/src/plugin_consumer.rs": 1314,
+        "crates/ao2-cli/src/plugin_consumer.rs": 1146,
+        "crates/ao2-cli/src/plugin_contract.rs": 1164,
         "crates/ao2-cli/src/plugin_distribution.rs": 2150,
-        "crates/ao2-cli/src/plugin_pulse.rs": 2829,
-        "crates/ao2-cli/src/plugin_release.rs": 2946,
+        "crates/ao2-cli/src/plugin_pulse.rs": 2831,
+        "crates/ao2-cli/src/plugin_release.rs": 2948,
         "crates/ao2-cli/src/provider_contract.rs": 239,
         "crates/ao2-cli/src/provider_ops.rs": 1890,
         "crates/ao2-cli/src/pulse_eval_loop.rs": 443,
@@ -76,9 +78,9 @@
         "crates/ao2-cli/src/workbench_server.rs": 1643,
         "crates/ao2-cli/src/workbench_support.rs": 132
       },
-      "main_rs_lines": 33869,
-      "main_rs_source_concentration_percent": 43.219,
-      "main_rs_top_level_functions": 311,
+      "main_rs_lines": 30867,
+      "main_rs_source_concentration_percent": 39.3641,
+      "main_rs_top_level_functions": 284,
       "main_rs_top_level_types": 63,
       "module_declarations": [
         "crates/ao2-cli/src/main.rs::cli_util",
@@ -97,8 +99,10 @@
         "crates/ao2-cli/src/main.rs::install_cmd",
         "crates/ao2-cli/src/main.rs::install_paths",
         "crates/ao2-cli/src/main.rs::memory_store",
+        "crates/ao2-cli/src/main.rs::plugin_adapter",
         "crates/ao2-cli/src/main.rs::plugin_cli",
         "crates/ao2-cli/src/main.rs::plugin_consumer",
+        "crates/ao2-cli/src/main.rs::plugin_contract",
         "crates/ao2-cli/src/main.rs::plugin_distribution",
         "crates/ao2-cli/src/main.rs::plugin_pulse",
         "crates/ao2-cli/src/main.rs::plugin_release",
@@ -143,7 +147,7 @@
         "crates/ao2-cli/src/main.rs::workbench_server",
         "crates/ao2-cli/src/main.rs::workbench_support"
       ],
-      "production_total_lines": 78366
+      "production_total_lines": 78414
     },
     "tests": {
       "cli_approval_replay_line_concentration_percent": 0.0,
