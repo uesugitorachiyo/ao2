@@ -9,16 +9,13 @@ use ao2_core::{
 };
 use chrono::{SecondsFormat, Utc};
 
-use crate::cli_util::run_dir;
-use crate::cli_util::{json_string, sha256_file};
+use crate::cli_util::{atomic_write_text, json_string, now_unix_ms, run_dir, sha256_file};
 use crate::release_crypto::{
     derive_public_key_from_private_key, sign_file_with_private_key, verify_file_signature,
 };
 use crate::workbench_contract::{WorkbenchOperator, WorkbenchSupportSigning};
 use crate::workbench_evidence_delivery::workbench_evidence_export_path;
-use crate::workbench_queue::{
-    append_workbench_audit_event_for_target, atomic_write_text, now_unix_ms,
-};
+use crate::workbench_queue::append_workbench_audit_event_for_target;
 
 fn workbench_obligation_ledger_path(target: &Path, run_id: &str) -> Result<PathBuf> {
     let run_dir = run_dir(target, run_id);

@@ -5,8 +5,8 @@ use anyhow::{anyhow, Context, Result};
 use ao2_core::sha256_hex;
 use chrono::{SecondsFormat, Utc};
 
+use crate::cli_util::sanitize_greenfield_id;
 use crate::factory_compat::{factory_ensure_target_repo, read_factory_compat_value};
-use crate::sanitize_greenfield_id;
 
 fn atomic_write_text(path: &Path, content: &str) -> Result<()> {
     if let Some(parent) = path.parent() {

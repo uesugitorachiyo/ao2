@@ -3,12 +3,71 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use ao2_core::sha256_hex;
 use flate2::{Compression, GzBuilder};
 use serde::de::DeserializeOwned;
 use tar::Builder;
+
+pub(crate) fn atomic_write_text(path: &Path, content: &str) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+    }
+    // Route through the shared ao2-core durable writer: temp file + write_all +
+    // sync_all + atomic rename, with the temp cleaned up on any error. This is
+    // the same write discipline the AO2 evidence boundary depends on, so a crash
+    // or power loss can never truncate the destination to a zero-length file or
+    // strew half-written temporaries beside it.
+    ao2_core::atomic_write(path, content)
+        .with_context(|| format!("atomic write {}", path.display()))?;
+    Ok(())
+}
+
+pub(crate) fn now_unix_ms() -> u64 {
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    unix_ms_from_duration(duration)
+}
+
+pub(crate) fn unix_ms_from_duration(duration: Duration) -> u64 {
+    duration.as_millis().try_into().unwrap_or(u64::MAX)
+}
+
+pub(crate) fn sanitize_greenfield_id(candidate: &str) -> String {
+    let mut out = String::new();
+    let mut last_dash = false;
+    for ch in candidate.trim().chars() {
+        let normalized = if ch.is_ascii_alphanumeric() {
+            Some(ch.to_ascii_lowercase())
+        } else if ch == '-' || ch == '_' || ch.is_whitespace() {
+            Some('-')
+        } else {
+            None
+        };
+        if let Some(ch) = normalized {
+            if ch == '-' {
+                if !last_dash && !out.is_empty() {
+                    out.push(ch);
+                    last_dash = true;
+                }
+            } else {
+                out.push(ch);
+                last_dash = false;
+            }
+        }
+    }
+    while out.ends_with('-') {
+        out.pop();
+    }
+    if out.is_empty() {
+        "greenfield-run".to_string()
+    } else {
+        out
+    }
+}
 
 pub(crate) fn binary_name_for_target(target: &str) -> &'static str {
     if target.contains("windows") {

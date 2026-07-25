@@ -5,14 +5,14 @@ use anyhow::{anyhow, Context, Result};
 use ao2_core::{extract_obligation_ledger, sha256_hex};
 use chrono::{SecondsFormat, Utc};
 
-use crate::cli_util::{canonical_json_sha256, json_string, sha256_bytes_hex};
-use crate::workbench_queue::atomic_write_text;
+use crate::cli_util::{
+    atomic_write_text, canonical_json_sha256, json_string, sanitize_greenfield_id, sha256_bytes_hex,
+};
 use crate::{
     classify_factory_shape, classify_factory_size, factory_classification_signals,
     factory_ensure_target_repo, factory_governed_run_json, factory_plan_json,
     factory_queue_submit_project_start_json, reject_factory_provider_api_key_auth,
-    sanitize_greenfield_id, FactoryGovernedRunOptions, FactoryPlanSigning,
-    FactoryQueueSubmitProjectStartOptions,
+    FactoryGovernedRunOptions, FactoryPlanSigning, FactoryQueueSubmitProjectStartOptions,
 };
 
 pub(crate) struct GreenfieldIngestOptions<'a> {

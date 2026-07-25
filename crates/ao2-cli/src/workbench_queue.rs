@@ -1,5 +1,5 @@
 use super::*;
-use crate::cli_util::run_dir;
+use crate::cli_util::{atomic_write_text, now_unix_ms, run_dir};
 use crate::run_reporting::{render_report_for_run, run_summary_json};
 use crate::run_resume::approve_and_resume_persisted_sandbox_patches;
 use crate::workbench_app::{
@@ -987,17 +987,6 @@ fn default_workbench_job_kind() -> String {
     "run".to_string()
 }
 
-pub(crate) fn now_unix_ms() -> u64 {
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default();
-    unix_ms_from_duration(duration)
-}
-
-pub(super) fn unix_ms_from_duration(duration: Duration) -> u64 {
-    duration.as_millis().try_into().unwrap_or(u64::MAX)
-}
-
 fn prune_workbench_jobs(jobs: &mut Vec<WorkbenchJob>, retention_limit: usize) -> bool {
     let original_len = jobs.len();
     while jobs.len() > retention_limit {
@@ -1036,20 +1025,6 @@ fn persist_workbench_queue_locked(
     };
     let content = serde_json::to_string_pretty(&file)?;
     atomic_write_text(&state.path, &content)?;
-    Ok(())
-}
-
-pub(crate) fn atomic_write_text(path: &Path, content: &str) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
-    }
-    // Route through the shared ao2-core durable writer: temp file + write_all +
-    // sync_all + atomic rename, with the temp cleaned up on any error. This is
-    // the same write discipline the AO2 evidence boundary depends on, so a crash
-    // or power loss can never truncate the destination to a zero-length file or
-    // strew half-written temporaries beside it.
-    ao2_core::atomic_write(path, content)
-        .with_context(|| format!("atomic write {}", path.display()))?;
     Ok(())
 }
 
