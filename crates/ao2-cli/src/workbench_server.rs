@@ -1,8 +1,108 @@
 use super::*;
+use crate::control_plane_http::parse_http_endpoint;
+use crate::workbench_app::{
+    build_workbench_operators, parse_form_body, templates_json,
+    workbench_evidence_control_plane_dashboard_json, workbench_launch_json,
+    workbench_provider_pilot_json, workbench_provider_pilot_preflight_json,
+    WorkbenchMinimumScoreError,
+};
+use crate::workbench_contract::{
+    WorkbenchOperator, WorkbenchOperatorRole, WorkbenchSupportSigning,
+};
+use crate::workbench_provider_pilot::{
+    workbench_export_latest_provider_pilot_acceptance_json,
+    workbench_latest_provider_pilot_acceptance_json, workbench_provider_pilot_cost_ledger_json,
+    workbench_provider_pilot_cost_trend_json,
+};
+use crate::workbench_queue::{start_workbench_queue, WorkbenchQueue};
 use crate::workbench_render::{
     latest_workbench_support_packet_json, render_workbench, workbench_provider_contracts_json,
     WorkbenchRenderOptions,
 };
+
+pub(super) struct ServeWorkbenchOptions {
+    pub(super) target: PathBuf,
+    pub(super) host: String,
+    pub(super) port: u16,
+    pub(super) once: bool,
+    pub(super) provenance_dir: PathBuf,
+    pub(super) api_token: Option<String>,
+    pub(super) operator_tokens: Vec<String>,
+    pub(super) enable_execution: bool,
+    pub(super) queue_retention: usize,
+    pub(super) control_plane_url: Option<String>,
+    pub(super) support_signing_key: Option<PathBuf>,
+    pub(super) support_signer_id: String,
+}
+
+struct WorkbenchAppOptions {
+    host: String,
+    port: u16,
+    once: bool,
+    target: PathBuf,
+    provenance_dir: PathBuf,
+    operators: Vec<WorkbenchOperator>,
+    support_signing: Option<WorkbenchSupportSigning>,
+    queue: Option<WorkbenchQueue>,
+    control_plane_url: Option<String>,
+}
+
+pub(super) fn serve_workbench(options: ServeWorkbenchOptions) -> Result<()> {
+    let ServeWorkbenchOptions {
+        target,
+        host,
+        port,
+        once,
+        provenance_dir,
+        api_token,
+        operator_tokens,
+        enable_execution,
+        queue_retention,
+        control_plane_url,
+        support_signing_key,
+        support_signer_id,
+    } = options;
+    let api_token = api_token.unwrap_or_else(generate_api_token);
+    let control_plane_url = normalize_workbench_control_plane_url(control_plane_url)?;
+    let operators = build_workbench_operators(api_token.clone(), operator_tokens)?;
+    let support_signing = support_signing_key.map(|key_path| WorkbenchSupportSigning {
+        key_path,
+        signer_id: support_signer_id,
+    });
+    let queue = if enable_execution {
+        Some(start_workbench_queue(
+            &target,
+            queue_retention,
+            support_signing.clone(),
+        )?)
+    } else {
+        None
+    };
+    serve_workbench_app(WorkbenchAppOptions {
+        host,
+        port,
+        once,
+        target,
+        provenance_dir,
+        operators,
+        support_signing,
+        queue,
+        control_plane_url,
+    })
+}
+
+fn normalize_workbench_control_plane_url(value: Option<String>) -> Result<Option<String>> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    parse_http_endpoint(trimmed)
+        .with_context(|| format!("validate --control-plane-url {trimmed}"))?;
+    Ok(Some(trimmed.trim_end_matches('/').to_string()))
+}
 
 pub(super) fn serve_cockpit(
     target: PathBuf,
@@ -49,7 +149,7 @@ fn serve_html(host: String, port: u16, once: bool, html: String) -> Result<()> {
     Ok(())
 }
 
-pub(super) fn serve_workbench_app(options: WorkbenchAppOptions) -> Result<()> {
+fn serve_workbench_app(options: WorkbenchAppOptions) -> Result<()> {
     let WorkbenchAppOptions {
         host,
         port,

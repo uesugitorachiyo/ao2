@@ -1,4 +1,8 @@
 use super::*;
+use crate::workbench_app::{
+    parse_optional_budget_form, validate_minimum_provider_score, workbench_provider_pilot_json,
+};
+use crate::workbench_contract::WorkbenchSupportSigning;
 
 #[derive(Clone)]
 pub(super) struct WorkbenchQueue {
@@ -6,12 +10,6 @@ pub(super) struct WorkbenchQueue {
     sender: mpsc::Sender<WorkbenchJobRequest>,
     active_children: Arc<Mutex<HashMap<String, Child>>>,
     support_signing: Option<WorkbenchSupportSigning>,
-}
-
-#[derive(Clone)]
-pub(crate) struct WorkbenchSupportSigning {
-    pub(crate) key_path: PathBuf,
-    pub(crate) signer_id: String,
 }
 
 struct WorkbenchQueueState {
@@ -81,22 +79,6 @@ struct WorkbenchJobExecutionResult {
     error: String,
     exit_code: i32,
 }
-
-#[derive(Debug)]
-pub(super) struct WorkbenchMinimumScoreError {
-    pub(super) run_id: String,
-    pub(super) minimum_score: u64,
-    pub(super) score: u64,
-    pub(super) verdict: String,
-}
-
-impl std::fmt::Display for WorkbenchMinimumScoreError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "minimum_provider_score_not_met")
-    }
-}
-
-impl std::error::Error for WorkbenchMinimumScoreError {}
 
 #[derive(Deserialize, Serialize)]
 struct WorkbenchQueueFile {
@@ -1127,59 +1109,6 @@ fn form_value<'a>(
         .map(|value| value.trim())
         .filter(|value| !value.is_empty())
         .unwrap_or(default)
-}
-
-pub(crate) fn form_value_owned(
-    form: &std::collections::BTreeMap<String, String>,
-    key: &str,
-) -> Option<String> {
-    form.get(key)
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-}
-
-pub(super) fn parse_optional_budget_form(
-    form: &std::collections::BTreeMap<String, String>,
-    key: &str,
-) -> Result<Option<f64>> {
-    let Some(value) = form_value_owned(form, key) else {
-        return Ok(None);
-    };
-    let budget = value
-        .parse::<f64>()
-        .with_context(|| format!("{key} must be a number"))?;
-    if !budget.is_finite() || budget <= 0.0 {
-        anyhow::bail!("{key} must be a positive finite number");
-    }
-    Ok(Some(budget))
-}
-
-pub(super) fn validate_minimum_provider_score(
-    target: &Path,
-    run_id: &str,
-    minimum_score: u64,
-) -> Result<serde_json::Value> {
-    if minimum_score == 0 {
-        return Ok(serde_json::Value::Null);
-    }
-    let scorecard =
-        provider_score_json(target, run_id).map_err(|_| WorkbenchMinimumScoreError {
-            run_id: run_id.to_string(),
-            minimum_score,
-            score: 0,
-            verdict: "missing".to_string(),
-        })?;
-    let score = json_u64(&scorecard, "score");
-    if score < minimum_score {
-        return Err(WorkbenchMinimumScoreError {
-            run_id: run_id.to_string(),
-            minimum_score,
-            score,
-            verdict: json_string(&scorecard, "verdict"),
-        }
-        .into());
-    }
-    Ok(scorecard)
 }
 
 fn mark_workbench_job_running(state: &WorkbenchQueueState, job_id: &str) -> bool {
