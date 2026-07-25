@@ -1,6 +1,6 @@
 {
   "baseline_source": {
-    "head": "51d329b48edc7ec891cde8cc357dc6125d2cd594",
+    "head": "120e282d8a811057043e11b68d90e39004ce0fd2",
     "v0_5_3_tag_target": "947e566bd3f54ed902f3c14fc0c90e21a24359bc"
   },
   "budgets": {
@@ -28,8 +28,9 @@
         "crates/ao2-cli/src/github_issue_intake.rs": 281,
         "crates/ao2-cli/src/install_cmd.rs": 274,
         "crates/ao2-cli/src/install_paths.rs": 79,
-        "crates/ao2-cli/src/main.rs": 29692,
+        "crates/ao2-cli/src/main.rs": 28274,
         "crates/ao2-cli/src/memory_store.rs": 578,
+        "crates/ao2-cli/src/phase1_promotion.rs": 1441,
         "crates/ao2-cli/src/plugin_adapter.rs": 2050,
         "crates/ao2-cli/src/plugin_cli.rs": 1403,
         "crates/ao2-cli/src/plugin_consumer.rs": 1146,
@@ -80,9 +81,9 @@
         "crates/ao2-cli/src/workbench_server.rs": 1644,
         "crates/ao2-cli/src/workbench_support.rs": 132
       },
-      "main_rs_lines": 29692,
-      "main_rs_source_concentration_percent": 37.8425,
-      "main_rs_top_level_functions": 252,
+      "main_rs_lines": 28274,
+      "main_rs_source_concentration_percent": 36.0247,
+      "main_rs_top_level_functions": 235,
       "main_rs_top_level_types": 62,
       "module_declarations": [
         "crates/ao2-cli/src/main.rs::cli_util",
@@ -101,6 +102,7 @@
         "crates/ao2-cli/src/main.rs::install_cmd",
         "crates/ao2-cli/src/main.rs::install_paths",
         "crates/ao2-cli/src/main.rs::memory_store",
+        "crates/ao2-cli/src/main.rs::phase1_promotion",
         "crates/ao2-cli/src/main.rs::plugin_adapter",
         "crates/ao2-cli/src/main.rs::plugin_cli",
         "crates/ao2-cli/src/main.rs::plugin_consumer",
@@ -151,7 +153,7 @@
         "crates/ao2-cli/src/main.rs::workbench_server",
         "crates/ao2-cli/src/main.rs::workbench_support"
       ],
-      "production_total_lines": 78462
+      "production_total_lines": 78485
     },
     "tests": {
       "cli_approval_replay_line_concentration_percent": 0.0,
@@ -227,7 +229,7 @@
         "crates/ao2-cli/tests/release_evaluator_decision.rs": 650,
         "crates/ao2-cli/tests/release_gate_obligation_gate_signing.rs": 1250,
         "crates/ao2-cli/tests/release_handoff_checklist.rs": 339,
-        "crates/ao2-cli/tests/release_packaging.rs": 5511,
+        "crates/ao2-cli/tests/release_packaging.rs": 5514,
         "crates/ao2-cli/tests/release_support_bundle_verification.rs": 1262,
         "crates/ao2-cli/tests/sdd_subcommand.rs": 1023,
         "crates/ao2-cli/tests/troubleshooting_support_bundle.rs": 604
@@ -304,7 +306,7 @@
         "crates/ao2-cli/tests/sdd_subcommand.rs": 16,
         "crates/ao2-cli/tests/troubleshooting_support_bundle.rs": 9
       },
-      "integration_test_file_total_lines": 80107,
+      "integration_test_file_total_lines": 80110,
       "integration_test_static_count": 672
     },
     "unsafe_blocks": [
