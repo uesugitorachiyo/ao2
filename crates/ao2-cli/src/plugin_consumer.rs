@@ -20,11 +20,11 @@ use super::plugin_distribution::{
     validate_plugin_install_smoke_contract, validate_plugin_package_contract,
     write_plugin_package_installation,
 };
+use super::plugin_wrapper::validate_plugin_readiness_contract;
 use super::{
     atomic_write_text, create_tar_gz, factory_app_run_bundle_reject_secret_markers,
     fail_if_provider_api_key_env_present, is_sha256_hex, json_string,
     resolve_cli_artifact_reference, run_current_ao2_json_command, sha256_file,
-    validate_plugin_readiness_contract,
 };
 
 pub(super) fn plugin_consumer_lifecycle(options: PluginConsumerLifecycleOptions) -> Result<()> {
