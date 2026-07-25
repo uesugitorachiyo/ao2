@@ -38,7 +38,11 @@ use super::plugin_release::{
     plugin_release_candidate_windows_recovery_verify,
     plugin_release_candidate_windows_transfer_bundle, plugin_shipment_readiness,
 };
-use super::{plugin_wrapper_harness, plugin_wrapper_harness_verify, PluginCommand};
+use super::plugin_wrapper::{
+    plugin_wrapper_harness, plugin_wrapper_harness_verify, PluginWrapperHarnessOptions,
+    PluginWrapperHarnessVerifyOptions,
+};
+use super::PluginCommand;
 
 pub(super) fn plugin(command: PluginCommand) -> Result<()> {
     match command {
@@ -952,16 +956,6 @@ pub(super) fn plugin(command: PluginCommand) -> Result<()> {
     }
 }
 
-pub(super) struct PluginWrapperHarnessOptions {
-    pub(super) readiness: PathBuf,
-    pub(super) readiness_sha256: String,
-    pub(super) args_file: PathBuf,
-    pub(super) args_sha256: String,
-    pub(super) run_kind: String,
-    pub(super) out_dir: PathBuf,
-    pub(super) json_output: bool,
-}
-
 pub(super) struct PluginConsumerLifecycleOptions {
     pub(super) package_summary: PathBuf,
     pub(super) package_summary_sha256: String,
@@ -1405,11 +1399,5 @@ pub(super) struct PluginAdapterObserverBundleOptions {
     pub(super) windows_verification: PathBuf,
     pub(super) windows_sha256: String,
     pub(super) out_dir: PathBuf,
-    pub(super) json_output: bool,
-}
-
-pub(super) struct PluginWrapperHarnessVerifyOptions {
-    pub(super) evidence_dir: PathBuf,
-    pub(super) summary_sha256: String,
     pub(super) json_output: bool,
 }
