@@ -1,5 +1,6 @@
 use super::*;
 use crate::control_plane_http::parse_http_endpoint;
+use crate::run_reporting::{render_cockpit_index, render_report_for_run, runs_list_json};
 use crate::workbench_app::{
     build_workbench_operators, parse_form_body, templates_json,
     workbench_evidence_control_plane_dashboard_json, workbench_launch_json,

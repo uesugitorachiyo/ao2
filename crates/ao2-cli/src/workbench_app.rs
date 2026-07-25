@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Context, Result};
 
 use crate::cli_util::json_string;
+use crate::cli_util::open_report_target;
 use crate::control_plane_http::{control_plane_endpoint, get_text_http};
 use crate::provider_ops::{
     provider_pilot_json, provider_profiles, provider_score_json, provider_warning_strings,
@@ -13,9 +14,8 @@ use crate::workbench_contract::{
     WorkbenchOperator, WorkbenchOperatorRole, WorkbenchSupportSigning,
 };
 use crate::{
-    factory_plan_json, form_value_owned, generate_api_token, open_report_target, percent_decode,
-    percent_encode, shell_quote, validate_factory_replacement_smoke_run_id, FactoryPlanSigning,
-    TASK_TEMPLATES,
+    factory_plan_json, form_value_owned, generate_api_token, percent_decode, percent_encode,
+    shell_quote, validate_factory_replacement_smoke_run_id, FactoryPlanSigning, TASK_TEMPLATES,
 };
 
 pub(super) fn workbench_export(
