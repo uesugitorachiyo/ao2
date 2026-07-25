@@ -2189,8 +2189,9 @@ fn release_operational_scripts_cover_three_os_ci_and_download_verification() {
     let download = fs::read_to_string(root.join("scripts/release-download-verify.sh"))
         .expect("download verifier exists");
     let package_json = fs::read_to_string(root.join("package.json")).expect("package json exists");
-    let cli_source =
-        fs::read_to_string(root.join("crates/ao2-cli/src/main.rs")).expect("cli source exists");
+    let phase1_promotion_source =
+        fs::read_to_string(root.join("crates/ao2-cli/src/phase1_promotion.rs"))
+            .expect("Phase 1 promotion source exists");
     let workbench_render_source =
         fs::read_to_string(root.join("crates/ao2-cli/src/workbench_render.rs"))
             .expect("Workbench render source exists");
@@ -2315,7 +2316,9 @@ fn release_operational_scripts_cover_three_os_ci_and_download_verification() {
     assert!(phase1_replacement_promotion.contains("morning-cross-os-readback"));
     assert!(phase1_replacement_promotion.contains("AO2_PHASE1_PROMOTION_INPUTS"));
     assert!(phase1_replacement_promotion.contains("ao2.phase1-replacement-promotion-inputs.v1"));
-    assert!(cli_source.contains("ao2.phase1-replacement-promotion-inputs-verification.v1"));
+    assert!(
+        phase1_promotion_source.contains("ao2.phase1-replacement-promotion-inputs-verification.v1")
+    );
     assert!(phase1_replacement_promotion.contains("release phase1-promotion-inputs-verify"));
     assert!(phase1_replacement_promotion.contains("verify_phase1_promotion_inputs decision-gate"));
     assert!(phase1_replacement_promotion.contains("--factory-project-run-summary"));
