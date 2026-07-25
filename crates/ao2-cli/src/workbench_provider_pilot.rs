@@ -6,6 +6,7 @@ use anyhow::Result;
 use crate::cli_util::{json_array, json_string, json_u64};
 use crate::provider_ops::{provider_cost_ledger_json, provider_cost_trend_json};
 use crate::release_history::release_tag_sort_key;
+use crate::workbench_evidence_delivery::workbench_evidence_export_json;
 use crate::workbench_provider_pilot_acceptance::{
     collect_provider_pilot_acceptance_bundles, provider_pilot_acceptance_sort_name,
     provider_pilot_acceptance_verification_json,
@@ -15,7 +16,7 @@ use crate::workbench_provider_pilot_history::{
     workbench_provider_pilot_acceptance_history_entry,
     workbench_provider_pilot_acceptance_trend_json,
 };
-use crate::{form_value_owned, query_value_owned, workbench_evidence_export_json};
+use crate::{form_value_owned, query_value_owned};
 
 #[derive(Clone, Debug)]
 pub(crate) struct WorkbenchProviderPilotAcceptanceFilter {
