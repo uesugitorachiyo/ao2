@@ -9,6 +9,9 @@ use crate::workbench_app::{
 use crate::workbench_contract::{
     WorkbenchOperator, WorkbenchOperatorRole, WorkbenchSupportSigning,
 };
+use crate::workbench_obligation::{
+    workbench_obligation_annotation_json, workbench_obligation_gate_json,
+};
 use crate::workbench_provider_pilot::{
     workbench_export_latest_provider_pilot_acceptance_json,
     workbench_latest_provider_pilot_acceptance_json, workbench_provider_pilot_cost_ledger_json,
