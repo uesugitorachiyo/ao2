@@ -1783,7 +1783,8 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
         .expect("run execution source exists")
         .replace("\r\n", "\n");
     let cli_source = fs::read_to_string(root.join("crates/ao2-cli/src/cli.rs"))
-        .expect("CLI declaration source exists");
+        .expect("CLI declaration source exists")
+        .replace("\r\n", "\n");
     let provider_run_repair_tests =
         fs::read_to_string(root.join("crates/ao2-cli/tests/cli_provider_run_repair.rs"))
             .expect("cli provider run/repair tests exist");
