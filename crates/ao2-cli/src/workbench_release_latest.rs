@@ -3,8 +3,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 
-use crate::cli_util::{json_array, json_string};
-use crate::query_value_owned;
+use crate::cli_util::{json_array, json_string, query_value_owned};
 use crate::release_comparison::release_comparison_bundle_verification_json;
 
 pub(crate) fn workbench_latest_release_comparison_json(query: &str) -> Result<serde_json::Value> {

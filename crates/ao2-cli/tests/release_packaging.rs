@@ -2116,6 +2116,237 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
         !provider_run_repair_tests.contains("Command::new(\"openssl\")"),
         "integration tests must generate signing keys through native AO2 helpers"
     );
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let main_source = fs::read_to_string(root.join("crates/ao2-cli/src/main.rs"))
+        .expect("CLI source exists")
+        .replace("\r\n", "\n");
+    let cli_util_source = fs::read_to_string(root.join("crates/ao2-cli/src/cli_util.rs"))
+        .expect("CLI utility source exists")
+        .replace("\r\n", "\n");
+    let workbench_render_source =
+        fs::read_to_string(root.join("crates/ao2-cli/src/workbench_render.rs"))
+            .expect("Workbench render source exists")
+            .replace("\r\n", "\n");
+
+    for function_name in [
+        "query_value_owned",
+        "form_value_owned",
+        "shell_quote",
+        "format_budget_usd",
+        "http_html_response",
+        "http_json_response",
+        "http_text_response",
+        "percent_decode",
+        "percent_encode",
+        "generate_api_token",
+    ] {
+        assert!(
+            cli_util_source.contains(&format!("fn {function_name}(")),
+            "{function_name} must be owned by cli_util"
+        );
+        assert!(
+            !main_source.contains(&format!("fn {function_name}(")),
+            "{function_name} must not remain in main"
+        );
+    }
+    for function_name in ["render_workbench_job_detail_page", "workbench_file_anchor"] {
+        assert!(
+            workbench_render_source.contains(&format!("fn {function_name}(")),
+            "{function_name} must be owned by workbench_render"
+        );
+        assert!(
+            !main_source.contains(&format!("fn {function_name}(")),
+            "{function_name} must not remain in main"
+        );
+    }
+    assert!(
+        !main_source.contains("pub(crate) use cli_util::")
+            && !main_source.contains("pub(crate) use workbench_render::"),
+        "shared helpers must not be re-exported through the crate root"
+    );
+    assert!(
+        workbench_render_source.contains("fn workbench_file_anchor(")
+            && !workbench_render_source.contains("pub(super) fn workbench_file_anchor(")
+            && !workbench_render_source.contains("pub(crate) fn workbench_file_anchor("),
+        "the Workbench file-anchor helper must remain private"
+    );
+    for (relative_path, required_helpers) in [
+        (
+            "crates/ao2-cli/src/control_plane_ops.rs",
+            &[
+                "query_value_owned",
+                "http_html_response",
+                "http_json_response",
+                "http_text_response",
+                "generate_api_token",
+            ][..],
+        ),
+        (
+            "crates/ao2-cli/src/provider_ops.rs",
+            &["shell_quote", "format_budget_usd", "generate_api_token"][..],
+        ),
+        (
+            "crates/ao2-cli/src/workbench_app.rs",
+            &[
+                "form_value_owned",
+                "shell_quote",
+                "percent_decode",
+                "percent_encode",
+                "generate_api_token",
+            ][..],
+        ),
+        (
+            "crates/ao2-cli/src/workbench_evidence_delivery.rs",
+            &["form_value_owned"][..],
+        ),
+        (
+            "crates/ao2-cli/src/workbench_factory_api.rs",
+            &["query_value_owned", "form_value_owned", "percent_decode"][..],
+        ),
+        (
+            "crates/ao2-cli/src/workbench_memory.rs",
+            &["query_value_owned"][..],
+        ),
+        (
+            "crates/ao2-cli/src/workbench_provider_pilot.rs",
+            &["query_value_owned", "form_value_owned"][..],
+        ),
+        (
+            "crates/ao2-cli/src/workbench_queue.rs",
+            &[
+                "query_value_owned",
+                "form_value_owned",
+                "format_budget_usd",
+                "generate_api_token",
+            ][..],
+        ),
+        (
+            "crates/ao2-cli/src/workbench_release.rs",
+            &["query_value_owned", "form_value_owned"][..],
+        ),
+        (
+            "crates/ao2-cli/src/workbench_release_latest.rs",
+            &["query_value_owned"][..],
+        ),
+        (
+            "crates/ao2-cli/src/workbench_run_evidence.rs",
+            &["query_value_owned"][..],
+        ),
+        (
+            "crates/ao2-cli/src/workbench_server.rs",
+            &[
+                "query_value_owned",
+                "form_value_owned",
+                "http_html_response",
+                "http_json_response",
+                "http_text_response",
+                "generate_api_token",
+            ][..],
+        ),
+    ] {
+        let source =
+            fs::read_to_string(root.join(relative_path)).expect("helper consumer source exists");
+        let direct_imports = source
+            .match_indices("use crate::cli_util::")
+            .filter_map(|(start, _)| {
+                source[start..]
+                    .find(';')
+                    .map(|end| &source[start..=start + end])
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        for helper in required_helpers {
+            assert!(
+                direct_imports.contains(helper),
+                "{relative_path} must import {helper} directly from cli_util"
+            );
+        }
+    }
+    let root_cli_util_import_start = main_source
+        .find("use cli_util::{")
+        .expect("root cli_util import exists");
+    let root_cli_util_import_end = main_source[root_cli_util_import_start..]
+        .find("};")
+        .expect("root cli_util import terminates");
+    let root_cli_util_import = &main_source
+        [root_cli_util_import_start..root_cli_util_import_start + root_cli_util_import_end];
+    for helper in [
+        "query_value_owned",
+        "form_value_owned",
+        "shell_quote",
+        "format_budget_usd",
+        "http_html_response",
+        "http_json_response",
+        "http_text_response",
+        "percent_decode",
+        "percent_encode",
+        "generate_api_token",
+    ] {
+        assert!(
+            !root_cli_util_import.contains(helper),
+            "{helper} must not be imported into the crate root"
+        );
+    }
+    let workbench_queue_source =
+        fs::read_to_string(root.join("crates/ao2-cli/src/workbench_queue.rs"))
+            .expect("Workbench queue source exists");
+    assert!(
+        workbench_queue_source
+            .contains("use crate::workbench_render::render_workbench_job_detail_page;"),
+        "workbench_queue must import job-detail rendering directly from workbench_render"
+    );
+    {
+        use sha2::{Digest, Sha256};
+
+        let protocol_start = cli_util_source
+            .find("pub(crate) fn query_value_owned(")
+            .expect("protocol helper block exists");
+        let encoding_start = cli_util_source
+            .find("pub(crate) fn percent_decode(")
+            .expect("encoding helper block exists");
+        let encoding_end = cli_util_source[encoding_start..]
+            .find("#[cfg(test)]")
+            .map(|offset| encoding_start + offset)
+            .expect("CLI utility tests follow production helpers");
+        let protocol_block = format!(
+            "{}\n",
+            cli_util_source[protocol_start..encoding_start].trim_end()
+        )
+        .replace("pub(crate) fn ", "fn ");
+        let encoding_block = format!(
+            "{}\n",
+            cli_util_source[encoding_start..encoding_end].trim_end()
+        )
+        .replace("pub(crate) fn ", "fn ");
+        let render_start = workbench_render_source
+            .find("pub(super) fn render_workbench_job_detail_page(")
+            .expect("job-detail render block exists");
+        let render_block = format!("{}\n", workbench_render_source[render_start..].trim_end())
+            .replace("pub(super) fn ", "fn ");
+        for (label, body, expected_sha256) in [
+            (
+                "protocol",
+                protocol_block,
+                "f15d90c928d0b0b47ef7aac1feec71d3c11e0feb62d3d2a72ba9cd5eda30f0cb",
+            ),
+            (
+                "render",
+                render_block,
+                "a2907a145b66983541068f9a8e1aaea6f5e25e94305694fc1b71cc74b15a7de7",
+            ),
+            (
+                "encoding",
+                encoding_block,
+                "dee2bd3b9e356adb2ee86f0870a689d5f936b7a7521448a39e621bbed376932d",
+            ),
+        ] {
+            assert_eq!(
+                format!("{:x}", Sha256::digest(body.as_bytes())),
+                expected_sha256,
+                "{label} helper bodies must remain byte-identical to the parent extraction"
+            );
+        }
+    }
 }
 
 fn write_provider_pilot_acceptance_bundle(path: &Path, provider: &str, schema: &str) {

@@ -5,13 +5,14 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Context, Result};
 
 use crate::cli_util::{
-    atomic_write_text, escape_html, json_array, json_string, now_unix_ms, read_json_file,
-    sha256_file,
+    atomic_write_text, escape_html, form_value_owned, json_array, json_string, now_unix_ms,
+    read_json_file, sha256_file,
 };
 use crate::control_plane_http::{control_plane_endpoint, get_text_http};
 use crate::evidence_publish::{
     evidence_pack_publish_to_control_plane_json, operator_packet_publish_to_control_plane_json,
 };
+use crate::is_sha256_hex;
 use crate::release_comparison::release_comparison_bundle_verification_json;
 use crate::release_history::workbench_release_history_for_dir;
 use crate::workbench_contract::WorkbenchSupportSigning;
@@ -20,7 +21,6 @@ use crate::workbench_run_evidence::{
     workbench_run_evidence_changes_json, workbench_run_evidence_diff_json,
     workbench_run_evidence_summary_json,
 };
-use crate::{form_value_owned, is_sha256_hex};
 
 pub(super) fn workbench_evidence_export_path(
     target: &Path,

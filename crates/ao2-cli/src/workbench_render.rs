@@ -1,8 +1,8 @@
 use super::*;
+use crate::cli_util::{escape_html, json_array, json_string, json_u64};
 use crate::run_reporting::runs_list_json;
 use crate::workbench_contract::WorkbenchOperator;
 use crate::workbench_support_latest::latest_workbench_support_packet_json;
-
 pub(super) struct WorkbenchRenderOptions<'a> {
     pub(super) operator: Option<&'a WorkbenchOperator>,
     pub(super) execution_enabled: bool,
@@ -2828,4 +2828,110 @@ fn render_workbench_commands(html: &mut String, version: &str) -> Result<()> {
         release_tag = escape_html(&release_tag)
     )?;
     Ok(())
+}
+
+pub(super) fn render_workbench_job_detail_page(detail: &serde_json::Value) -> String {
+    let job = &detail["job"];
+    let run_id = json_string(job, "run_id");
+    let status = json_string(job, "status");
+    let evidence_pack = json_string(job, "evidence_pack");
+    let cockpit = json_string(job, "cockpit");
+    let stdout = detail["stdout"].as_str().unwrap_or("");
+    let stderr = detail["stderr"].as_str().unwrap_or("");
+    let diagnosis = &detail["diagnosis"];
+    let recovery_actions = json_array(diagnosis, "recovery_actions")
+        .iter()
+        .map(|action| format!("<li>{}</li>", escape_html(action.as_str().unwrap_or(""))))
+        .collect::<Vec<_>>()
+        .join("");
+    let evidence_link = workbench_file_anchor("Open Evidence", &evidence_pack);
+    let cockpit_link = workbench_file_anchor("Open Cockpit", &cockpit);
+    format!(
+        r#"<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AO2 Queue Job {run_id}</title>
+  <style>
+    body {{ margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #18202f; background: #f6f7f9; }}
+    main {{ max-width: 1120px; margin: 0 auto; padding: 32px 20px 48px; }}
+    h1 {{ margin: 0 0 4px; font-size: 30px; line-height: 1.15; }}
+    .muted {{ color: #5f6b7a; font-size: 14px; }}
+    .toolbar {{ display: flex; gap: 10px; margin: 18px 0 24px; flex-wrap: wrap; }}
+    .toolbar a {{ border: 1px solid #cbd3dc; border-radius: 6px; color: #152238; padding: 8px 10px; text-decoration: none; background: #fff; }}
+    .metrics {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 18px 0; }}
+    .metric {{ background: #fff; border: 1px solid #dbe1e8; border-radius: 8px; padding: 12px; }}
+    .metric span {{ display: block; color: #596677; font-size: 12px; margin-bottom: 6px; }}
+    .metric strong {{ font-size: 18px; }}
+    pre {{ background: #111827; color: #f3f4f6; border-radius: 8px; padding: 14px; overflow: auto; white-space: pre-wrap; min-height: 80px; }}
+    .diagnosis {{ background: #fff; border: 1px solid #d8e0ea; border-radius: 8px; padding: 14px; }}
+    .diagnosis ul {{ margin: 8px 0 0; padding-left: 20px; }}
+    section {{ margin-top: 24px; }}
+  </style>
+</head>
+<body>
+  <main class="queue-detail-page">
+    <h1>{run_id}</h1>
+    <div class="muted">Job {job_id} / {status}</div>
+    <div class="toolbar">{evidence_link}{cockpit_link}</div>
+    <section class="metrics" aria-label="Runtime metrics">
+      <div class="metric"><span>Queue Wait</span><strong>{queue_wait_ms} ms</strong></div>
+      <div class="metric"><span>Duration</span><strong>{duration_ms} ms</strong></div>
+      <div class="metric"><span>Exit Code</span><strong>{exit_code}</strong></div>
+      <div class="metric"><span>Retry Count</span><strong>{retry_count}</strong></div>
+    </section>
+    <section class="diagnosis">
+      <h2>Failure Diagnosis</h2>
+      <div class="muted">kind={failure_kind} timed_out={timed_out}</div>
+      <p>{primary_error}</p>
+      <ul>{recovery_actions}</ul>
+      <h3>Stderr Excerpt</h3>
+      <pre>{stderr_excerpt}</pre>
+      <h3>Stdout Excerpt</h3>
+      <pre>{stdout_excerpt}</pre>
+    </section>
+    <section>
+      <h2>Stdout</h2>
+      <pre>{stdout}</pre>
+    </section>
+    <section>
+      <h2>Stderr</h2>
+      <pre>{stderr}</pre>
+    </section>
+  </main>
+</body>
+</html>"#,
+        run_id = escape_html(&run_id),
+        job_id = escape_html(&json_string(job, "job_id")),
+        status = escape_html(&status),
+        evidence_link = evidence_link,
+        cockpit_link = cockpit_link,
+        queue_wait_ms = json_u64(job, "queue_wait_ms"),
+        duration_ms = json_u64(job, "duration_ms"),
+        exit_code = job["exit_code"].as_i64().unwrap_or(-1),
+        retry_count = json_u64(job, "retry_count"),
+        failure_kind = escape_html(&json_string(diagnosis, "failure_kind")),
+        timed_out = diagnosis
+            .get("timed_out")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false),
+        primary_error = escape_html(&json_string(diagnosis, "primary_error")),
+        recovery_actions = recovery_actions,
+        stderr_excerpt = escape_html(&json_string(diagnosis, "stderr_excerpt")),
+        stdout_excerpt = escape_html(&json_string(diagnosis, "stdout_excerpt")),
+        stdout = escape_html(stdout),
+        stderr = escape_html(stderr)
+    )
+}
+
+fn workbench_file_anchor(label: &str, path: &str) -> String {
+    if path.is_empty() {
+        return String::new();
+    }
+    format!(
+        r#"<a href="file://{href}">{label}</a>"#,
+        href = escape_html(path),
+        label = escape_html(label)
+    )
 }

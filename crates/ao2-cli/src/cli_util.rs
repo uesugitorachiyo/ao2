@@ -426,6 +426,120 @@ pub(crate) fn fail_if_provider_api_key_env_present() -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn query_value_owned(query: &str, key: &str) -> Option<String> {
+    query.split('&').find_map(|part| {
+        let (query_key, value) = part.split_once('=')?;
+        (query_key == key)
+            .then(|| percent_decode(value).trim().to_string())
+            .filter(|value| !value.is_empty())
+    })
+}
+
+pub(crate) fn form_value_owned(
+    form: &std::collections::BTreeMap<String, String>,
+    key: &str,
+) -> Option<String> {
+    form.get(key)
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+pub(crate) fn shell_quote(input: &str) -> String {
+    if input
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | '/' | ':' | '='))
+    {
+        input.to_string()
+    } else {
+        format!("'{}'", input.replace('\'', "'\\''"))
+    }
+}
+
+pub(crate) fn format_budget_usd(max_budget_usd: f64) -> Result<String> {
+    if !max_budget_usd.is_finite() || max_budget_usd <= 0.0 {
+        anyhow::bail!("provider max budget USD must be a positive finite number");
+    }
+    Ok(format!("{max_budget_usd:.2}"))
+}
+
+pub(crate) fn http_html_response(html: String) -> String {
+    format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        html.len(),
+        html
+    )
+}
+
+pub(crate) fn http_json_response(status: u16, json: serde_json::Value) -> Result<String> {
+    let body = serde_json::to_string_pretty(&json)?;
+    let reason = match status {
+        200 => "OK",
+        400 => "Bad Request",
+        403 => "Forbidden",
+        404 => "Not Found",
+        _ => "OK",
+    };
+    Ok(format!(
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.len(),
+        body
+    ))
+}
+
+pub(crate) fn http_text_response(status: u16, reason: &str, body: &str) -> String {
+    format!(
+        "HTTP/1.1 {status} {reason}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        body.len(),
+        body
+    )
+}
+
+pub(crate) fn percent_decode(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut output = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'+' {
+            output.push(b' ');
+            index += 1;
+        } else if bytes[index] == b'%' && index + 2 < bytes.len() {
+            let hex = &input[index + 1..index + 3];
+            if let Ok(value) = u8::from_str_radix(hex, 16) {
+                output.push(value);
+                index += 3;
+            } else {
+                output.push(bytes[index]);
+                index += 1;
+            }
+        } else {
+            output.push(bytes[index]);
+            index += 1;
+        }
+    }
+    String::from_utf8_lossy(&output).to_string()
+}
+
+pub(crate) fn percent_encode(input: &str) -> String {
+    let mut output = String::new();
+    for byte in input.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
+            output.push(char::from(byte));
+        } else {
+            output.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    output
+}
+
+pub(crate) fn generate_api_token() -> String {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_nanos())
+        .unwrap_or(0);
+    let pid = std::process::id();
+    format!("{now:x}{pid:x}")
+}
+
 #[cfg(test)]
 mod canonical_json_contract_tests {
     use super::*;
