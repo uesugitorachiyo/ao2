@@ -1777,6 +1777,10 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
     let skill_contract_manifest_source =
         fs::read_to_string(root.join("crates/ao2-cli/src/skill_contract_manifest.rs"))
             .expect("skill contract manifest source exists");
+    let run_resume_source = fs::read_to_string(root.join("crates/ao2-cli/src/run_resume.rs"))
+        .expect("run resume source exists");
+    let run_execution_source = fs::read_to_string(root.join("crates/ao2-cli/src/run_execution.rs"))
+        .expect("run execution source exists");
     let provider_run_repair_tests =
         fs::read_to_string(root.join("crates/ao2-cli/tests/cli_provider_run_repair.rs"))
             .expect("cli provider run/repair tests exist");
@@ -1867,6 +1871,52 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
             "{function_name} must not remain in main"
         );
     }
+    assert!(
+        run_resume_source.contains("struct ApprovalRecoveryContext"),
+        "approval recovery context must be owned by run_resume"
+    );
+    assert!(
+        !main_source.contains("struct ApprovalRecoveryContext"),
+        "approval recovery context must not remain in main"
+    );
+    for function_name in [
+        "read_approval_recovery_context",
+        "approval_recovery_context_by_ticket",
+        "pending_approval_recovery_context",
+        "print_approval_recovery_context",
+        "approve",
+        "replay",
+    ] {
+        assert!(
+            run_resume_source.contains(&format!("fn {function_name}(")),
+            "{function_name} must be owned by run_resume"
+        );
+        assert!(
+            !main_source.contains(&format!("fn {function_name}(")),
+            "{function_name} must not remain in main"
+        );
+    }
+    assert!(
+        run_execution_source.contains(
+            "use crate::run_resume::{\n    approve_and_resume_persisted_sandbox_patches, pending_approval_recovery_context,\n    print_approval_recovery_context,\n};"
+        ),
+        "run_execution must import approval recovery helpers directly from run_resume"
+    );
+    assert!(
+        main_source.contains("use run_resume::{approve, replay};"),
+        "main must import approve and replay directly from run_resume"
+    );
+    assert!(
+        run_resume_source.contains("fn read_approval_recovery_context(")
+            && !run_resume_source.contains("pub(crate) fn read_approval_recovery_context(")
+            && run_resume_source.contains("fn approval_recovery_context_by_ticket(")
+            && !run_resume_source.contains("pub(crate) fn approval_recovery_context_by_ticket("),
+        "run_resume lookup helpers must remain private"
+    );
+    assert!(
+        main_source.contains("fn is_sha256_hex("),
+        "is_sha256_hex remains outside this wave"
+    );
     for function_name in [
         "verify_release_archive_signature",
         "derive_public_key_from_private_key",
