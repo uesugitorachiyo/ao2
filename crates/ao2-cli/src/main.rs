@@ -24,10 +24,7 @@ use ao2_core::{
     ObligationEvidence, ObligationLedger, ObligationStatus,
 };
 use ao2_policy::redact_secrets;
-use ao2_runtime::{
-    approve_risky_pr_ticket, replay_run, run_risky_pr_with_provider_prompt, ApprovalOptions,
-    ProviderRunOptions, RepairSourceContext, ReplayOptions,
-};
+use ao2_runtime::{run_risky_pr_with_provider_prompt, ProviderRunOptions, RepairSourceContext};
 use chrono::{SecondsFormat, Utc};
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
@@ -330,6 +327,7 @@ use release_summary::{release_smoke_summary, resolve_cli_artifact_reference};
 use release_summary_enrich::release_summary_enrich;
 use run_execution::{print_run_summary, run, CliRunOptions};
 use run_reporting::{cockpit_index, report, report_verify, runs_list, runs_show};
+use run_resume::{approve, replay};
 use skill_contract_manifest::{skill_contract_manifest, SkillContractManifestCommand};
 use upgrade_cmd::{upgrade, UpgradeCommand};
 use workbench_memory::{
@@ -7569,131 +7567,6 @@ fn is_sha256_hex(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-}
-
-struct ApprovalRecoveryContext {
-    ticket_id: String,
-    run_id: String,
-    action_digest: String,
-    evidence_dir: PathBuf,
-    target: PathBuf,
-}
-
-fn read_approval_recovery_context(
-    target: &Path,
-    approval_path: &Path,
-) -> Option<ApprovalRecoveryContext> {
-    let text = fs::read_to_string(approval_path).ok()?;
-    let value: serde_json::Value = serde_json::from_str(&text).ok()?;
-    let ticket = value.get("ticket")?;
-    let ticket_id = ticket.get("ticket_id")?.as_str()?.to_string();
-    let run_id = ticket.get("run_id")?.as_str()?.to_string();
-    let action_digest = ticket.get("action_digest")?.as_str()?.to_string();
-    let evidence_dir = approval_path.parent()?.parent()?.to_path_buf();
-    Some(ApprovalRecoveryContext {
-        ticket_id,
-        run_id,
-        action_digest,
-        evidence_dir,
-        target: target.to_path_buf(),
-    })
-}
-
-fn approval_recovery_context_by_ticket(
-    target: &Path,
-    ticket_id: &str,
-) -> Option<ApprovalRecoveryContext> {
-    let runs_dir = target.join(".ao2").join("runs");
-    for entry in fs::read_dir(runs_dir).ok()? {
-        let run_dir = entry.ok()?.path();
-        let approval_path = run_dir.join("approvals").join(format!("{ticket_id}.json"));
-        if approval_path.is_file() {
-            return read_approval_recovery_context(target, &approval_path);
-        }
-    }
-    None
-}
-
-fn pending_approval_recovery_context(
-    target: &Path,
-    run_id: &str,
-) -> Option<ApprovalRecoveryContext> {
-    let approvals_dir = target
-        .join(".ao2")
-        .join("runs")
-        .join(run_id)
-        .join("approvals");
-    for entry in fs::read_dir(approvals_dir).ok()? {
-        let approval_path = entry.ok()?.path();
-        if approval_path.extension().and_then(|ext| ext.to_str()) != Some("json") {
-            continue;
-        }
-        let text = fs::read_to_string(&approval_path).ok()?;
-        let value: serde_json::Value = serde_json::from_str(&text).ok()?;
-        if value["ticket"]["status"].as_str() == Some("pending") {
-            return read_approval_recovery_context(target, &approval_path);
-        }
-    }
-    None
-}
-
-fn print_approval_recovery_context(
-    context: &ApprovalRecoveryContext,
-    approval_status: &str,
-    digest_failure: Option<&str>,
-) {
-    eprintln!("approval_status={approval_status}");
-    eprintln!("required_digest_field=action_digest");
-    eprintln!("action_digest={}", context.action_digest);
-    if let Some(digest_failure) = digest_failure {
-        eprintln!("digest_failure={digest_failure}");
-    }
-    eprintln!("replay_state=waiting_for_approval");
-    eprintln!("evidence_dir={}", context.evidence_dir.display());
-    eprintln!(
-        "next_step=ao2 approve {} --target {} --approver <operator>; ao2 run --resume {} --target {}",
-        context.ticket_id,
-        context.target.display(),
-        context.run_id,
-        context.target.display()
-    );
-    eprintln!("recovery=preserve the failing state and compare the required action_digest before retrying");
-}
-
-fn approve(target: PathBuf, ticket_id: String, approver: String) -> Result<()> {
-    match approve_risky_pr_ticket(ApprovalOptions {
-        target_repo: target.clone(),
-        ticket_id: ticket_id.clone(),
-        approver,
-    }) {
-        Ok(approval) => {
-            println!("ticket_id={}", approval.ticket_id);
-            println!("status={}", approval.status);
-            println!("approver={}", approval.approver.unwrap_or_default());
-            Ok(())
-        }
-        Err(error) => {
-            if error.to_string().contains("approval digest mismatch") {
-                if let Some(context) = approval_recovery_context_by_ticket(&target, &ticket_id) {
-                    print_approval_recovery_context(
-                        &context,
-                        "rejected",
-                        Some("approval digest mismatch"),
-                    );
-                }
-            }
-            Err(error)
-        }
-    }
-}
-
-fn replay(target: PathBuf, run_id: String) -> Result<()> {
-    let summary = replay_run(ReplayOptions {
-        target_repo: target,
-        run_id,
-    })?;
-    println!("{}", serde_json::to_string_pretty(&summary)?);
-    Ok(())
 }
 
 struct TemplateSpec {

@@ -14,8 +14,10 @@ use crate::cli_util::{
     sha256_bytes_hex,
 };
 use crate::provider_ops::{materialize_template_workflow, read_optional_json};
-use crate::run_resume::approve_and_resume_persisted_sandbox_patches;
-use crate::{pending_approval_recovery_context, print_approval_recovery_context};
+use crate::run_resume::{
+    approve_and_resume_persisted_sandbox_patches, pending_approval_recovery_context,
+    print_approval_recovery_context,
+};
 
 pub(crate) struct CliRunOptions {
     pub(crate) workflow: Option<PathBuf>,
