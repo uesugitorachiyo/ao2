@@ -24,9 +24,9 @@ use crate::workbench_provider_pilot::{
 };
 use crate::workbench_queue::{start_workbench_queue, WorkbenchQueue};
 use crate::workbench_render::{
-    latest_workbench_support_packet_json, render_workbench, workbench_provider_contracts_json,
-    WorkbenchRenderOptions,
+    render_workbench, workbench_provider_contracts_json, WorkbenchRenderOptions,
 };
+use crate::workbench_support_latest::latest_workbench_support_packet_json;
 
 pub(super) struct ServeWorkbenchOptions {
     pub(super) target: PathBuf,

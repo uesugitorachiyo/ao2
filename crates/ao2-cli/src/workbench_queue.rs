@@ -1,5 +1,6 @@
 use super::*;
 use crate::cli_util::{atomic_write_text, now_unix_ms, run_dir};
+use crate::factory_queue_operator::embedded_project_start_hermes_flow_contract_json;
 use crate::run_reporting::{render_report_for_run, run_summary_json};
 use crate::run_resume::approve_and_resume_persisted_sandbox_patches;
 use crate::workbench_app::{
