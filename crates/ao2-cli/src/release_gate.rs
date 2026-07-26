@@ -5,17 +5,17 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 use crate::cli_util::{json_array, json_string};
+use crate::contract_verify_obligation_gate_signing_json;
 use crate::factory_compat::read_factory_compat_value;
+use crate::factory_governance::{
+    json_path, normalize_factory_replacement_smoke_os, require_json_bool, require_json_eq,
+    FACTORY_REPLACEMENT_SMOKE_REQUIRED_OS, GREENFIELD_THREE_OS_REQUIRED_OS,
+};
 use crate::release_crypto::verify_release_archive_signature;
 use crate::release_provenance::verify_release_provenance_signature;
 use crate::release_summary::{
     release_obligation_gate_verification_json, release_smoke_summary_verification_json,
     resolve_summary_sidecar_path,
-};
-use crate::{
-    contract_verify_obligation_gate_signing_json, json_path,
-    normalize_factory_replacement_smoke_os, require_json_bool, require_json_eq,
-    FACTORY_REPLACEMENT_SMOKE_REQUIRED_OS, GREENFIELD_THREE_OS_REQUIRED_OS,
 };
 
 #[allow(clippy::too_many_arguments)]
