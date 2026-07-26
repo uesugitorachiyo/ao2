@@ -1778,7 +1778,8 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
         fs::read_to_string(root.join("crates/ao2-cli/src/skill_contract_manifest.rs"))
             .expect("skill contract manifest source exists");
     let run_resume_source = fs::read_to_string(root.join("crates/ao2-cli/src/run_resume.rs"))
-        .expect("run resume source exists");
+        .expect("run resume source exists")
+        .replace("\r\n", "\n");
     let run_execution_source = fs::read_to_string(root.join("crates/ao2-cli/src/run_execution.rs"))
         .expect("run execution source exists")
         .replace("\r\n", "\n");
@@ -1911,8 +1912,8 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
         "run_execution must import approval recovery helpers directly from run_resume"
     );
     assert!(
-        main_source.contains("use run_resume::{approve, replay};"),
-        "main must import approve and replay directly from run_resume"
+        main_source.contains("use run_resume::{approve, repair, replay};"),
+        "main must import approval, repair, and replay commands directly from run_resume"
     );
     assert!(
         run_resume_source.contains("fn read_approval_recovery_context(")
@@ -1925,6 +1926,77 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
         main_source.contains("fn is_sha256_hex("),
         "is_sha256_hex remains outside this wave"
     );
+    for function_name in [
+        "repair",
+        "repair_source_context_from_evidence_pack",
+        "unresolved_concerns_from_closures",
+        "string_values",
+        "latest_artifact_content",
+    ] {
+        assert!(
+            run_resume_source.contains(&format!("fn {function_name}(")),
+            "{function_name} must be owned by run_resume"
+        );
+        assert!(
+            !main_source.contains(&format!("fn {function_name}(")),
+            "{function_name} must not remain in main"
+        );
+    }
+    assert!(
+        main_source.contains("use run_resume::{approve, repair, replay};")
+            && !main_source.contains("pub(crate) use run_resume::"),
+        "main must import repair dispatch directly without re-exporting it"
+    );
+    let workbench_queue_source =
+        fs::read_to_string(root.join("crates/ao2-cli/src/workbench_queue.rs"))
+            .expect("workbench queue source exists")
+            .replace("\r\n", "\n");
+    assert!(
+        workbench_queue_source
+            .contains("use crate::run_resume::repair_source_context_from_evidence_pack;"),
+        "workbench_queue must import repair evidence parsing directly from run_resume"
+    );
+    let run_reporting_source = fs::read_to_string(root.join("crates/ao2-cli/src/run_reporting.rs"))
+        .expect("run reporting source exists")
+        .replace("\r\n", "\n");
+    assert!(
+        run_reporting_source.contains("pub(crate) fn print_run_summary(")
+            && !run_execution_source.contains("fn print_run_summary(")
+            && !run_resume_source.contains("use crate::run_execution::"),
+        "shared run summary rendering must live in run_reporting without a resume/execution cycle"
+    );
+    assert!(
+        run_execution_source.contains("crate::run_reporting::print_run_summary(&summary);")
+            && run_resume_source.contains("use crate::run_reporting::print_run_summary;"),
+        "run execution and repair resume must depend directly on run_reporting"
+    );
+    assert!(
+        run_resume_source.contains("fn unresolved_concerns_from_closures(")
+            && !run_resume_source.contains("pub(crate) fn unresolved_concerns_from_closures(")
+            && run_resume_source.contains("fn string_values(")
+            && !run_resume_source.contains("pub(crate) fn string_values(")
+            && run_resume_source.contains("fn latest_artifact_content(")
+            && !run_resume_source.contains("pub(crate) fn latest_artifact_content("),
+        "repair evidence parsing details must remain private"
+    );
+    assert!(
+        run_resume_source.lines().count() <= 5_000,
+        "run_resume.rs must remain within the production-file hard ceiling"
+    );
+    {
+        use sha2::{Digest, Sha256};
+
+        let repair_start = run_resume_source
+            .find("pub(crate) fn repair(")
+            .expect("repair resume block exists");
+        let normalized_body = format!("{}\n", run_resume_source[repair_start..].trim_end())
+            .replace("pub(crate) fn ", "fn ");
+        assert_eq!(
+            format!("{:x}", Sha256::digest(normalized_body.as_bytes())),
+            "416172855993ece88b18d9c54cbbb0d6b0ef9e009779c1929e913b4afeacde7e",
+            "repair resume bodies must remain byte-identical to the parent extraction"
+        );
+    }
     assert!(
         cli_source.contains("pub(crate) struct Cli"),
         "top-level CLI parser must be owned by cli"
