@@ -1785,6 +1785,10 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
     let cli_source = fs::read_to_string(root.join("crates/ao2-cli/src/cli.rs"))
         .expect("CLI declaration source exists")
         .replace("\r\n", "\n");
+    let factory_dispatch_source =
+        fs::read_to_string(root.join("crates/ao2-cli/src/factory_dispatch.rs"))
+            .expect("factory dispatch source exists")
+            .replace("\r\n", "\n");
     let provider_run_repair_tests =
         fs::read_to_string(root.join("crates/ao2-cli/tests/cli_provider_run_repair.rs"))
             .expect("cli provider run/repair tests exist");
@@ -2013,6 +2017,56 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
             "{relative_path} must import its command type directly from cli"
         );
     }
+    assert!(
+        factory_dispatch_source.contains("pub(crate) fn factory("),
+        "Factory command dispatch must be owned by factory_dispatch"
+    );
+    assert!(
+        !main_source.contains("fn factory("),
+        "Factory command dispatch must not remain in main"
+    );
+    assert!(
+        factory_dispatch_source.lines().count() <= 5_000,
+        "factory_dispatch.rs must remain within the production-file hard ceiling"
+    );
+    for direct_import in [
+        "use crate::cli::FactoryCommand;",
+        "use crate::cli_util::{atomic_write_text, json_string, json_u64, sha256_file};",
+        "use crate::release_crypto::{",
+    ] {
+        assert!(
+            factory_dispatch_source.contains(direct_import),
+            "factory_dispatch must retain direct import edge {direct_import}"
+        );
+    }
+    for forbidden_import in ["use crate::{", "super::*", "ProcessCommand"] {
+        assert!(
+            !factory_dispatch_source.contains(forbidden_import),
+            "factory_dispatch must not contain {forbidden_import}"
+        );
+    }
+    assert!(
+        factory_dispatch_source.contains("factory_bridge::"),
+        "factory bridge calls must remain qualified"
+    );
+    assert!(
+        main_source.contains("use factory_dispatch::factory;")
+            && !main_source.contains("pub(crate) use factory_dispatch::factory;"),
+        "main must import factory dispatch directly without re-exporting it"
+    );
+    {
+        use sha2::{Digest, Sha256};
+
+        let dispatch_start = factory_dispatch_source
+            .find("pub(crate) fn factory(")
+            .expect("factory dispatch body exists");
+        let normalized_body = format!("{}\n", factory_dispatch_source[dispatch_start..].trim_end());
+        assert_eq!(
+            format!("{:x}", Sha256::digest(normalized_body.as_bytes())),
+            "edfec7071595a02b27a626ac399b6c03ba52f3da65bcd4f30c6f440d546ffb39",
+            "factory dispatch body must remain byte-identical to the parent extraction"
+        );
+    }
     for function_name in [
         "verify_release_archive_signature",
         "derive_public_key_from_private_key",
@@ -2047,6 +2101,7 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
         &factory_governance_source,
         &factory_run_execution_source,
         &factory_queue_recovery_release_source,
+        &factory_dispatch_source,
         &release_crypto_source,
         &release_provenance_source,
     ] {
