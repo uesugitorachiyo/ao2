@@ -398,6 +398,14 @@ pub(crate) fn base64_standard(bytes: &[u8]) -> String {
     BASE64_STANDARD.encode(bytes)
 }
 
+pub(crate) fn trimmed_required(flag: &str, value: &str) -> Result<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(anyhow::anyhow!("{flag} must not be empty"));
+    }
+    Ok(trimmed.to_string())
+}
+
 #[cfg(test)]
 mod canonical_json_contract_tests {
     use super::*;
