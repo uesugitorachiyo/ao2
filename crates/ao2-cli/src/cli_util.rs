@@ -406,6 +406,17 @@ pub(crate) fn trimmed_required(flag: &str, value: &str) -> Result<String> {
     Ok(trimmed.to_string())
 }
 
+pub(crate) fn read_prompt(prompt: Option<String>, prompt_file: Option<PathBuf>) -> Result<String> {
+    match (prompt, prompt_file) {
+        (Some(prompt), None) => Ok(prompt),
+        (None, Some(path)) => {
+            fs::read_to_string(&path).with_context(|| format!("read prompt {}", path.display()))
+        }
+        (Some(_), Some(_)) => anyhow::bail!("use either --prompt or --prompt-file, not both"),
+        (None, None) => anyhow::bail!("--prompt or --prompt-file is required"),
+    }
+}
+
 #[cfg(test)]
 mod canonical_json_contract_tests {
     use super::*;
