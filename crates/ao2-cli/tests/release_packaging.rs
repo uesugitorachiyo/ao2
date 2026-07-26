@@ -1727,6 +1727,9 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let main_source =
         fs::read_to_string(root.join("crates/ao2-cli/src/main.rs")).expect("cli source exists");
+    let contract_gate_signing_source =
+        fs::read_to_string(root.join("crates/ao2-cli/src/contract_gate_signing.rs"))
+            .expect("contract gate signing source exists");
     let factory_app_run_source =
         fs::read_to_string(root.join("crates/ao2-cli/src/factory_app_run.rs"))
             .expect("factory app-run source exists");
@@ -1791,6 +1794,7 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
     );
     for source in [
         &main_source,
+        &contract_gate_signing_source,
         &factory_app_run_source,
         &factory_evaluator_source,
         &factory_evidence_source,
