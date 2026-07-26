@@ -1,8 +1,9 @@
 use anyhow::{Context, Result};
+use ao2_adapters::DEFAULT_PROVIDER_TIMEOUT_SECONDS;
 
 use super::{
     build_provider_prompt_command, doctor_provider, json_array, json_string, json_u64,
-    parse_provider, DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+    parse_provider,
 };
 use crate::provider_ops::{provider_matrix_json, provider_smoke_guard_env};
 

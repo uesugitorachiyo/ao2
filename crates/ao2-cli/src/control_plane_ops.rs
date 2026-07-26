@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 
+use crate::cli::{ControlPlaneCommand, ControlPlaneHistoryCommand, ControlPlaneSourcesCommand};
 use crate::cli_util::{
     create_tar_gz, escape_html, json_array, json_string, json_u64, open_report_target, sha256_file,
 };
@@ -22,8 +23,8 @@ use crate::{
     atomic_write_text, generate_api_token, http_html_response, http_json_response,
     http_text_response, now_unix_ms, parse_http_request_line, query_value_owned,
     read_workbench_audit_events, read_workbench_queue_file, runtime_git_commit,
-    runtime_target_label, split_path_query, workbench_audit_path_for_target, ControlPlaneCommand,
-    ControlPlaneHistoryCommand, ControlPlaneSourcesCommand, WorkbenchSupportSigning,
+    runtime_target_label, split_path_query, workbench_audit_path_for_target,
+    WorkbenchSupportSigning,
 };
 
 pub(crate) fn workbench_support_keygen(out: PathBuf, bits: usize, json: bool) -> Result<()> {

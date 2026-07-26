@@ -6,7 +6,8 @@ use anyhow::{anyhow, Context, Result};
 use ao2_core::sha256_hex;
 use ao2_policy::redact_secrets;
 
-use super::{json_string, GitCommand};
+use super::json_string;
+use crate::cli::GitCommand;
 
 pub(super) fn git(command: GitCommand) -> Result<()> {
     match command {
