@@ -1769,6 +1769,11 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
     let release_provenance_source =
         fs::read_to_string(root.join("crates/ao2-cli/src/release_provenance.rs"))
             .expect("release provenance source exists");
+    let pulse_run_source = fs::read_to_string(root.join("crates/ao2-cli/src/pulse_run.rs"))
+        .expect("pulse run source exists");
+    let pulse_eval_loop_source =
+        fs::read_to_string(root.join("crates/ao2-cli/src/pulse_eval_loop.rs"))
+            .expect("pulse eval-loop source exists");
     let provider_run_repair_tests =
         fs::read_to_string(root.join("crates/ao2-cli/tests/cli_provider_run_repair.rs"))
             .expect("cli provider run/repair tests exist");
@@ -1785,6 +1790,33 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
             "{function_name} must not remain in main"
         );
     }
+    for function_name in [
+        "pulse_artifact_key",
+        "pulse_run_execute_json",
+        "pulse_run_apply_dry_run_json",
+        "pulse_apply_normalized_path",
+        "pulse_apply_target_path",
+        "pulse_apply_status_body",
+        "validate_pulse_task_contract",
+    ] {
+        assert!(
+            pulse_run_source.contains(&format!("fn {function_name}(")),
+            "{function_name} must be owned by pulse_run"
+        );
+        assert!(
+            !main_source.contains(&format!("fn {function_name}(")),
+            "{function_name} must not remain in main"
+        );
+    }
+    assert!(
+        pulse_eval_loop_source.contains("use crate::pulse_run::validate_pulse_task_contract;"),
+        "pulse_eval_loop must import task-contract validation from pulse_run"
+    );
+    assert!(
+        pulse_run_source
+            .contains("use crate::cli_util::{atomic_write_text, json_bool, json_string};"),
+        "pulse_run must import shared helpers directly from cli_util"
+    );
     for function_name in [
         "verify_release_archive_signature",
         "derive_public_key_from_private_key",
