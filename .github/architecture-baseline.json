@@ -1,6 +1,6 @@
 {
   "baseline_source": {
-    "head": "b3a3fe6b3c42667ba4b6a744544cedcd0851d157",
+    "head": "f98dc73762b183e121512553654de50b77c02321",
     "v0_5_3_tag_target": "947e566bd3f54ed902f3c14fc0c90e21a24359bc"
   },
   "budgets": {
@@ -25,6 +25,7 @@
         "crates/ao2-cli/src/factory_compat.rs": 1134,
         "crates/ao2-cli/src/factory_evaluator.rs": 416,
         "crates/ao2-cli/src/factory_evidence.rs": 1078,
+        "crates/ao2-cli/src/factory_governance.rs": 1399,
         "crates/ao2-cli/src/factory_project_contract.rs": 24,
         "crates/ao2-cli/src/factory_project_execution.rs": 936,
         "crates/ao2-cli/src/factory_project_planning.rs": 813,
@@ -43,7 +44,7 @@
         "crates/ao2-cli/src/greenfield_workflow.rs": 738,
         "crates/ao2-cli/src/install_cmd.rs": 274,
         "crates/ao2-cli/src/install_paths.rs": 79,
-        "crates/ao2-cli/src/main.rs": 12292,
+        "crates/ao2-cli/src/main.rs": 10922,
         "crates/ao2-cli/src/memory_store.rs": 578,
         "crates/ao2-cli/src/phase1_promotion.rs": 1440,
         "crates/ao2-cli/src/plugin_adapter.rs": 2050,
@@ -81,7 +82,7 @@
         "crates/ao2-cli/src/support_bundle.rs": 767,
         "crates/ao2-cli/src/upgrade_cmd.rs": 172,
         "crates/ao2-cli/src/windows_input.rs": 120,
-        "crates/ao2-cli/src/workbench_app.rs": 541,
+        "crates/ao2-cli/src/workbench_app.rs": 542,
         "crates/ao2-cli/src/workbench_contract.rs": 43,
         "crates/ao2-cli/src/workbench_evidence_delivery.rs": 276,
         "crates/ao2-cli/src/workbench_factory_api.rs": 1629,
@@ -99,10 +100,10 @@
         "crates/ao2-cli/src/workbench_support.rs": 132,
         "crates/ao2-cli/src/workbench_support_latest.rs": 77
       },
-      "main_rs_lines": 12292,
-      "main_rs_source_concentration_percent": 15.5838,
-      "main_rs_top_level_functions": 86,
-      "main_rs_top_level_types": 31,
+      "main_rs_lines": 10922,
+      "main_rs_source_concentration_percent": 13.8416,
+      "main_rs_top_level_functions": 71,
+      "main_rs_top_level_types": 29,
       "module_declarations": [
         "crates/ao2-cli/src/main.rs::artifact_safety",
         "crates/ao2-cli/src/main.rs::cli_util",
@@ -116,6 +117,7 @@
         "crates/ao2-cli/src/main.rs::factory_compat",
         "crates/ao2-cli/src/main.rs::factory_evaluator",
         "crates/ao2-cli/src/main.rs::factory_evidence",
+        "crates/ao2-cli/src/main.rs::factory_governance",
         "crates/ao2-cli/src/main.rs::factory_project_contract",
         "crates/ao2-cli/src/main.rs::factory_project_execution",
         "crates/ao2-cli/src/main.rs::factory_project_planning",
@@ -189,7 +191,7 @@
         "crates/ao2-cli/src/main.rs::workbench_support",
         "crates/ao2-cli/src/main.rs::workbench_support_latest"
       ],
-      "production_total_lines": 78877
+      "production_total_lines": 78907
     },
     "tests": {
       "cli_approval_replay_line_concentration_percent": 0.0,
@@ -265,7 +267,7 @@
         "crates/ao2-cli/tests/release_evaluator_decision.rs": 650,
         "crates/ao2-cli/tests/release_gate_obligation_gate_signing.rs": 1250,
         "crates/ao2-cli/tests/release_handoff_checklist.rs": 339,
-        "crates/ao2-cli/tests/release_packaging.rs": 5554,
+        "crates/ao2-cli/tests/release_packaging.rs": 5558,
         "crates/ao2-cli/tests/release_support_bundle_verification.rs": 1262,
         "crates/ao2-cli/tests/sdd_subcommand.rs": 1023,
         "crates/ao2-cli/tests/troubleshooting_support_bundle.rs": 604
@@ -342,7 +344,7 @@
         "crates/ao2-cli/tests/sdd_subcommand.rs": 16,
         "crates/ao2-cli/tests/troubleshooting_support_bundle.rs": 9
       },
-      "integration_test_file_total_lines": 80150,
+      "integration_test_file_total_lines": 80154,
       "integration_test_static_count": 672
     },
     "unsafe_blocks": [
