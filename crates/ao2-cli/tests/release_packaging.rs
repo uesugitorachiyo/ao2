@@ -1774,6 +1774,9 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
     let pulse_eval_loop_source =
         fs::read_to_string(root.join("crates/ao2-cli/src/pulse_eval_loop.rs"))
             .expect("pulse eval-loop source exists");
+    let skill_contract_manifest_source =
+        fs::read_to_string(root.join("crates/ao2-cli/src/skill_contract_manifest.rs"))
+            .expect("skill contract manifest source exists");
     let provider_run_repair_tests =
         fs::read_to_string(root.join("crates/ao2-cli/tests/cli_provider_run_repair.rs"))
             .expect("cli provider run/repair tests exist");
@@ -1817,6 +1820,53 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
             .contains("use crate::cli_util::{atomic_write_text, json_bool, json_string};"),
         "pulse_run must import shared helpers directly from cli_util"
     );
+    assert!(
+        skill_contract_manifest_source.contains("enum SkillContractManifestCommand"),
+        "skill contract manifest command must be owned by skill_contract_manifest"
+    );
+    assert!(
+        !main_source.contains("enum SkillContractManifestCommand"),
+        "skill contract manifest command must not remain in main"
+    );
+    for declaration_name in [
+        "SKILL_CONTRACT_REQUIRED_INVENTORY",
+        "SkillContractManifestEntrySpec",
+    ] {
+        assert!(
+            skill_contract_manifest_source.contains(declaration_name),
+            "{declaration_name} must be owned by skill_contract_manifest"
+        );
+        assert!(
+            !main_source.contains(declaration_name),
+            "{declaration_name} must not remain in main"
+        );
+    }
+    for direct_import in [
+        "crate::artifact_safety::factory_app_run_bundle_reject_secret_markers",
+        "crate::cli_util::{",
+        "crate::plugin_distribution::{",
+    ] {
+        assert!(
+            skill_contract_manifest_source.contains(direct_import),
+            "skill_contract_manifest must retain direct import edge {direct_import}"
+        );
+    }
+    for function_name in [
+        "skill_contract_manifest",
+        "skill_contract_manifest_generate",
+        "skill_contract_manifest_verify",
+        "skill_contract_manifest_entry",
+        "validate_skill_contract_manifest",
+    ] {
+        assert!(
+            skill_contract_manifest_source.contains(&format!("fn {function_name}(")),
+            "{function_name} must be owned by skill_contract_manifest"
+        );
+        assert!(
+            !main_source.contains(&format!("fn {function_name}(")),
+            "{function_name} must not remain in main"
+        );
+    }
     for function_name in [
         "verify_release_archive_signature",
         "derive_public_key_from_private_key",
