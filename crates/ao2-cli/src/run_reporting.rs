@@ -14,6 +14,33 @@ use super::risky_pr_readback::{
     render_report_index_for_run, report_contract_verification_json, report_index_path,
 };
 
+pub(crate) fn print_run_summary(summary: &ao2_runtime::RunSummary) {
+    println!("run_id={}", summary.run_id);
+    println!("status={:?}", summary.status);
+    println!("run_record={}", summary.run_record_path.display());
+    println!("evidence_dir={}", summary.run_dir.display());
+    println!("replay_state={}", run_status_replay_state(summary.status));
+    println!("evidence_pack={}", summary.evidence_pack_path.display());
+    println!("report={}", summary.report_path.display());
+}
+
+fn run_status_replay_state(status: ao2_runtime::RunStatus) -> &'static str {
+    match status {
+        ao2_runtime::RunStatus::Accepted => "accepted",
+        ao2_runtime::RunStatus::AcceptedWithConcerns => "accepted_with_concerns",
+        ao2_runtime::RunStatus::Rejected => "rejected",
+        ao2_runtime::RunStatus::Failed => "failed",
+        ao2_runtime::RunStatus::Blocked => "blocked",
+        ao2_runtime::RunStatus::WaitingForApproval => "waiting_for_approval",
+        ao2_runtime::RunStatus::Canceled => "canceled",
+        ao2_runtime::RunStatus::Replaying => "replaying",
+        ao2_runtime::RunStatus::Created
+        | ao2_runtime::RunStatus::Compiled
+        | ao2_runtime::RunStatus::Queued
+        | ao2_runtime::RunStatus::Running => "not_finished",
+    }
+}
+
 pub(super) fn runs_list(target: PathBuf, json: bool) -> Result<()> {
     let result = runs_list_json(&target)?;
     if json {

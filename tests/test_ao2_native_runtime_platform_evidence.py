@@ -12,14 +12,17 @@ def test_ao2_cli_uses_in_repo_runtime_without_standalone_ao_runtime_dependency()
     root_cargo = read("Cargo.toml")
     cli_cargo = read("crates/ao2-cli/Cargo.toml")
     runtime_cargo = read("crates/ao2-runtime/Cargo.toml")
-    cli_main = read("crates/ao2-cli/src/main.rs")
+    cli_sources = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted((REPO / "crates/ao2-cli/src").glob("*.rs"))
+    )
     lockfile = read("Cargo.lock")
     readme = read("README.md")
 
     assert '"crates/ao2-runtime"' in root_cargo
     assert 'name = "ao2-runtime"' in runtime_cargo
     assert 'ao2-runtime = { path = "../ao2-runtime" }' in cli_cargo
-    assert "use ao2_runtime::" in cli_main
+    assert "use ao2_runtime::" in cli_sources
 
     assert 'name = "ao2-runtime"' in lockfile
     assert 'name = "ao-runtime"' not in lockfile

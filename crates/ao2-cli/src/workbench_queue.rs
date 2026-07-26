@@ -6,6 +6,7 @@ use crate::cli_util::{
 use crate::factory_queue_operator::embedded_project_start_hermes_flow_contract_json;
 use crate::run_reporting::{render_report_for_run, run_summary_json};
 use crate::run_resume::approve_and_resume_persisted_sandbox_patches;
+use crate::run_resume::repair_source_context_from_evidence_pack;
 use crate::workbench_app::{
     parse_optional_budget_form, validate_minimum_provider_score, workbench_provider_pilot_json,
 };

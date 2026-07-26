@@ -96,7 +96,7 @@ pub(crate) fn run(options: CliRunOptions) -> Result<()> {
             run_id: resume_run_id.clone(),
         }) {
             Ok(summary) => {
-                print_run_summary(&summary);
+                crate::run_reporting::print_run_summary(&summary);
                 return Ok(());
             }
             Err(error) => {
@@ -138,7 +138,7 @@ pub(crate) fn run(options: CliRunOptions) -> Result<()> {
             max_budget_usd: options.provider_max_budget_usd,
             repair_source: None,
         })?;
-        print_run_summary(&summary);
+        crate::run_reporting::print_run_summary(&summary);
         return Ok(());
     }
 
@@ -173,7 +173,7 @@ pub(crate) fn run(options: CliRunOptions) -> Result<()> {
         workflow_path: workflow,
         run_id: options.run_id,
     })?;
-    print_run_summary(&summary);
+    crate::run_reporting::print_run_summary(&summary);
     Ok(())
 }
 
@@ -364,7 +364,7 @@ fn run_ao2_run_spec_governed(options: CliRunOptions, spec: &Path) -> Result<()> 
         }
     }
     let task_graph_path = write_ao2_run_spec_task_graph_sidecar(&loaded, &summary, execution_mode)?;
-    print_run_summary(&summary);
+    crate::run_reporting::print_run_summary(&summary);
     println!("sdd_task_graph={}", task_graph_path.display());
     Ok(())
 }
@@ -934,31 +934,4 @@ fn ao2_run_spec_acceptance(
         acceptance.push("replay has zero digest failures".to_string());
     }
     acceptance
-}
-
-pub(crate) fn print_run_summary(summary: &ao2_runtime::RunSummary) {
-    println!("run_id={}", summary.run_id);
-    println!("status={:?}", summary.status);
-    println!("run_record={}", summary.run_record_path.display());
-    println!("evidence_dir={}", summary.run_dir.display());
-    println!("replay_state={}", run_status_replay_state(summary.status));
-    println!("evidence_pack={}", summary.evidence_pack_path.display());
-    println!("report={}", summary.report_path.display());
-}
-
-fn run_status_replay_state(status: ao2_runtime::RunStatus) -> &'static str {
-    match status {
-        ao2_runtime::RunStatus::Accepted => "accepted",
-        ao2_runtime::RunStatus::AcceptedWithConcerns => "accepted_with_concerns",
-        ao2_runtime::RunStatus::Rejected => "rejected",
-        ao2_runtime::RunStatus::Failed => "failed",
-        ao2_runtime::RunStatus::Blocked => "blocked",
-        ao2_runtime::RunStatus::WaitingForApproval => "waiting_for_approval",
-        ao2_runtime::RunStatus::Canceled => "canceled",
-        ao2_runtime::RunStatus::Replaying => "replaying",
-        ao2_runtime::RunStatus::Created
-        | ao2_runtime::RunStatus::Compiled
-        | ao2_runtime::RunStatus::Queued
-        | ao2_runtime::RunStatus::Running => "not_finished",
-    }
 }
