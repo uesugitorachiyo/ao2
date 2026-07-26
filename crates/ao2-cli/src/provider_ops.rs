@@ -16,8 +16,8 @@ use ao2_runtime::{
 use crate::cli::{AdapterCommand, AdapterPatchCommand, ProviderCommand};
 use crate::cli_util::{
     atomic_write_text, base64_standard, format_budget_usd, generate_api_token, hex_lower,
-    json_array, json_f64, json_string, json_u64, now_unix_ms, read_prompt, run_dir,
-    sha256_bytes_hex, shell_quote,
+    json_array, json_f64, json_string, json_u64, now_unix_ms, read_prompt, resolve_api_token,
+    run_dir, sha256_bytes_hex, shell_quote, trimmed_required,
 };
 use crate::control_plane_http::{control_plane_endpoint, post_json_http};
 use crate::provider_contract::provider_contract;
@@ -28,7 +28,7 @@ use crate::workbench_provider_pilot_acceptance::{
     collect_provider_pilot_acceptance_bundles, provider_cost_ledger_release_tag,
     provider_pilot_acceptance_verification_json,
 };
-use crate::{resolve_api_token, trimmed_required, TASK_TEMPLATES};
+use crate::TASK_TEMPLATES;
 pub(crate) fn provider(command: ProviderCommand) -> Result<()> {
     match command {
         ProviderCommand::List => {

@@ -7,9 +7,9 @@ use clap::Subcommand;
 use crate::cli_util::{
     base64_standard, hex_lower, json_array, json_string, sha256_bytes_hex, sha256_file,
 };
+use crate::cli_util::{resolve_api_token, trimmed_required};
 use crate::control_plane_http::{control_plane_endpoint, post_json_http};
 use crate::release_crypto::{public_key_pem_from_private_key, sign_bytes_with_private_key};
-use crate::{resolve_api_token, trimmed_required};
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum EvidenceCommand {

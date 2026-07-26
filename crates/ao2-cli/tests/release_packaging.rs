@@ -1793,6 +1793,10 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
         fs::read_to_string(root.join("crates/ao2-cli/src/factory_dispatch.rs"))
             .expect("factory dispatch source exists")
             .replace("\r\n", "\n");
+    let release_dispatch_source =
+        fs::read_to_string(root.join("crates/ao2-cli/src/release_dispatch.rs"))
+            .expect("release dispatch source exists")
+            .replace("\r\n", "\n");
     let provider_run_repair_tests =
         fs::read_to_string(root.join("crates/ao2-cli/tests/cli_provider_run_repair.rs"))
             .expect("cli provider run/repair tests exist");
@@ -2047,6 +2051,43 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
         );
     }
     assert!(
+        release_dispatch_source.contains("pub(crate) fn release("),
+        "release command dispatch must be owned by release_dispatch"
+    );
+    assert!(
+        !main_source.contains("fn release("),
+        "release command dispatch must not remain in main"
+    );
+    assert!(
+        main_source.contains("use release_dispatch::release;")
+            && !main_source.contains("pub(crate) use release_dispatch::release;"),
+        "main must import release dispatch directly without re-exporting it"
+    );
+    assert!(
+        release_dispatch_source.contains("use crate::cli::ReleaseCommand;")
+            && !release_dispatch_source.contains("use crate::{")
+            && !release_dispatch_source.contains("super::*"),
+        "release_dispatch must use direct owner imports without root glob dependencies"
+    );
+    assert!(
+        release_dispatch_source.lines().count() <= 5_000,
+        "release_dispatch.rs must remain within the production-file hard ceiling"
+    );
+    {
+        use sha2::{Digest, Sha256};
+
+        let release_start = release_dispatch_source
+            .find("pub(crate) fn release(")
+            .expect("release dispatch block exists");
+        let normalized_body = format!("{}\n", release_dispatch_source[release_start..].trim_end())
+            .replace("pub(crate) fn ", "fn ");
+        assert_eq!(
+            format!("{:x}", Sha256::digest(normalized_body.as_bytes())),
+            "b6c829a66f249bacf6816cb2e72b9495b259d89923695ceacb4f2340119ae250",
+            "release dispatch body must remain byte-identical to the parent extraction"
+        );
+    }
+    assert!(
         cli_source.contains("pub(crate) struct Cli"),
         "top-level CLI parser must be owned by cli"
     );
@@ -2257,6 +2298,7 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
         "percent_decode",
         "percent_encode",
         "generate_api_token",
+        "resolve_api_token",
     ] {
         assert!(
             cli_util_source.contains(&format!("fn {function_name}(")),
@@ -2301,7 +2343,28 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
         ),
         (
             "crates/ao2-cli/src/provider_ops.rs",
-            &["shell_quote", "format_budget_usd", "generate_api_token"][..],
+            &[
+                "shell_quote",
+                "format_budget_usd",
+                "generate_api_token",
+                "resolve_api_token",
+            ][..],
+        ),
+        (
+            "crates/ao2-cli/src/control_plane_snapshot.rs",
+            &["resolve_api_token"][..],
+        ),
+        (
+            "crates/ao2-cli/src/evidence_publish.rs",
+            &["resolve_api_token"][..],
+        ),
+        (
+            "crates/ao2-cli/src/phase1_promotion.rs",
+            &["resolve_api_token"][..],
+        ),
+        (
+            "crates/ao2-cli/src/release_dispatch.rs",
+            &["resolve_api_token"][..],
         ),
         (
             "crates/ao2-cli/src/workbench_app.rs",
@@ -2399,6 +2462,7 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
         "percent_decode",
         "percent_encode",
         "generate_api_token",
+        "resolve_api_token",
     ] {
         assert!(
             !root_cli_util_import.contains(helper),
