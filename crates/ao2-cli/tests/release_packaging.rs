@@ -1782,6 +1782,9 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
     let run_execution_source = fs::read_to_string(root.join("crates/ao2-cli/src/run_execution.rs"))
         .expect("run execution source exists")
         .replace("\r\n", "\n");
+    let cli_source = fs::read_to_string(root.join("crates/ao2-cli/src/cli.rs"))
+        .expect("CLI declaration source exists")
+        .replace("\r\n", "\n");
     let provider_run_repair_tests =
         fs::read_to_string(root.join("crates/ao2-cli/tests/cli_provider_run_repair.rs"))
             .expect("cli provider run/repair tests exist");
@@ -1918,6 +1921,98 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
         main_source.contains("fn is_sha256_hex("),
         "is_sha256_hex remains outside this wave"
     );
+    assert!(
+        cli_source.contains("pub(crate) struct Cli"),
+        "top-level CLI parser must be owned by cli"
+    );
+    assert!(
+        !main_source.contains("struct Cli"),
+        "top-level CLI parser must not remain in main"
+    );
+    for declaration_name in [
+        "Command",
+        "CpCommand",
+        "ReportCommand",
+        "RepairCommand",
+        "RunsCommand",
+        "CockpitCommand",
+        "PulseCommand",
+        "PulseEvalLoopCommand",
+        "WorkbenchCommand",
+        "ControlPlaneCommand",
+        "ControlPlaneSourcesCommand",
+        "ControlPlaneHistoryCommand",
+        "ContractCommand",
+        "GitCommand",
+        "IssueCommand",
+        "FactoryCommand",
+        "GreenfieldCommand",
+        "ReleaseCommand",
+        "TemplateCommand",
+        "ProviderCommand",
+        "PluginCommand",
+        "AdapterCommand",
+        "AdapterPatchCommand",
+    ] {
+        assert!(
+            cli_source.contains(&format!("enum {declaration_name}")),
+            "{declaration_name} must be owned by cli"
+        );
+        assert!(
+            !main_source.contains(&format!("enum {declaration_name}")),
+            "{declaration_name} must not remain in main"
+        );
+    }
+    assert!(
+        cli_source.contains("fn parse_bool(") && !main_source.contains("fn parse_bool("),
+        "the Clap boolean parser must move with CLI declarations"
+    );
+    assert!(
+        cli_source.contains("#[allow(clippy::large_enum_variant)]\npub(crate) enum PluginCommand"),
+        "PluginCommand must retain its large-enum allowance"
+    );
+    assert!(
+        !main_source.contains("pub(crate) use cli::")
+            && !main_source.contains("pub(crate) use cli::{"),
+        "CLI command types must not be re-exported through the crate root"
+    );
+    assert!(
+        cli_source.lines().count() <= 5_000,
+        "cli.rs must remain within the production-file hard ceiling"
+    );
+    for (relative_path, direct_import) in [
+        (
+            "crates/ao2-cli/src/control_plane_snapshot.rs",
+            "use crate::cli::CpCommand;",
+        ),
+        (
+            "crates/ao2-cli/src/control_plane_ops.rs",
+            "use crate::cli::{",
+        ),
+        (
+            "crates/ao2-cli/src/git_cmd.rs",
+            "use crate::cli::GitCommand;",
+        ),
+        (
+            "crates/ao2-cli/src/github_issue_intake.rs",
+            "use crate::cli::IssueCommand;",
+        ),
+        (
+            "crates/ao2-cli/src/provider_ops.rs",
+            "use crate::cli::ProviderCommand;",
+        ),
+        (
+            "crates/ao2-cli/src/plugin_cli.rs",
+            "use crate::cli::PluginCommand;",
+        ),
+    ] {
+        let source =
+            fs::read_to_string(root.join(relative_path)).expect("CLI command consumer exists");
+        assert!(
+            source.contains(direct_import),
+            "{relative_path} must import its command type directly from cli"
+        );
+    }
     for function_name in [
         "verify_release_archive_signature",
         "derive_public_key_from_private_key",

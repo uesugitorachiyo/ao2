@@ -2,9 +2,10 @@ use std::fs;
 
 use anyhow::{anyhow, Context, Result};
 
+use crate::cli::CpCommand;
 use crate::cli_util::{canonical_json_string, json_string, sha256_bytes_hex};
 use crate::control_plane_http::{get_json_http, get_text_http};
-use crate::{resolve_api_token, CpCommand};
+use crate::resolve_api_token;
 
 const CP_PROBE_EXTENDED_SCHEMA: &str = "ao2.cp-healthz-extended-probe.v1";
 const CP_HEALTHZ_EXTENDED_SCHEMA: &str = "ao2.cp-healthz-extended.v1";

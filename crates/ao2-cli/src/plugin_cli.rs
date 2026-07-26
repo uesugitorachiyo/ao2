@@ -2,6 +2,8 @@ use std::path::PathBuf;
 
 use anyhow::Result;
 
+use crate::cli::PluginCommand;
+
 use super::plugin_adapter::{
     plugin_adapter_install_smoke, plugin_adapter_install_smoke_observer_bundle,
     plugin_adapter_install_smoke_verify, plugin_adapter_observer_bundle, plugin_adapter_scaffold,
@@ -42,8 +44,6 @@ use super::plugin_wrapper::{
     plugin_wrapper_harness, plugin_wrapper_harness_verify, PluginWrapperHarnessOptions,
     PluginWrapperHarnessVerifyOptions,
 };
-use super::PluginCommand;
-
 pub(super) fn plugin(command: PluginCommand) -> Result<()> {
     match command {
         PluginCommand::Readiness { out, json } => plugin_readiness(out, json),

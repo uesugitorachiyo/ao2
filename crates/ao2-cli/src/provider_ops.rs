@@ -12,6 +12,7 @@ use ao2_runtime::{
     replay_run, run_risky_pr_with_provider_prompt, ProviderRunOptions, ReplayOptions,
 };
 
+use crate::cli::ProviderCommand;
 use crate::cli_util::{
     base64_standard, hex_lower, json_array, json_f64, json_string, json_u64, run_dir,
     sha256_bytes_hex,
@@ -27,7 +28,7 @@ use crate::workbench_provider_pilot_acceptance::{
 };
 use crate::{
     atomic_write_text, format_budget_usd, generate_api_token, now_unix_ms, resolve_api_token,
-    shell_quote, trimmed_required, ProviderCommand, TASK_TEMPLATES,
+    shell_quote, trimmed_required, TASK_TEMPLATES,
 };
 
 pub(crate) fn provider(command: ProviderCommand) -> Result<()> {

@@ -1,7 +1,8 @@
 use anyhow::Result;
 use serde::Serialize;
 
-use super::{canonical_json_sha256, github_issue_draft, IssueCommand};
+use super::{canonical_json_sha256, github_issue_draft};
+use crate::cli::IssueCommand;
 
 #[derive(Debug, Serialize)]
 struct GitHubIssueIntakeReadback {
