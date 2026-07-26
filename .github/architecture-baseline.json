@@ -1,6 +1,6 @@
 {
   "baseline_source": {
-    "head": "89a4d55d0c7c7909fd1be8145a6ef5bb4423cfa9",
+    "head": "8a9ed58c206e0c5e966757f9b2414bed36d7651a",
     "v0_5_3_tag_target": "947e566bd3f54ed902f3c14fc0c90e21a24359bc"
   },
   "budgets": {
@@ -31,13 +31,14 @@
         "crates/ao2-cli/src/factory_project_start_summary.rs": 274,
         "crates/ao2-cli/src/factory_queue.rs": 1281,
         "crates/ao2-cli/src/factory_queue_recovery.rs": 2648,
+        "crates/ao2-cli/src/factory_queue_recovery_release.rs": 3252,
         "crates/ao2-cli/src/git_cmd.rs": 336,
         "crates/ao2-cli/src/github_issue_draft.rs": 1468,
         "crates/ao2-cli/src/github_issue_intake.rs": 281,
         "crates/ao2-cli/src/greenfield_workflow.rs": 735,
         "crates/ao2-cli/src/install_cmd.rs": 274,
         "crates/ao2-cli/src/install_paths.rs": 79,
-        "crates/ao2-cli/src/main.rs": 18891,
+        "crates/ao2-cli/src/main.rs": 15684,
         "crates/ao2-cli/src/memory_store.rs": 578,
         "crates/ao2-cli/src/phase1_promotion.rs": 1440,
         "crates/ao2-cli/src/plugin_adapter.rs": 2050,
@@ -78,7 +79,7 @@
         "crates/ao2-cli/src/workbench_app.rs": 540,
         "crates/ao2-cli/src/workbench_contract.rs": 43,
         "crates/ao2-cli/src/workbench_evidence_delivery.rs": 276,
-        "crates/ao2-cli/src/workbench_factory_api.rs": 1622,
+        "crates/ao2-cli/src/workbench_factory_api.rs": 1624,
         "crates/ao2-cli/src/workbench_memory.rs": 165,
         "crates/ao2-cli/src/workbench_obligation.rs": 433,
         "crates/ao2-cli/src/workbench_provider_pilot.rs": 249,
@@ -92,10 +93,10 @@
         "crates/ao2-cli/src/workbench_server.rs": 1644,
         "crates/ao2-cli/src/workbench_support.rs": 132
       },
-      "main_rs_lines": 18891,
-      "main_rs_source_concentration_percent": 24.0026,
-      "main_rs_top_level_functions": 138,
-      "main_rs_top_level_types": 46,
+      "main_rs_lines": 15684,
+      "main_rs_source_concentration_percent": 19.9159,
+      "main_rs_top_level_functions": 120,
+      "main_rs_top_level_types": 36,
       "module_declarations": [
         "crates/ao2-cli/src/main.rs::artifact_safety",
         "crates/ao2-cli/src/main.rs::cli_util",
@@ -115,6 +116,7 @@
         "crates/ao2-cli/src/main.rs::factory_project_start_summary",
         "crates/ao2-cli/src/main.rs::factory_queue",
         "crates/ao2-cli/src/main.rs::factory_queue_recovery",
+        "crates/ao2-cli/src/main.rs::factory_queue_recovery_release",
         "crates/ao2-cli/src/main.rs::git_cmd",
         "crates/ao2-cli/src/main.rs::github_issue_draft",
         "crates/ao2-cli/src/main.rs::github_issue_intake",
@@ -175,13 +177,13 @@
         "crates/ao2-cli/src/main.rs::workbench_server",
         "crates/ao2-cli/src/main.rs::workbench_support"
       ],
-      "production_total_lines": 78704
+      "production_total_lines": 78751
     },
     "tests": {
       "cli_approval_replay_line_concentration_percent": 0.0,
       "cli_approval_replay_rs_lines": 0,
       "cli_approval_replay_tests": 0,
-      "cli_provider_run_repair_line_concentration_percent": 0.4855,
+      "cli_provider_run_repair_line_concentration_percent": 0.4854,
       "cli_provider_run_repair_rs_lines": 389,
       "cli_provider_run_repair_tests": 5,
       "file_lines": {
@@ -251,7 +253,7 @@
         "crates/ao2-cli/tests/release_evaluator_decision.rs": 650,
         "crates/ao2-cli/tests/release_gate_obligation_gate_signing.rs": 1250,
         "crates/ao2-cli/tests/release_handoff_checklist.rs": 339,
-        "crates/ao2-cli/tests/release_packaging.rs": 5534,
+        "crates/ao2-cli/tests/release_packaging.rs": 5538,
         "crates/ao2-cli/tests/release_support_bundle_verification.rs": 1262,
         "crates/ao2-cli/tests/sdd_subcommand.rs": 1023,
         "crates/ao2-cli/tests/troubleshooting_support_bundle.rs": 604
@@ -328,7 +330,7 @@
         "crates/ao2-cli/tests/sdd_subcommand.rs": 16,
         "crates/ao2-cli/tests/troubleshooting_support_bundle.rs": 9
       },
-      "integration_test_file_total_lines": 80130,
+      "integration_test_file_total_lines": 80134,
       "integration_test_static_count": 672
     },
     "unsafe_blocks": [
