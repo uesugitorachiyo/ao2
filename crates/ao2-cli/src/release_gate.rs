@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 
 use crate::cli_util::{json_array, json_string};
-use crate::contract_verify_obligation_gate_signing_json;
+use crate::contract_gate_signing::contract_verify_obligation_gate_signing_json;
 use crate::factory_compat::read_factory_compat_value;
 use crate::factory_governance::{
     json_path, normalize_factory_replacement_smoke_os, require_json_bool, require_json_eq,
