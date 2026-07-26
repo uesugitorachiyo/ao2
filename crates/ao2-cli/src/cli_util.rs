@@ -417,6 +417,15 @@ pub(crate) fn read_prompt(prompt: Option<String>, prompt_file: Option<PathBuf>) 
     }
 }
 
+pub(crate) fn fail_if_provider_api_key_env_present() -> Result<()> {
+    for key in ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"] {
+        if std::env::var_os(key).is_some() {
+            anyhow::bail!("forbidden provider API key present in environment: {key}");
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod canonical_json_contract_tests {
     use super::*;

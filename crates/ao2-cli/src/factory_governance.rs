@@ -5,7 +5,11 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Context, Result};
 use chrono::{SecondsFormat, Utc};
 
-use crate::cli_util::{atomic_write_text, json_string, sha256_file};
+use crate::artifact_safety::factory_app_run_bundle_reject_secret_markers;
+use crate::cli_util::{
+    atomic_write_text, fail_if_provider_api_key_env_present, json_array, json_bool, json_string,
+    sha256_file,
+};
 use crate::factory_compat::{factory_ensure_target_repo, read_factory_compat_value};
 use crate::factory_evaluator::factory_evaluate_json;
 use crate::factory_evidence::{
@@ -14,7 +18,12 @@ use crate::factory_evidence::{
 };
 use crate::factory_queue::factory_queue_submit_json;
 use crate::factory_queue_execution::{factory_queue_run_next_json, FactoryQueueRunNextOptions};
-use crate::release_crypto::verify_file_signature;
+use crate::plugin_distribution::{
+    validate_plugin_observer_trust_boundary, validate_plugin_provider_auth,
+};
+use crate::release_crypto::{
+    derive_public_key_from_private_key, sign_file_with_private_key, verify_file_signature,
+};
 
 pub(crate) const GREENFIELD_THREE_OS_REQUIRED_OS: [&str; 3] = ["macos", "ubuntu", "windows"];
 
@@ -1396,4 +1405,377 @@ pub(crate) fn factory_verify_run_result_json(run_result_path: &Path) -> Result<s
         "ao2_decision_owner": "ao2-native-run-result-verifier",
         "control_plane_role": "read_only_observer_after_signed_evidence"
     }))
+}
+
+pub(crate) struct FactoryCloserDecisionOptions<'a> {
+    pub(crate) rubric: &'a Path,
+    pub(crate) rubric_sha256: String,
+    pub(crate) evidence: &'a Path,
+    pub(crate) evidence_sha256: String,
+    pub(crate) skill_contract_manifest: &'a Path,
+    pub(crate) skill_contract_manifest_sha256: String,
+    pub(crate) signing_key: &'a Path,
+    pub(crate) signer_id: String,
+    pub(crate) out: &'a Path,
+}
+
+pub(crate) fn factory_closer_decision_json(
+    options: FactoryCloserDecisionOptions<'_>,
+) -> Result<serde_json::Value> {
+    fail_if_provider_api_key_env_present()?;
+    let actual_rubric_sha256 = sha256_file(options.rubric)?;
+    if actual_rubric_sha256 != options.rubric_sha256.trim() {
+        anyhow::bail!(
+            "closer decision rubric sha256 mismatch for {}: expected {}, actual {}",
+            options.rubric.display(),
+            options.rubric_sha256,
+            actual_rubric_sha256
+        );
+    }
+    let actual_evidence_sha256 = sha256_file(options.evidence)?;
+    if actual_evidence_sha256 != options.evidence_sha256.trim() {
+        anyhow::bail!(
+            "closer decision evidence sha256 mismatch for {}: expected {}, actual {}",
+            options.evidence.display(),
+            options.evidence_sha256,
+            actual_evidence_sha256
+        );
+    }
+    let actual_manifest_sha256 = sha256_file(options.skill_contract_manifest)?;
+    if actual_manifest_sha256 != options.skill_contract_manifest_sha256.trim() {
+        anyhow::bail!(
+            "closer decision skill-contract manifest sha256 mismatch for {}: expected {}, actual {}",
+            options.skill_contract_manifest.display(),
+            options.skill_contract_manifest_sha256,
+            actual_manifest_sha256
+        );
+    }
+
+    let rubric = read_factory_compat_value(options.rubric)
+        .with_context(|| format!("read closer rubric {}", options.rubric.display()))?;
+    if json_string(&rubric, "schema_version") != "ao2.factory-evaluator-rubric.v1"
+        || json_string(&rubric, "status") != "accepted"
+    {
+        anyhow::bail!("closer decision requires accepted ao2.factory-evaluator-rubric.v1");
+    }
+    if json_string(&rubric["signature"], "signature_status") != "signed"
+        || !json_bool(&rubric["signature"], "signature_verified")
+    {
+        anyhow::bail!("closer decision requires signed evaluator rubric");
+    }
+
+    let evidence = read_factory_compat_value(options.evidence)
+        .with_context(|| format!("read closer evidence {}", options.evidence.display()))?;
+    if !matches!(
+        json_string(&evidence, "status").as_str(),
+        "passed" | "accepted"
+    ) {
+        anyhow::bail!("closer decision evidence must be passed or accepted");
+    }
+    let evidence_rubric_sha256 = json_string(&evidence, "rubric_sha256");
+    if evidence_rubric_sha256 != actual_rubric_sha256 {
+        anyhow::bail!("closer decision evidence must reference rubric_sha256");
+    }
+
+    validate_plugin_provider_auth(
+        evidence
+            .get("provider_auth")
+            .context("closer decision evidence missing provider_auth")?,
+        "closer decision evidence",
+    )?;
+    validate_plugin_observer_trust_boundary(
+        evidence
+            .get("trust_boundary")
+            .context("closer decision evidence missing trust_boundary")?,
+        "closer decision evidence",
+    )?;
+
+    let manifest =
+        read_factory_compat_value(options.skill_contract_manifest).with_context(|| {
+            format!(
+                "read closer skill-contract manifest {}",
+                options.skill_contract_manifest.display()
+            )
+        })?;
+    let closure_entry = skill_contract_manifest_find_entry(&manifest, "closure_verification")
+        .context("closer decision requires closure_verification manifest entry")?;
+    if json_string(closure_entry, "category") != "runtime_critical"
+        || json_string(closure_entry, "ao2_disposition") != "enforced"
+        || json_string(&closure_entry["enforcement"], "ao2_command")
+            != "ao2 factory closer-decision"
+        || json_string(&closure_entry["enforcement"], "ao2_artifact")
+            != "ao2.factory-closer-decision.v1"
+        || closure_entry
+            .get("blocker")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|text| !text.trim().is_empty())
+    {
+        anyhow::bail!("closer decision requires enforced closure_verification manifest entry");
+    }
+
+    if let Some(parent) = options
+        .out
+        .parent()
+        .filter(|path| !path.as_os_str().is_empty())
+    {
+        fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+    }
+    let signed_payload_path = options.out.with_extension("signed-payload.json");
+    let signature_path = options.out.with_extension("json.sig");
+    let public_key_path = options.out.with_extension("public.pem");
+    let mut decision = serde_json::json!({
+        "schema_version": "ao2.factory-closer-decision.v1",
+        "status": "accepted",
+        "decision": "accepted",
+        "producer": "ao2",
+        "created_at": Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true),
+        "run_id": json_string(&rubric, "run_id"),
+        "rubric_sha256": actual_rubric_sha256,
+        "rubric": {
+            "path": options.rubric.display().to_string(),
+            "schema_version": json_string(&rubric, "schema_version"),
+            "status": json_string(&rubric, "status"),
+            "signature_status": json_string(&rubric["signature"], "signature_status"),
+            "signature_verified": json_bool(&rubric["signature"], "signature_verified")
+        },
+        "evidence_path": options.evidence.display().to_string(),
+        "evidence_sha256": actual_evidence_sha256,
+        "evidence_schema_version": json_string(&evidence, "schema_version"),
+        "evidence_status": json_string(&evidence, "status"),
+        "skill_contract_manifest_path": options.skill_contract_manifest.display().to_string(),
+        "skill_contract_manifest_sha256": actual_manifest_sha256,
+        "closure_verification": closure_entry.clone(),
+        "provider_auth": {
+            "local_oauth_cli_only": true,
+            "provider_api_key_auth_allowed": false,
+            "provider_api_key_env_required": false
+        },
+        "trust_boundary": {
+            "execution_owner": "ao2",
+            "factory_v3_role": "parity_auditor",
+            "control_plane_role": "read_only_observer",
+            "mutates_ao_artifacts": false,
+            "control_plane_approves_release": false,
+            "release_acceptance_owner": "ao2 evaluator-closer"
+        },
+        "control_plane_observation": {
+            "role": "read_only_observer",
+            "may_observe_evidence_bundle_path": true,
+            "may_mutate_evidence": false,
+            "may_approve_release": false
+        },
+        "side_effects": {
+            "would_execute_provider": false,
+            "would_execute_queue": false,
+            "would_write_memory": false,
+            "would_mutate_control_plane": false,
+            "would_mutate_ao_artifacts": false,
+            "would_approve_release": false
+        },
+        "token_safe_output_verified": true,
+        "factory_v3_role": "parity_auditor"
+    });
+    atomic_write_text(
+        &signed_payload_path,
+        &serde_json::to_string_pretty(&decision)?,
+    )?;
+    factory_app_run_bundle_reject_secret_markers(&signed_payload_path, "closer-decision.json")?;
+    derive_public_key_from_private_key(options.signing_key, &public_key_path)?;
+    sign_file_with_private_key(options.signing_key, &signed_payload_path, &signature_path)?;
+    let signature_verified =
+        verify_file_signature(&signed_payload_path, &signature_path, &public_key_path)?;
+    let sidecar_ref = |path: &Path| -> String {
+        path.file_name()
+            .and_then(|name| name.to_str())
+            .map(str::to_owned)
+            .unwrap_or_else(|| path.display().to_string())
+    };
+    decision["signature"] = serde_json::json!({
+        "schema_version": "ao2.factory-closer-decision-signature.v1",
+        "signature_algorithm": "RSA/SHA-256",
+        "signer_id": options.signer_id,
+        "signed_payload": "closer_decision_without_signature_field",
+        "signed_payload_path": sidecar_ref(&signed_payload_path),
+        "signed_payload_sha256": sha256_file(&signed_payload_path)?,
+        "signature_path": sidecar_ref(&signature_path),
+        "signature_sha256": sha256_file(&signature_path)?,
+        "public_key_path": sidecar_ref(&public_key_path),
+        "public_key_sha256": sha256_file(&public_key_path)?,
+        "signature_status": "signed",
+        "signature_verified": signature_verified
+    });
+    atomic_write_text(options.out, &serde_json::to_string_pretty(&decision)?)?;
+    factory_app_run_bundle_reject_secret_markers(options.out, "closer-decision.json")?;
+    let decision_sha256 = sha256_file(options.out)?;
+    decision["decision_path"] = serde_json::json!(options.out.display().to_string());
+    decision["decision_sha256"] = serde_json::json!(decision_sha256);
+    Ok(decision)
+}
+
+pub(crate) fn factory_closer_decision_verify_json(
+    decision_path: &Path,
+    decision_sha256: &str,
+) -> Result<serde_json::Value> {
+    fail_if_provider_api_key_env_present()?;
+    let actual_sha256 = sha256_file(decision_path)?;
+    if actual_sha256 != decision_sha256.trim() {
+        anyhow::bail!(
+            "closer decision sha256 mismatch for {}: expected {}, actual {}",
+            decision_path.display(),
+            decision_sha256,
+            actual_sha256
+        );
+    }
+    factory_app_run_bundle_reject_secret_markers(decision_path, "closer-decision.json")?;
+    let decision = read_factory_compat_value(decision_path)
+        .with_context(|| format!("read closer decision {}", decision_path.display()))?;
+    let signature = &decision["signature"];
+    let base = decision_path.parent().unwrap_or_else(|| Path::new("."));
+    let resolve = |raw: &str| {
+        let path = PathBuf::from(raw);
+        if path.is_absolute() {
+            path
+        } else {
+            base.join(path)
+        }
+    };
+    let signed_payload_path = signature
+        .get("signed_payload_path")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(resolve);
+    let signature_path = signature
+        .get("signature_path")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(resolve);
+    let public_key_path = signature
+        .get("public_key_path")
+        .and_then(serde_json::Value::as_str)
+        .filter(|value| !value.trim().is_empty())
+        .map(resolve);
+    let signed_payload_digest_match = signed_payload_path
+        .as_ref()
+        .filter(|path| path.is_file())
+        .map(|path| {
+            sha256_file(path)
+                .map(|actual| actual == json_string(signature, "signed_payload_sha256"))
+        })
+        .transpose()?
+        .unwrap_or(false);
+    let signature_digest_match = signature_path
+        .as_ref()
+        .filter(|path| path.is_file())
+        .map(|path| {
+            sha256_file(path).map(|actual| actual == json_string(signature, "signature_sha256"))
+        })
+        .transpose()?
+        .unwrap_or(false);
+    let public_key_digest_match = public_key_path
+        .as_ref()
+        .filter(|path| path.is_file())
+        .map(|path| {
+            sha256_file(path).map(|actual| actual == json_string(signature, "public_key_sha256"))
+        })
+        .transpose()?
+        .unwrap_or(false);
+    let decision_payload_matches_signed_payload = match signed_payload_path.as_ref() {
+        Some(path) if path.is_file() && signed_payload_digest_match => {
+            let signed_payload = read_factory_compat_value(path)
+                .with_context(|| format!("read signed closer payload {}", path.display()))?;
+            let mut decision_without_signature = decision.clone();
+            if let Some(object) = decision_without_signature.as_object_mut() {
+                object.remove("signature");
+            }
+            signed_payload == decision_without_signature
+        }
+        _ => false,
+    };
+    let signature_verified = match (
+        signed_payload_path.as_ref(),
+        signature_path.as_ref(),
+        public_key_path.as_ref(),
+    ) {
+        (Some(signed_payload_path), Some(signature_path), Some(public_key_path))
+            if signed_payload_path.is_file()
+                && signature_path.is_file()
+                && public_key_path.is_file()
+                && json_string(signature, "signed_payload")
+                    == "closer_decision_without_signature_field"
+                && signed_payload_digest_match
+                && signature_digest_match
+                && public_key_digest_match
+                && decision_payload_matches_signed_payload =>
+        {
+            verify_file_signature(signed_payload_path, signature_path, public_key_path)?
+        }
+        _ => false,
+    };
+    let trust_boundary_ok = json_string(&decision["trust_boundary"], "execution_owner") == "ao2"
+        && json_string(&decision["trust_boundary"], "factory_v3_role") == "parity_auditor"
+        && json_string(&decision["trust_boundary"], "control_plane_role") == "read_only_observer"
+        && !json_bool(&decision["trust_boundary"], "mutates_ao_artifacts")
+        && !json_bool(
+            &decision["trust_boundary"],
+            "control_plane_approves_release",
+        );
+    let side_effects_ok = [
+        "would_execute_provider",
+        "would_execute_queue",
+        "would_write_memory",
+        "would_mutate_control_plane",
+        "would_mutate_ao_artifacts",
+        "would_approve_release",
+    ]
+    .iter()
+    .all(|key| !json_bool(&decision["side_effects"], key));
+    let closure_entry_enforced = json_string(&decision["closure_verification"], "ao2_disposition")
+        == "enforced"
+        && json_string(
+            &decision["closure_verification"]["enforcement"],
+            "ao2_command",
+        ) == "ao2 factory closer-decision"
+        && json_string(
+            &decision["closure_verification"]["enforcement"],
+            "ao2_artifact",
+        ) == "ao2.factory-closer-decision.v1";
+    let rubric_linkage_verified = !json_string(&decision, "rubric_sha256").is_empty()
+        && json_string(&decision["rubric"], "schema_version") == "ao2.factory-evaluator-rubric.v1"
+        && json_string(&decision["rubric"], "status") == "accepted"
+        && json_bool(&decision["rubric"], "signature_verified");
+    let accepted = json_string(&decision, "schema_version") == "ao2.factory-closer-decision.v1"
+        && json_string(&decision, "status") == "accepted"
+        && json_string(&decision, "decision") == "accepted"
+        && signature_verified
+        && trust_boundary_ok
+        && side_effects_ok
+        && closure_entry_enforced
+        && rubric_linkage_verified
+        && json_bool(&decision, "token_safe_output_verified");
+    Ok(serde_json::json!({
+        "schema_version": "ao2.factory-closer-decision-verification.v1",
+        "status": if accepted { "accepted" } else { "rejected" },
+        "decision_path": decision_path.display().to_string(),
+        "decision_sha256": actual_sha256,
+        "signed_payload_digest_match": signed_payload_digest_match,
+        "signature_digest_match": signature_digest_match,
+        "public_key_digest_match": public_key_digest_match,
+        "decision_payload_matches_signed_payload": decision_payload_matches_signed_payload,
+        "signature_verified": signature_verified,
+        "trust_boundary_ok": trust_boundary_ok,
+        "side_effects_ok": side_effects_ok,
+        "closure_entry_enforced": closure_entry_enforced,
+        "rubric_linkage_verified": rubric_linkage_verified,
+        "factory_v3_role": "parity_auditor",
+        "control_plane_role": "read_only_observer"
+    }))
+}
+
+fn skill_contract_manifest_find_entry<'a>(
+    manifest: &'a serde_json::Value,
+    wanted_name: &str,
+) -> Option<&'a serde_json::Value> {
+    json_array(manifest, "entries")
+        .iter()
+        .find(|entry| json_string(entry, "name") == wanted_name)
 }

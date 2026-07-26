@@ -5,7 +5,7 @@ use std::process::Command as ProcessCommand;
 use anyhow::{anyhow, Context, Result};
 use chrono::{SecondsFormat, Utc};
 
-use super::cli_util::json_u64;
+use super::cli_util::{fail_if_provider_api_key_env_present, json_u64};
 use super::plugin_cli;
 use super::plugin_contract::{
     validate_plugin_control_plane_observation, validate_plugin_side_effects_false,
@@ -15,8 +15,8 @@ use super::plugin_distribution::{
 };
 use super::{
     atomic_write_text, canonical_json_sha256, create_tar_gz,
-    factory_app_run_bundle_reject_secret_markers, fail_if_provider_api_key_env_present, json_bool,
-    json_string, sha256_file, validate_plugin_observer_trust_boundary,
+    factory_app_run_bundle_reject_secret_markers, json_bool, json_string, sha256_file,
+    validate_plugin_observer_trust_boundary,
 };
 
 pub(super) fn plugin_pulse_apply_observer_bundle(

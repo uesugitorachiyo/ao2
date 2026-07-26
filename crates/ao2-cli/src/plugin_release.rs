@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
+use super::cli_util::fail_if_provider_api_key_env_present;
 use super::plugin_cli;
 use super::plugin_contract::{
     validate_plugin_control_plane_observation, validate_plugin_side_effects_false,
@@ -13,9 +14,8 @@ use super::plugin_distribution::{
 };
 use super::{
     atomic_write_text, canonical_json_sha256, copy_dir_recursive, create_tar_gz,
-    factory_app_run_bundle_reject_secret_markers, fail_if_provider_api_key_env_present,
-    is_git_sha_prefix, is_sha256_hex, json_bool, json_string, json_u64,
-    resolve_cli_artifact_reference, sha256_file,
+    factory_app_run_bundle_reject_secret_markers, is_git_sha_prefix, is_sha256_hex, json_bool,
+    json_string, json_u64, resolve_cli_artifact_reference, sha256_file,
 };
 
 pub(super) fn plugin_release_candidate(

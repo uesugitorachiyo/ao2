@@ -1773,6 +1773,19 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
         fs::read_to_string(root.join("crates/ao2-cli/tests/cli_provider_run_repair.rs"))
             .expect("cli provider run/repair tests exist");
     for function_name in [
+        "factory_closer_decision_json",
+        "factory_closer_decision_verify_json",
+    ] {
+        assert!(
+            factory_governance_source.contains(&format!("fn {function_name}(")),
+            "{function_name} must be owned by factory_governance"
+        );
+        assert!(
+            !main_source.contains(&format!("fn {function_name}(")),
+            "{function_name} must not remain in main"
+        );
+    }
+    for function_name in [
         "verify_release_archive_signature",
         "derive_public_key_from_private_key",
         "sign_file_with_private_key",

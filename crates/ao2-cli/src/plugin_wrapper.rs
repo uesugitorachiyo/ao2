@@ -6,9 +6,10 @@ use anyhow::{Context, Result};
 use ao2_policy::{redact_secrets, secret_redaction_class_counts};
 use serde::Deserialize;
 
+use super::cli_util::fail_if_provider_api_key_env_present;
 use super::{
-    atomic_write_text, factory_app_run_bundle_reject_secret_markers,
-    fail_if_provider_api_key_env_present, json_bool, json_string, json_u64, sha256_file,
+    atomic_write_text, factory_app_run_bundle_reject_secret_markers, json_bool, json_string,
+    json_u64, sha256_file,
 };
 
 pub(super) struct PluginWrapperHarnessOptions {
