@@ -5,9 +5,8 @@ use anyhow::{Context, Result};
 use ao2_core::sha256_hex;
 use chrono::{SecondsFormat, Utc};
 
-use crate::{
-    atomic_write_text, json_bool, json_string, json_u64, sha256_file, validate_pulse_task_contract,
-};
+use crate::pulse_run::validate_pulse_task_contract;
+use crate::{atomic_write_text, json_bool, json_string, json_u64, sha256_file};
 
 pub(crate) fn pulse_eval_loop_run_once_json(
     executor_evidence: &Path,
