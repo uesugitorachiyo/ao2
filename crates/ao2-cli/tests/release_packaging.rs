@@ -1742,6 +1742,9 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
     let factory_project_start_source =
         fs::read_to_string(root.join("crates/ao2-cli/src/factory_project_start.rs"))
             .expect("factory project start source exists");
+    let factory_queue_recovery_release_source =
+        fs::read_to_string(root.join("crates/ao2-cli/src/factory_queue_recovery_release.rs"))
+            .expect("factory queue recovery release source exists");
     let release_crypto_source =
         fs::read_to_string(root.join("crates/ao2-cli/src/release_crypto.rs"))
             .expect("release crypto source exists");
@@ -1778,6 +1781,7 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
         &factory_project_execution_source,
         &factory_project_planning_source,
         &factory_project_start_source,
+        &factory_queue_recovery_release_source,
         &release_crypto_source,
         &release_provenance_source,
     ] {
