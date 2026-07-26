@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 
-use super::cli_util::{canonical_json_sha256, json_u64};
+use super::cli_util::{canonical_json_sha256, fail_if_provider_api_key_env_present, json_u64};
 use super::plugin_cli;
 use super::plugin_contract::{
     validate_k37_plugin_observer_bundle, validate_k37_plugin_observer_input,
@@ -23,9 +23,8 @@ use super::plugin_distribution::{
     validate_plugin_provider_auth,
 };
 use super::{
-    atomic_write_text, create_tar_gz, factory_app_run_bundle_reject_secret_markers,
-    fail_if_provider_api_key_env_present, is_sha256_hex, json_bool, json_string, sha256_file,
-    validate_release_gate_with_replacement_rollup,
+    atomic_write_text, create_tar_gz, factory_app_run_bundle_reject_secret_markers, is_sha256_hex,
+    json_bool, json_string, sha256_file, validate_release_gate_with_replacement_rollup,
 };
 
 pub(super) fn plugin_control_plane_fixture_handoff(
