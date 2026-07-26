@@ -4,12 +4,13 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 
+use crate::cli_util::{now_unix_ms, query_value_owned};
 use crate::control_plane_http::{control_plane_endpoint, get_text_http};
 use crate::memory_store::{
     append_jsonl, memory_export_json, memory_link_run_json, memory_publish_to_control_plane_json,
     memory_recent_json, memory_run_links_path, memory_search_json,
 };
-use crate::{now_unix_ms, query_value_owned, WorkbenchSupportSigning};
+use crate::WorkbenchSupportSigning;
 
 pub(crate) fn workbench_memory_search_json(
     target: &Path,

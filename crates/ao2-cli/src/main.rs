@@ -10,7 +10,6 @@ use std::process::{Child, Command as ProcessCommand, Stdio};
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, Context, Result};
 use ao2_adapters::{
@@ -126,9 +125,9 @@ use cli::{
     ReportCommand, RunsCommand, TemplateCommand, WorkbenchCommand,
 };
 use cli_util::{
-    atomic_write_text, canonical_json_sha256, create_tar_gz, escape_html, json_array, json_bool,
-    json_string, json_u64, json_value_text, now_unix_ms, read_json_file, read_prompt,
-    sha256_bytes_hex, sha256_file, trimmed_required,
+    atomic_write_text, canonical_json_sha256, create_tar_gz, json_array, json_bool, json_string,
+    json_u64, json_value_text, now_unix_ms, read_json_file, read_prompt, sha256_bytes_hex,
+    sha256_file, trimmed_required,
 };
 use contract_gate_signing::{
     contract_obligation_gate_signing_survey_json, contract_verify_obligation_gate_signing_json,
@@ -1622,226 +1621,6 @@ fn workbench(command: WorkbenchCommand) -> Result<()> {
     }
 }
 
-pub(crate) fn query_value_owned(query: &str, key: &str) -> Option<String> {
-    query.split('&').find_map(|part| {
-        let (query_key, value) = part.split_once('=')?;
-        (query_key == key)
-            .then(|| percent_decode(value).trim().to_string())
-            .filter(|value| !value.is_empty())
-    })
-}
-
-pub(crate) fn form_value_owned(
-    form: &std::collections::BTreeMap<String, String>,
-    key: &str,
-) -> Option<String> {
-    form.get(key)
-        .map(|value| value.trim().to_string())
-        .filter(|value| !value.is_empty())
-}
-
-fn shell_quote(input: &str) -> String {
-    if input
-        .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.' | '/' | ':' | '='))
-    {
-        input.to_string()
-    } else {
-        format!("'{}'", input.replace('\'', "'\\''"))
-    }
-}
-
-fn format_budget_usd(max_budget_usd: f64) -> Result<String> {
-    if !max_budget_usd.is_finite() || max_budget_usd <= 0.0 {
-        anyhow::bail!("provider max budget USD must be a positive finite number");
-    }
-    Ok(format!("{max_budget_usd:.2}"))
-}
-
-fn http_html_response(html: String) -> String {
-    format!(
-        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-        html.len(),
-        html
-    )
-}
-
-fn http_json_response(status: u16, json: serde_json::Value) -> Result<String> {
-    let body = serde_json::to_string_pretty(&json)?;
-    let reason = match status {
-        200 => "OK",
-        400 => "Bad Request",
-        403 => "Forbidden",
-        404 => "Not Found",
-        _ => "OK",
-    };
-    Ok(format!(
-        "HTTP/1.1 {status} {reason}\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-        body.len(),
-        body
-    ))
-}
-
-fn http_text_response(status: u16, reason: &str, body: &str) -> String {
-    format!(
-        "HTTP/1.1 {status} {reason}\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-        body.len(),
-        body
-    )
-}
-
-fn render_workbench_job_detail_page(detail: &serde_json::Value) -> String {
-    let job = &detail["job"];
-    let run_id = json_string(job, "run_id");
-    let status = json_string(job, "status");
-    let evidence_pack = json_string(job, "evidence_pack");
-    let cockpit = json_string(job, "cockpit");
-    let stdout = detail["stdout"].as_str().unwrap_or("");
-    let stderr = detail["stderr"].as_str().unwrap_or("");
-    let diagnosis = &detail["diagnosis"];
-    let recovery_actions = json_array(diagnosis, "recovery_actions")
-        .iter()
-        .map(|action| format!("<li>{}</li>", escape_html(action.as_str().unwrap_or(""))))
-        .collect::<Vec<_>>()
-        .join("");
-    let evidence_link = workbench_file_anchor("Open Evidence", &evidence_pack);
-    let cockpit_link = workbench_file_anchor("Open Cockpit", &cockpit);
-    format!(
-        r#"<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AO2 Queue Job {run_id}</title>
-  <style>
-    body {{ margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: #18202f; background: #f6f7f9; }}
-    main {{ max-width: 1120px; margin: 0 auto; padding: 32px 20px 48px; }}
-    h1 {{ margin: 0 0 4px; font-size: 30px; line-height: 1.15; }}
-    .muted {{ color: #5f6b7a; font-size: 14px; }}
-    .toolbar {{ display: flex; gap: 10px; margin: 18px 0 24px; flex-wrap: wrap; }}
-    .toolbar a {{ border: 1px solid #cbd3dc; border-radius: 6px; color: #152238; padding: 8px 10px; text-decoration: none; background: #fff; }}
-    .metrics {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 18px 0; }}
-    .metric {{ background: #fff; border: 1px solid #dbe1e8; border-radius: 8px; padding: 12px; }}
-    .metric span {{ display: block; color: #596677; font-size: 12px; margin-bottom: 6px; }}
-    .metric strong {{ font-size: 18px; }}
-    pre {{ background: #111827; color: #f3f4f6; border-radius: 8px; padding: 14px; overflow: auto; white-space: pre-wrap; min-height: 80px; }}
-    .diagnosis {{ background: #fff; border: 1px solid #d8e0ea; border-radius: 8px; padding: 14px; }}
-    .diagnosis ul {{ margin: 8px 0 0; padding-left: 20px; }}
-    section {{ margin-top: 24px; }}
-  </style>
-</head>
-<body>
-  <main class="queue-detail-page">
-    <h1>{run_id}</h1>
-    <div class="muted">Job {job_id} / {status}</div>
-    <div class="toolbar">{evidence_link}{cockpit_link}</div>
-    <section class="metrics" aria-label="Runtime metrics">
-      <div class="metric"><span>Queue Wait</span><strong>{queue_wait_ms} ms</strong></div>
-      <div class="metric"><span>Duration</span><strong>{duration_ms} ms</strong></div>
-      <div class="metric"><span>Exit Code</span><strong>{exit_code}</strong></div>
-      <div class="metric"><span>Retry Count</span><strong>{retry_count}</strong></div>
-    </section>
-    <section class="diagnosis">
-      <h2>Failure Diagnosis</h2>
-      <div class="muted">kind={failure_kind} timed_out={timed_out}</div>
-      <p>{primary_error}</p>
-      <ul>{recovery_actions}</ul>
-      <h3>Stderr Excerpt</h3>
-      <pre>{stderr_excerpt}</pre>
-      <h3>Stdout Excerpt</h3>
-      <pre>{stdout_excerpt}</pre>
-    </section>
-    <section>
-      <h2>Stdout</h2>
-      <pre>{stdout}</pre>
-    </section>
-    <section>
-      <h2>Stderr</h2>
-      <pre>{stderr}</pre>
-    </section>
-  </main>
-</body>
-</html>"#,
-        run_id = escape_html(&run_id),
-        job_id = escape_html(&json_string(job, "job_id")),
-        status = escape_html(&status),
-        evidence_link = evidence_link,
-        cockpit_link = cockpit_link,
-        queue_wait_ms = json_u64(job, "queue_wait_ms"),
-        duration_ms = json_u64(job, "duration_ms"),
-        exit_code = job["exit_code"].as_i64().unwrap_or(-1),
-        retry_count = json_u64(job, "retry_count"),
-        failure_kind = escape_html(&json_string(diagnosis, "failure_kind")),
-        timed_out = diagnosis
-            .get("timed_out")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false),
-        primary_error = escape_html(&json_string(diagnosis, "primary_error")),
-        recovery_actions = recovery_actions,
-        stderr_excerpt = escape_html(&json_string(diagnosis, "stderr_excerpt")),
-        stdout_excerpt = escape_html(&json_string(diagnosis, "stdout_excerpt")),
-        stdout = escape_html(stdout),
-        stderr = escape_html(stderr)
-    )
-}
-
-fn workbench_file_anchor(label: &str, path: &str) -> String {
-    if path.is_empty() {
-        return String::new();
-    }
-    format!(
-        r#"<a href="file://{href}">{label}</a>"#,
-        href = escape_html(path),
-        label = escape_html(label)
-    )
-}
-
-fn percent_decode(input: &str) -> String {
-    let bytes = input.as_bytes();
-    let mut output = Vec::with_capacity(bytes.len());
-    let mut index = 0;
-    while index < bytes.len() {
-        if bytes[index] == b'+' {
-            output.push(b' ');
-            index += 1;
-        } else if bytes[index] == b'%' && index + 2 < bytes.len() {
-            let hex = &input[index + 1..index + 3];
-            if let Ok(value) = u8::from_str_radix(hex, 16) {
-                output.push(value);
-                index += 3;
-            } else {
-                output.push(bytes[index]);
-                index += 1;
-            }
-        } else {
-            output.push(bytes[index]);
-            index += 1;
-        }
-    }
-    String::from_utf8_lossy(&output).to_string()
-}
-
-fn percent_encode(input: &str) -> String {
-    let mut output = String::new();
-    for byte in input.bytes() {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
-            output.push(char::from(byte));
-        } else {
-            output.push_str(&format!("%{byte:02X}"));
-        }
-    }
-    output
-}
-
-fn generate_api_token() -> String {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|duration| duration.as_nanos())
-        .unwrap_or(0);
-    let pid = std::process::id();
-    format!("{now:x}{pid:x}")
-}
-
 fn adapter(command: AdapterCommand) -> Result<()> {
     match command {
         AdapterCommand::Doctor { provider } => {
@@ -2489,7 +2268,8 @@ mod unix_ms_conversion_tests {
 
 #[cfg(test)]
 mod http_request_line_tests {
-    use super::{parse_http_request_line, query_value_owned, split_path_query};
+    use super::{parse_http_request_line, split_path_query};
+    use crate::cli_util::query_value_owned;
 
     #[test]
     fn preserves_spaces_inside_request_target() {

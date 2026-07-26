@@ -3,7 +3,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
-
 use ao2_adapters::{
     doctor_provider, parse_provider, provider_metadata, DEFAULT_PROVIDER_TIMEOUT_SECONDS,
 };
@@ -14,8 +13,9 @@ use ao2_runtime::{
 
 use crate::cli::ProviderCommand;
 use crate::cli_util::{
-    base64_standard, hex_lower, json_array, json_f64, json_string, json_u64, run_dir,
-    sha256_bytes_hex,
+    atomic_write_text, base64_standard, format_budget_usd, generate_api_token, hex_lower,
+    json_array, json_f64, json_string, json_u64, now_unix_ms, run_dir, sha256_bytes_hex,
+    shell_quote,
 };
 use crate::control_plane_http::{control_plane_endpoint, post_json_http};
 use crate::provider_contract::provider_contract;
@@ -26,11 +26,7 @@ use crate::workbench_provider_pilot_acceptance::{
     collect_provider_pilot_acceptance_bundles, provider_cost_ledger_release_tag,
     provider_pilot_acceptance_verification_json,
 };
-use crate::{
-    atomic_write_text, format_budget_usd, generate_api_token, now_unix_ms, resolve_api_token,
-    shell_quote, trimmed_required, TASK_TEMPLATES,
-};
-
+use crate::{resolve_api_token, trimmed_required, TASK_TEMPLATES};
 pub(crate) fn provider(command: ProviderCommand) -> Result<()> {
     match command {
         ProviderCommand::List => {
