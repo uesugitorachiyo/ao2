@@ -1780,6 +1780,9 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
     let run_resume_source = fs::read_to_string(root.join("crates/ao2-cli/src/run_resume.rs"))
         .expect("run resume source exists")
         .replace("\r\n", "\n");
+    let provider_ops_source = fs::read_to_string(root.join("crates/ao2-cli/src/provider_ops.rs"))
+        .expect("provider operations source exists")
+        .replace("\r\n", "\n");
     let run_execution_source = fs::read_to_string(root.join("crates/ao2-cli/src/run_execution.rs"))
         .expect("run execution source exists")
         .replace("\r\n", "\n");
@@ -1997,6 +2000,52 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
             "repair resume bodies must remain byte-identical to the parent extraction"
         );
     }
+    for function_name in ["adapter", "adapter_patch", "split_tab_args"] {
+        assert!(
+            provider_ops_source.contains(&format!("fn {function_name}(")),
+            "{function_name} must be owned by provider_ops"
+        );
+        assert!(
+            !main_source.contains(&format!("fn {function_name}(")),
+            "{function_name} must not remain in main"
+        );
+    }
+    assert!(
+        main_source.contains("use provider_ops::{")
+            && main_source.contains("adapter, provider,")
+            && !main_source.contains("pub(crate) use provider_ops::"),
+        "main must import adapter dispatch directly from provider_ops without re-exporting it"
+    );
+    assert!(
+        provider_ops_source
+            .contains("use crate::cli::{AdapterCommand, AdapterPatchCommand, ProviderCommand};"),
+        "provider_ops must import adapter command types directly from cli"
+    );
+    assert!(
+        provider_ops_source.contains("fn adapter_patch(")
+            && !provider_ops_source.contains("pub(crate) fn adapter_patch(")
+            && provider_ops_source.contains("fn split_tab_args(")
+            && !provider_ops_source.contains("pub(crate) fn split_tab_args("),
+        "adapter implementation details must remain private"
+    );
+    assert!(
+        provider_ops_source.lines().count() <= 5_000,
+        "provider_ops.rs must remain within the production-file hard ceiling"
+    );
+    {
+        use sha2::{Digest, Sha256};
+
+        let adapter_start = provider_ops_source
+            .find("pub(crate) fn adapter(")
+            .expect("adapter dispatch block exists");
+        let normalized_body = format!("{}\n", provider_ops_source[adapter_start..].trim_end())
+            .replace("pub(crate) fn ", "fn ");
+        assert_eq!(
+            format!("{:x}", Sha256::digest(normalized_body.as_bytes())),
+            "7ef9c5b835129040b43ffcee439980007f7d5a1477d1555db509edb1f3ef0b3b",
+            "adapter dispatch bodies must remain byte-identical to the parent extraction"
+        );
+    }
     assert!(
         cli_source.contains("pub(crate) struct Cli"),
         "top-level CLI parser must be owned by cli"
@@ -2073,10 +2122,7 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
             "crates/ao2-cli/src/github_issue_intake.rs",
             "use crate::cli::IssueCommand;",
         ),
-        (
-            "crates/ao2-cli/src/provider_ops.rs",
-            "use crate::cli::ProviderCommand;",
-        ),
+        ("crates/ao2-cli/src/provider_ops.rs", "use crate::cli::{"),
         (
             "crates/ao2-cli/src/plugin_cli.rs",
             "use crate::cli::PluginCommand;",

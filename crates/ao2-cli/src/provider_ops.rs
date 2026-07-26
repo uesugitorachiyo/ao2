@@ -4,18 +4,20 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 use ao2_adapters::{
-    doctor_provider, parse_provider, provider_metadata, DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+    apply_sandbox_patch, doctor_provider, parse_provider, preview_sandbox_patch, provider_metadata,
+    run_provider_prompt_in_sandbox, AdapterRunRequest, LocalCliAdapter, ProviderPromptRequest,
+    SandboxPatchApplyRequest, SandboxRunRequest, DEFAULT_PROVIDER_TIMEOUT_SECONDS,
 };
 use ao2_core::sha256_hex;
 use ao2_runtime::{
     replay_run, run_risky_pr_with_provider_prompt, ProviderRunOptions, ReplayOptions,
 };
 
-use crate::cli::ProviderCommand;
+use crate::cli::{AdapterCommand, AdapterPatchCommand, ProviderCommand};
 use crate::cli_util::{
     atomic_write_text, base64_standard, format_budget_usd, generate_api_token, hex_lower,
-    json_array, json_f64, json_string, json_u64, now_unix_ms, run_dir, sha256_bytes_hex,
-    shell_quote,
+    json_array, json_f64, json_string, json_u64, now_unix_ms, read_prompt, run_dir,
+    sha256_bytes_hex, shell_quote,
 };
 use crate::control_plane_http::{control_plane_endpoint, post_json_http};
 use crate::provider_contract::provider_contract;
@@ -1885,4 +1887,101 @@ pub(crate) fn materialize_template_workflow(target: &Path, name: &str) -> Result
     fs::write(&workflow, template.content)
         .with_context(|| format!("write {}", workflow.display()))?;
     Ok(workflow)
+}
+
+pub(crate) fn adapter(command: AdapterCommand) -> Result<()> {
+    match command {
+        AdapterCommand::Doctor { provider } => {
+            let provider = parse_provider(&provider)?;
+            let report = doctor_provider(provider)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            Ok(())
+        }
+        AdapterCommand::Run {
+            provider,
+            target,
+            command,
+            args,
+            role_id,
+            keep_sandbox,
+            timeout_seconds,
+        } => {
+            let provider = parse_provider(&provider)?;
+            let adapter = LocalCliAdapter::new(provider);
+            let result = adapter.run_in_sandbox(SandboxRunRequest {
+                target_repo: target,
+                keep_sandbox,
+                request: AdapterRunRequest {
+                    role_id,
+                    command,
+                    args: split_tab_args(&args),
+                    working_dir: PathBuf::from("."),
+                    stdin: None,
+                    timeout_ms: Some(timeout_seconds * 1_000),
+                },
+            })?;
+            println!("{}", serde_json::to_string_pretty(&result)?);
+            Ok(())
+        }
+        AdapterCommand::Prompt {
+            provider,
+            target,
+            prompt,
+            prompt_file,
+            role_id,
+            keep_sandbox,
+            timeout_seconds,
+            max_budget_usd,
+        } => {
+            let provider = parse_provider(&provider)?;
+            let prompt = read_prompt(prompt, prompt_file)?;
+            let result = run_provider_prompt_in_sandbox(ProviderPromptRequest {
+                provider,
+                target_repo: target,
+                prompt,
+                role_id,
+                keep_sandbox,
+                timeout_ms: Some(timeout_seconds * 1_000),
+                max_budget_usd,
+            })?;
+            println!("{}", serde_json::to_string_pretty(&result)?);
+            Ok(())
+        }
+        AdapterCommand::Patch { command } => adapter_patch(command),
+    }
+}
+
+fn adapter_patch(command: AdapterPatchCommand) -> Result<()> {
+    match command {
+        AdapterPatchCommand::Preview { target, sandbox } => {
+            let preview = preview_sandbox_patch(&target, &sandbox)?;
+            println!("{}", serde_json::to_string_pretty(&preview)?);
+            Ok(())
+        }
+        AdapterPatchCommand::Apply {
+            target,
+            sandbox,
+            digest,
+            approver,
+        } => {
+            let preview = preview_sandbox_patch(&target, &sandbox)?;
+            let applied = apply_sandbox_patch(SandboxPatchApplyRequest {
+                target_repo: target,
+                sandbox_path: sandbox,
+                expected_subject: preview.approval_subject,
+                expected_digest: digest,
+                approver,
+            })?;
+            println!("{}", serde_json::to_string_pretty(&applied)?);
+            Ok(())
+        }
+    }
+}
+
+fn split_tab_args(args: &str) -> Vec<String> {
+    if args.is_empty() {
+        Vec::new()
+    } else {
+        args.split('\t').map(str::to_string).collect()
+    }
 }

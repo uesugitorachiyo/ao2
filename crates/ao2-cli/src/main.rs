@@ -1,11 +1,7 @@
 #![recursion_limit = "256"]
 
 use anyhow::{anyhow, Context, Result};
-use ao2_adapters::{
-    apply_sandbox_patch, build_provider_prompt_command, doctor_provider, parse_provider,
-    preview_sandbox_patch, run_provider_prompt_in_sandbox, AdapterRunRequest, LocalCliAdapter,
-    ProviderPromptRequest, SandboxPatchApplyRequest, SandboxRunRequest,
-};
+use ao2_adapters::{build_provider_prompt_command, doctor_provider, parse_provider};
 use ao2_core::{
     annotate_obligation_ledger, check_obligation_ledger, extract_obligation_ledger,
     ObligationEvidence, ObligationLedger, ObligationStatus,
@@ -117,14 +113,14 @@ pub(crate) use artifact_safety::{
     factory_app_run_bundle_reject_secret_fields, factory_app_run_bundle_reject_secret_markers,
 };
 use cli::{
-    AdapterCommand, AdapterPatchCommand, Cli, CockpitCommand, Command, ContractCommand,
-    GreenfieldCommand, PulseCommand, PulseEvalLoopCommand, ReleaseCommand, ReportCommand,
-    RunsCommand, TemplateCommand, WorkbenchCommand,
+    Cli, CockpitCommand, Command, ContractCommand, GreenfieldCommand, PulseCommand,
+    PulseEvalLoopCommand, ReleaseCommand, ReportCommand, RunsCommand, TemplateCommand,
+    WorkbenchCommand,
 };
 use cli_util::{
     atomic_write_text, canonical_json_sha256, create_tar_gz, json_array, json_bool, json_string,
-    json_u64, json_value_text, now_unix_ms, read_json_file, read_prompt, sha256_bytes_hex,
-    sha256_file, trimmed_required,
+    json_u64, json_value_text, now_unix_ms, read_json_file, sha256_bytes_hex, sha256_file,
+    trimmed_required,
 };
 use contract_gate_signing::{
     contract_obligation_gate_signing_survey_json, contract_verify_obligation_gate_signing_json,
@@ -170,7 +166,7 @@ use plugin_distribution::{
 };
 use provider_contract::{provider_contract_json, provider_contract_verify_json};
 use provider_ops::{
-    provider, provider_matrix_json, provider_profiles, provider_profiles_json,
+    adapter, provider, provider_matrix_json, provider_profiles, provider_profiles_json,
     provider_smoke_all_json, provider_warning_strings,
 };
 use pulse_eval_loop::{
@@ -1476,103 +1472,6 @@ fn workbench(command: WorkbenchCommand) -> Result<()> {
         WorkbenchCommand::SupportKeygen { out, bits, json } => {
             workbench_support_keygen(out, bits, json)
         }
-    }
-}
-
-fn adapter(command: AdapterCommand) -> Result<()> {
-    match command {
-        AdapterCommand::Doctor { provider } => {
-            let provider = parse_provider(&provider)?;
-            let report = doctor_provider(provider)?;
-            println!("{}", serde_json::to_string_pretty(&report)?);
-            Ok(())
-        }
-        AdapterCommand::Run {
-            provider,
-            target,
-            command,
-            args,
-            role_id,
-            keep_sandbox,
-            timeout_seconds,
-        } => {
-            let provider = parse_provider(&provider)?;
-            let adapter = LocalCliAdapter::new(provider);
-            let result = adapter.run_in_sandbox(SandboxRunRequest {
-                target_repo: target,
-                keep_sandbox,
-                request: AdapterRunRequest {
-                    role_id,
-                    command,
-                    args: split_tab_args(&args),
-                    working_dir: PathBuf::from("."),
-                    stdin: None,
-                    timeout_ms: Some(timeout_seconds * 1_000),
-                },
-            })?;
-            println!("{}", serde_json::to_string_pretty(&result)?);
-            Ok(())
-        }
-        AdapterCommand::Prompt {
-            provider,
-            target,
-            prompt,
-            prompt_file,
-            role_id,
-            keep_sandbox,
-            timeout_seconds,
-            max_budget_usd,
-        } => {
-            let provider = parse_provider(&provider)?;
-            let prompt = read_prompt(prompt, prompt_file)?;
-            let result = run_provider_prompt_in_sandbox(ProviderPromptRequest {
-                provider,
-                target_repo: target,
-                prompt,
-                role_id,
-                keep_sandbox,
-                timeout_ms: Some(timeout_seconds * 1_000),
-                max_budget_usd,
-            })?;
-            println!("{}", serde_json::to_string_pretty(&result)?);
-            Ok(())
-        }
-        AdapterCommand::Patch { command } => adapter_patch(command),
-    }
-}
-
-fn adapter_patch(command: AdapterPatchCommand) -> Result<()> {
-    match command {
-        AdapterPatchCommand::Preview { target, sandbox } => {
-            let preview = preview_sandbox_patch(&target, &sandbox)?;
-            println!("{}", serde_json::to_string_pretty(&preview)?);
-            Ok(())
-        }
-        AdapterPatchCommand::Apply {
-            target,
-            sandbox,
-            digest,
-            approver,
-        } => {
-            let preview = preview_sandbox_patch(&target, &sandbox)?;
-            let applied = apply_sandbox_patch(SandboxPatchApplyRequest {
-                target_repo: target,
-                sandbox_path: sandbox,
-                expected_subject: preview.approval_subject,
-                expected_digest: digest,
-                approver,
-            })?;
-            println!("{}", serde_json::to_string_pretty(&applied)?);
-            Ok(())
-        }
-    }
-}
-
-fn split_tab_args(args: &str) -> Vec<String> {
-    if args.is_empty() {
-        Vec::new()
-    } else {
-        args.split('\t').map(str::to_string).collect()
     }
 }
 
