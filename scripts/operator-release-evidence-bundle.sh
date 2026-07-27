@@ -6,6 +6,7 @@ AO2_RELEASE_REPO="${AO2_RELEASE_REPO:-uesugitorachiyo/ao2}"
 AO2_CP_RELEASE_REPO="${AO2_CP_RELEASE_REPO:-uesugitorachiyo/ao2-control-plane}"
 AO2_OPERATOR_RELEASE_EVIDENCE_ROOT="${AO2_OPERATOR_RELEASE_EVIDENCE_ROOT:-$ROOT/target/operator-release-evidence-bundle/latest}"
 AO2_OPERATOR_RELEASE_EVIDENCE_FIXTURE_DIR="${AO2_OPERATOR_RELEASE_EVIDENCE_FIXTURE_DIR:-}"
+AO2_OPERATOR_RELEASE_CLOSURE_INDEX_RUN_ID="${AO2_OPERATOR_RELEASE_CLOSURE_INDEX_RUN_ID:-}"
 DOWNLOAD_ROOT="$AO2_OPERATOR_RELEASE_EVIDENCE_ROOT/downloaded-artifacts"
 SUMMARY="$AO2_OPERATOR_RELEASE_EVIDENCE_ROOT/summary.json"
 DOWNLOAD_LOG="$AO2_OPERATOR_RELEASE_EVIDENCE_ROOT/download.log"
@@ -57,6 +58,28 @@ download_latest_artifact() {
   return 1
 }
 
+download_evidence_artifact() {
+  local repo="$1"
+  local workflow="$2"
+  local artifact="$3"
+  local dest="$4"
+  if [ "$artifact" = "ao2-dual-repo-release-publication-closure-index" ] \
+    && [ -n "$AO2_OPERATOR_RELEASE_CLOSURE_INDEX_RUN_ID" ]; then
+    rm -rf "$dest"
+    mkdir -p "$dest"
+    if gh run download "$AO2_OPERATOR_RELEASE_CLOSURE_INDEX_RUN_ID" \
+      --repo "$repo" --name "$artifact" --dir "$dest"; then
+      printf "downloaded repo=%s workflow=%s artifact=%s run_id=%s dest=%s\n" \
+        "$repo" "$workflow" "$artifact" \
+        "$AO2_OPERATOR_RELEASE_CLOSURE_INDEX_RUN_ID" "$dest" >>"$DOWNLOAD_LOG"
+      printf "%s\n" "$AO2_OPERATOR_RELEASE_CLOSURE_INDEX_RUN_ID" >"$dest/run-id.txt"
+      return 0
+    fi
+    return 1
+  fi
+  download_latest_artifact "$repo" "$workflow" "$artifact" "$dest"
+}
+
 download_status="passed"
 if [ -n "$AO2_OPERATOR_RELEASE_EVIDENCE_FIXTURE_DIR" ]; then
   if [ ! -d "$AO2_OPERATOR_RELEASE_EVIDENCE_FIXTURE_DIR" ]; then
@@ -71,7 +94,7 @@ else
   while IFS='|' read -r repo workflow artifact dest_name; do
     [ -n "$repo" ] || continue
     dest="$DOWNLOAD_ROOT/$dest_name"
-    if ! download_latest_artifact "$repo" "$workflow" "$artifact" "$dest"; then
+    if ! download_evidence_artifact "$repo" "$workflow" "$artifact" "$dest"; then
       download_status="failed"
     fi
   done <<EOF

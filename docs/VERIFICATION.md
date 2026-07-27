@@ -1248,21 +1248,24 @@ Result:
   `ao2.release-publication-dry-run-closure.v1`; it records
   `publication_ready`, `stable_release_ready`, dry-run upload status, and
   explicit `release_publish=not executed` guards without mutating GitHub
-  Releases
+  Releases. When `AO2_RELEASE_CANONICAL_HOSTED_SUMMARY` points to a passing
+  `ao2.hosted-release-public-verification.v1` report, the closure records
+  `publication_model=canonical_hosted_five_asset`; the strict hosted verifier
+  must first validate the three native archives, promotion plan, aggregate
+  checksums, source/version/tag, and physical-Windows evidence binding.
 - `npm run phase1:promote`: prepares Phase 1 prerequisites, runs promotion
   preflights, publishes to ao2-control-plane when
   `AO2_PHASE1_CONTROL_PLANE_URL` is set, and may capture a dashboard snapshot
   with `AO2_PHASE1_DASHBOARD_SNAPSHOT=1`
-- stable public release archives at v0.5.2 (macOS aarch64, Linux aarch64,
-  Linux x86_64, Windows x86_64) are SHA256 verified from the published
-  `SHA256SUMS`; signed provenance sidecars are required before stable-promotion
-  readiness can pass
+- stable public release archives at v0.5.5 (macOS aarch64, Linux x86_64, and
+  Windows x86_64) are SHA256 verified from the published `SHA256SUMS`; the
+  canonical hosted release is bound by its immutable `promotion-plan.json`.
 - `.github/workflows/post-stable-release-verification.yml` runs a hosted
   consumer smoke for the stable public release on Ubuntu, macOS, and Windows:
-  download the published archive plus signed provenance sidecars, verify
-  `SHA256SUMS`, install via `ao2 install update --provenance-dir` into a
-  temporary bin directory, require `signature_verified` install-update evidence,
-  then run `ao2 version --json`, `ao2 doctor --json`, and
+  download the published archive, verify `SHA256SUMS`, install through the
+  archive-native installer into a temporary platform-default bin directory,
+  require verified checksum-covered install evidence, then run
+  `ao2 version --json`, `ao2 doctor --json`, and
   `ao2 adapter doctor --provider scripted`
 - `npm run release:dual-public-smoke`: downloads the published AO2 and control-plane archives
   for Linux x86_64, verifies both public `SHA256SUMS`

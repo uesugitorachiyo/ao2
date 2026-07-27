@@ -211,6 +211,10 @@ the final `packet/summary.json`, `packet/dashboard.html`, the source
 `Release readiness artifact consumer` job downloads this artifact and fails
 closed unless `stable_release_evidence_ready=true`,
 `mutates_releases=false`, and `stores_credentials=false`.
+The packet job depends on the current run's dual-repository publication
+closure index and pins both evidence collectors to that exact run ID. This
+avoids selecting a stale successful CI artifact while a newly promoted stable
+pair is being closed.
 
 The manual `Stable Release Promotion` GitHub Actions workflow consumes that
 hosted packet before it runs the stable-promotion workflow. Leave
