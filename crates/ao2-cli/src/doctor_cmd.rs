@@ -13,6 +13,9 @@ use crate::install_paths::{
     command_exists, default_install_dir, install_verification_evidence_path, is_binary_on_path,
 };
 use crate::release_provenance::verify_release_provenance_signature;
+use ao2_runtime::{
+    expected_doctor_release_assets, is_hosted_release_directory, verify_hosted_release_directory,
+};
 
 use super::{json_string, read_json_file, runtime_target_label, terminate_workbench_child};
 
@@ -96,19 +99,26 @@ pub(crate) fn doctor_report_json(
     let dependencies_ok = ["native_crypto", "curl", "tar"]
         .into_iter()
         .all(|name| dependencies[name].as_bool().unwrap_or(false));
-    let release_ok = !release_report["checked"].as_bool().unwrap_or(false)
+    let release_checked = release_report["checked"].as_bool().unwrap_or(false);
+    let release_provenance_verified = release_report["provenance_verified"]
+        .as_bool()
+        .unwrap_or(false);
+    let release_ok = !release_checked
         || (release_report["assets_available"]
             .as_bool()
             .unwrap_or(false)
-            && release_report["provenance_verified"]
-                .as_bool()
-                .unwrap_or(false)
+            && release_provenance_verified
             && release_report["provenance_tag_matches"]
                 .as_bool()
                 .unwrap_or(false));
+    let provenance_ok = if release_checked {
+        release_provenance_verified
+    } else {
+        provenance_verified
+    };
     let status = if installed
         && on_path
-        && provenance_verified
+        && provenance_ok
         && scripted.available
         && dependencies_ok
         && release_ok
@@ -174,7 +184,10 @@ fn doctor_release_report_json(
     provenance_verified: bool,
 ) -> serde_json::Value {
     let version = release_tag.strip_prefix('v').unwrap_or(&release_tag);
-    let expected_assets = expected_release_asset_names(version);
+    let hosted_directory = release_asset_dir
+        .as_deref()
+        .is_some_and(is_hosted_release_directory);
+    let expected_assets = expected_doctor_release_assets(release_asset_dir.as_deref(), version);
     let provenance_tag = fs::read_to_string(provenance_json)
         .ok()
         .and_then(|body| serde_json::from_str::<serde_json::Value>(&body).ok())
@@ -210,6 +223,13 @@ fn doctor_release_report_json(
         report["present_assets"] = serde_json::json!(present_assets);
         report["missing_assets"] = serde_json::json!(missing_assets);
         report["rollback"] = release_rollback_summary_json(&asset_dir);
+        if hosted_directory {
+            let verification = verify_hosted_release_directory(&asset_dir, version, &release_tag);
+            report["hosted_contract"] = verification.report;
+            report["provenance_verified"] = serde_json::json!(verification.verified);
+            report["provenance_tag"] = serde_json::json!(release_tag);
+            report["provenance_tag_matches"] = serde_json::json!(verification.tag_matches);
+        }
         return report;
     }
 
@@ -372,23 +392,4 @@ fn release_rollback_summary_json(asset_dir: &Path) -> serde_json::Value {
             "summary_json": summary,
         }),
     }
-}
-
-fn expected_release_asset_names(version: &str) -> Vec<String> {
-    let mut names = Vec::new();
-    for target in [
-        "macos-aarch64",
-        "linux-aarch64",
-        "linux-x86_64",
-        "windows-x86_64",
-    ] {
-        let archive = format!("ao2-{version}-{target}.tar.gz");
-        names.push(archive.clone());
-        names.push(format!("{archive}.sha256"));
-        names.push(format!("{archive}.sig"));
-    }
-    names.push("ao2-release-provenance.json".to_string());
-    names.push("ao2-release-provenance.json.sig".to_string());
-    names.push("ao2-release-signing-public.pem".to_string());
-    names
 }

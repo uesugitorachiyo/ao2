@@ -5,8 +5,8 @@ This is the operator index for verifying public release evidence across
 
 The current public release pair is:
 
-- AO2 stable release: `v0.5.2`
-- AO2 control-plane stable release: `v0.1.17`
+- AO2 stable release: `v0.5.3`
+- AO2 control-plane stable release: `v0.1.18`
 
 All checks below are read-only. They download release assets or GitHub Actions
 artifacts, verify checksums and summaries, and do not approve AO2 runs, mutate
@@ -16,8 +16,8 @@ AO artifacts, mutate GitHub releases, or include credential material.
 
 AO2 uses `Post Stable Release Verification` in
 `.github/workflows/post-stable-release-verification.yml`. It can be dispatched
-manually and runs on schedule. It downloads AO2 `v0.5.2` release archives,
-`SHA256SUMS`, signed provenance sidecars, and the signing public key, then runs
+manually and runs on schedule. It downloads AO2 `v0.5.3` release archives,
+`promotion-plan.json`, and `SHA256SUMS`, then runs
 install/update, `version --json`, `doctor --json`, and
 `adapter doctor --provider scripted` on Ubuntu, macOS, and Windows.
 
@@ -58,7 +58,7 @@ release approval authority.
 
 The control-plane uses `Post Release Verification` in
 `.github/workflows/post-release-verification.yml`. It can be dispatched
-manually and runs on schedule. It downloads all public `v0.1.17` release
+manually and runs on schedule. It downloads all public `v0.1.18` release
 assets, verifies `SHA256SUMS`, and writes a release publication closure summary
 on Ubuntu, macOS, and Windows.
 

@@ -1,0 +1,61 @@
+{
+  "approved_asset_manifest_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "artifacts": [
+    {
+      "archive": "target/hosted-release/candidates/ao2-hosted-native-candidate-linux-x86_64-cccccccccccccccccccccccccccccccccccccccc/dist/ao2-9.9.9-linux-x86_64.tar.gz",
+      "canonical_public_archive": true,
+      "runner": "ubuntu-latest",
+      "sha256": "a1d09b85d6fe3ee2759f68dc932def62c767c1cd84c0790cd6b9bb43c63a6223",
+      "target": "linux-x86_64",
+      "target_triple": "x86_64-unknown-linux-gnu"
+    },
+    {
+      "archive": "target/hosted-release/candidates/ao2-hosted-native-candidate-macos-aarch64-cccccccccccccccccccccccccccccccccccccccc/dist/ao2-9.9.9-macos-aarch64.tar.gz",
+      "canonical_public_archive": true,
+      "runner": "macos-latest",
+      "sha256": "50de82c187d25062f691a67e34aa830a24577b6aa6aa43d17d9d2c80e662b0fc",
+      "target": "macos-aarch64",
+      "target_triple": "aarch64-apple-darwin"
+    },
+    {
+      "archive": "target/hosted-release/candidates/ao2-hosted-native-candidate-windows-x86_64-cccccccccccccccccccccccccccccccccccccccc/dist/ao2-9.9.9-windows-x86_64.tar.gz",
+      "canonical_public_archive": true,
+      "runner": "windows-latest",
+      "sha256": "ba174dddba94aad2879392b56f418d0999c480f43a6b795f0a3a62cc883b1d74",
+      "target": "windows-x86_64",
+      "target_triple": "x86_64-pc-windows-msvc"
+    }
+  ],
+  "physical_windows_evidence_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "rejection_policy": [
+    "missing_artifact",
+    "duplicate_artifact",
+    "stale_source_sha",
+    "substituted_archive",
+    "unexpected_artifact",
+    "version_tag_mismatch",
+    "approved_manifest_mismatch",
+    "physical_windows_evidence_mismatch",
+    "incorrect_live_confirmation"
+  ],
+  "schema_version": "ao2.hosted-release-promotion-plan.v1",
+  "source_sha": "cccccccccccccccccccccccccccccccccccccccc",
+  "status": "passed",
+  "tag": "v9.9.9",
+  "trust_boundary": {
+    "build_jobs_mutate_releases": false,
+    "plan_job_mutates_releases": false,
+    "stores_credentials": false,
+    "uses_workflow_scoped_github_token": true
+  },
+  "version": "9.9.9",
+  "windows": {
+    "canonical_runner": "windows-latest",
+    "canonical_target_triple": "x86_64-pc-windows-msvc",
+    "linux_mingw_cross_build": {
+      "canonical_public_windows_archive": false,
+      "classification": "non_authoritative",
+      "target_triple": "x86_64-pc-windows-gnu"
+    }
+  }
+}

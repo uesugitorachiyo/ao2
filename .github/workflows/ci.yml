@@ -1050,7 +1050,6 @@ jobs:
           assert cp_summary.get("trust_boundary", {}).get("mutates_github_releases") is False, cp_summary
           assert cp_summary.get("trust_boundary", {}).get("mutates_ao_artifacts") is False, cp_summary
           required_ao2_archives = [
-              f"ao2-{stable_version}-linux-aarch64.tar.gz",
               f"ao2-{stable_version}-linux-x86_64.tar.gz",
               f"ao2-{stable_version}-macos-aarch64.tar.gz",
               f"ao2-{stable_version}-windows-x86_64.tar.gz",
@@ -1354,7 +1353,7 @@ jobs:
           assert summary["byte_identical"] is True, summary
           assert summary["schema_aligned"] is True, summary
           assert summary["target_aligned"] is True, summary
-          assert summary["next_patch"]["ao2"]["tag"] == "v0.5.3", summary
+          assert summary["next_patch"]["ao2"]["tag"] == "v0.5.4", summary
           assert summary["next_patch"]["ao2_control_plane"]["tag"] == "v0.1.18", summary
           assert summary["trust_boundary"]["mutates_github_releases"] is False, summary
           PY

@@ -27,6 +27,14 @@ fn copy_git_fixture(src: &Path, dst: &Path) {
     init_existing_git_repo(dst);
 }
 
+fn copy_hosted_release_fixture(dst: &Path) {
+    copy_fixture(
+        &PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/hosted-release-publication-v1"),
+        dst,
+    );
+}
+
 fn init_existing_git_repo(repo: &Path) {
     assert!(Command::new("git")
         .args(["init"])
@@ -895,6 +903,95 @@ fn cli_doctor_release_checks_local_release_assets() {
     assert_eq!(json["release"]["provenance_verified"], true);
     assert_eq!(json["release"]["rollback"]["checked"], true);
     assert_eq!(json["release"]["rollback"]["status"], "verified");
+}
+
+#[test]
+fn cli_doctor_accepts_exact_hosted_release_publication() {
+    let temp = tempfile::tempdir().unwrap();
+    let assets = temp.path().join("release-assets");
+    let install_dir = temp.path().join("bin");
+    fs::create_dir_all(&install_dir).unwrap();
+    copy_hosted_release_fixture(&assets);
+    let binary_name = if cfg!(windows) { "ao2.exe" } else { "ao2" };
+    fs::copy(env!("CARGO_BIN_EXE_ao2"), install_dir.join(binary_name)).unwrap();
+    let path = prepend_path(&install_dir);
+
+    let doctor = ao2_with_env(
+        [
+            "doctor",
+            "--json",
+            "--install-dir",
+            install_dir.to_str().unwrap(),
+            "--release",
+            "v9.9.9",
+            "--release-asset-dir",
+            assets.to_str().unwrap(),
+            "--provenance-dir",
+            assets.to_str().unwrap(),
+        ],
+        [("PATH", path.as_str())],
+    );
+
+    assert!(doctor.status.success(), "{}", stderr(&doctor));
+    let json: serde_json::Value = serde_json::from_str(&stdout(&doctor)).unwrap();
+    assert_eq!(json["status"], "ok");
+    assert_eq!(
+        json["release"]["expected_assets"],
+        serde_json::json!([
+            "ao2-9.9.9-macos-aarch64.tar.gz",
+            "ao2-9.9.9-linux-x86_64.tar.gz",
+            "ao2-9.9.9-windows-x86_64.tar.gz",
+            "promotion-plan.json",
+            "SHA256SUMS",
+        ])
+    );
+    assert_eq!(json["release"]["asset_count"], 5);
+    assert_eq!(json["release"]["assets_available"], true);
+    assert_eq!(json["release"]["provenance_verified"], true);
+    assert_eq!(json["release"]["provenance_tag_matches"], true);
+    assert_eq!(json["release"]["hosted_contract"]["status"], "verified");
+    assert_eq!(
+        json["release"]["hosted_contract"]["checksums_verified"],
+        true
+    );
+    assert_eq!(
+        json["release"]["hosted_contract"]["promotion_plan_verified"],
+        true
+    );
+}
+
+#[test]
+fn cli_doctor_rejects_hosted_release_digest_tampering() {
+    let temp = tempfile::tempdir().unwrap();
+    let assets = temp.path().join("release-assets");
+    copy_hosted_release_fixture(&assets);
+    fs::write(
+        assets.join("ao2-9.9.9-windows-x86_64.tar.gz"),
+        "altered hosted Windows candidate\n",
+    )
+    .unwrap();
+
+    let doctor = ao2([
+        "doctor",
+        "--json",
+        "--release",
+        "v9.9.9",
+        "--release-asset-dir",
+        assets.to_str().unwrap(),
+        "--provenance-dir",
+        assets.to_str().unwrap(),
+    ]);
+
+    assert!(doctor.status.success(), "{}", stderr(&doctor));
+    let json: serde_json::Value = serde_json::from_str(&stdout(&doctor)).unwrap();
+    assert_eq!(json["status"], "attention");
+    assert_eq!(json["release"]["assets_available"], true);
+    assert_eq!(json["release"]["provenance_verified"], false);
+    assert_eq!(json["release"]["hosted_contract"]["status"], "invalid");
+    assert_eq!(
+        json["release"]["hosted_contract"]["checksums_verified"],
+        false
+    );
 }
 
 #[test]
