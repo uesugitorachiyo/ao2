@@ -77,18 +77,11 @@ jobs:
         run: |
           set -euo pipefail
           AO2_ASSET="ao2-${AO2_RELEASE_VERSION}-${AO2_TARGET_LABEL}.tar.gz"
-          AO2_ASSET_SHA="${AO2_ASSET}.sha256"
-          AO2_ASSET_SIG="${AO2_ASSET}.sig"
           mkdir -p release smoke/extract smoke/bin
           gh release download "$AO2_RELEASE_TAG" \
             --repo "$AO2_RELEASE_REPO" \
             --pattern "$AO2_ASSET" \
-            --pattern "$AO2_ASSET_SHA" \
-            --pattern "$AO2_ASSET_SIG" \
             --pattern SHA256SUMS \
-            --pattern ao2-release-provenance.json \
-            --pattern ao2-release-provenance.json.sig \
-            --pattern ao2-release-signing-public.pem \
             --dir release \
             --clobber
         shell: bash
@@ -105,13 +98,20 @@ jobs:
           (cd release && shasum -a 256 -c SHA256SUMS.asset)
           tar -xzf "release/$AO2_ASSET" -C smoke/extract
           test -f smoke/extract/RELEASE-MANIFEST.json
-          smoke/extract/bin/ao2 install update \
-            --archive "$PWD/release/$AO2_ASSET" \
-            --provenance-dir "$PWD/release" \
-            --install-dir "$PWD/smoke/bin" \
-            | tee smoke/install-update.json
-          grep -q '"signature_verified": true' smoke/install-update.json
-          grep -q '"status": "installed"' smoke/install-update.json
+          sh smoke/extract/verify-release.sh | tee smoke/archive-verification.txt
+          AO2_INSTALL_DIR="$PWD/smoke/bin" \
+            sh smoke/extract/install.sh | tee smoke/install-output.txt
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          evidence = json.loads(
+              Path("smoke/bin/ao2.install-verification.json").read_text(encoding="utf-8")
+          )
+          assert evidence["status"] == "verified", evidence
+          assert evidence["install_status"] == "installed", evidence
+          assert evidence["version"] == Path("smoke/extract/VERSION").read_text(encoding="utf-8").strip(), evidence
+          PY
           test -x "smoke/bin/$AO2_BINARY"
           "smoke/bin/$AO2_BINARY" version --json | tee smoke/version.json
           "smoke/bin/$AO2_BINARY" doctor --json | tee smoke/doctor.json
@@ -139,18 +139,21 @@ jobs:
           if (!(Test-Path smoke/extract/RELEASE-MANIFEST.json)) {
             throw "missing RELEASE-MANIFEST.json"
           }
+          & smoke/extract/Verify-Release.ps1 |
+            Set-Content -Encoding UTF8 smoke/archive-verification.txt
           $env:AO2_INSTALL_DIR = (Resolve-Path smoke/bin).Path
-          & smoke/extract/bin/ao2.exe install update `
-            --archive (Resolve-Path (Join-Path "release" $env:AO2_ASSET)).Path `
-            --provenance-dir (Resolve-Path "release").Path `
-            --install-dir $env:AO2_INSTALL_DIR `
-            | Set-Content -Encoding UTF8 smoke/install-update.json
-          $installUpdate = Get-Content smoke/install-update.json -Raw
-          if ($installUpdate -notmatch '"signature_verified": true') {
-            throw "install update did not verify release signature"
+          & smoke/extract/install.ps1 |
+            Set-Content -Encoding UTF8 smoke/install-output.txt
+          $installEvidencePath = Join-Path $env:AO2_INSTALL_DIR "ao2.exe.install-verification.json"
+          if (!(Test-Path $installEvidencePath)) {
+            throw "missing install verification evidence: $installEvidencePath"
           }
-          if ($installUpdate -notmatch '"status": "installed"') {
-            throw "install update did not install release"
+          $installEvidence = Get-Content $installEvidencePath -Raw | ConvertFrom-Json
+          if ($installEvidence.status -ne "verified") {
+            throw "install evidence status is not verified"
+          }
+          if ($installEvidence.install_status -ne "installed") {
+            throw "install evidence status is not installed"
           }
           $ao2 = Join-Path $env:AO2_INSTALL_DIR $env:AO2_BINARY
           if (!(Test-Path $ao2)) {
@@ -167,10 +170,9 @@ jobs:
           name: post-stable-release-smoke-${{ runner.os }}
           path: |
             release/SHA256SUMS
-            release/ao2-release-provenance.json
-            release/ao2-release-provenance.json.sig
-            release/ao2-release-signing-public.pem
-            smoke/install-update.json
+            smoke/archive-verification.txt
+            smoke/install-output.txt
+            smoke/bin/ao2*.install-verification.json
             smoke/version.json
             smoke/doctor.json
             smoke/scripted-doctor.txt
