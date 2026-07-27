@@ -16191,6 +16191,8 @@ def test_post_stable_release_verification_workflow_runs_hosted_consumer_smoke():
         "doctor --json",
         "adapter doctor --provider scripted",
         "post-stable-release-smoke",
+        "smoke/home/**/ao2*.install-verification.json",
+        "include-hidden-files: true",
     ]:
         assert needle in workflow
 

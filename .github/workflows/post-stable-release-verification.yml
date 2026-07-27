@@ -192,6 +192,7 @@ jobs:
             smoke/doctor.json
             smoke/scripted-doctor.txt
           if-no-files-found: error
+          include-hidden-files: true
 
   dual-public-release-smoke:
     name: Dual public release smoke
