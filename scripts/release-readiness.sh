@@ -925,7 +925,8 @@ release_public_pair_digest_audit_contract_ok = (
     and "scripts/release-train-env.sh" in release_public_pair_digest_audit_script
     and "AO2_RELEASE_TRAIN_AO2_VERSION" in release_public_pair_digest_audit_script
     and "AO2_RELEASE_TRAIN_CP_VERSION" in release_public_pair_digest_audit_script
-    and 'f"AO2 Control Plane {cp_tag}"' in release_public_pair_digest_audit_script
+    and 'f"AO2 {ao2_tag}"' in release_public_pair_digest_audit_script
+    and 'f"ao2-control-plane {cp_tag}"' in release_public_pair_digest_audit_script
     and 'f"ao2-{ao2_version}-linux-x86_64.tar.gz"' in release_public_pair_digest_audit_script
     and 'f"ao2-{ao2_version}-macos-aarch64.tar.gz"' in release_public_pair_digest_audit_script
     and 'f"ao2-{ao2_version}-windows-x86_64.tar.gz"' in release_public_pair_digest_audit_script
