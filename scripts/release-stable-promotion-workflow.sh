@@ -12,6 +12,7 @@ AO2_STABLE_PROMOTION_CONFIRM="${AO2_STABLE_PROMOTION_CONFIRM:-}"
 AO2_STABLE_PROMOTION_EVIDENCE_ROOT="${AO2_STABLE_PROMOTION_EVIDENCE_ROOT:-$AO2_STABLE_PROMOTION_ROOT/post-release-verification-evidence}"
 AO2_STABLE_PROMOTION_EVIDENCE_FIXTURE_DIR="${AO2_STABLE_PROMOTION_EVIDENCE_FIXTURE_DIR:-}"
 AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD="${AO2_STABLE_PROMOTION_SKIP_EVIDENCE_DOWNLOAD:-0}"
+AO2_STABLE_PROMOTION_CLOSURE_INDEX_RUN_ID="${AO2_STABLE_PROMOTION_CLOSURE_INDEX_RUN_ID:-}"
 # Default release train confirmation resolves from docs/release/release-train.json.
 READINESS_ROOT="$AO2_STABLE_PROMOTION_ROOT/stable-release-readiness"
 READINESS_SUMMARY="$READINESS_ROOT/summary.json"
@@ -54,6 +55,28 @@ download_latest_artifact() {
   return 1
 }
 
+download_evidence_artifact() {
+  local repo="$1"
+  local workflow="$2"
+  local artifact="$3"
+  local dest="$4"
+  if [ "$artifact" = "ao2-dual-repo-release-publication-closure-index" ] \
+    && [ -n "$AO2_STABLE_PROMOTION_CLOSURE_INDEX_RUN_ID" ]; then
+    rm -rf "$dest"
+    mkdir -p "$dest"
+    if gh run download "$AO2_STABLE_PROMOTION_CLOSURE_INDEX_RUN_ID" \
+      --repo "$repo" --name "$artifact" --dir "$dest"; then
+      printf "downloaded repo=%s workflow=%s artifact=%s run_id=%s dest=%s\n" \
+        "$repo" "$workflow" "$artifact" \
+        "$AO2_STABLE_PROMOTION_CLOSURE_INDEX_RUN_ID" "$dest" >> "$EVIDENCE_LOG"
+      printf "%s\n" "$AO2_STABLE_PROMOTION_CLOSURE_INDEX_RUN_ID" > "$dest/run-id.txt"
+      return 0
+    fi
+    return 1
+  fi
+  download_latest_artifact "$repo" "$workflow" "$artifact" "$dest"
+}
+
 rm -rf "$AO2_STABLE_PROMOTION_EVIDENCE_ROOT"
 mkdir -p "$AO2_STABLE_PROMOTION_EVIDENCE_ROOT"
 printf "stable_promotion_evidence_gate=start\n" > "$EVIDENCE_LOG"
@@ -76,7 +99,7 @@ else
   while IFS='|' read -r repo workflow artifact dest_name; do
     [ -n "$repo" ] || continue
     dest="$AO2_STABLE_PROMOTION_EVIDENCE_ROOT/$dest_name"
-    if ! download_latest_artifact "$repo" "$workflow" "$artifact" "$dest"; then
+    if ! download_evidence_artifact "$repo" "$workflow" "$artifact" "$dest"; then
       download_status="failed"
     fi
   done <<EOF

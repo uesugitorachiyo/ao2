@@ -299,9 +299,12 @@ release_publication_closure_artifacts_ok = (
     and "ao2-release-publication-closure" in release_publication_closure_artifacts
     and "target/release-publication-closure-ci" in release_publication_closure_artifacts
     and "dtolnay/rust-toolchain@stable" in release_publication_closure_artifacts
-    and "Download published provenance sidecars" in release_publication_closure_artifacts
+    and "Verify canonical hosted public release" in release_publication_closure_artifacts
+    and "scripts/hosted_release_promotion.py verify-public" in release_publication_closure_artifacts
+    and "Check legacy provenance-sidecar state" in release_publication_closure_artifacts
     and "gh release download" in release_publication_closure_artifacts
     and "AO2_RELEASE_PROVENANCE_DIR=target/release-publication-provenance" in release_publication_closure_artifacts
+    and "AO2_RELEASE_CANONICAL_HOSTED_SUMMARY=target/canonical-hosted-public-release-verification.json" in release_publication_closure_artifacts
     and "AO2_RELEASE_ASSET_PUBLICATION_READINESS_CI_SAFE=1" in release_publication_closure_artifacts
     and "AO2_RELEASE_PUBLICATION_DRY_RUN_CLOSURE_ROOT=target/release-publication-closure-ci" in release_publication_closure_artifacts
     and "npm run release:publication-dry-run-closure" in release_publication_closure_artifacts
@@ -362,11 +365,14 @@ stable_release_evidence_packet_artifacts = workflow_job_block("stable-release-ev
 stable_release_evidence_packet_artifacts_ok = (
     stable_release_evidence_packet_artifacts is not None
     and "name: Stable release evidence packet artifacts" in stable_release_evidence_packet_artifacts
-    and "needs: rsi-cross-repo-e2e-artifacts" in stable_release_evidence_packet_artifacts
+    and "- rsi-cross-repo-e2e-artifacts" in stable_release_evidence_packet_artifacts
+    and "- dual-repo-release-publication-closure-index" in stable_release_evidence_packet_artifacts
     and "GH_TOKEN: ${{ github.token }}" in stable_release_evidence_packet_artifacts
     and "AO2_STABLE_PROMOTION_ROOT=target/stable-release-evidence-packet-ci/stable-promotion-workflow" in stable_release_evidence_packet_artifacts
+    and "AO2_STABLE_PROMOTION_CLOSURE_INDEX_RUN_ID=${{ github.run_id }}" in stable_release_evidence_packet_artifacts
     and "npm run release:stable-promotion-workflow" in stable_release_evidence_packet_artifacts
     and "AO2_OPERATOR_RELEASE_EVIDENCE_ROOT=target/stable-release-evidence-packet-ci/operator-release-evidence-bundle" in stable_release_evidence_packet_artifacts
+    and "AO2_OPERATOR_RELEASE_CLOSURE_INDEX_RUN_ID=${{ github.run_id }}" in stable_release_evidence_packet_artifacts
     and "npm run release:operator-evidence-bundle" in stable_release_evidence_packet_artifacts
     and "name: ao2-rsi-cross-repo-e2e" in stable_release_evidence_packet_artifacts
     and "target/stable-release-evidence-packet-ci/rsi-cross-repo-e2e" in stable_release_evidence_packet_artifacts

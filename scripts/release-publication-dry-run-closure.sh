@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_ROOT="${AO2_RELEASE_PUBLICATION_DRY_RUN_CLOSURE_ROOT:-$ROOT/target/release-publication-dry-run-closure/latest}"
+CANONICAL_HOSTED_SUMMARY="${AO2_RELEASE_CANONICAL_HOSTED_SUMMARY:-}"
 SUMMARY="$OUT_ROOT/summary.json"
 LOG_DIR="$OUT_ROOT/logs"
 
@@ -28,7 +29,7 @@ ao2_gate_run_step "$LOG_DIR" stable_readiness \
     AO2_STABLE_PROMOTION_CONFIRM= \
     npm run release:stable-readiness
 
-python3 - "$OUT_ROOT" "$SUMMARY" <<'PY'
+python3 - "$OUT_ROOT" "$SUMMARY" "$CANONICAL_HOSTED_SUMMARY" <<'PY'
 import json
 import sys
 from datetime import datetime, timezone
@@ -36,6 +37,7 @@ from pathlib import Path
 
 out_root = Path(sys.argv[1]).resolve()
 summary_path = Path(sys.argv[2]).resolve()
+canonical_summary_path = Path(sys.argv[3]).resolve() if sys.argv[3] else None
 log_dir = out_root / "logs"
 
 components = {
@@ -88,17 +90,52 @@ stable_payload = component_payloads["stable_readiness"]
 sync_trust_boundary = sync_payload.get("trust_boundary", {})
 stable_trust_boundary = stable_payload.get("trust_boundary", {})
 
+canonical_payload = {}
+canonical_ready = False
+if canonical_summary_path is not None:
+    canonical_payload = json.loads(canonical_summary_path.read_text(encoding="utf-8"))
+    version = canonical_payload.get("version")
+    canonical_ready = (
+        canonical_payload.get("schema_version")
+        == "ao2.hosted-release-public-verification.v1"
+        and canonical_payload.get("status") == "passed"
+        and isinstance(version, str)
+        and canonical_payload.get("tag") == f"v{version}"
+        and canonical_payload.get("assets")
+        == sorted(
+            [
+                f"ao2-{version}-linux-x86_64.tar.gz",
+                f"ao2-{version}-macos-aarch64.tar.gz",
+                f"ao2-{version}-windows-x86_64.tar.gz",
+                "promotion-plan.json",
+                "SHA256SUMS",
+            ]
+        )
+    )
+
 dry_run = sync_payload.get("dry_run") is True
 upload_status = sync_payload.get("upload_status")
-publication_ready = (
+legacy_publication_ready = (
     asset_payload.get("status") == "passed"
     and sync_payload.get("status") in {"already_synced", "ready_to_upload", "release_missing"}
     and dry_run
     and upload_status == "not_attempted"
     and sync_trust_boundary.get("mutates_releases") is False
 )
+publication_ready = legacy_publication_ready or canonical_ready
+publication_model = (
+    "canonical_hosted_five_asset"
+    if canonical_ready
+    else "legacy_provenance_sidecars"
+)
 stable_release_ready = stable_payload.get("stable_release_ready") is True
 commands_passed = all(check["status"] == "passed" for check in checks)
+if canonical_ready:
+    commands_passed = all(
+        check["status"] == "passed"
+        for check in checks
+        if check["name"] not in {"asset_publication_readiness", "sync_provenance_assets"}
+    )
 mutation_guard_ok = (
     dry_run
     and upload_status == "not_attempted"
@@ -114,7 +151,12 @@ payload = {
     "publication_ready": publication_ready,
     "stable_release_ready": stable_release_ready,
     "release_tag": asset_payload.get("release_tag") or sync_payload.get("release_tag"),
-    "expected_release_assets": asset_payload.get("expected_release_assets", []),
+    "publication_model": publication_model,
+    "expected_release_assets": (
+        canonical_payload["assets"]
+        if canonical_ready
+        else asset_payload.get("expected_release_assets", [])
+    ),
     "checks": checks,
     "component_summaries": {
         "asset_publication_readiness": str(components["asset_publication_readiness"]["summary"]),
@@ -122,8 +164,16 @@ payload = {
         "stable_readiness": str(components["stable_readiness"]["summary"]),
     },
     "publication_state": {
-        "asset_publication_status": asset_payload.get("status"),
-        "sync_provenance_status": sync_payload.get("status"),
+        "asset_publication_status": (
+            "not_applicable_canonical_hosted_release"
+            if canonical_ready
+            else asset_payload.get("status")
+        ),
+        "sync_provenance_status": (
+            "not_applicable_canonical_hosted_release"
+            if canonical_ready
+            else sync_payload.get("status")
+        ),
         "stable_readiness_status": stable_payload.get("status"),
         "dry_run": dry_run,
         "upload_status": upload_status,
@@ -131,7 +181,12 @@ payload = {
         "tag_push_publish_deploy": "not executed",
         "release_not_found_gap": sync_payload.get("release_not_found_gap"),
     },
-    "blockers": blockers,
+    "blockers": [] if canonical_ready else blockers,
+    "canonical_hosted_release_verification": {
+        "path": str(canonical_summary_path) if canonical_summary_path else None,
+        "schema_version": canonical_payload.get("schema_version"),
+        "status": canonical_payload.get("status"),
+    },
     "trust_boundary": {
         "local_only": True,
         "queries_public_releases": True,
