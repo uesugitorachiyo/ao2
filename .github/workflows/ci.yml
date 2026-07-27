@@ -202,7 +202,12 @@ jobs:
             timeout_minutes: 20
             command: |
               npm run test:archive-resources
-              cargo test -p ao2-cli --test release_packaging -- --test-threads=1
+              cargo test -p ao2-cli \
+                --test cli_architecture_ownership \
+                --test provider_pilot_acceptance_preservation \
+                --test release_packaging \
+                -- \
+                --test-threads=1
           - os: ubuntu-latest
             phase: test-cli-factory-bridge
             timeout_minutes: 20
@@ -362,6 +367,8 @@ jobs:
             command: >-
               npm run test:archive-resources &&
               cargo test -p ao2-cli
+              --test cli_architecture_ownership
+              --test provider_pilot_acceptance_preservation
               --test release_packaging
               --test sdd_subcommand
               -- --test-threads=1
@@ -510,6 +517,8 @@ jobs:
             command: >-
               npm run test:archive-resources &&
               cargo test -p ao2-cli
+              --test cli_architecture_ownership
+              --test provider_pilot_acceptance_preservation
               --test release_packaging
               --test sdd_subcommand
               -- --test-threads=1
