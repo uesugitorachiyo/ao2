@@ -1299,6 +1299,8 @@ def test_public_release_pair_digest_audit_rejects_closure_release_asset_drift(tm
         "uesugitorachiyo/ao2",
         "uesugitorachiyo/ao2-control-plane",
         "gh release view",
+        'f"AO2 {ao2_tag}"',
+        'f"ao2-control-plane {cp_tag}"',
         "dual_repo_closure_digest_match",
         "published_asset_digest_present",
         "published_asset_size_match",
@@ -1360,7 +1362,7 @@ def test_public_release_pair_digest_audit_rejects_closure_release_asset_drift(tm
         json.dumps(
             {
                 "tagName": "v0.5.5",
-                "name": "AO2 v0.5.5 stable",
+                "name": "AO2 v0.5.5",
                 "isPrerelease": False,
                 "publishedAt": "2026-06-10T18:45:16Z",
                 "url": "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.5",
@@ -1379,7 +1381,7 @@ def test_public_release_pair_digest_audit_rejects_closure_release_asset_drift(tm
         json.dumps(
             {
                 "tagName": "v0.1.18",
-                "name": "AO2 Control Plane v0.1.18",
+                "name": "ao2-control-plane v0.1.18",
                 "isPrerelease": False,
                 "publishedAt": "2026-06-12T05:53:59Z",
                 "url": (
@@ -1516,9 +1518,9 @@ def test_public_release_pair_digest_audit_rejects_missing_or_mismatched_full_arc
                 {
                     "tagName": "v0.5.5" if component == "ao2" else "v0.1.18",
                     "name": (
-                            "AO2 v0.5.5 stable"
+                            "AO2 v0.5.5"
                         if component == "ao2"
-                        else "AO2 Control Plane v0.1.18"
+                        else "ao2-control-plane v0.1.18"
                     ),
                     "isPrerelease": False,
                     "publishedAt": "2026-06-12T00:00:00Z",
