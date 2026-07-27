@@ -4,6 +4,7 @@ import importlib.util
 import json
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1679,6 +1680,60 @@ def test_execution_authorization_accepts_exact_short_lived_signed_action(
     assert "signature" not in json.dumps(receipt)
     assert "public_key_pem" not in receipt
     assert runtime.accept_control_task(signed) == "duplicate"
+
+
+def test_claimed_mutation_is_not_reverified_or_overwritten(
+    tmp_path: Path, monkeypatch
+) -> None:
+    worker = load_worker_module()
+    transport = worker.MemoryTransport()
+    verifier_calls = 0
+    action_started = threading.Event()
+    release_action = threading.Event()
+
+    def verifier(*_args, **_kwargs):
+        nonlocal verifier_calls
+        verifier_calls += 1
+        if verifier_calls == 1:
+            return True, "execution_authorization_verified"
+        return False, "execution_authorization_verification_failed"
+
+    runtime = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        state=worker.WorkerState(tmp_path / "state"),
+        transport=transport,
+        execution_authorization_verifier=verifier,
+    )
+
+    def run_action(*_args, **_kwargs):
+        action_started.set()
+        assert release_action.wait(timeout=2)
+        return {"status": "accepted"}
+
+    monkeypatch.setattr(runtime, "run_action", run_action)
+    task = worker.control_task(
+        request_id="claimed-mutation",
+        action="windows_stack_qualification",
+        parameters={"mode": "physical_unique", "repositories": ["ao2"]},
+    )
+
+    assert runtime.accept_control_task(task) == "started"
+    assert action_started.wait(timeout=2)
+    assert runtime.accept_control_task(task) == "duplicate"
+    assert verifier_calls == 1
+    assert transport.posted == []
+
+    altered_duplicate = json.loads(json.dumps(task))
+    altered_duplicate["ao2_cross_host"]["action"] = "not-allowlisted"
+    assert runtime.accept_control_task(altered_duplicate) == "duplicate"
+    assert verifier_calls == 1
+    assert transport.posted == []
+
+    release_action.set()
+    assert runtime.wait_for_idle(timeout_seconds=2)
+    result = transport.posted_results_by_request_id()["claimed-mutation"]["ao2_cross_host"]
+    assert result["status"] == "accepted"
 
 
 def test_execution_authorization_rejects_unsigned_and_altered_mutations(tmp_path: Path) -> None:
