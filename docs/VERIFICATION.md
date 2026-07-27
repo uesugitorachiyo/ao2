@@ -683,12 +683,11 @@ Result:
   `AO2_PUBLIC_PAIR_DIGEST_AUDIT_DUAL_REPO_CLOSURE_INDEX_JSON`, and emits
   `ao2.public-release-pair-digest-audit.v1`. It checks each published archive
   has digest and size metadata, requires full archive parity for AO2
-  `ao2-0.5.2-linux-aarch64.tar.gz`, `ao2-0.5.2-linux-x86_64.tar.gz`,
-  `ao2-0.5.2-macos-aarch64.tar.gz`, and
-  `ao2-0.5.2-windows-x86_64.tar.gz`, plus control-plane
-  `ao2-control-plane-0.1.17-linux-x86_64.tar.gz`,
-  `ao2-control-plane-0.1.17-macos-aarch64.tar.gz`, and
-  `ao2-control-plane-0.1.17-windows-x86_64.tar.gz`, and compares every closure
+  `ao2-0.5.3-linux-x86_64.tar.gz`, `ao2-0.5.3-macos-aarch64.tar.gz`, and
+  `ao2-0.5.3-windows-x86_64.tar.gz`, plus control-plane
+  `ao2-control-plane-0.1.18-linux-x86_64.tar.gz`,
+  `ao2-control-plane-0.1.18-macos-aarch64.tar.gz`, and
+  `ao2-control-plane-0.1.18-windows-x86_64.tar.gz`, and compares every closure
   archive record's `sha256`/`size_bytes` evidence with the corresponding
   published release asset. The summary includes `required_archive_names`,
   `required_archive_presence`, and `archive_parity` evidence. Fixture inputs

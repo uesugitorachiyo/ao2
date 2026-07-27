@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use ao2_core::{atomic_write, new_id, sha256_hex, ArtifactRef};
 
+pub mod hosted_release_contract;
+
 #[derive(Debug, Clone)]
 pub struct ArtifactStore {
     root: PathBuf,

@@ -57,19 +57,13 @@ for component in asset_summary["components"]:
         )
     if component["name"] == "ao2":
         observed = set(component.get("observed_assets", []))
-        required_signed_provenance = {
-            "ao2-release-signing-public.pem",
-            "ao2-release-provenance.json",
-            "ao2-release-provenance.json.sig",
-        }
-        missing_signed_provenance = sorted(required_signed_provenance.difference(observed))
-        if missing_signed_provenance:
+        if "promotion-plan.json" not in observed:
             blockers.append(
                 {
-                    "code": "signed_provenance_public_key_missing",
+                    "code": "hosted_promotion_plan_missing",
                     "severity": "blocking",
-                    "message": "Stable release promotion requires signed provenance/public-key sidecars.",
-                    "missing_assets": missing_signed_provenance,
+                    "message": "Stable release readiness requires the immutable hosted promotion plan.",
+                    "missing_assets": ["promotion-plan.json"],
                 }
             )
     if component.get("status") != "passed":

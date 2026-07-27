@@ -24,6 +24,9 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
+pub use ao2_artifacts::hosted_release_contract::{
+    expected_doctor_release_assets, is_hosted_release_directory, verify_hosted_release_directory,
+};
 pub use ao2_core::RunStatus;
 
 pub mod pulse_event_loop;

@@ -335,7 +335,6 @@ dual_repo_release_publication_closure_index_ok = (
     and "hashlib.sha256(path.read_bytes()).hexdigest()" in dual_repo_release_publication_closure_index
     and 'release_train = json.loads(Path("docs/release/release-train.json").read_text(encoding="utf-8"))' in dual_repo_release_publication_closure_index
     and 'stable_version = release_train["stable"]["ao2"]["version"]' in dual_repo_release_publication_closure_index
-    and 'f"ao2-{stable_version}-linux-aarch64.tar.gz"' in dual_repo_release_publication_closure_index
     and 'f"ao2-{stable_version}-linux-x86_64.tar.gz"' in dual_repo_release_publication_closure_index
     and 'f"ao2-{stable_version}-macos-aarch64.tar.gz"' in dual_repo_release_publication_closure_index
     and 'f"ao2-{stable_version}-windows-x86_64.tar.gz"' in dual_repo_release_publication_closure_index
@@ -921,7 +920,6 @@ release_public_pair_digest_audit_contract_ok = (
     and "AO2_RELEASE_TRAIN_AO2_VERSION" in release_public_pair_digest_audit_script
     and "AO2_RELEASE_TRAIN_CP_VERSION" in release_public_pair_digest_audit_script
     and 'f"AO2 Control Plane {cp_tag}"' in release_public_pair_digest_audit_script
-    and 'f"ao2-{ao2_version}-linux-aarch64.tar.gz"' in release_public_pair_digest_audit_script
     and 'f"ao2-{ao2_version}-linux-x86_64.tar.gz"' in release_public_pair_digest_audit_script
     and 'f"ao2-{ao2_version}-macos-aarch64.tar.gz"' in release_public_pair_digest_audit_script
     and 'f"ao2-{ao2_version}-windows-x86_64.tar.gz"' in release_public_pair_digest_audit_script

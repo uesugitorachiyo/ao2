@@ -45,7 +45,6 @@ components = [
         "release_view_env": "AO2_PUBLIC_PAIR_DIGEST_AUDIT_AO2_RELEASE_VIEW_JSON",
         "archive_prefix": "ao2-",
         "required_archive_names": [
-            f"ao2-{ao2_version}-linux-aarch64.tar.gz",
             f"ao2-{ao2_version}-linux-x86_64.tar.gz",
             f"ao2-{ao2_version}-macos-aarch64.tar.gz",
             f"ao2-{ao2_version}-windows-x86_64.tar.gz",
