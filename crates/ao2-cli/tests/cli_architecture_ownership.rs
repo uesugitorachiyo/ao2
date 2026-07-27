@@ -68,6 +68,9 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
     let cli_source = fs::read_to_string(root.join("crates/ao2-cli/src/cli.rs"))
         .expect("CLI declaration source exists")
         .replace("\r\n", "\n");
+    let cli_util_source = fs::read_to_string(root.join("crates/ao2-cli/src/cli_util.rs"))
+        .expect("CLI utility source exists")
+        .replace("\r\n", "\n");
     let factory_dispatch_source =
         fs::read_to_string(root.join("crates/ao2-cli/src/factory_dispatch.rs"))
             .expect("factory dispatch source exists")
@@ -209,8 +212,9 @@ fn cli_signature_helpers_use_native_crypto_without_openssl_shellouts() {
         "run_resume lookup helpers must remain private"
     );
     assert!(
-        main_source.contains("fn is_sha256_hex("),
-        "is_sha256_hex remains outside this wave"
+        cli_util_source.contains("pub(crate) fn is_sha256_hex(")
+            && !main_source.contains("fn is_sha256_hex("),
+        "is_sha256_hex must be owned by cli_util"
     );
     for function_name in [
         "repair",

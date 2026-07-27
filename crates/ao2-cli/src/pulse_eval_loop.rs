@@ -1,10 +1,11 @@
 use std::fs;
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use ao2_core::sha256_hex;
 use chrono::{SecondsFormat, Utc};
 
+use crate::cli::PulseEvalLoopCommand;
 use crate::pulse_run::validate_pulse_task_contract;
 use crate::{atomic_write_text, json_bool, json_string, json_u64, sha256_file};
 
@@ -439,4 +440,110 @@ pub(crate) fn pulse_eval_loop_handoff_json(
     });
     atomic_write_text(&handoff_path, &serde_json::to_string_pretty(&result)?)?;
     Ok(result)
+}
+
+pub(crate) fn pulse_eval_loop(command: PulseEvalLoopCommand) -> Result<()> {
+    match command {
+        PulseEvalLoopCommand::Run {
+            once,
+            chain,
+            executor_evidence,
+            executor_sha256,
+            eval_loop_evidence,
+            eval_loop_sha256,
+            verification_command,
+            verification_status,
+            packet,
+            board,
+            out_dir,
+            json,
+        } => {
+            if [once, chain].into_iter().filter(|enabled| *enabled).count() != 1 {
+                anyhow::bail!("ao2 pulse eval-loop run requires exactly one of --once or --chain");
+            }
+            let result = if once {
+                let executor_evidence = executor_evidence.as_deref().ok_or_else(|| {
+                    anyhow!("ao2 pulse eval-loop run --once requires --executor-evidence")
+                })?;
+                let executor_sha256 = executor_sha256.as_deref().ok_or_else(|| {
+                    anyhow!("ao2 pulse eval-loop run --once requires --executor-sha256")
+                })?;
+                if eval_loop_evidence.is_some() || eval_loop_sha256.is_some() {
+                    anyhow::bail!("--eval-loop-evidence is only valid with --chain");
+                }
+                pulse_eval_loop_run_once_json(
+                    executor_evidence,
+                    executor_sha256,
+                    &verification_command,
+                    &verification_status,
+                    &packet,
+                    &board,
+                    &out_dir,
+                )?
+            } else {
+                let eval_loop_evidence = eval_loop_evidence.as_deref().ok_or_else(|| {
+                    anyhow!("ao2 pulse eval-loop run --chain requires --eval-loop-evidence")
+                })?;
+                let eval_loop_sha256 = eval_loop_sha256.as_deref().ok_or_else(|| {
+                    anyhow!("ao2 pulse eval-loop run --chain requires --eval-loop-sha256")
+                })?;
+                if executor_evidence.is_some() || executor_sha256.is_some() {
+                    anyhow::bail!("--executor-evidence is only valid with --once");
+                }
+                pulse_eval_loop_run_chain_json(
+                    eval_loop_evidence,
+                    eval_loop_sha256,
+                    &verification_command,
+                    &verification_status,
+                    &packet,
+                    &board,
+                    &out_dir,
+                )?
+            };
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else {
+                println!("status={}", json_string(&result, "status"));
+                println!(
+                    "recommended_next_task={}",
+                    json_string(&result["recommended_next_task"], "id")
+                );
+                println!(
+                    "artifact={}",
+                    json_string(&result["artifacts"], "pulse_eval_loop")
+                );
+            }
+            Ok(())
+        }
+        PulseEvalLoopCommand::Handoff {
+            eval_loop_evidence,
+            eval_loop_sha256,
+            packet,
+            board,
+            out_dir,
+            json,
+        } => {
+            let result = pulse_eval_loop_handoff_json(
+                &eval_loop_evidence,
+                &eval_loop_sha256,
+                &packet,
+                &board,
+                &out_dir,
+            )?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else {
+                println!("status={}", json_string(&result, "status"));
+                println!(
+                    "task_contract={}",
+                    json_string(&result["artifacts"], "task_contract")
+                );
+                println!(
+                    "task_contract_sha256={}",
+                    json_string(&result["artifacts"], "task_contract_sha256")
+                );
+            }
+            Ok(())
+        }
+    }
 }

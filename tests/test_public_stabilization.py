@@ -3,6 +3,7 @@ import ast
 import json
 import os
 import re
+import runpy
 import shlex
 import shutil
 import stat
@@ -75,6 +76,110 @@ def write_release_train_manifest(path: Path) -> dict:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return manifest
+
+
+def test_rust_architecture_counter_counts_restricted_visibility_functions(tmp_path):
+    architecture = runpy.run_path(
+        str(REPO_ROOT / "scripts/check-rust-architecture.py")
+    )
+    source = tmp_path / "visibility.rs"
+    source.write_text(
+        "\n".join(
+            [
+                "fn private_function() {}",
+                "pub fn public_function() {}",
+                "pub(crate) fn crate_function() {}",
+                "pub(super) async fn parent_async_function() {}",
+                "const fn constant_function() {}",
+                "pub unsafe fn unsafe_function() {}",
+                'extern "C" fn c_abi_function() {}',
+                'pub(crate) const unsafe extern "C" fn qualified_function() {}',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert (
+        architecture["count_pattern"](
+            source, architecture["TOP_LEVEL_FUNCTION_PATTERN"]
+        )
+        == 8
+    )
+
+
+def test_rust_architecture_counter_counts_unions_and_unsafe_traits(tmp_path):
+    architecture = runpy.run_path(
+        str(REPO_ROOT / "scripts/check-rust-architecture.py")
+    )
+    source = tmp_path / "types.rs"
+    source.write_text(
+        "\n".join(
+            [
+                "struct PrivateStruct;",
+                "pub enum PublicEnum {}",
+                "pub(crate) union CrateUnion { value: u64 }",
+                "trait PrivateTrait {}",
+                "unsafe trait UnsafeTrait {}",
+                "pub unsafe trait PublicUnsafeTrait {}",
+                "pub(super) type ParentAlias = u64;",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    assert (
+        architecture["count_pattern"](source, architecture["TOP_LEVEL_TYPE_PATTERN"])
+        == 7
+    )
+
+
+def test_cli_main_owns_only_startup_and_top_level_dispatch():
+    architecture = runpy.run_path(
+        str(REPO_ROOT / "scripts/check-rust-architecture.py")
+    )
+    main_source = read("crates/ao2-cli/src/main.rs")
+    top_level_functions = {
+        match.group(1)
+        for match in re.finditer(
+            architecture["TOP_LEVEL_FUNCTION_PATTERN"], main_source, re.MULTILINE
+        )
+    }
+    assert top_level_functions == {
+        "main",
+        "real_main",
+    }
+    assert not re.search(
+        architecture["TOP_LEVEL_TYPE_PATTERN"], main_source, re.MULTILINE
+    )
+
+    expected_modules = {
+        "build_identity": {"version", "runtime_git_commit", "runtime_target_label"},
+        "contract_dispatch": {"contract"},
+        "greenfield_workflow": {"greenfield"},
+        "pulse_eval_loop": {"pulse_eval_loop"},
+        "pulse_run": {"pulse"},
+        "run_reporting": {"runs", "cockpit"},
+        "state_commands": {"init", "status", "export"},
+        "template_commands": {"template"},
+        "workbench_app": {"workbench"},
+    }
+    for module, functions in expected_modules.items():
+        assert f"mod {module};" in main_source
+        module_source = read(f"crates/ao2-cli/src/{module}.rs")
+        for function in functions:
+            assert re.search(
+                rf"(?m)^pub\(crate\)\s+fn\s+{function}\b", module_source
+            )
+
+    for helper in (
+        "is_sha256_hex",
+        "is_git_sha_prefix",
+        "validate_release_gate_with_replacement_rollup",
+        "run_current_ao2_json_command",
+    ):
+        assert not re.search(rf"(?m)^fn\s+{helper}\b", main_source)
 
 
 def test_ci_runs_on_public_push_and_pull_request_while_release_gates_stay_manual():

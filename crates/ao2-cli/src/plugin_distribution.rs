@@ -2,8 +2,10 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::process::Command as ProcessCommand;
 
 use anyhow::{Context, Result};
+use ao2_policy::redact_secrets;
 use flate2::read::GzDecoder;
 
 use super::cli_util::fail_if_provider_api_key_env_present;
@@ -15,9 +17,33 @@ use super::plugin_wrapper::{
 use super::{
     atomic_write_text, copy_dir_recursive, create_tar_gz, ensure_rsa_private_key,
     factory_app_run_bundle_reject_secret_fields, factory_app_run_bundle_reject_secret_markers,
-    json_bool, json_string, read_json_file, run_current_ao2_json_command, sha256_bytes_hex,
-    sha256_file,
+    json_bool, json_string, read_json_file, sha256_bytes_hex, sha256_file,
 };
+
+pub(super) fn run_current_ao2_json_command(args: &[String]) -> Result<serde_json::Value> {
+    let output =
+        ProcessCommand::new(std::env::current_exe().context("resolve current ao2 binary")?)
+            .args(args)
+            .env_remove("OPENAI_API_KEY")
+            .env_remove("ANTHROPIC_API_KEY")
+            .output()
+            .with_context(|| format!("run ao2 {}", args.join(" ")))?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    if !output.status.success() {
+        anyhow::bail!(
+            "ao2 {} failed with exit code {:?}: {}",
+            args.join(" "),
+            output.status.code(),
+            redact_secrets(&stderr)
+        );
+    }
+    let value: serde_json::Value = serde_json::from_str(&stdout)
+        .with_context(|| format!("parse JSON from ao2 {}", args.join(" ")))?;
+    reject_secret_markers_in_bytes(stdout.as_bytes(), "ao2-json-command-stdout")?;
+    reject_secret_markers_in_bytes(stderr.as_bytes(), "ao2-json-command-stderr")?;
+    Ok(value)
+}
 
 pub(super) struct PluginManifestVerifyOptions {
     pub(super) manifest_dir: PathBuf,

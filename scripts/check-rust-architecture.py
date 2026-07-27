@@ -21,6 +21,15 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_BASELINE = ROOT / ".github" / "architecture-baseline.json"
 PROD_DIR = ROOT / "crates" / "ao2-cli" / "src"
 TEST_DIR = ROOT / "crates" / "ao2-cli" / "tests"
+TOP_LEVEL_FUNCTION_PATTERN = (
+    r"^(?:pub(?:\([^)]*\))?\s+)?"
+    r"(?:const\s+)?(?:async\s+)?(?:unsafe\s+)?"
+    r"(?:extern(?:\s+\"[^\"]+\")?\s+)?fn\s+([A-Za-z0-9_]+)"
+)
+TOP_LEVEL_TYPE_PATTERN = (
+    r"^(?:pub(?:\([^)]*\))?\s+)?"
+    r"(?:(?:unsafe\s+)?trait|struct|enum|union|type)\s+[A-Za-z0-9_]+"
+)
 
 
 def physical_lines(path: Path) -> int:
@@ -113,10 +122,10 @@ def measure() -> dict[str, Any]:
                 physical_lines(main_rs) / total_prod * 100, 4
             ),
             "main_rs_top_level_functions": count_pattern(
-                main_rs, r"^(?:pub\s+)?(?:async\s+)?fn\s+[A-Za-z0-9_]+"
+                main_rs, TOP_LEVEL_FUNCTION_PATTERN
             ),
             "main_rs_top_level_types": count_pattern(
-                main_rs, r"^(?:pub\s+)?(?:struct|enum|trait|type)\s+[A-Za-z0-9_]+"
+                main_rs, TOP_LEVEL_TYPE_PATTERN
             ),
             "file_lines": prod_lines,
             "module_declarations": module_declarations(prod_files),

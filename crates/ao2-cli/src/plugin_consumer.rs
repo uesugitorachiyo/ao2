@@ -16,14 +16,14 @@ use super::plugin_contract::{
     validate_plugin_consumer_lifecycle_observer_bundle_summary,
 };
 use super::plugin_distribution::{
-    plugin_package_archive_json, read_plugin_package_archive_files, sha256_archive_file,
-    validate_plugin_install_smoke_contract, validate_plugin_package_contract,
+    plugin_package_archive_json, read_plugin_package_archive_files, run_current_ao2_json_command,
+    sha256_archive_file, validate_plugin_install_smoke_contract, validate_plugin_package_contract,
     write_plugin_package_installation,
 };
 use super::plugin_wrapper::validate_plugin_readiness_contract;
 use super::{
     atomic_write_text, create_tar_gz, factory_app_run_bundle_reject_secret_markers, is_sha256_hex,
-    json_string, resolve_cli_artifact_reference, run_current_ao2_json_command, sha256_file,
+    json_string, resolve_cli_artifact_reference, sha256_file,
 };
 
 pub(super) fn plugin_consumer_lifecycle(options: PluginConsumerLifecycleOptions) -> Result<()> {

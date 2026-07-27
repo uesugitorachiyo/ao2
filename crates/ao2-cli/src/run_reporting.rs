@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use ao2_runtime::{replay_run, ReplayOptions};
 
+use super::cli::{CockpitCommand, RunsCommand};
 use super::cli_util::{
     concerns_text, escape_html, json_array, json_string, json_u64, open_report_target, pills,
     pills_from_strings, run_dir, string_array_text, usage_text,
@@ -13,6 +14,7 @@ use super::provider_ops::provider_score_json;
 use super::risky_pr_readback::{
     render_report_index_for_run, report_contract_verification_json, report_index_path,
 };
+use super::workbench_server::serve_cockpit;
 
 pub(crate) fn print_run_summary(summary: &ao2_runtime::RunSummary) {
     println!("run_id={}", summary.run_id);
@@ -681,4 +683,29 @@ fn render_markers(html: &mut String, pack: &serde_json::Value) -> Result<()> {
     html.push_str(&pills(json_array(pack, "markers")));
     html.push_str("</p>\n</section>\n");
     Ok(())
+}
+
+pub(crate) fn runs(command: RunsCommand) -> Result<()> {
+    match command {
+        RunsCommand::List { target, json } => runs_list(target, json),
+        RunsCommand::Show {
+            run_id,
+            target,
+            json,
+        } => runs_show(target, run_id, json),
+    }
+}
+
+pub(crate) fn cockpit(command: CockpitCommand) -> Result<()> {
+    match command {
+        CockpitCommand::Index { target, out, open } => cockpit_index(target, out, open),
+        CockpitCommand::Serve {
+            run_id,
+            target,
+            host,
+            port,
+            index,
+            once,
+        } => serve_cockpit(target, run_id, host, port, index, once),
+    }
 }
