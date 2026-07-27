@@ -1,6 +1,6 @@
 {
   "baseline_source": {
-    "head": "72584606dd2fe377150d860ee7b00abba1fd71ee",
+    "head": "112e2c1c29ca1b5dd4678b4755f029e2846d282f",
     "v0_5_3_tag_target": "947e566bd3f54ed902f3c14fc0c90e21a24359bc"
   },
   "budgets": {
@@ -207,11 +207,12 @@
       "cli_approval_replay_line_concentration_percent": 0.0,
       "cli_approval_replay_rs_lines": 0,
       "cli_approval_replay_tests": 0,
-      "cli_provider_run_repair_line_concentration_percent": 0.481,
+      "cli_provider_run_repair_line_concentration_percent": 0.4809,
       "cli_provider_run_repair_rs_lines": 389,
       "cli_provider_run_repair_tests": 5,
       "file_lines": {
         "crates/ao2-cli/tests/cli_adapter.rs": 316,
+        "crates/ao2-cli/tests/cli_architecture_ownership.rs": 820,
         "crates/ao2-cli/tests/cli_contract.rs": 280,
         "crates/ao2-cli/tests/cli_contract_fixtures.rs": 85,
         "crates/ao2-cli/tests/cli_control_plane.rs": 2300,
@@ -274,16 +275,18 @@
         "crates/ao2-cli/tests/factory_cancel_transition.rs": 433,
         "crates/ao2-cli/tests/github_issue_draft_publisher.rs": 2423,
         "crates/ao2-cli/tests/github_issue_intake.rs": 162,
+        "crates/ao2-cli/tests/provider_pilot_acceptance_preservation.rs": 126,
         "crates/ao2-cli/tests/release_evaluator_decision.rs": 650,
         "crates/ao2-cli/tests/release_gate_obligation_gate_signing.rs": 1250,
         "crates/ao2-cli/tests/release_handoff_checklist.rs": 339,
-        "crates/ao2-cli/tests/release_packaging.rs": 6271,
+        "crates/ao2-cli/tests/release_packaging.rs": 5342,
         "crates/ao2-cli/tests/release_support_bundle_verification.rs": 1262,
         "crates/ao2-cli/tests/sdd_subcommand.rs": 1023,
         "crates/ao2-cli/tests/troubleshooting_support_bundle.rs": 604
       },
       "file_tests": {
         "crates/ao2-cli/tests/cli_adapter.rs": 5,
+        "crates/ao2-cli/tests/cli_architecture_ownership.rs": 1,
         "crates/ao2-cli/tests/cli_contract.rs": 4,
         "crates/ao2-cli/tests/cli_contract_fixtures.rs": 1,
         "crates/ao2-cli/tests/cli_control_plane.rs": 33,
@@ -346,15 +349,16 @@
         "crates/ao2-cli/tests/factory_cancel_transition.rs": 14,
         "crates/ao2-cli/tests/github_issue_draft_publisher.rs": 30,
         "crates/ao2-cli/tests/github_issue_intake.rs": 5,
+        "crates/ao2-cli/tests/provider_pilot_acceptance_preservation.rs": 1,
         "crates/ao2-cli/tests/release_evaluator_decision.rs": 9,
         "crates/ao2-cli/tests/release_gate_obligation_gate_signing.rs": 17,
         "crates/ao2-cli/tests/release_handoff_checklist.rs": 10,
-        "crates/ao2-cli/tests/release_packaging.rs": 83,
+        "crates/ao2-cli/tests/release_packaging.rs": 81,
         "crates/ao2-cli/tests/release_support_bundle_verification.rs": 13,
         "crates/ao2-cli/tests/sdd_subcommand.rs": 16,
         "crates/ao2-cli/tests/troubleshooting_support_bundle.rs": 9
       },
-      "integration_test_file_total_lines": 80867,
+      "integration_test_file_total_lines": 80884,
       "integration_test_static_count": 672
     },
     "unsafe_blocks": [
