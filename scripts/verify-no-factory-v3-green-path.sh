@@ -98,7 +98,10 @@ def classify(rel: str, line: str) -> tuple[bool, str]:
         '"parity:factory-v3"' in line or '"verify:no-factory-v3"' in line
     ):
         return True, "manual_guard_or_parity_script"
-    if rel == "crates/ao2-cli/src/main.rs" and (
+    if rel in {
+        "crates/ao2-cli/src/main.rs",
+        "crates/ao2-cli/src/skill_contract_manifest.rs",
+    } and (
         "factory-v3-root" in normalized or "factory_v3_root" in line
     ):
         return True, "skill_contract_manifest_source_only"
