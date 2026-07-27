@@ -1592,6 +1592,10 @@ class WorkerState:
             self._save()
             return True
 
+    def has_request(self, request_id: str) -> bool:
+        with self._lock:
+            return request_id in self._ledger.setdefault("tasks", {})
+
     def complete(self, request_id: str, status: str) -> None:
         with self._lock:
             tasks = self._ledger.setdefault("tasks", {})
@@ -1779,6 +1783,9 @@ class WindowsOutboundWorker:
         arbitrary = bool(cross_host.get("arbitrary_command_execution"))
         if not request_id:
             return "ignored"
+
+        if self.state.has_request(request_id):
+            return "duplicate"
 
         if arbitrary or action not in ALLOWLISTED_ACTIONS:
             self._post_result_best_effort(request_id, action or "unknown", {
