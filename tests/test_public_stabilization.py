@@ -57,6 +57,56 @@ def write_public_consumer_smoke_fixture(fixture: Path, name: str, target_label: 
     )
 
 
+def write_post_stable_smoke_fixture(
+    fixture: Path, name: str, target_label: str
+) -> None:
+    smoke = fixture / name / "smoke"
+    install_evidence = (
+        smoke / "home" / ".local" / "bin" / "ao2.install-verification.json"
+    )
+    install_evidence.parent.mkdir(parents=True)
+    install_evidence.write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.install-verification-evidence.v1",
+                "status": "verified",
+                "install_status": "installed",
+                "version": "0.5.4",
+                "target": target_label,
+                "offline_verification": {
+                    "schema_version": "ao2.release-archive-offline-verification.v1",
+                    "status": "verified",
+                    "checksum_coverage_verified": True,
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (smoke / "doctor.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "ao2.doctor.v1",
+                "status": "ok",
+                "version": "0.5.4",
+                "target": target_label,
+                "install": {
+                    "installed": True,
+                    "on_path": True,
+                    "verification_evidence": {
+                        "present": True,
+                        "status": "verified",
+                    },
+                },
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
 def write_release_train_manifest(path: Path) -> dict:
     manifest = {
         "schema_version": "ao2.release-train-manifest.v1",
@@ -943,6 +993,7 @@ def test_current_public_pair_tracks_control_plane_v0_1_18():
     next_patch_pair_paths = [
         "docs/release/v0.5.3-stable.md",
         "docs/release/v0.5.4-stable.md",
+        "docs/release/v0.5.5-stable.md",
     ]
     for path in next_patch_pair_paths:
         text = read(path)
@@ -957,10 +1008,10 @@ def test_current_public_pair_tracks_control_plane_v0_1_18():
         "public_operator_confirm": "public-release-reviewed-v0.5.4-v0.1.18",
     }
     expected_next_patch = {
-        "ao2": {"tag": "v0.5.4", "version": "0.5.4"},
+        "ao2": {"tag": "v0.5.5", "version": "0.5.5"},
         "ao2_control_plane": {"tag": "v0.1.18", "version": "0.1.18"},
-        "promotion_confirm": "promote-stable-v0.5.4-v0.1.18",
-        "public_operator_confirm": "public-release-reviewed-v0.5.4-v0.1.18",
+        "promotion_confirm": "promote-stable-v0.5.5-v0.1.18",
+        "public_operator_confirm": "public-release-reviewed-v0.5.5-v0.1.18",
     }
     assert manifest["stable"] == expected_stable
     assert manifest["next_patch"] == expected_next_patch
@@ -1878,7 +1929,9 @@ def test_stable_promotion_workflow_is_guarded_and_documented():
         "post_release_evidence_missing",
         "checksum_verified",
         "credential_material_included",
-        "signature_verified",
+        "ao2.install-verification-evidence.v1",
+        "ao2.doctor.v1",
+        "doctor_status",
     ]:
         assert needle in text
 
@@ -3620,20 +3673,12 @@ def test_stable_promotion_dry_run_checklist_workflow_runs_from_stable_evidence_p
 
 def test_stable_promotion_workflow_requires_public_pair_digest_audit(tmp_path):
     fixture = tmp_path / "fixture"
-    for name in ["ao2-linux", "ao2-macos", "ao2-windows"]:
-        install_update = fixture / name / "smoke" / "install-update.json"
-        install_update.parent.mkdir(parents=True)
-        install_update.write_text(
-            json.dumps(
-                {
-                    "status": "installed",
-                    "signature_verified": True,
-                },
-                sort_keys=True,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
+    for name, target_label in [
+        ("ao2-linux", "linux-x86_64"),
+        ("ao2-macos", "macos-aarch64"),
+        ("ao2-windows", "windows-x86_64"),
+    ]:
+        write_post_stable_smoke_fixture(fixture, name, target_label)
 
     for name, target_label in [
         ("public-consumer-linux", "linux-x86_64"),
@@ -3777,20 +3822,12 @@ JSON
 
 def test_stable_promotion_accepts_downloaded_public_pair_digest_layout(tmp_path):
     fixture = tmp_path / "fixture"
-    for name in ["ao2-linux", "ao2-macos", "ao2-windows"]:
-        install_update = fixture / name / "smoke" / "install-update.json"
-        install_update.parent.mkdir(parents=True)
-        install_update.write_text(
-            json.dumps(
-                {
-                    "status": "installed",
-                    "signature_verified": True,
-                },
-                sort_keys=True,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
+    for name, target_label in [
+        ("ao2-linux", "linux-x86_64"),
+        ("ao2-macos", "macos-aarch64"),
+        ("ao2-windows", "windows-x86_64"),
+    ]:
+        write_post_stable_smoke_fixture(fixture, name, target_label)
 
     for name, target_label in [
         ("public-consumer-linux", "linux-x86_64"),
@@ -4041,7 +4078,9 @@ def test_operator_release_evidence_bundle_downloads_and_verifies_cross_repo_arti
         "ao2-control-plane-post-release-verification-windows",
         "ao2.dual-repo-release-publication-closure-index.v1",
         "ao2.cp-release-publication-closure.v1",
-        "signature_verified",
+        "ao2.install-verification-evidence.v1",
+        "ao2.doctor.v1",
+        "doctor_status",
         "checksum_verified",
         "credential_material_included",
         "mutates_github_releases",
@@ -4118,20 +4157,12 @@ def test_operator_release_evidence_bundle_downloads_and_verifies_cross_repo_arti
         + "\n",
         encoding="utf-8",
     )
-    for name in ["ao2-linux", "ao2-macos", "ao2-windows"]:
-        install_update = fixture / name / "smoke" / "install-update.json"
-        install_update.parent.mkdir(parents=True)
-        install_update.write_text(
-            json.dumps(
-                {
-                    "status": "installed",
-                    "signature_verified": True,
-                },
-                sort_keys=True,
-            )
-            + "\n",
-            encoding="utf-8",
-        )
+    for name, target_label in [
+        ("ao2-linux", "linux-x86_64"),
+        ("ao2-macos", "macos-aarch64"),
+        ("ao2-windows", "windows-x86_64"),
+    ]:
+        write_post_stable_smoke_fixture(fixture, name, target_label)
     for name, target_label in [
         ("public-consumer-linux", "linux-x86_64"),
         ("public-consumer-macos", "macos-aarch64"),
@@ -4618,6 +4649,7 @@ def test_stable_release_evidence_packet_combines_release_and_operator_baselines(
     for needle in [
         "stable-release-evidence-packet-artifacts:",
         "name: Stable release evidence packet artifacts",
+        "if: github.event_name != 'pull_request'",
         "needs: rsi-cross-repo-e2e-artifacts",
         "AO2_STABLE_PROMOTION_ROOT=target/stable-release-evidence-packet-ci/stable-promotion-workflow",
         "npm run release:stable-promotion-workflow",
@@ -14135,7 +14167,7 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
         "tag": "v0.1.18",
         "version": "0.1.18",
     }
-    assert manifest["next_patch"]["ao2"] == {"tag": "v0.5.4", "version": "0.5.4"}
+    assert manifest["next_patch"]["ao2"] == {"tag": "v0.5.5", "version": "0.5.5"}
     assert manifest["next_patch"]["ao2_control_plane"] == {
         "tag": "v0.1.18",
         "version": "0.1.18",
@@ -14146,7 +14178,7 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
     )
     assert (
         manifest["next_patch"]["promotion_confirm"]
-        == "promote-stable-v0.5.4-v0.1.18"
+        == "promote-stable-v0.5.5-v0.1.18"
     )
 
     helper = REPO_ROOT / "scripts" / "release-train-env.sh"
@@ -14163,15 +14195,15 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
     assert result.returncode == 0, result.stderr + result.stdout
     exported = dict(line.split("=", 1) for line in result.stdout.splitlines())
     assert exported["AO2_RELEASE_TRAIN_NAME"] == "next_patch"
-    assert exported["AO2_RELEASE_TRAIN_AO2_TAG"] == "v0.5.4"
-    assert exported["AO2_RELEASE_TRAIN_AO2_VERSION"] == "0.5.4"
+    assert exported["AO2_RELEASE_TRAIN_AO2_TAG"] == "v0.5.5"
+    assert exported["AO2_RELEASE_TRAIN_AO2_VERSION"] == "0.5.5"
     assert exported["AO2_RELEASE_TRAIN_CP_TAG"] == "v0.1.18"
     assert exported["AO2_RELEASE_TRAIN_CP_VERSION"] == "0.1.18"
     assert exported["AO2_RELEASE_TRAIN_PROMOTION_CONFIRM"] == (
-        "promote-stable-v0.5.4-v0.1.18"
+        "promote-stable-v0.5.5-v0.1.18"
     )
     assert exported["AO2_RELEASE_TRAIN_PUBLIC_OPERATOR_CONFIRM"] == (
-        "public-release-reviewed-v0.5.4-v0.1.18"
+        "public-release-reviewed-v0.5.5-v0.1.18"
     )
 
     for workflow_path in [
@@ -14592,7 +14624,7 @@ def test_candidate_patch_release_rehearsal_workflow_produces_single_bundle():
         "ao2.candidate-patch-release-rehearsal-audit.v1",
         "ao2.public-release-train-drill.v1",
         '"selected_train"] == "next_patch"',
-        '"v0.5.4"',
+        '"v0.5.5"',
         '"v0.1.18"',
         "ao2-candidate-patch-release-rehearsal",
         "target/candidate-patch-release-rehearsal/report",
@@ -14615,7 +14647,7 @@ def test_candidate_patch_release_rehearsal_audit_contract(tmp_path):
         "release_train_manifest",
         "release_targets",
         "next_patch",
-        "v0.5.4",
+        "v0.5.5",
         "v0.1.18",
         "refuses_publish_side_effects_by_default",
         "OPENAI_API_KEY",
@@ -14651,10 +14683,10 @@ def test_candidate_patch_release_rehearsal_audit_contract(tmp_path):
                 },
                 "release_targets": {
                     "selected_train": "next_patch",
-                    "ao2": {"tag": "v0.5.4", "version": "0.5.4"},
+                    "ao2": {"tag": "v0.5.5", "version": "0.5.5"},
                     "ao2_control_plane": {"tag": "v0.1.18", "version": "0.1.18"},
-                    "promotion_confirm": "promote-stable-v0.5.4-v0.1.18",
-                    "public_operator_confirm": "public-release-reviewed-v0.5.4-v0.1.18",
+                    "promotion_confirm": "promote-stable-v0.5.5-v0.1.18",
+                    "public_operator_confirm": "public-release-reviewed-v0.5.5-v0.1.18",
                 },
                 "checks": [{"name": "fixture", "status": "passed", "exit_code": 0}],
                 "publish_guards": {
@@ -14683,7 +14715,7 @@ def test_candidate_patch_release_rehearsal_audit_contract(tmp_path):
     audit = json.loads((bundle / "candidate-patch-release-rehearsal-audit.json").read_text())
     assert audit["schema_version"] == "ao2.candidate-patch-release-rehearsal-audit.v1"
     assert audit["status"] == "passed"
-    assert audit["release_targets"]["ao2"]["tag"] == "v0.5.4"
+    assert audit["release_targets"]["ao2"]["tag"] == "v0.5.5"
     assert audit["release_targets"]["ao2_control_plane"]["tag"] == "v0.1.18"
     assert audit["token_scan"]["credential_material_included"] is False
     assert audit["trust_boundary"]["mutates_github_releases"] is False
@@ -14745,7 +14777,7 @@ def test_release_train_manifest_parity_audit_contract(tmp_path):
     assert summary["schema_aligned"] is True
     assert summary["target_aligned"] is True
     assert summary["stable"]["ao2"]["tag"] == "v0.5.4"
-    assert summary["next_patch"]["ao2"]["tag"] == "v0.5.4"
+    assert summary["next_patch"]["ao2"]["tag"] == "v0.5.5"
 
     for needle in [
         "release-train-manifest-parity:",
@@ -16128,14 +16160,17 @@ def test_post_stable_release_verification_workflow_runs_hosted_consumer_smoke():
         'AO2_ASSET="ao2-${AO2_RELEASE_VERSION}-${AO2_TARGET_LABEL}.tar.gz"',
         "gh release download",
         "SHA256SUMS",
-        "AO2_INSTALL_DIR",
         "verify-release.sh",
         "Verify-Release.ps1",
         "install.sh",
         "install.ps1",
         "ao2.install-verification.json",
+        'export HOME="$PWD/smoke/home"',
+        '$env:LOCALAPPDATA = (Resolve-Path smoke/home).Path',
         'evidence["status"] == "verified"',
         'evidence["install_status"] == "installed"',
+        'doctor["status"] == "ok"',
+        '$doctor.status -ne "ok"',
         "version --json",
         "doctor --json",
         "adapter doctor --provider scripted",

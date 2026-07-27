@@ -1,24 +1,20 @@
+use super::{json_string, read_json_file, runtime_target_label, terminate_workbench_child};
+use crate::cli_util::binary_name_for_target;
+use crate::install_paths::{
+    command_exists, default_install_dir, install_verification_evidence_path, is_binary_on_path,
+};
+use crate::release_provenance::verify_release_provenance_signature;
+use anyhow::Result;
+use ao2_adapters::{doctor_provider, parse_provider};
+use ao2_runtime::{
+    expected_doctor_release_assets, is_hosted_release_directory, verify_hosted_release_directory,
+};
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command as ProcessCommand, Stdio};
 use std::thread;
 use std::time::Duration;
-
-use anyhow::Result;
-use ao2_adapters::{doctor_provider, parse_provider};
-
-use crate::cli_util::binary_name_for_target;
-use crate::install_paths::{
-    command_exists, default_install_dir, install_verification_evidence_path, is_binary_on_path,
-};
-use crate::release_provenance::verify_release_provenance_signature;
-use ao2_runtime::{
-    expected_doctor_release_assets, is_hosted_release_directory, verify_hosted_release_directory,
-};
-
-use super::{json_string, read_json_file, runtime_target_label, terminate_workbench_child};
-
 pub(crate) fn doctor(
     json: bool,
     install_dir: Option<PathBuf>,
@@ -43,7 +39,6 @@ pub(crate) fn doctor(
     }
     Ok(())
 }
-
 pub(crate) fn doctor_report_json(
     install_dir: Option<PathBuf>,
     provenance_dir: PathBuf,
@@ -59,7 +54,6 @@ pub(crate) fn doctor_report_json(
     let on_path = installed && is_binary_on_path(binary_name, &installed_binary);
     let install_verification_evidence =
         doctor_install_verification_evidence_json(&installed_binary);
-
     let release_public_key = provenance_dir.join("ao2-release-signing-public.pem");
     let provenance_json = provenance_dir.join("ao2-release-provenance.json");
     let provenance_signature = provenance_dir.join("ao2-release-provenance.json.sig");
@@ -85,7 +79,6 @@ pub(crate) fn doctor_report_json(
             provenance_verified,
         );
     }
-
     let scripted = doctor_provider(parse_provider("scripted")?)?;
     let providers = serde_json::json!({
         "scripted": scripted,
@@ -115,6 +108,10 @@ pub(crate) fn doctor_report_json(
         release_provenance_verified
     } else {
         provenance_verified
+            || doctor_install_verification_evidence_is_valid(
+                &install_verification_evidence,
+                &target,
+            )
     };
     let status = if installed
         && on_path
@@ -127,7 +124,6 @@ pub(crate) fn doctor_report_json(
     } else {
         "attention"
     };
-
     Ok(serde_json::json!({
         "schema_version": "ao2.doctor.v1",
         "status": status,
@@ -145,7 +141,21 @@ pub(crate) fn doctor_report_json(
         "dependencies": dependencies,
     }))
 }
-
+fn doctor_install_verification_evidence_is_valid(
+    evidence: &serde_json::Value,
+    target: &str,
+) -> bool {
+    evidence["present"].as_bool() == Some(true)
+        && evidence["schema_version"].as_str() == Some("ao2.install-verification-evidence.v1")
+        && evidence["status"].as_str() == Some("verified")
+        && evidence["install_status"].as_str() == Some("installed")
+        && evidence["version"].as_str() == Some(env!("CARGO_PKG_VERSION"))
+        && evidence["target"].as_str() == Some(target)
+        && evidence["offline_verification"]["schema_version"].as_str()
+            == Some("ao2.release-archive-offline-verification.v1")
+        && evidence["offline_verification"]["status"].as_str() == Some("verified")
+        && evidence["offline_verification"]["checksum_coverage_verified"].as_bool() == Some(true)
+}
 fn doctor_install_verification_evidence_json(installed_binary: &Path) -> serde_json::Value {
     let evidence_path = install_verification_evidence_path(installed_binary);
     if !evidence_path.is_file() {
@@ -175,7 +185,6 @@ fn doctor_install_verification_evidence_json(installed_binary: &Path) -> serde_j
         }),
     }
 }
-
 fn doctor_release_report_json(
     release_tag: String,
     release_repo: String,
@@ -194,7 +203,6 @@ fn doctor_release_report_json(
         .map(|json| json_string(&json, "release_tag"))
         .unwrap_or_default();
     let provenance_tag_matches = provenance_tag == release_tag;
-
     let mut report = serde_json::json!({
         "checked": true,
         "release_tag": release_tag,
@@ -204,7 +212,6 @@ fn doctor_release_report_json(
         "provenance_tag": provenance_tag,
         "provenance_tag_matches": provenance_tag_matches,
     });
-
     if let Some(asset_dir) = release_asset_dir {
         let present_assets = expected_assets
             .iter()
@@ -232,7 +239,6 @@ fn doctor_release_report_json(
         }
         return report;
     }
-
     if resolve_gh_command().is_none() {
         report["asset_source"] = serde_json::json!("github");
         report["assets_available"] = serde_json::json!(false);
@@ -240,7 +246,6 @@ fn doctor_release_report_json(
         report["error"] = serde_json::json!("gh_not_available");
         return report;
     }
-
     let Some(tag) = report["release_tag"].as_str() else {
         report["assets_available"] = serde_json::json!(false);
         return report;
@@ -291,7 +296,6 @@ fn doctor_release_report_json(
     }
     report
 }
-
 fn run_gh_release_view_for_doctor(tag: &str, repo: &str) -> std::io::Result<std::process::Output> {
     let Some((gh, shell_script)) = resolve_gh_command() else {
         return Err(std::io::Error::new(
@@ -340,7 +344,6 @@ fn run_gh_release_view_for_doctor(tag: &str, repo: &str) -> std::io::Result<std:
         thread::sleep(Duration::from_millis(25));
     }
 }
-
 fn resolve_gh_command() -> Option<(PathBuf, bool)> {
     let path = std::env::var_os("PATH").unwrap_or_default();
     for dir in std::env::split_paths(&path) {
@@ -366,7 +369,6 @@ fn resolve_gh_command() -> Option<(PathBuf, bool)> {
     }
     None
 }
-
 fn release_rollback_summary_json(asset_dir: &Path) -> serde_json::Value {
     let summary = asset_dir.join("release-rollback-summary.json");
     if !summary.is_file() {
@@ -376,7 +378,6 @@ fn release_rollback_summary_json(asset_dir: &Path) -> serde_json::Value {
             "summary_json": summary,
         });
     }
-
     match fs::read_to_string(&summary)
         .ok()
         .and_then(|body| serde_json::from_str::<serde_json::Value>(&body).ok())

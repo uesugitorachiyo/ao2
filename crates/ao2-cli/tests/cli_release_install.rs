@@ -1301,6 +1301,87 @@ fn cli_doctor_reports_install_provider_release_and_path_health() {
 }
 
 #[test]
+fn cli_doctor_accepts_verified_public_archive_install_without_private_provenance() {
+    let temp = tempfile::tempdir().unwrap();
+    let install_dir = temp.path().join("bin");
+    let missing_provenance = temp.path().join("missing-provenance");
+    fs::create_dir_all(&install_dir).unwrap();
+
+    let (binary_name, target) = if cfg!(windows) {
+        ("ao2.exe", "windows-x86_64")
+    } else if cfg!(target_os = "macos") {
+        ("ao2", "macos-aarch64")
+    } else {
+        ("ao2", "linux-x86_64")
+    };
+    let installed_binary = install_dir.join(binary_name);
+    fs::copy(env!("CARGO_BIN_EXE_ao2"), &installed_binary).unwrap();
+    let evidence_path = install_dir.join(format!("{binary_name}.install-verification.json"));
+    fs::write(
+        &evidence_path,
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "schema_version": "ao2.install-verification-evidence.v1",
+            "status": "verified",
+            "install_status": "installed",
+            "version": env!("CARGO_PKG_VERSION"),
+            "target": target,
+            "offline_verification": {
+                "schema_version": "ao2.release-archive-offline-verification.v1",
+                "status": "verified",
+                "checksum_coverage_verified": true,
+            },
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+
+    let path = prepend_path(&install_dir);
+    let doctor = ao2_with_env(
+        [
+            "doctor",
+            "--json",
+            "--install-dir",
+            install_dir.to_str().unwrap(),
+            "--provenance-dir",
+            missing_provenance.to_str().unwrap(),
+        ],
+        [("PATH", path.as_str())],
+    );
+    assert!(doctor.status.success(), "{}", stderr(&doctor));
+    let json: serde_json::Value = serde_json::from_str(&stdout(&doctor)).unwrap();
+    assert_eq!(json["status"], "ok");
+    assert_eq!(json["release"]["checked"], false);
+    assert_eq!(json["release"]["provenance_verified"], false);
+    assert_eq!(
+        json["install"]["verification_evidence"]["status"],
+        "verified"
+    );
+
+    let mut invalid: serde_json::Value =
+        serde_json::from_slice(&fs::read(&evidence_path).unwrap()).unwrap();
+    invalid["offline_verification"]["checksum_coverage_verified"] = serde_json::json!(false);
+    fs::write(&evidence_path, serde_json::to_vec_pretty(&invalid).unwrap()).unwrap();
+    let invalid_doctor = ao2_with_env(
+        [
+            "doctor",
+            "--json",
+            "--install-dir",
+            install_dir.to_str().unwrap(),
+            "--provenance-dir",
+            missing_provenance.to_str().unwrap(),
+        ],
+        [("PATH", path.as_str())],
+    );
+    assert!(
+        invalid_doctor.status.success(),
+        "{}",
+        stderr(&invalid_doctor)
+    );
+    let invalid_json: serde_json::Value = serde_json::from_str(&stdout(&invalid_doctor)).unwrap();
+    assert_eq!(invalid_json["status"], "attention");
+}
+
+#[test]
 fn cli_upgrade_check_reports_latest_release_from_fixture() {
     let temp = tempfile::tempdir().unwrap();
     let release_file = temp.path().join("release.json");
