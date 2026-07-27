@@ -3,7 +3,10 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 
-use super::cli_util::{canonical_json_sha256, fail_if_provider_api_key_env_present, json_u64};
+use super::cli_util::{
+    canonical_json_sha256, fail_if_provider_api_key_env_present, is_git_sha_prefix, json_bool,
+    json_string, json_u64,
+};
 use super::plugin_cli;
 use super::plugin_contract::{
     validate_k37_plugin_observer_bundle, validate_k37_plugin_observer_input,
@@ -24,8 +27,64 @@ use super::plugin_distribution::{
 };
 use super::{
     atomic_write_text, create_tar_gz, factory_app_run_bundle_reject_secret_markers, is_sha256_hex,
-    json_bool, json_string, sha256_file, validate_release_gate_with_replacement_rollup,
+    sha256_file,
 };
+
+fn validate_release_gate_with_replacement_rollup(
+    rollup: &serde_json::Value,
+    platform: &str,
+) -> Result<()> {
+    if json_string(rollup, "schema_version") != "ao2.release-gate-with-replacement-parity.v1" {
+        anyhow::bail!(
+            "{platform} release-gate rollup requires ao2.release-gate-with-replacement-parity.v1, got {}",
+            json_string(rollup, "schema_version")
+        );
+    }
+    if json_string(rollup, "overall_verdict") != "PASS" {
+        anyhow::bail!("{platform} release-gate rollup must be PASS");
+    }
+    let ao2_git_head = json_string(rollup, "ao2_git_head");
+    if !is_git_sha_prefix(&ao2_git_head) || ao2_git_head.len() != 40 {
+        anyhow::bail!("{platform} release-gate rollup ao2_git_head must be a full git sha");
+    }
+    let counts = rollup
+        .get("counts")
+        .context("release-gate rollup missing counts")?;
+    let passed = json_u64(counts, "passed");
+    let total = json_u64(counts, "total_stages");
+    if passed == 0 || passed != total || json_u64(counts, "non_passed") != 0 {
+        anyhow::bail!("{platform} release-gate rollup counts must be all passing");
+    }
+    let stages = rollup
+        .get("stages")
+        .and_then(serde_json::Value::as_array)
+        .context("release-gate rollup missing stages")?;
+    if stages.len() as u64 != total {
+        anyhow::bail!("{platform} release-gate rollup stage count does not match totals");
+    }
+    if !stages
+        .iter()
+        .all(|stage| stage.get("status").and_then(serde_json::Value::as_str) == Some("PASS"))
+    {
+        anyhow::bail!("{platform} release-gate rollup has a non-PASS stage");
+    }
+    if !stages.iter().any(|stage| {
+        stage.get("name").and_then(serde_json::Value::as_str) == Some("replacement_parity")
+    }) {
+        anyhow::bail!("{platform} release-gate rollup must include replacement_parity stage");
+    }
+    let trust = rollup
+        .get("trust_boundary")
+        .context("release-gate rollup missing trust_boundary")?;
+    if json_string(trust, "ao2_role") != "canonical_producer"
+        || json_string(trust, "factory_v3_role") != "parity_oracle_only"
+        || json_bool(trust, "mutates_ao_artifacts")
+        || json_bool(trust, "mutates_control_plane")
+    {
+        anyhow::bail!("{platform} release-gate rollup trust boundary is not observer-safe");
+    }
+    Ok(())
+}
 
 pub(super) fn plugin_control_plane_fixture_handoff(
     options: plugin_cli::PluginControlPlaneFixtureHandoffOptions,

@@ -3,11 +3,16 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{anyhow, Context, Result};
 
+use crate::cli::WorkbenchCommand;
 use crate::cli_util::{
     form_value_owned, generate_api_token, json_string, open_report_target, percent_decode,
     percent_encode, shell_quote,
 };
 use crate::control_plane_http::{control_plane_endpoint, get_text_http};
+use crate::control_plane_ops::{
+    workbench_support_bundle_import, workbench_support_bundle_inspect,
+    workbench_support_bundle_verify, workbench_support_keygen,
+};
 use crate::factory_evidence::{factory_plan_json, FactoryPlanSigning};
 use crate::factory_governance::validate_factory_replacement_smoke_run_id;
 use crate::provider_ops::{
@@ -17,6 +22,8 @@ use crate::provider_ops::{
 use crate::workbench_contract::{
     WorkbenchOperator, WorkbenchOperatorRole, WorkbenchSupportSigning,
 };
+use crate::workbench_render::{render_workbench, WorkbenchRenderOptions};
+use crate::workbench_server::{serve_workbench, ServeWorkbenchOptions};
 use crate::TASK_TEMPLATES;
 
 pub(super) fn workbench_export(
@@ -538,4 +545,70 @@ pub(super) fn workbench_provider_pilot_preflight_json(
         "checks": checks,
         "pilot": pilot
     }))
+}
+
+pub(crate) fn workbench(command: WorkbenchCommand) -> Result<()> {
+    match command {
+        WorkbenchCommand::Export {
+            target,
+            out,
+            open,
+            provenance_dir,
+        } => {
+            let html = render_workbench(
+                &target,
+                &provenance_dir,
+                WorkbenchRenderOptions {
+                    operator: None,
+                    execution_enabled: false,
+                    can_operate: false,
+                    release_comparison_signing_enabled: false,
+                    control_plane_url: None,
+                    release_gate_artifact_path: None,
+                },
+            )?;
+            workbench_export(target, out, open, html)
+        }
+        WorkbenchCommand::Serve {
+            target,
+            host,
+            port,
+            once,
+            provenance_dir,
+            api_token,
+            operator_tokens,
+            enable_execution,
+            queue_retention,
+            control_plane_url,
+            support_signing_key,
+            support_signer_id,
+        } => serve_workbench(ServeWorkbenchOptions {
+            target,
+            host,
+            port,
+            once,
+            provenance_dir,
+            api_token,
+            operator_tokens,
+            enable_execution,
+            queue_retention,
+            control_plane_url,
+            support_signing_key,
+            support_signer_id,
+        }),
+        WorkbenchCommand::SupportVerify { bundle_dir, json } => {
+            workbench_support_bundle_verify(bundle_dir, json)
+        }
+        WorkbenchCommand::SupportImport {
+            bundle_dir,
+            out_dir,
+            json,
+        } => workbench_support_bundle_import(bundle_dir, out_dir, json),
+        WorkbenchCommand::SupportInspect { bundle_dir, json } => {
+            workbench_support_bundle_inspect(bundle_dir, json)
+        }
+        WorkbenchCommand::SupportKeygen { out, bits, json } => {
+            workbench_support_keygen(out, bits, json)
+        }
+    }
 }

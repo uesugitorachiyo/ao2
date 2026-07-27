@@ -5,11 +5,14 @@ use anyhow::{anyhow, Context, Result};
 use ao2_core::{extract_obligation_ledger, sha256_hex};
 use chrono::{SecondsFormat, Utc};
 
+use crate::cli::GreenfieldCommand;
 use crate::cli_util::{
     atomic_write_text, canonical_json_sha256, json_string, sanitize_greenfield_id, sha256_bytes_hex,
 };
 use crate::factory_evidence::{factory_plan_json, FactoryPlanSigning};
-use crate::factory_governance::{factory_governed_run_json, FactoryGovernedRunOptions};
+use crate::factory_governance::{
+    factory_governed_run_json, greenfield_three_os_smoke_gate_json, FactoryGovernedRunOptions,
+};
 use crate::factory_queue_project_start::{
     factory_queue_submit_project_start_json, FactoryQueueSubmitProjectStartOptions,
 };
@@ -656,6 +659,119 @@ pub(crate) fn greenfield_governed_run_json(
     });
     atomic_write_text(&result_path, &serde_json::to_string_pretty(&result)?)?;
     Ok(result)
+}
+
+pub(crate) fn greenfield(command: GreenfieldCommand) -> Result<()> {
+    match command {
+        GreenfieldCommand::Ingest {
+            spec,
+            target,
+            run_id,
+            verifier_command,
+            signing_key,
+            signer_id,
+            out_dir,
+            json,
+        } => {
+            let result = greenfield_ingest_json(GreenfieldIngestOptions {
+                spec: &spec,
+                target: &target,
+                run_id,
+                verifier_command,
+                signing_key: signing_key.as_deref(),
+                signer_id: &signer_id,
+                out_dir: out_dir.as_deref(),
+            })?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else {
+                println!("greenfield_ingest={}", json_string(&result, "ingest_path"));
+                println!("plan={}", json_string(&result["artifacts"], "plan"));
+                println!(
+                    "classification_shape={}",
+                    json_string(&result["classification"], "shape")
+                );
+                println!(
+                    "classification_size={}",
+                    json_string(&result["classification"], "size")
+                );
+            }
+            Ok(())
+        }
+        GreenfieldCommand::GovernedRun {
+            spec,
+            target,
+            run_id,
+            verifier_command,
+            provider,
+            provider_prompt,
+            provider_prompt_file,
+            provider_max_budget_usd,
+            factory_decision,
+            signing_key,
+            signer_id,
+            max_repair_attempts,
+            out_dir,
+            json,
+        } => {
+            let result = greenfield_governed_run_json(GreenfieldGovernedRunOptions {
+                spec: &spec,
+                target: &target,
+                run_id,
+                verifier_command,
+                provider,
+                provider_prompt,
+                provider_prompt_file,
+                provider_max_budget_usd,
+                factory_decision,
+                signing_key,
+                signer_id,
+                max_repair_attempts,
+                out_dir: &out_dir,
+            })?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else {
+                println!("run_id={}", json_string(&result, "run_id"));
+                println!("status={}", json_string(&result, "status"));
+                println!(
+                    "greenfield_governed_run={}",
+                    json_string(&result["artifacts"], "greenfield_governed_run")
+                );
+                println!(
+                    "evidence_pack={}",
+                    json_string(&result["governed_run"]["artifacts"], "packed_evidence")
+                );
+            }
+            Ok(())
+        }
+        GreenfieldCommand::ThreeOsSmokeGate { smokes, out, json } => {
+            let result = greenfield_three_os_smoke_gate_json(&smokes, out.as_deref())?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else {
+                println!("status={}", json_string(&result, "status"));
+                println!(
+                    "accepted_os_count={}",
+                    result["accepted_os"]
+                        .as_array()
+                        .map(|items| items.len())
+                        .unwrap_or(0)
+                );
+                println!(
+                    "missing_os_count={}",
+                    result["missing_os"]
+                        .as_array()
+                        .map(|items| items.len())
+                        .unwrap_or(0)
+                );
+            }
+            if json_string(&result, "status") != "accepted" {
+                return Err(anyhow!("greenfield three-os-smoke-gate rejected"));
+            }
+            Ok(())
+        }
+    }
 }
 
 pub(crate) fn factory_greenfield_run_json(

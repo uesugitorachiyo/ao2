@@ -5,7 +5,9 @@ use anyhow::{anyhow, Context, Result};
 use ao2_core::sha256_hex;
 use chrono::{SecondsFormat, Utc};
 
+use crate::cli::PulseCommand;
 use crate::cli_util::{atomic_write_text, json_bool, json_string};
+use crate::pulse_eval_loop::pulse_eval_loop;
 
 pub(crate) fn pulse_run_once_json(
     packet: &Path,
@@ -845,4 +847,222 @@ pub(crate) fn validate_pulse_task_contract(contract: &serde_json::Value) -> Resu
         }
     }
     Ok(())
+}
+
+pub(crate) fn pulse(command: PulseCommand) -> Result<()> {
+    match command {
+        PulseCommand::Run {
+            once,
+            chain,
+            execute,
+            once_evidence,
+            chain_evidence,
+            task_contract,
+            dry_run_task,
+            apply_dry_run,
+            dry_run_evidence,
+            dry_run_sha256,
+            apply_root,
+            packet,
+            board,
+            out_dir,
+            json,
+        } => {
+            if [once, chain, execute]
+                .into_iter()
+                .filter(|enabled| *enabled)
+                .count()
+                != 1
+            {
+                anyhow::bail!(
+                    "ao2 pulse run requires exactly one of --once, --chain, or --execute"
+                );
+            }
+            let result = if once {
+                if once_evidence.is_some() {
+                    anyhow::bail!("--once-evidence is only valid with --chain");
+                }
+                if chain_evidence.is_some() {
+                    anyhow::bail!("--chain-evidence is only valid with --execute");
+                }
+                if task_contract.is_some() {
+                    anyhow::bail!("--task-contract is only valid with --execute");
+                }
+                if dry_run_task {
+                    anyhow::bail!("--dry-run-task is only valid with --execute");
+                }
+                if apply_dry_run || dry_run_evidence.is_some() || dry_run_sha256.is_some() {
+                    anyhow::bail!("--apply-dry-run is only valid with --execute");
+                }
+                pulse_run_once_json(&packet, &board, &out_dir)?
+            } else if chain {
+                if chain_evidence.is_some() {
+                    anyhow::bail!("--chain-evidence is only valid with --execute");
+                }
+                if task_contract.is_some() {
+                    anyhow::bail!("--task-contract is only valid with --execute");
+                }
+                if dry_run_task {
+                    anyhow::bail!("--dry-run-task is only valid with --execute");
+                }
+                if apply_dry_run || dry_run_evidence.is_some() || dry_run_sha256.is_some() {
+                    anyhow::bail!("--apply-dry-run is only valid with --execute");
+                }
+                let once_evidence = once_evidence
+                    .as_deref()
+                    .ok_or_else(|| anyhow!("ao2 pulse run --chain requires --once-evidence"))?;
+                pulse_run_chain_json(&packet, &board, once_evidence, &out_dir)?
+            } else {
+                if once_evidence.is_some() {
+                    anyhow::bail!("--once-evidence is only valid with --chain");
+                }
+                if apply_dry_run {
+                    if dry_run_task {
+                        anyhow::bail!("--dry-run-task cannot be combined with --apply-dry-run");
+                    }
+                    if chain_evidence.is_some() {
+                        anyhow::bail!("--chain-evidence is not valid with --apply-dry-run");
+                    }
+                    if task_contract.is_some() {
+                        anyhow::bail!("--task-contract is not valid with --apply-dry-run");
+                    }
+                    let dry_run_evidence = dry_run_evidence.as_deref().ok_or_else(|| {
+                        anyhow!(
+                            "ao2 pulse run --execute --apply-dry-run requires --dry-run-evidence"
+                        )
+                    })?;
+                    let dry_run_sha256 = dry_run_sha256.as_deref().ok_or_else(|| {
+                        anyhow!("ao2 pulse run --execute --apply-dry-run requires --dry-run-sha256")
+                    })?;
+                    pulse_run_apply_dry_run_json(
+                        &packet,
+                        &board,
+                        dry_run_evidence,
+                        dry_run_sha256,
+                        &apply_root,
+                        &out_dir,
+                    )?
+                } else {
+                    if dry_run_evidence.is_some() || dry_run_sha256.is_some() {
+                        anyhow::bail!("--dry-run-evidence is only valid with --apply-dry-run");
+                    }
+                    let chain_evidence = chain_evidence.as_deref().ok_or_else(|| {
+                        anyhow!("ao2 pulse run --execute requires --chain-evidence")
+                    })?;
+                    let task_contract = task_contract.as_deref().ok_or_else(|| {
+                        anyhow!("ao2 pulse run --execute requires --task-contract")
+                    })?;
+                    pulse_run_execute_json(
+                        &packet,
+                        &board,
+                        chain_evidence,
+                        task_contract,
+                        &out_dir,
+                        dry_run_task,
+                    )?
+                }
+            };
+            if json {
+                println!("{}", serde_json::to_string_pretty(&result)?);
+            } else {
+                println!("status={}", json_string(&result, "status"));
+                println!(
+                    "selected_task={}",
+                    json_string(&result["selected_task"], "id")
+                );
+                println!(
+                    "artifact={}",
+                    json_string(
+                        &result["artifacts"],
+                        pulse_artifact_key(once, chain, execute)
+                    )
+                );
+            }
+            Ok(())
+        }
+        PulseCommand::RunLoop {
+            command,
+            decision_file,
+            max_chain_runs,
+            max_runtime_seconds,
+            out_dir,
+            stdout_fallback,
+            apply_root,
+            json,
+        } => {
+            let summary = ao2_runtime::pulse_event_loop::run_pulse_event_loop(
+                &command,
+                decision_file.as_deref(),
+                max_chain_runs,
+                max_runtime_seconds,
+                &out_dir,
+                stdout_fallback,
+                &apply_root,
+            )?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+            } else {
+                println!("status={}", summary.status);
+                println!("iterations={}", summary.iterations);
+                println!("decision_source={}", summary.decision_source);
+                if let Some(ref path) = summary.decision_path {
+                    println!("decision_path={}", path);
+                }
+                if let Some(ref task_id) = summary.next_task_id {
+                    println!("next_task_id={}", task_id);
+                }
+            }
+            if summary.status == "failed" {
+                anyhow::bail!("Pulse event-loop run failed");
+            }
+            Ok(())
+        }
+        PulseCommand::AutoAdvance {
+            resume_json,
+            out_dir,
+            ledger,
+            stop_file,
+            max_iterations,
+            allow_duplicate,
+            forever,
+            sleep_seconds,
+            generate_next,
+            generate_next_sleep_seconds,
+            pr_ci_gate,
+            pr_ci_gate_state,
+            pr_ci_gate_update,
+            local_only_while_pr_blocked,
+            direct_main_publish,
+            apply_root,
+        } => {
+            let result_str = ao2_runtime::pulse_event_loop::run_pulse_auto_advance(
+                ao2_runtime::pulse_event_loop::PulseAutoAdvanceOptions {
+                    resume_json: &resume_json,
+                    out_dir: &out_dir,
+                    ledger: &ledger,
+                    stop_file: &stop_file,
+                    max_iterations_opt: max_iterations,
+                    allow_duplicate,
+                    forever,
+                    sleep_seconds,
+                    generate_next,
+                    generate_next_sleep_seconds_opt: generate_next_sleep_seconds,
+                    pr_ci_gate,
+                    pr_ci_gate_state: &pr_ci_gate_state,
+                    pr_ci_gate_update,
+                    local_only_while_pr_blocked,
+                    direct_main_publish,
+                    apply_root: &apply_root,
+                },
+            )?;
+            let summary_path = out_dir.join("summary.json");
+            println!("summary={}", summary_path.to_string_lossy());
+            println!("status={}", result_str);
+            if result_str != "passed" && result_str != "stopped" && result_str != "waiting" {
+                anyhow::bail!("Pulse auto-advance failed with status: {}", result_str);
+            }
+            Ok(())
+        }
+        PulseCommand::EvalLoop { command } => pulse_eval_loop(command),
+    }
 }
