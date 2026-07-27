@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command as ProcessCommand;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use ao2_core::sha256_hex;
 use flate2::{Compression, GzBuilder};
 use serde::de::DeserializeOwned;
@@ -425,7 +425,19 @@ pub(crate) fn fail_if_provider_api_key_env_present() -> Result<()> {
     }
     Ok(())
 }
-
+pub(crate) fn resolve_api_token(token: Option<&str>, token_env: Option<&str>) -> Result<String> {
+    match (token, token_env) {
+        (Some(_), Some(_)) => Err(anyhow!("use only one of --api-token or --api-token-env")),
+        (Some(token), None) => trimmed_required("--api-token", token),
+        (None, Some(env_name)) => {
+            let env_name = trimmed_required("--api-token-env", env_name)?;
+            let token = std::env::var(&env_name)
+                .with_context(|| format!("read control-plane API token from ${env_name}"))?;
+            trimmed_required(&format!("${env_name}"), &token)
+        }
+        (None, None) => Err(anyhow!("--api-token or --api-token-env is required")),
+    }
+}
 pub(crate) fn query_value_owned(query: &str, key: &str) -> Option<String> {
     query.split('&').find_map(|part| {
         let (query_key, value) = part.split_once('=')?;
