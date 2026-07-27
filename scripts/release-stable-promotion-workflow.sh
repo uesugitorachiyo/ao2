@@ -205,16 +205,57 @@ for item in required:
         status = "missing"
         details["missing"] = "artifact_directory"
     elif item["kind"] == "ao2-post-stable":
-        install_update = item["path"] / "smoke" / "install-update.json"
-        if not install_update.is_file():
+        install_evidence_paths = sorted(
+            (item["path"] / "smoke").rglob("ao2*.install-verification.json")
+        )
+        doctor_path = item["path"] / "smoke" / "doctor.json"
+        if len(install_evidence_paths) != 1:
             status = "missing"
-            details["missing"] = "smoke/install-update.json"
+            details["missing"] = "smoke/home/**/ao2*.install-verification.json"
+            details["install_evidence_count"] = len(install_evidence_paths)
+        elif not doctor_path.is_file():
+            status = "missing"
+            details["missing"] = "smoke/doctor.json"
         else:
-            payload = json.loads(install_update.read_text(encoding="utf-8"))
-            details["install_update"] = str(install_update)
-            details["signature_verified"] = payload.get("signature_verified")
-            details["install_status"] = payload.get("status")
-            if payload.get("signature_verified") is not True or payload.get("status") != "installed":
+            install_evidence = json.loads(
+                install_evidence_paths[0].read_text(encoding="utf-8")
+            )
+            doctor = json.loads(doctor_path.read_text(encoding="utf-8"))
+            offline = install_evidence.get("offline_verification", {})
+            doctor_install = doctor.get("install", {})
+            doctor_evidence = doctor_install.get("verification_evidence", {})
+            expected_target = {
+                "linux": "linux-x86_64",
+                "macos": "macos-aarch64",
+                "windows": "windows-x86_64",
+            }[item["platform"]]
+            details["install_evidence"] = str(install_evidence_paths[0])
+            details["install_schema_version"] = install_evidence.get("schema_version")
+            details["install_status"] = install_evidence.get("install_status")
+            details["offline_verification_status"] = offline.get("status")
+            details["doctor"] = str(doctor_path)
+            details["doctor_schema_version"] = doctor.get("schema_version")
+            details["doctor_status"] = doctor.get("status")
+            details["target"] = doctor.get("target")
+            if not (
+                install_evidence.get("schema_version")
+                == "ao2.install-verification-evidence.v1"
+                and install_evidence.get("status") == "verified"
+                and install_evidence.get("install_status") == "installed"
+                and install_evidence.get("target") == expected_target
+                and offline.get("schema_version")
+                == "ao2.release-archive-offline-verification.v1"
+                and offline.get("status") == "verified"
+                and offline.get("checksum_coverage_verified") is True
+                and doctor.get("schema_version") == "ao2.doctor.v1"
+                and doctor.get("status") == "ok"
+                and doctor.get("target") == expected_target
+                and doctor.get("version") == install_evidence.get("version")
+                and doctor_install.get("installed") is True
+                and doctor_install.get("on_path") is True
+                and doctor_evidence.get("present") is True
+                and doctor_evidence.get("status") == "verified"
+            ):
                 status = "failed"
     elif item["kind"] == "public-release-consumer-smoke":
         summary = item["path"] / "latest" / "summary.json"

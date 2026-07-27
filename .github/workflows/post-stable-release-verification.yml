@@ -77,7 +77,7 @@ jobs:
         run: |
           set -euo pipefail
           AO2_ASSET="ao2-${AO2_RELEASE_VERSION}-${AO2_TARGET_LABEL}.tar.gz"
-          mkdir -p release smoke/extract smoke/bin
+          mkdir -p release smoke/extract smoke/home
           gh release download "$AO2_RELEASE_TAG" \
             --repo "$AO2_RELEASE_REPO" \
             --pattern "$AO2_ASSET" \
@@ -99,23 +99,31 @@ jobs:
           tar -xzf "release/$AO2_ASSET" -C smoke/extract
           test -f smoke/extract/RELEASE-MANIFEST.json
           sh smoke/extract/verify-release.sh | tee smoke/archive-verification.txt
-          AO2_INSTALL_DIR="$PWD/smoke/bin" \
-            sh smoke/extract/install.sh | tee smoke/install-output.txt
+          export HOME="$PWD/smoke/home"
+          sh smoke/extract/install.sh | tee smoke/install-output.txt
+          export PATH="$HOME/.local/bin:$PATH"
           python3 - <<'PY'
           import json
           from pathlib import Path
 
           evidence = json.loads(
-              Path("smoke/bin/ao2.install-verification.json").read_text(encoding="utf-8")
+              Path("smoke/home/.local/bin/ao2.install-verification.json").read_text(encoding="utf-8")
           )
           assert evidence["status"] == "verified", evidence
           assert evidence["install_status"] == "installed", evidence
           assert evidence["version"] == Path("smoke/extract/VERSION").read_text(encoding="utf-8").strip(), evidence
           PY
-          test -x "smoke/bin/$AO2_BINARY"
-          "smoke/bin/$AO2_BINARY" version --json | tee smoke/version.json
-          "smoke/bin/$AO2_BINARY" doctor --json | tee smoke/doctor.json
-          "smoke/bin/$AO2_BINARY" adapter doctor --provider scripted | tee smoke/scripted-doctor.txt
+          test -x "$HOME/.local/bin/$AO2_BINARY"
+          "$HOME/.local/bin/$AO2_BINARY" version --json | tee smoke/version.json
+          "$HOME/.local/bin/$AO2_BINARY" doctor --json | tee smoke/doctor.json
+          "$HOME/.local/bin/$AO2_BINARY" adapter doctor --provider scripted | tee smoke/scripted-doctor.txt
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          doctor = json.loads(Path("smoke/doctor.json").read_text(encoding="utf-8"))
+          assert doctor["status"] == "ok", doctor
+          PY
         shell: bash
 
       - name: Verify and install stable release on Windows
@@ -141,10 +149,12 @@ jobs:
           }
           & smoke/extract/Verify-Release.ps1 |
             Set-Content -Encoding UTF8 smoke/archive-verification.txt
-          $env:AO2_INSTALL_DIR = (Resolve-Path smoke/bin).Path
+          New-Item -ItemType Directory -Force -Path smoke/home | Out-Null
+          $env:LOCALAPPDATA = (Resolve-Path smoke/home).Path
           & smoke/extract/install.ps1 |
             Set-Content -Encoding UTF8 smoke/install-output.txt
-          $installEvidencePath = Join-Path $env:AO2_INSTALL_DIR "ao2.exe.install-verification.json"
+          $installDir = Join-Path $env:LOCALAPPDATA "AO2/bin"
+          $installEvidencePath = Join-Path $installDir "ao2.exe.install-verification.json"
           if (!(Test-Path $installEvidencePath)) {
             throw "missing install verification evidence: $installEvidencePath"
           }
@@ -155,12 +165,17 @@ jobs:
           if ($installEvidence.install_status -ne "installed") {
             throw "install evidence status is not installed"
           }
-          $ao2 = Join-Path $env:AO2_INSTALL_DIR $env:AO2_BINARY
+          $ao2 = Join-Path $installDir $env:AO2_BINARY
           if (!(Test-Path $ao2)) {
             throw "installed binary missing: $ao2"
           }
+          $env:PATH = "$installDir;$env:PATH"
           & $ao2 version --json | Set-Content -Encoding UTF8 smoke/version.json
           & $ao2 doctor --json | Set-Content -Encoding UTF8 smoke/doctor.json
+          $doctor = Get-Content smoke/doctor.json -Raw | ConvertFrom-Json
+          if ($doctor.status -ne "ok") {
+            throw "doctor status is not ok"
+          }
           & $ao2 adapter doctor --provider scripted | Set-Content -Encoding UTF8 smoke/scripted-doctor.txt
         shell: pwsh
 
@@ -172,7 +187,7 @@ jobs:
             release/SHA256SUMS
             smoke/archive-verification.txt
             smoke/install-output.txt
-            smoke/bin/ao2*.install-verification.json
+            smoke/home/**/ao2*.install-verification.json
             smoke/version.json
             smoke/doctor.json
             smoke/scripted-doctor.txt
