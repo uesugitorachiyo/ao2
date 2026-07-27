@@ -13983,6 +13983,75 @@ def test_no_factory_v3_guard_allows_evaluator_closer_required_contract(tmp_path)
     assert report["trust_boundary"]["factory_v3_role"] == "parity_oracle_or_audit_reference_only"
 
 
+def test_no_factory_v3_guard_allows_decomposed_skill_contract_manifest_source(tmp_path):
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    (repo / "crates" / "ao2-cli" / "src").mkdir(parents=True)
+    (repo / "crates" / "ao2-runtime" / "src").mkdir(parents=True)
+    (repo / "package.json").write_text('{"scripts": {}}\n', encoding="utf-8")
+    (repo / "crates" / "ao2-cli" / "src" / "skill_contract_manifest.rs").write_text(
+        '#[arg(long = "factory-v3-root", default_value = "../factory-v3")]\n'
+        "factory_v3_root: PathBuf,\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "AO2 Test"], cwd=repo, check=True)
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "fixture"], cwd=repo, check=True)
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "scripts" / "verify-no-factory-v3-green-path.sh"),
+        ],
+        cwd=repo,
+        env={**os.environ, "AO2_ROOT": str(repo), "OUT_DIR": str(tmp_path / "out")},
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+    report = json.loads((tmp_path / "out" / "no-factory-v3-green-path.json").read_text())
+    assert report["status"] == "passed"
+    assert report["failure_count"] == 0
+    assert report["candidate_count"] == 2
+
+
+def test_no_factory_v3_guard_rejects_source_root_in_unrelated_rust_module(tmp_path):
+    repo = tmp_path / "repo"
+    (repo / "scripts").mkdir(parents=True)
+    (repo / "crates" / "ao2-cli" / "src").mkdir(parents=True)
+    (repo / "crates" / "ao2-runtime" / "src").mkdir(parents=True)
+    (repo / "package.json").write_text('{"scripts": {}}\n', encoding="utf-8")
+    (repo / "crates" / "ao2-cli" / "src" / "unrelated.rs").write_text(
+        'let root = "../factory-v3";\n',
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "AO2 Test"], cwd=repo, check=True)
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "fixture"], cwd=repo, check=True)
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(REPO_ROOT / "scripts" / "verify-no-factory-v3-green-path.sh"),
+        ],
+        cwd=repo,
+        env={**os.environ, "AO2_ROOT": str(repo), "OUT_DIR": str(tmp_path / "out")},
+        text=True,
+        capture_output=True,
+    )
+
+    assert result.returncode == 1
+    report = json.loads((tmp_path / "out" / "no-factory-v3-green-path.json").read_text())
+    assert report["status"] == "failed"
+    assert report["failure_count"] == 1
+    assert report["failures"][0]["path"] == "crates/ao2-cli/src/unrelated.rs"
+
+
 def test_public_release_train_drill_contract():
     package_json = json.loads(read("package.json"))
     verification = read("docs/VERIFICATION.md")
