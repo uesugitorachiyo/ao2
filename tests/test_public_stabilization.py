@@ -295,6 +295,8 @@ def test_ci_non_approval_shards_are_split_for_mac_and_windows():
             "release_support_bundle_verification",
         ],
         "test-cli-release-packaging-sdd": [
+            "cli_architecture_ownership",
+            "provider_pilot_acceptance_preservation",
             "release_packaging",
             "sdd_subcommand",
         ],
