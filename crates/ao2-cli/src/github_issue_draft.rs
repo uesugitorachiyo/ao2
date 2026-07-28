@@ -1192,7 +1192,7 @@ fn hex_bytes(bytes: &[u8]) -> String {
     output
 }
 
-fn read_bounded_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T> {
+pub(crate) fn read_bounded_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T> {
     let mut file = open_bounded_input(path)?;
     let metadata = validate_opened_input(&file, path)?;
     let mut bytes = Vec::with_capacity((metadata.len() as usize).min(MAX_INPUT_BYTES as usize));

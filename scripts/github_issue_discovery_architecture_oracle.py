@@ -11,11 +11,12 @@ import os
 import subprocess
 import sys
 import tempfile
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
 
-ARCHITECTURE_SHA = "b8c64860003238ab45fe7c76d7e8950f80a4043b"
+ARCHITECTURE_SHA = "8e6f247b800b60c520b4e967f7553974a20ec2f8"
 HEAD_SHA = "1111111111111111111111111111111111111111"
 RUN_ID = "repair-run-20260728"
 COMPLETED_AT = "2026-07-28T00:00:00Z"
@@ -77,6 +78,80 @@ def canonical_digest(value: dict[str, Any]) -> str:
         value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def bind_digest(value: dict[str, Any], field: str) -> dict[str, Any]:
+    value.pop(field, None)
+    value[field] = canonical_digest(value)
+    return value
+
+
+def publication_authority(root: Path, now: datetime) -> dict[str, Any]:
+    fixture_root = root / "stack" / "fixtures" / "github-issue-repair" / "v1"
+
+    def load(name: str) -> dict[str, Any]:
+        return json.loads((fixture_root / name).read_text())
+
+    envelope = load("immutable-run-envelope.valid.json")
+    candidate = load("candidate-decision.valid.json")
+    governance = load("governance-decision.valid.json")
+    reviewer = load("reviewer-independence.valid.json")
+    envelope["created_at"] = (now - timedelta(minutes=20)).isoformat().replace(
+        "+00:00", "Z"
+    )
+    envelope["expires_at"] = (now + timedelta(minutes=60)).isoformat().replace(
+        "+00:00", "Z"
+    )
+    candidate["decided_at"] = (now - timedelta(minutes=15)).isoformat().replace(
+        "+00:00", "Z"
+    )
+    governance["decided_at"] = (now - timedelta(minutes=10)).isoformat().replace(
+        "+00:00", "Z"
+    )
+    reviewer["reviewed_at"] = (now - timedelta(minutes=8)).isoformat().replace(
+        "+00:00", "Z"
+    )
+    return {
+        "run_envelope": bind_digest(envelope, "canonical_digest"),
+        "candidate_decision": bind_digest(candidate, "decision_digest"),
+        "governance_decision": bind_digest(governance, "decision_digest"),
+        "reviewer_independence": bind_digest(reviewer, "review_digest"),
+    }
+
+
+def publication_action(
+    operation: str, authority: dict[str, Any], now: datetime
+) -> dict[str, Any]:
+    title = "Fix bounded fixture"
+    body = "Repairs #101 with exact evidence."
+    envelope = authority["run_envelope"]
+    candidate = authority["candidate_decision"]
+    governance = authority["governance_decision"]
+    reviewer = authority["reviewer_independence"]
+    repository = candidate["repository"]
+    action = {
+        "schema": "ao.architecture.autonomous-issue-repair.github-action-digest.v1",
+        "run_id": candidate["run_id"],
+        "repository": repository,
+        "issue_number": candidate["issue_number"],
+        "base_sha": candidate["base_sha"],
+        "head_sha": governance["head_sha"],
+        "fork": f"{envelope['routing']['fork_owner']}/{repository.split('/', 1)[1]}",
+        "branch": envelope["routing"]["repair_branch"],
+        "pr_title_digest": hashlib.sha256(title.encode()).hexdigest(),
+        "pr_body_digest": hashlib.sha256(body.encode()).hexdigest(),
+        "diff_digest": reviewer["subject_digest"],
+        "required_checks": governance["required_checks"],
+        "action": operation,
+        "approved_at": (now - timedelta(minutes=5)).isoformat().replace("+00:00", "Z"),
+        "expires_at": (now + timedelta(minutes=55)).isoformat().replace("+00:00", "Z"),
+        "run_envelope_digest": envelope["canonical_digest"],
+        "candidate_decision_digest": candidate["decision_digest"],
+        "governance_decision_digest": governance["decision_digest"],
+        "reviewer_independence_digest": reviewer["review_digest"],
+    }
+    action["action_digest"] = canonical_digest(action)
+    return action
 
 
 def candidate_document(
@@ -187,7 +262,74 @@ def main() -> int:
             raise RuntimeError(
                 f"Architecture discovery/candidate link failed for {issue_number}: {link_errors}"
             )
-    print("AO2 bounded discovery Architecture oracle passed")
+    publication_now = datetime.now(timezone.utc)
+    authority = publication_authority(architecture_root, publication_now)
+    push = publication_action("push_operator_fork", authority, publication_now)
+    draft = publication_action("open_upstream_draft_pr", authority, publication_now)
+    for action in [push, draft]:
+        action_errors = validator.validate_contract_instance(
+            "github_action_digest", action, root=architecture_root
+        )
+        if action_errors:
+            raise RuntimeError(
+                f"Architecture GitHub action validation failed: {action_errors}"
+            )
+        link_errors = validator.validate_action_digest_links(
+            action,
+            authority["run_envelope"],
+            authority["candidate_decision"],
+            authority["governance_decision"],
+            authority["reviewer_independence"],
+            reference_time=publication_now,
+            root=architecture_root,
+        )
+        if link_errors:
+            raise RuntimeError(
+                f"Architecture GitHub action authority link failed: {link_errors}"
+            )
+    plan = {
+        "schema_version": "ao2.github-repair-publication-plan.v1",
+        "architecture_contract_commit": ARCHITECTURE_SHA,
+        "authority": authority,
+        "push_action": push,
+        "draft_action": draft,
+        "draft": {
+            "title": "Fix bounded fixture",
+            "body": "Repairs #101 with exact evidence.",
+        },
+    }
+    with tempfile.TemporaryDirectory(prefix="ao2-publication-oracle-") as directory:
+        plan_path = Path(directory) / "plan.json"
+        plan_path.write_text(json.dumps(plan), encoding="utf-8")
+        result = subprocess.run(
+            [
+                str(ao2_binary(args.ao2)),
+                "issue",
+                "publish",
+                "verify",
+                "--plan",
+                str(plan_path),
+                "--expected-push-action-digest",
+                push["action_digest"],
+                "--expected-draft-action-digest",
+                draft["action_digest"],
+                "--json",
+            ],
+            check=True,
+            text=True,
+            capture_output=True,
+        )
+    readback = json.loads(result.stdout)
+    expected_zero_writes = {
+        "github_contacted": False,
+        "git_write_performed": False,
+        "draft_pr_write_performed": False,
+        "merge_performed": False,
+    }
+    for field, expected in expected_zero_writes.items():
+        if readback.get(field) is not expected:
+            raise RuntimeError(f"AO2 publication verification changed {field}")
+    print("AO2 discovery and publication Architecture oracle passed")
     return 0
 
 

@@ -8,7 +8,9 @@ use crate::install_cmd::InstallCommand;
 use crate::memory_store::MemoryCommand;
 use crate::skill_contract_manifest::SkillContractManifestCommand;
 use crate::upgrade_cmd::UpgradeCommand;
-use crate::{github_issue_draft, sdd_cmd, support_bundle};
+use crate::{
+    github_issue_draft, github_issue_intake::github_issue_publish, sdd_cmd, support_bundle,
+};
 
 #[derive(Debug, Parser)]
 #[command(name = "ao2")]
@@ -1042,6 +1044,11 @@ pub(crate) enum IssueCommand {
     DraftPr {
         #[command(subcommand)]
         command: github_issue_draft::DraftPrCommand,
+    },
+    /// Verify or apply exact digest-bound GitHub repair publication actions.
+    Publish {
+        #[command(subcommand)]
+        command: github_issue_publish::PublishCommand,
     },
 }
 

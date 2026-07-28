@@ -29,6 +29,7 @@ pub use ao2_artifacts::hosted_release_contract::{
 };
 pub use ao2_core::RunStatus;
 
+pub mod github_issue_publication;
 pub mod pulse_event_loop;
 
 #[derive(Debug, Clone)]
