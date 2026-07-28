@@ -1015,6 +1015,29 @@ pub(crate) enum IssueCommand {
         #[arg(long)]
         json: bool,
     },
+    /// Produce bounded, offline GitHub issue discovery evidence from a sanitized page envelope.
+    Discover {
+        #[arg(long = "page-envelope")]
+        page_envelope: PathBuf,
+        #[arg(long)]
+        url: String,
+        #[arg(long)]
+        repository: String,
+        #[arg(long = "default-branch")]
+        default_branch: String,
+        #[arg(long = "head-sha")]
+        head_sha: String,
+        #[arg(long = "run-id")]
+        run_id: String,
+        #[arg(long = "completed-at")]
+        completed_at: String,
+        #[arg(long = "snapshot-limit", default_value_t = 50)]
+        snapshot_limit: usize,
+        #[arg(long = "candidate-limit", default_value_t = 10)]
+        candidate_limit: usize,
+        #[arg(long)]
+        json: bool,
+    },
     /// Build, verify, or exercise a bounded local draft pull request action.
     DraftPr {
         #[command(subcommand)]

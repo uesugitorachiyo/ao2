@@ -69,6 +69,8 @@ jobs:
               cargo test -p ao2-cli --test cli_git
               cargo test -p ao2-cli --test cli_provider_run_repair
               cargo test -p ao2-cli --test cli_memory
+              cargo test -p ao2-cli --test github_issue_intake
+              cargo test -p ao2-cli --test github_issue_discovery
           - os: ubuntu-latest
             phase: test-cli-approval-control-plane
             timeout_minutes: 20
@@ -247,6 +249,8 @@ jobs:
               cargo test -p ao2-cli --test cli_git
               cargo test -p ao2-cli --test cli_provider_run_repair
               cargo test -p ao2-cli --test cli_memory
+              cargo test -p ao2-cli --test github_issue_intake
+              cargo test -p ao2-cli --test github_issue_discovery
           - os: macos-latest
             phase: test-cli-approval-control-plane
             timeout_minutes: 20
@@ -396,6 +400,8 @@ jobs:
               cargo test -p ao2-cli --test cli_git
               cargo test -p ao2-cli --test cli_provider_run_repair
               cargo test -p ao2-cli --test cli_memory
+              cargo test -p ao2-cli --test github_issue_intake
+              cargo test -p ao2-cli --test github_issue_discovery
           - os: windows-latest
             phase: test-cli-approval-control-plane
             timeout_minutes: 20
@@ -552,6 +558,29 @@ jobs:
           scripts/ci-cargo-retry.sh "${{ matrix.phase }}" <<'AO2_CI_COMMAND'
           ${{ matrix.command }}
           AO2_CI_COMMAND
+
+      - name: Checkout Architecture discovery oracle
+        if: matrix.phase == 'test-cli-approval-core'
+        uses: actions/checkout@v6.0.3
+        with:
+          repository: uesugitorachiyo/ao-architecture
+          ref: b8c64860003238ab45fe7c76d7e8950f80a4043b
+          path: target/architecture-discovery-oracle
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Verify bounded discovery Architecture oracle
+        if: matrix.phase == 'test-cli-approval-core'
+        shell: bash
+        run: |
+          cargo build -p ao2-cli --locked
+          python_command=python3
+          if ! command -v "$python_command" >/dev/null 2>&1; then
+            python_command=python
+          fi
+          "$python_command" scripts/github_issue_discovery_architecture_oracle.py \
+            --architecture-root target/architecture-discovery-oracle \
+            --ao2 target/debug/ao2
 
       - name: Upload Python guard artifacts
         if: matrix.phase == 'python-guard-tests'

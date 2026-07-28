@@ -7,9 +7,9 @@ use std::path::Path;
 
 use anyhow::{bail, Result};
 use windows_sys::Win32::Storage::FileSystem::{
-    FileAttributeTagInfo, GetFileInformationByHandleEx, GetFileType, FILE_ATTRIBUTE_REPARSE_POINT,
-    FILE_ATTRIBUTE_TAG_INFO, FILE_FLAG_OPEN_REPARSE_POINT, FILE_TYPE_DISK, SECURITY_IDENTIFICATION,
-    SECURITY_SQOS_PRESENT,
+    FileAttributeTagInfo, GetFileInformationByHandle, GetFileInformationByHandleEx, GetFileType,
+    BY_HANDLE_FILE_INFORMATION, FILE_ATTRIBUTE_REPARSE_POINT, FILE_ATTRIBUTE_TAG_INFO,
+    FILE_FLAG_OPEN_REPARSE_POINT, FILE_TYPE_DISK, SECURITY_IDENTIFICATION, SECURITY_SQOS_PRESENT,
 };
 
 // Audited Windows input-handle boundary: callers pass already-opened read-only
@@ -27,6 +27,17 @@ pub(crate) fn validate_non_reparse_disk_handle(file: &fs::File, path: &Path) -> 
     validate_file_characteristics(file_type(file), tag_info.FileAttributes, path)
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct DiskFileIdentity {
+    volume_serial_number: u32,
+    file_index: u64,
+}
+
+pub(crate) fn disk_file_identity(file: &fs::File, path: &Path) -> Result<DiskFileIdentity> {
+    let inspection = inspect_disk_handle(file, path)?;
+    Ok(identity_from_file_information(&inspection.file_information))
+}
+
 fn file_type(file: &fs::File) -> u32 {
     // SAFETY: GetFileType only inspects the borrowed HANDLE value. The handle
     // comes from std::fs::File, remains owned by the caller, and is not closed
@@ -35,25 +46,51 @@ fn file_type(file: &fs::File) -> u32 {
 }
 
 fn file_attribute_tag_info(file: &fs::File, path: &Path) -> Result<FILE_ATTRIBUTE_TAG_INFO> {
+    Ok(inspect_disk_handle(file, path)?.tag_info)
+}
+
+struct DiskHandleInspection {
+    tag_info: FILE_ATTRIBUTE_TAG_INFO,
+    file_information: BY_HANDLE_FILE_INFORMATION,
+}
+
+fn inspect_disk_handle(file: &fs::File, path: &Path) -> Result<DiskHandleInspection> {
     let mut tag_info = FILE_ATTRIBUTE_TAG_INFO::default();
-    // SAFETY: The buffer points to a properly aligned FILE_ATTRIBUTE_TAG_INFO
-    // value for the duration of the call, and the byte count matches the
-    // buffer type. The borrowed HANDLE is not closed or retained.
-    let inspected = unsafe {
-        GetFileInformationByHandleEx(
-            file.as_raw_handle(),
-            FileAttributeTagInfo,
-            std::ptr::from_mut(&mut tag_info).cast(),
-            std::mem::size_of::<FILE_ATTRIBUTE_TAG_INFO>() as u32,
+    let mut file_information = BY_HANDLE_FILE_INFORMATION::default();
+    // SAFETY: Both buffers are properly aligned for the respective Windows
+    // inspection APIs. The borrowed HANDLE remains owned by std::fs::File and
+    // is neither closed nor retained by either call.
+    let (tag_inspected, identity_inspected) = unsafe {
+        (
+            GetFileInformationByHandleEx(
+                file.as_raw_handle(),
+                FileAttributeTagInfo,
+                std::ptr::from_mut(&mut tag_info).cast(),
+                std::mem::size_of::<FILE_ATTRIBUTE_TAG_INFO>() as u32,
+            ),
+            GetFileInformationByHandle(
+                file.as_raw_handle(),
+                std::ptr::from_mut(&mut file_information),
+            ),
         )
     };
-    if inspected == 0 {
+    if tag_inspected == 0 || identity_inspected == 0 {
         bail!(
-            "inspect Windows input reparse attributes before read: {}",
+            "inspect Windows input identity and reparse attributes before read: {}",
             path.display()
         );
     }
-    Ok(tag_info)
+    Ok(DiskHandleInspection {
+        tag_info,
+        file_information,
+    })
+}
+
+fn identity_from_file_information(info: &BY_HANDLE_FILE_INFORMATION) -> DiskFileIdentity {
+    DiskFileIdentity {
+        volume_serial_number: info.dwVolumeSerialNumber,
+        file_index: (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow),
+    }
 }
 
 fn validate_file_type(file_type: u32, path: &Path) -> Result<()> {
@@ -116,5 +153,26 @@ mod tests {
             validate_file_characteristics(FILE_TYPE_DISK, FILE_ATTRIBUTE_REPARSE_POINT, path)
                 .is_err()
         );
+    }
+
+    #[test]
+    fn disk_file_identity_compares_volume_and_full_file_index() {
+        let first = DiskFileIdentity {
+            volume_serial_number: 7,
+            file_index: u64::from(u32::MAX) + 1,
+        };
+        let same = first;
+        let different_volume = DiskFileIdentity {
+            volume_serial_number: 8,
+            file_index: first.file_index,
+        };
+        let different_index = DiskFileIdentity {
+            volume_serial_number: first.volume_serial_number,
+            file_index: first.file_index + 1,
+        };
+
+        assert_eq!(first, same);
+        assert_ne!(first, different_volume);
+        assert_ne!(first, different_index);
     }
 }

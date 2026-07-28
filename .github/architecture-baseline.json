@@ -7,7 +7,7 @@
     "new_integration_test_file_lines_hard_ceiling": 4000,
     "new_integration_test_file_tests_hard_ceiling": 35,
     "new_production_file_lines_hard_ceiling": 5000,
-    "production_total_lines_soft_cap": 79000,
+    "production_total_lines_soft_cap": 80000,
     "shared_test_leaf_lines_hard_ceiling": 500
   },
   "measurements": {
@@ -370,8 +370,8 @@
       "integration_test_static_count": 672
     },
     "unsafe_blocks": [
-      "crates/ao2-cli/src/windows_input.rs:34:unsafe { GetFileType(file.as_raw_handle()) }",
-      "crates/ao2-cli/src/windows_input.rs:42:let inspected = unsafe {"
+      "crates/ao2-cli/src/windows_input.rs:45:unsafe { GetFileType(file.as_raw_handle()) }",
+      "crates/ao2-cli/src/windows_input.rs:63:let (tag_inspected, identity_inspected) = unsafe {"
     ],
     "workspace_dependency_edges": [
       "ao2-adapters->ao2-adapter-claude",
@@ -391,7 +391,8 @@
   },
   "notes": [
     "Initial ratchet was measured at AO2 v0.5.3 post-hackathon start SHA.",
-    "Existing oversize files are grandfathered debt and may not grow."
+    "Existing oversize files are grandfathered debt and may not grow.",
+    "Phase 5 bounded-discovery adds one separately ratcheted production module and its audited Windows identity boundary; the aggregate soft cap is raised only to 80000."
   ],
   "schema_version": "ao2.rust_architecture_baseline.v1"
 }
