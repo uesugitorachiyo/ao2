@@ -25,5 +25,8 @@ serde_json.workspace = true
 tempfile.workspace = true
 walkdir.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+win32job = "2.0.3"
+
 [lints]
 workspace = true

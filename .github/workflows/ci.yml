@@ -71,6 +71,7 @@ jobs:
               cargo test -p ao2-cli --test cli_memory
               cargo test -p ao2-cli --test github_issue_intake
               cargo test -p ao2-cli --test github_issue_discovery
+              cargo test -p ao2-cli --test github_issue_fork_publish
           - os: ubuntu-latest
             phase: test-cli-approval-control-plane
             timeout_minutes: 20
@@ -251,6 +252,7 @@ jobs:
               cargo test -p ao2-cli --test cli_memory
               cargo test -p ao2-cli --test github_issue_intake
               cargo test -p ao2-cli --test github_issue_discovery
+              cargo test -p ao2-cli --test github_issue_fork_publish
           - os: macos-latest
             phase: test-cli-approval-control-plane
             timeout_minutes: 20
@@ -402,6 +404,7 @@ jobs:
               cargo test -p ao2-cli --test cli_memory
               cargo test -p ao2-cli --test github_issue_intake
               cargo test -p ao2-cli --test github_issue_discovery
+              cargo test -p ao2-cli --test github_issue_fork_publish
           - os: windows-latest
             phase: test-cli-approval-control-plane
             timeout_minutes: 20
@@ -564,7 +567,7 @@ jobs:
         uses: actions/checkout@v6.0.3
         with:
           repository: uesugitorachiyo/ao-architecture
-          ref: b8c64860003238ab45fe7c76d7e8950f80a4043b
+          ref: 8e6f247b800b60c520b4e967f7553974a20ec2f8
           path: target/architecture-discovery-oracle
           persist-credentials: false
           fetch-depth: 1

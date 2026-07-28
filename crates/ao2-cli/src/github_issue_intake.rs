@@ -3,6 +3,7 @@ use serde::Serialize;
 
 #[path = "github_issue_discovery.rs"]
 mod github_issue_discovery;
+pub(crate) mod github_issue_publish;
 
 use super::{canonical_json_sha256, github_issue_draft};
 use crate::cli::IssueCommand;
@@ -62,6 +63,7 @@ pub(super) fn issue(command: IssueCommand) -> Result<()> {
         IssueCommand::DraftPr { command } => {
             github_issue_draft::run(command, canonical_json_sha256)
         }
+        IssueCommand::Publish { command } => github_issue_publish::run(command),
     }
 }
 
