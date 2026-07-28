@@ -326,6 +326,29 @@ fn verify_accepts_exact_live_actions_and_reports_zero_writes() {
 }
 
 #[test]
+fn verify_rejects_duplicate_nested_authority_fields() {
+    let now = Utc::now();
+    let (plan, push_digest, draft_digest) = publication_plan(now);
+    let encoded = serde_json::to_string_pretty(&plan).unwrap();
+    let duplicated = encoded.replacen(
+        "\"protected_path_touched\": false",
+        "\"protected_path_touched\": false,\n      \"protected_path_touched\": false",
+        1,
+    );
+    assert_ne!(duplicated, encoded);
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("duplicate-plan.json");
+    fs::write(&path, duplicated).unwrap();
+
+    let output = verify(&path, &push_digest, &draft_digest);
+    assert!(
+        !output.status.success(),
+        "duplicate nested field was accepted"
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("duplicate"));
+}
+
+#[test]
 fn verify_rejects_unknown_malformed_oversized_and_unsafe_plan_inputs() {
     let now = Utc::now();
     let (mut unknown, push_digest, draft_digest) = publication_plan(now);
