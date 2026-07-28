@@ -425,7 +425,7 @@ fn validate_opened_input(file: &fs::File, path: &Path) -> Result<fs::Metadata> {
     Ok(metadata)
 }
 
-fn validate_path_matches_opened(path: &Path, opened: &fs::Metadata) -> Result<()> {
+fn validate_path_matches_opened(path: &Path, _opened: &fs::Metadata) -> Result<()> {
     let path_metadata = fs::symlink_metadata(path)
         .with_context(|| format!("inspect page envelope path {}", path.display()))?;
     if !path_metadata.file_type().is_file() {
@@ -438,7 +438,7 @@ fn validate_path_matches_opened(path: &Path, opened: &fs::Metadata) -> Result<()
     {
         use std::os::unix::fs::MetadataExt;
 
-        if path_metadata.dev() != opened.dev() || path_metadata.ino() != opened.ino() {
+        if path_metadata.dev() != _opened.dev() || path_metadata.ino() != _opened.ino() {
             return Err(anyhow!(
                 "page envelope path changed while reading: {}",
                 path.display()
