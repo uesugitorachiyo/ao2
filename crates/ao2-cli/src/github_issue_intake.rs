@@ -1,6 +1,9 @@
 use anyhow::Result;
 use serde::Serialize;
 
+#[path = "github_issue_discovery.rs"]
+mod github_issue_discovery;
+
 use super::{canonical_json_sha256, github_issue_draft};
 use crate::cli::IssueCommand;
 
@@ -33,6 +36,29 @@ pub(super) fn issue(command: IssueCommand) -> Result<()> {
             target_commit,
             json,
         } => issue_acquire(&url, &upstream_url, &default_branch, &target_commit, json),
+        IssueCommand::Discover {
+            page_envelope,
+            url,
+            repository,
+            default_branch,
+            head_sha,
+            run_id,
+            completed_at,
+            snapshot_limit,
+            candidate_limit,
+            json,
+        } => github_issue_discovery::run(github_issue_discovery::DiscoveryRequest {
+            page_envelope: &page_envelope,
+            url: &url,
+            repository: &repository,
+            default_branch: &default_branch,
+            head_sha: &head_sha,
+            run_id: &run_id,
+            completed_at: &completed_at,
+            snapshot_limit,
+            candidate_limit,
+            json,
+        }),
         IssueCommand::DraftPr { command } => {
             github_issue_draft::run(command, canonical_json_sha256)
         }
