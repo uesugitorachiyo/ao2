@@ -6,7 +6,7 @@ use clap::Subcommand;
 use serde::Serialize;
 
 use ao2_runtime::github_issue_publication::{
-    apply_publication_plan, verify_publication_plan, PublicationPlan,
+    apply_publication_plan, decode_publication_plan_strict, verify_publication_plan,
 };
 
 #[derive(Debug, Subcommand)]
@@ -65,8 +65,10 @@ pub(crate) fn run(command: PublishCommand) -> Result<()> {
             Some(repository),
         ),
     };
-    let plan: PublicationPlan = crate::github_issue_draft::read_bounded_json(&plan_path)
-        .context("publication plan is malformed, unsafe, oversized, or contains unknown fields")?;
+    let bytes = crate::github_issue_draft::read_bounded_bytes(&plan_path)
+        .context("publication plan is malformed, unsafe, or oversized")?;
+    let plan = decode_publication_plan_strict(&bytes)
+        .context("publication plan contains invalid, unknown, or duplicate fields")?;
     let now = Utc::now();
     match repository {
         Some(root) => emit(

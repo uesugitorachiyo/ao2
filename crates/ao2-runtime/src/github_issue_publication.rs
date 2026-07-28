@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+use std::fmt;
 use std::io::{Read, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -9,7 +10,8 @@ use std::time::{Duration, Instant};
 use anyhow::{bail, Context, Result};
 use ao2_core::sha256_hex;
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
+use serde::de::{self, MapAccess, SeqAccess, Visitor};
+use serde::{Deserialize, Deserializer, Serialize};
 
 const MAX_TITLE_BYTES: usize = 256;
 const MAX_BODY_BYTES: usize = 8_192;
@@ -27,6 +29,110 @@ pub struct PublicationPlan {
     push_action: GitHubActionDigest,
     draft_action: GitHubActionDigest,
     draft: DraftText,
+}
+
+struct UniqueJSONValue(serde_json::Value);
+
+impl<'de> Deserialize<'de> for UniqueJSONValue {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_any(UniqueJSONVisitor)
+    }
+}
+
+struct UniqueJSONVisitor;
+
+impl<'de> Visitor<'de> for UniqueJSONVisitor {
+    type Value = UniqueJSONValue;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("JSON without duplicate object fields")
+    }
+
+    fn visit_bool<E>(self, value: bool) -> std::result::Result<Self::Value, E> {
+        Ok(UniqueJSONValue(serde_json::Value::Bool(value)))
+    }
+
+    fn visit_i64<E>(self, value: i64) -> std::result::Result<Self::Value, E> {
+        Ok(UniqueJSONValue(serde_json::Value::Number(value.into())))
+    }
+
+    fn visit_u64<E>(self, value: u64) -> std::result::Result<Self::Value, E> {
+        Ok(UniqueJSONValue(serde_json::Value::Number(value.into())))
+    }
+
+    fn visit_f64<E>(self, value: f64) -> std::result::Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        serde_json::Number::from_f64(value)
+            .map(serde_json::Value::Number)
+            .map(UniqueJSONValue)
+            .ok_or_else(|| E::custom("non-finite JSON number"))
+    }
+
+    fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E> {
+        Ok(UniqueJSONValue(serde_json::Value::String(
+            value.to_string(),
+        )))
+    }
+
+    fn visit_string<E>(self, value: String) -> std::result::Result<Self::Value, E> {
+        Ok(UniqueJSONValue(serde_json::Value::String(value)))
+    }
+
+    fn visit_none<E>(self) -> std::result::Result<Self::Value, E> {
+        Ok(UniqueJSONValue(serde_json::Value::Null))
+    }
+
+    fn visit_unit<E>(self) -> std::result::Result<Self::Value, E> {
+        Ok(UniqueJSONValue(serde_json::Value::Null))
+    }
+
+    fn visit_some<D>(self, deserializer: D) -> std::result::Result<Self::Value, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        UniqueJSONValue::deserialize(deserializer)
+    }
+
+    fn visit_seq<A>(self, mut sequence: A) -> std::result::Result<Self::Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        let mut values = Vec::new();
+        while let Some(value) = sequence.next_element::<UniqueJSONValue>()? {
+            values.push(value.0);
+        }
+        Ok(UniqueJSONValue(serde_json::Value::Array(values)))
+    }
+
+    fn visit_map<A>(self, mut object: A) -> std::result::Result<Self::Value, A::Error>
+    where
+        A: MapAccess<'de>,
+    {
+        let mut values = serde_json::Map::new();
+        while let Some(key) = object.next_key::<String>()? {
+            if values.contains_key(&key) {
+                return Err(de::Error::custom(format!("duplicate field {key:?}")));
+            }
+            values.insert(key, object.next_value::<UniqueJSONValue>()?.0);
+        }
+        Ok(UniqueJSONValue(serde_json::Value::Object(values)))
+    }
+}
+
+pub fn decode_publication_plan_strict(bytes: &[u8]) -> Result<PublicationPlan> {
+    let mut deserializer = serde_json::Deserializer::from_slice(bytes);
+    let value = UniqueJSONValue::deserialize(&mut deserializer)
+        .context("publication plan is not strict duplicate-free JSON")?;
+    deserializer
+        .end()
+        .context("publication plan contains trailing JSON")?;
+    serde_json::from_value(value.0)
+        .context("publication plan does not match the strict typed contract")
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -1244,7 +1350,7 @@ fn validate_action(
 
 trait PublicationTransport {
     fn now(&mut self) -> DateTime<Utc>;
-    fn verify_local_repository(&mut self, root: &Path, action: &GitHubActionDigest) -> Result<()>;
+    fn verify_local_repository(&mut self, root: &Path, plan: &PublicationPlan) -> Result<()>;
     fn authenticated_login(&mut self) -> Result<String>;
     fn read_repository(&mut self, repository: &str) -> Result<RepositoryIdentity>;
     fn read_fork(&mut self, fork: &str) -> Result<Option<ForkIdentity>>;
@@ -1338,7 +1444,7 @@ fn apply_with_transport<T: PublicationTransport>(
         .fork
         .as_deref()
         .context("operator-owned fork is required")?;
-    transport.verify_local_repository(repository, push)?;
+    transport.verify_local_repository(repository, plan)?;
     let login = transport.authenticated_login()?;
     let (fork_owner, _) = split_repository(fork)?;
     if login != fork_owner {
@@ -1512,7 +1618,8 @@ impl PublicationTransport for SystemTransport {
         Utc::now()
     }
 
-    fn verify_local_repository(&mut self, root: &Path, action: &GitHubActionDigest) -> Result<()> {
+    fn verify_local_repository(&mut self, root: &Path, plan: &PublicationPlan) -> Result<()> {
+        let action = &plan.push_action;
         if run_output("git", &["rev-parse", "HEAD"], root, None)? != action.head_sha {
             bail!("local repository HEAD does not match the exact approved head");
         }
@@ -1534,6 +1641,25 @@ impl PublicationTransport for SystemTransport {
         let diff = read_governed_diff(root, &action.base_sha, &action.head_sha)?;
         if sha256(&diff) != action.diff_digest {
             bail!("local repository diff does not match the approved diff digest");
+        }
+        let changed_paths = read_governed_changed_paths(root, &action.base_sha, &action.head_sha)?;
+        let protected_patterns = json_strings(
+            &plan.authority.run_envelope,
+            &["routing", "protected_path_classes"],
+        )?
+        .into_iter()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+        let derived = derive_protected_path_touched(&changed_paths, &protected_patterns)?;
+        let claimed = json_bool(
+            &plan.authority.governance_decision,
+            &["protected_path_touched"],
+        )?;
+        if derived != claimed {
+            bail!("governance protected-path claim does not match the approved diff");
+        }
+        if derived {
+            bail!("approved diff touches a protected path");
         }
         Ok(())
     }
@@ -1946,6 +2072,81 @@ fn read_governed_diff(root: &Path, base: &str, head: &str) -> Result<Vec<u8>> {
         root,
         None,
     )
+}
+
+fn read_governed_changed_paths(root: &Path, base: &str, head: &str) -> Result<Vec<String>> {
+    let output = run_bytes(
+        "git",
+        &[
+            "diff",
+            "--name-only",
+            "-z",
+            "--no-ext-diff",
+            "--no-textconv",
+            &format!("{base}..{head}"),
+            "--",
+        ],
+        root,
+        None,
+    )?;
+    if output.is_empty() {
+        bail!("approved diff must change at least one path");
+    }
+    output
+        .split(|byte| *byte == 0)
+        .filter(|path| !path.is_empty())
+        .map(|bytes| {
+            let path =
+                std::str::from_utf8(bytes).context("approved diff changed path is not UTF-8")?;
+            if path.is_empty()
+                || path.starts_with('/')
+                || path.contains('\\')
+                || path
+                    .split('/')
+                    .any(|component| component.is_empty() || component == "..")
+            {
+                bail!("approved diff contains an unsafe changed path");
+            }
+            Ok(path.to_string())
+        })
+        .collect()
+}
+
+fn derive_protected_path_touched(changed_paths: &[String], patterns: &[String]) -> Result<bool> {
+    for pattern in patterns {
+        if pattern.is_empty() || pattern.starts_with('/') || pattern.contains('\\') {
+            bail!("protected path pattern is unsafe");
+        }
+        let prefix = pattern.strip_suffix("/**");
+        if pattern.contains('*') && prefix.is_none() {
+            bail!("protected path pattern uses an unsupported wildcard");
+        }
+        for path in changed_paths {
+            if path.is_empty()
+                || path.starts_with('/')
+                || path.contains('\\')
+                || path
+                    .split('/')
+                    .any(|component| component.is_empty() || component == "..")
+            {
+                bail!("changed path is unsafe");
+            }
+            if let Some(prefix) = prefix {
+                if prefix.is_empty() {
+                    bail!("protected path prefix is empty");
+                }
+                if path == prefix {
+                    bail!("changed path collides with a protected directory root");
+                }
+                if path.starts_with(&format!("{prefix}/")) {
+                    return Ok(true);
+                }
+            } else if path == pattern {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
 }
 
 fn split_repository(value: &str) -> Result<(&str, &str)> {
@@ -2453,11 +2654,7 @@ mod tests {
             self.clocks.pop_front().unwrap_or_else(fixed_now)
         }
 
-        fn verify_local_repository(
-            &mut self,
-            _root: &Path,
-            _action: &GitHubActionDigest,
-        ) -> Result<()> {
+        fn verify_local_repository(&mut self, _root: &Path, _plan: &PublicationPlan) -> Result<()> {
             self.calls.push("verify_local");
             Ok(())
         }
@@ -2787,6 +2984,149 @@ mod tests {
         .unwrap();
         read_governed_diff(root.path(), &base, &head).unwrap();
         assert!(!marker.exists());
+    }
+
+    #[test]
+    fn protected_path_contact_is_derived_from_changed_paths() {
+        let patterns = vec![".ao/**".to_string(), ".github/**".to_string()];
+        assert!(derive_protected_path_touched(
+            &[".github/workflows/ci.yml".to_string()],
+            &patterns,
+        )
+        .unwrap());
+        assert!(derive_protected_path_touched(
+            &[".ao/autonomous-repair-governance.json".to_string()],
+            &patterns,
+        )
+        .unwrap());
+        assert!(!derive_protected_path_touched(
+            &[
+                "eligibility.go".to_string(),
+                "eligibility_regression_test.go".to_string(),
+            ],
+            &patterns,
+        )
+        .unwrap());
+        assert!(derive_protected_path_touched(&[".github".to_string()], &patterns).is_err());
+    }
+
+    #[test]
+    fn strict_decoder_rejects_duplicates_at_every_depth_and_trailing_json() {
+        let encoded = serde_json::to_string_pretty(&plan()).unwrap();
+        let top_level = encoded.replacen(
+            "\"schema_version\": \"ao2.github-repair-publication-plan.v1\"",
+            "\"schema_version\": \"ao2.github-repair-publication-plan.v1\",\n  \
+             \"schema_version\": \"ao2.github-repair-publication-plan.v1\"",
+            1,
+        );
+        assert!(decode_publication_plan_strict(top_level.as_bytes())
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate"));
+
+        let nested_array = encoded.replacen(
+            "\"conclusion\": \"success\"",
+            "\"conclusion\": \"success\", \"conclusion\": \"success\"",
+            1,
+        );
+        assert!(decode_publication_plan_strict(nested_array.as_bytes())
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate"));
+
+        let trailing = format!("{encoded}\n{{}}");
+        assert!(decode_publication_plan_strict(trailing.as_bytes())
+            .unwrap_err()
+            .to_string()
+            .contains("trailing JSON"));
+    }
+
+    #[test]
+    fn local_verification_rejects_redigested_false_protected_path_claim() {
+        let root = tempfile::tempdir().unwrap();
+        run_status("git", &["init", "--quiet"], root.path(), None).unwrap();
+        run_status(
+            "git",
+            &["config", "user.email", "fixture@example.invalid"],
+            root.path(),
+            None,
+        )
+        .unwrap();
+        run_status(
+            "git",
+            &["config", "user.name", "Fixture"],
+            root.path(),
+            None,
+        )
+        .unwrap();
+        std::fs::write(root.path().join("subject.txt"), "base\n").unwrap();
+        run_status("git", &["add", "."], root.path(), None).unwrap();
+        run_status(
+            "git",
+            &["commit", "--quiet", "-m", "base"],
+            root.path(),
+            None,
+        )
+        .unwrap();
+        let base = run_output("git", &["rev-parse", "HEAD"], root.path(), None).unwrap();
+        std::fs::create_dir_all(root.path().join(".github/workflows")).unwrap();
+        std::fs::write(
+            root.path().join(".github/workflows/ci.yml"),
+            "name: protected\n",
+        )
+        .unwrap();
+        run_status("git", &["add", "."], root.path(), None).unwrap();
+        run_status(
+            "git",
+            &["commit", "--quiet", "-m", "protected"],
+            root.path(),
+            None,
+        )
+        .unwrap();
+        let head = run_output("git", &["rev-parse", "HEAD"], root.path(), None).unwrap();
+        let diff_digest = sha256(&read_governed_diff(root.path(), &base, &head).unwrap());
+
+        let mut candidate = plan();
+        candidate.authority.run_envelope["trigger"]["pinned_base_commit"] =
+            serde_json::Value::String(base.clone());
+        candidate.authority.run_envelope["routing"]["pinned_base_commit"] =
+            serde_json::Value::String(base.clone());
+        candidate.authority.run_envelope["routing"]["protected_path_classes"] =
+            serde_json::json!([".github/**"]);
+        candidate.authority.candidate_decision["base_sha"] =
+            serde_json::Value::String(base.clone());
+        candidate.authority.governance_decision["base_sha"] =
+            serde_json::Value::String(base.clone());
+        candidate.authority.governance_decision["head_sha"] =
+            serde_json::Value::String(head.clone());
+        candidate.authority.governance_decision["required_checks"][0]["head_sha"] =
+            serde_json::Value::String(head.clone());
+        candidate.authority.governance_decision["protected_path_touched"] =
+            serde_json::Value::Bool(false);
+        candidate.authority.reviewer_independence["subject_digest"] =
+            serde_json::Value::String(diff_digest.clone());
+        for action in [&mut candidate.push_action, &mut candidate.draft_action] {
+            action.base_sha = base.clone();
+            action.head_sha = head.clone();
+            action.diff_digest = diff_digest.clone();
+            action.required_checks[0].head_sha = head.clone();
+        }
+        rebind_authority(&mut candidate);
+
+        let result = SystemTransport.verify_local_repository(root.path(), &candidate);
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("protected-path claim"));
+
+        candidate.authority.governance_decision["protected_path_touched"] =
+            serde_json::Value::Bool(true);
+        rebind_authority(&mut candidate);
+        let result = SystemTransport.verify_local_repository(root.path(), &candidate);
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("touches a protected path"));
     }
 
     #[test]

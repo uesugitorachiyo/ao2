@@ -1193,6 +1193,12 @@ fn hex_bytes(bytes: &[u8]) -> String {
 }
 
 pub(crate) fn read_bounded_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T> {
+    let bytes = read_bounded_bytes(path)?;
+    serde_json::from_slice(&bytes)
+        .with_context(|| format!("parse strict JSON from {}", path.display()))
+}
+
+pub(crate) fn read_bounded_bytes(path: &Path) -> Result<Vec<u8>> {
     let mut file = open_bounded_input(path)?;
     let metadata = validate_opened_input(&file, path)?;
     let mut bytes = Vec::with_capacity((metadata.len() as usize).min(MAX_INPUT_BYTES as usize));
@@ -1207,8 +1213,7 @@ pub(crate) fn read_bounded_json<T: for<'de> Deserialize<'de>>(path: &Path) -> Re
         );
     }
     validate_opened_input(&file, path)?;
-    serde_json::from_slice(&bytes)
-        .with_context(|| format!("parse strict JSON from {}", path.display()))
+    Ok(bytes)
 }
 
 fn open_bounded_input(path: &Path) -> Result<fs::File> {
