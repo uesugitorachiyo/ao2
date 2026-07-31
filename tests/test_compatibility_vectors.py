@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-VECTOR_PATH = ROOT / "tests" / "fixtures" / "compatibility" / "ao2-execution-receipt-v0.5.2.json"
+VECTOR_PATH = ROOT / "tests" / "fixtures" / "compatibility" / "ao2-execution-receipt-v0.5.6.json"
 COVENANT_AO2_VECTOR_PATH = (
     ROOT
     / "tests"
@@ -13,9 +13,10 @@ COVENANT_AO2_VECTOR_PATH = (
     / "covenant-approval-ticket-to-ao2-approved-execution-v0.1.json"
 )
 
-AO2_TAG_TARGET = "pending-v0.5.2-release-prep-merge"
-CP_TAG_TARGET = "6336801eedc4a8402d12b306b98603ce0a6fb6b5"
-MANIFEST_DIGEST = "pending-v0.5.2-approved-manifest-digest"
+AO2_TAG_TARGET = "5706ec9cf3a108d20984973975c2a56b905a8173"
+CP_TAG_TARGET = "6257ec23fde726d4a0133c5b62231881fb6aaa9a"
+MANIFEST_DIGEST = "f3d7a5040de8e6fd2703791235fa67841db480d3401c7deadfb3288464d31a45"
+COVENANT_VECTOR_AO2_TAG_TARGET = "pending-v0.5.2-release-prep-merge"
 
 
 def load_vector() -> dict:
@@ -43,14 +44,14 @@ def test_ao2_execution_receipt_vector_matches_current_public_pair():
     vector = load_vector()
 
     assert vector["schema_version"] == "ao.compatibility.execution-receipt-vector.v1"
-    assert vector["vector_id"] == "ao2-v0.5.2-execution-receipt-to-control-plane-evidence-event"
+    assert vector["vector_id"] == "ao2-v0.5.6-execution-receipt-to-control-plane-evidence-event"
     assert vector["edge"] == "ao2.execution_receipt -> ao2-control-plane.evidence_event"
 
     producer = vector["producer"]
     assert producer == {
         "repository": "ao2",
-        "version": "v0.5.2",
-        "release_url": "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.2",
+        "version": "v0.5.6",
+        "release_url": "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.6",
         "tag_target": AO2_TAG_TARGET,
         "approved_manifest_digest": MANIFEST_DIGEST,
     }
@@ -58,8 +59,8 @@ def test_ao2_execution_receipt_vector_matches_current_public_pair():
     consumer = vector["consumer"]
     assert consumer == {
         "repository": "ao2-control-plane",
-        "version": "v0.1.17",
-        "release_url": "https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.17",
+        "version": "v0.1.18",
+        "release_url": "https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.18",
         "tag_target": CP_TAG_TARGET,
     }
 
@@ -70,12 +71,12 @@ def test_ao2_execution_receipt_vector_derives_expected_control_plane_event():
     event = vector["expected_control_plane_event"]
 
     assert receipt["schema_version"] == "ao2.execution-receipt.v1"
-    assert receipt["receipt_id"] == "ao2-v0.5.2-provider-free-doctor-smoke"
+    assert receipt["receipt_id"] == "ao2-v0.5.6-provider-free-doctor-smoke"
     assert receipt["status"] == "passed"
     assert receipt["provider_execution_required"] is False
     assert receipt["workflow"] == "provider_free_doctor_smoke"
     assert receipt["command"] == "ao2 doctor --json"
-    assert receipt["release"]["version"] == "v0.5.2"
+    assert receipt["release"]["version"] == "v0.5.6"
     assert receipt["release"]["tag_target"] == AO2_TAG_TARGET
 
     assert event["schema_version"] == "ao2-control-plane.evidence-event.v1"
@@ -87,6 +88,17 @@ def test_ao2_execution_receipt_vector_derives_expected_control_plane_event():
     assert event["producer_release_tag_target"] == receipt["release"]["tag_target"]
     assert event["observed_evidence_path"] == receipt["evidence_path"]
     assert event["status"] == "accepted"
+
+    bridge = vector["compatibility_bridge"]
+    assert bridge == {
+        "predecessor_producer_version": "v0.5.1",
+        "predecessor_producer_tag_target": "80ec5321f42d4bab17d5e64fdae6aa099ba59d4a",
+        "predecessor_consumer_version": "v0.1.16",
+        "predecessor_consumer_tag_target": "f4f5fea9fefa1081cebcbabac550b0e08b9f0e3d",
+        "contract_change": "unchanged",
+        "producer_schema_version": receipt["schema_version"],
+        "consumer_schema_version": event["schema_version"],
+    }
 
 
 def test_ao2_execution_receipt_vector_is_public_safe_and_non_authorizing():
@@ -131,7 +143,7 @@ def test_covenant_approval_ticket_vector_maps_to_ao2_approved_execution_request(
     assert vector["producer"]["repository"] == "ao-covenant"
     assert vector["consumer"]["repository"] == "ao2"
     assert vector["consumer"]["version"] == "v0.5.2"
-    assert vector["consumer"]["tag_target"] == AO2_TAG_TARGET
+    assert vector["consumer"]["tag_target"] == COVENANT_VECTOR_AO2_TAG_TARGET
 
     ticket = vector["covenant_approval_ticket"]
     request = vector["expected_ao2_approved_execution_request"]
