@@ -18,3 +18,5 @@
 **/.ao2/control-plane/
 **/.ao2/memory/
 *.log
+CLAUDE.local.md
+.claude/settings.local.json
