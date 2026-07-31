@@ -18,11 +18,11 @@ AO2 Control Plane consumes typed state and evidence as a read-only observer. It 
 
 - Keep the MVP local-first and evidence-exact. The runtime, policy, artifacts, approvals, replay, and evaluator closure remain source-owned here.
 - Evaluate policy before every side effect. An approval authorizes only the exact recorded digest; drift, missing evidence, unknown state, or denied authority must fail closed.
-- Do not add provider API-key paths or persist secrets, bearer values, private key material, account identifiers, private repository paths, or unredacted provider transcripts.
+- Do not add provider API-key paths. Do not record secrets, bearer values, private key material, account identifiers, private repository paths, or unredacted provider transcripts.
 - Keep `target/`, `dist*/`, `.ao2/`, `.ao2-local/`, and generated run/evidence output out of source changes. Treat published records under `docs/release/` and `docs/beta/` as historical; do not rewrite them to support a current claim.
 - Source fixtures in `fixtures/`, `tests/fixtures/`, and `examples/` are contracts. Change them only with the consumer tests, never to inflate a result or bypass a negative case.
 - Release, deployment, publication, live-provider, credentialed, and direct-main commands require separate explicit authority. A dry run, readiness result, control-plane readback, or instruction file does not grant it.
-- Before non-trivial writes, reserve the intended paths in the task record or handoff, confirm no overlapping task branch/worktree, and release the scope with cleanup evidence.
+- Before non-trivial writes, reserve your write scope in the active task record or ignored `target/` artifacts, confirm no overlapping task branch/worktree, and release it in the handoff with cleanup evidence.
 
 ## Working Method
 
