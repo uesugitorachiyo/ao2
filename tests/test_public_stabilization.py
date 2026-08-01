@@ -5485,6 +5485,10 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ci_rsi_cross_repo_e2e_artifact_job",
         "ci_dual_repo_installed_release_smoke_artifact_job",
         "ci_release_publication_closure_artifact_job",
+        'eval "$(scripts/release-train-env.sh stable)"',
+        'version="$AO2_RELEASE_TRAIN_AO2_VERSION"',
+        'tag="$AO2_RELEASE_TRAIN_AO2_TAG"',
+        '"scripts/current-version.sh" not in release_publication_closure_artifacts',
         "ci_dual_repo_release_publication_closure_index_job",
         "ci_stable_release_promotion_workflow_dispatch",
         "ci_stable_release_promotion_dry_run_audit_workflow",
@@ -5628,6 +5632,9 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2-dual-repo-release-publication-closure-index",
         "uses: dtolnay/rust-toolchain@stable",
         "Verify canonical hosted public release",
+        'eval "$(scripts/release-train-env.sh stable)"',
+        'version="$AO2_RELEASE_TRAIN_AO2_VERSION"',
+        'tag="$AO2_RELEASE_TRAIN_AO2_TAG"',
         "scripts/hosted_release_promotion.py verify-public",
         "target/canonical-hosted-public-release-verification.json",
         "Check legacy provenance-sidecar state",
@@ -5697,6 +5704,11 @@ def test_release_readiness_static_gate_locks_cross_os_ci_contract(tmp_path):
         "ao2-release-readiness-final-closure-verifier",
     ]:
         assert needle in ci
+
+    publication_job = ci.split("  release-publication-closure-artifacts:", 1)[1].split(
+        "\n  dual-repo-release-publication-closure-index:", 1
+    )[0]
+    assert "scripts/current-version.sh" not in publication_job
 
     stable_promotion_workflow = read(".github/workflows/stable-release-promotion.yml")
     for needle in [
