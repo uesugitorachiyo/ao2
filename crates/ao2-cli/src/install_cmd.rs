@@ -7,7 +7,7 @@ use clap::Subcommand;
 use crate::cli_util::{binary_name_for_target, sha256_file};
 use crate::install_paths::{
     default_install_dir, install_verification_evidence_path, make_executable,
-    rollback_path_for_binary,
+    rollback_evidence_path, rollback_path_for_binary,
 };
 use crate::release_archive_contract::{
     ensure_safe_release_archive_path, verify_release_archive_offline_contract,
@@ -139,28 +139,28 @@ pub(crate) fn install_update_result(options: InstallUpdateOptions) -> Result<ser
         .with_context(|| format!("create {}", install_dir.display()))?;
     let installed_binary = install_dir.join(binary_name);
     let rollback_binary = rollback_path_for_binary(&installed_binary);
+    let evidence_path = install_verification_evidence_path(&installed_binary);
+    let rollback_evidence = rollback_evidence_path(&installed_binary);
     let rollback_created = if installed_binary.exists() {
-        fs::copy(&installed_binary, &rollback_binary).with_context(|| {
-            format!(
-                "copy rollback {} to {}",
-                installed_binary.display(),
-                rollback_binary.display()
-            )
-        })?;
+        atomic_copy_file(&installed_binary, &rollback_binary, true)?;
+        if evidence_path.is_file() {
+            atomic_copy_file(&evidence_path, &rollback_evidence, false)?;
+        } else {
+            remove_file_if_exists(&rollback_evidence)?;
+        }
         true
     } else {
+        remove_file_if_exists(&rollback_binary)?;
+        remove_file_if_exists(&rollback_evidence)?;
         false
     };
-    fs::copy(&source_binary, &installed_binary).with_context(|| {
-        format!(
-            "copy {} to {}",
-            source_binary.display(),
-            installed_binary.display()
-        )
-    })?;
-    make_executable(&installed_binary)?;
 
-    let evidence_path = install_verification_evidence_path(&installed_binary);
+    remove_file_if_exists(&evidence_path)?;
+    if cfg!(debug_assertions) && std::env::var_os("AO2_TEST_INSTALL_INTERRUPT").is_some() {
+        anyhow::bail!("simulated interruption before binary activation");
+    }
+    atomic_copy_file(&source_binary, &installed_binary, true)?;
+
     let evidence = serde_json::json!({
         "schema_version": "ao2.install-verification-evidence.v1",
         "status": "verified",
@@ -173,8 +173,7 @@ pub(crate) fn install_update_result(options: InstallUpdateOptions) -> Result<ser
         "offline_verification": offline_verification,
         "archive": archive
     });
-    let mut evidence_text = serde_json::to_string_pretty(&evidence)?;
-    evidence_text.push('\n');
+    let evidence_text = format!("{}\n", serde_json::to_string_pretty(&evidence)?);
     atomic_write_text(&evidence_path, &evidence_text)?;
 
     let _ = fs::remove_dir_all(&work_dir);
@@ -193,6 +192,8 @@ pub(crate) fn rollback_install(
     let install_dir = install_dir.unwrap_or_else(default_install_dir);
     let installed_binary = install_dir.join(binary_name);
     let rollback_binary = rollback_path_for_binary(&installed_binary);
+    let evidence_path = install_verification_evidence_path(&installed_binary);
+    let rollback_evidence = rollback_evidence_path(&installed_binary);
     if !rollback_binary.is_file() {
         anyhow::bail!("rollback binary not found: {}", rollback_binary.display());
     }
@@ -202,14 +203,11 @@ pub(crate) fn rollback_install(
         &install_dir,
         &target,
     )?;
-    fs::copy(&rollback_binary, &installed_binary).with_context(|| {
-        format!(
-            "copy rollback {} to {}",
-            rollback_binary.display(),
-            installed_binary.display()
-        )
-    })?;
-    make_executable(&installed_binary)?;
+    remove_file_if_exists(&evidence_path)?;
+    atomic_copy_file(&rollback_binary, &installed_binary, true)?;
+    if rollback_evidence.is_file() {
+        atomic_copy_file(&rollback_evidence, &evidence_path, false)?;
+    }
     let result = serde_json::json!({
         "status": "rolled_back",
         "target": target,
@@ -218,6 +216,30 @@ pub(crate) fn rollback_install(
     });
     println!("{}", serde_json::to_string_pretty(&result)?);
     Ok(())
+}
+
+fn atomic_copy_file(source: &Path, destination: &Path, executable: bool) -> Result<()> {
+    let bytes = fs::read(source).with_context(|| format!("read {}", source.display()))?;
+    atomic_replace_bytes(destination, &bytes)?;
+    if executable {
+        make_executable(destination)?;
+    }
+    Ok(())
+}
+
+fn atomic_replace_bytes(destination: &Path, bytes: &[u8]) -> Result<()> {
+    #[cfg(windows)]
+    remove_file_if_exists(destination)?;
+    ao2_core::atomic_write(destination, bytes)
+        .with_context(|| format!("atomic replace {}", destination.display()))
+}
+
+fn remove_file_if_exists(path: &Path) -> Result<()> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error).with_context(|| format!("remove {}", path.display())),
+    }
 }
 
 #[cfg(windows)]

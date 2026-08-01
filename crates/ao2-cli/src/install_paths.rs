@@ -70,6 +70,12 @@ pub(crate) fn rollback_path_for_binary(installed_binary: &Path) -> PathBuf {
     installed_binary.with_file_name(format!("{filename}.rollback"))
 }
 
+pub(crate) fn rollback_evidence_path(installed_binary: &Path) -> PathBuf {
+    let mut path = install_verification_evidence_path(installed_binary).into_os_string();
+    path.push(".rollback");
+    path.into()
+}
+
 #[cfg(unix)]
 pub(crate) fn make_executable(path: &Path) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
