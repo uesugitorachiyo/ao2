@@ -67,8 +67,14 @@ ao2 version --json
 ao2 doctor --json
 ```
 
-If you install into a different directory, add that directory to `PATH` or run
-the installed binary by full path for the first `version` and `doctor` checks.
+If you install into a different directory, add that directory to `PATH` before
+running `ao2 doctor`; doctor discovers the verified custom installation from
+the matching PATH binary. When the directory is not on `PATH`, run the binary
+by full path and pass the same directory explicitly:
+
+```sh
+/path/to/bin/ao2 doctor --json --install-dir /path/to/bin
+```
 
 On Windows, extract the archive, run `Verify-Release.ps1`, then run
 `install.ps1` and confirm the installed identity with
