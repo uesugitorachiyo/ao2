@@ -1791,7 +1791,21 @@ fn cli_install_update_keeps_previous_binary_for_rollback() {
 
     let binary_name = if cfg!(windows) { "ao2.exe" } else { "ao2" };
     let installed_binary = install_dir.join(binary_name);
+    let evidence_path = install_dir.join(format!("{binary_name}.install-verification.json"));
+    let previous_evidence = serde_json::json!({
+        "schema_version": "ao2.install-verification-evidence.v1",
+        "status": "verified",
+        "install_status": "installed",
+        "version": "9.9.8-test",
+        "target": "previous-fixture",
+        "installed_binary": installed_binary,
+    });
     fs::write(&installed_binary, "old-binary\n").unwrap();
+    fs::write(
+        &evidence_path,
+        serde_json::to_vec_pretty(&previous_evidence).unwrap(),
+    )
+    .unwrap();
 
     let package = ao2([
         "release",
@@ -1848,6 +1862,102 @@ fn cli_install_update_keeps_previous_binary_for_rollback() {
         fs::read_to_string(installed_binary).unwrap(),
         "old-binary\n"
     );
+    let restored_evidence: serde_json::Value =
+        serde_json::from_slice(&fs::read(evidence_path).unwrap()).unwrap();
+    assert_eq!(restored_evidence, previous_evidence);
+}
+
+#[test]
+fn cli_interrupted_install_fails_closed_and_rollback_restores_previous_evidence() {
+    let temp = tempfile::tempdir().unwrap();
+    let dist = temp.path().join("dist");
+    let provenance = temp.path().join("provenance");
+    let install_dir = temp.path().join("bin");
+    fs::create_dir_all(&install_dir).unwrap();
+
+    let binary_name = if cfg!(windows) { "ao2.exe" } else { "ao2" };
+    let installed_binary = install_dir.join(binary_name);
+    let evidence_path = install_dir.join(format!("{binary_name}.install-verification.json"));
+    let previous_evidence = serde_json::json!({
+        "schema_version": "ao2.install-verification-evidence.v1",
+        "status": "verified",
+        "install_status": "installed",
+        "version": "9.9.8-test",
+        "target": "previous-fixture",
+        "installed_binary": installed_binary,
+    });
+    fs::write(&installed_binary, "old-binary\n").unwrap();
+    fs::write(
+        &evidence_path,
+        serde_json::to_vec_pretty(&previous_evidence).unwrap(),
+    )
+    .unwrap();
+
+    let package = ao2([
+        "release",
+        "package",
+        "--out-dir",
+        dist.to_str().unwrap(),
+        "--version",
+        "9.9.9-test",
+    ]);
+    assert!(package.status.success(), "{}", stderr(&package));
+    let package_json: serde_json::Value = serde_json::from_str(&stdout(&package)).unwrap();
+    let archive = package_json["archive"].as_str().unwrap();
+
+    let sign = release_sign_command()
+        .env("AO2_VERSION", "9.9.9-test")
+        .env("AO2_MACOS_ARCHIVE", archive)
+        .env("AO2_LINUX_ARCHIVE", archive)
+        .env("AO2_LINUX_X86_64_ARCHIVE", archive)
+        .env("AO2_WINDOWS_ARCHIVE", archive)
+        .env("AO2_RELEASE_PROVENANCE_DIR", &provenance)
+        .env(
+            "AO2_RELEASE_PRIVATE_KEY",
+            temp.path().join("release-key.pem"),
+        )
+        .output()
+        .unwrap();
+    assert!(sign.status.success(), "{}", stderr(&sign));
+
+    let interrupted = ao2_with_env(
+        [
+            "install",
+            "update",
+            "--archive",
+            archive,
+            "--provenance-dir",
+            provenance.to_str().unwrap(),
+            "--install-dir",
+            install_dir.to_str().unwrap(),
+        ],
+        [("AO2_TEST_INSTALL_INTERRUPT", "1")],
+    );
+    assert!(!interrupted.status.success());
+    assert!(stderr(&interrupted).contains("simulated interruption before binary activation"));
+    assert_eq!(
+        fs::read_to_string(&installed_binary).unwrap(),
+        "old-binary\n"
+    );
+    assert!(
+        !evidence_path.exists(),
+        "interrupted activation must not leave stale trusted evidence"
+    );
+
+    let rollback = ao2([
+        "install",
+        "rollback",
+        "--install-dir",
+        install_dir.to_str().unwrap(),
+    ]);
+    assert!(rollback.status.success(), "{}", stderr(&rollback));
+    assert_eq!(
+        fs::read_to_string(installed_binary).unwrap(),
+        "old-binary\n"
+    );
+    let restored_evidence: serde_json::Value =
+        serde_json::from_slice(&fs::read(evidence_path).unwrap()).unwrap();
+    assert_eq!(restored_evidence, previous_evidence);
 }
 
 #[test]
