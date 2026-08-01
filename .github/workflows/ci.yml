@@ -938,8 +938,9 @@ jobs:
           set -euo pipefail
           publication_root="target/canonical-hosted-public-release"
           report="target/canonical-hosted-public-release-verification.json"
-          version="$(scripts/current-version.sh)"
-          tag="v$version"
+          eval "$(scripts/release-train-env.sh stable)"
+          version="$AO2_RELEASE_TRAIN_AO2_VERSION"
+          tag="$AO2_RELEASE_TRAIN_AO2_TAG"
           mkdir -p "$publication_root"
           gh release download "$tag" \
             --repo uesugitorachiyo/ao2 \
@@ -965,7 +966,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p target/release-publication-provenance
-          release_tag="v$(scripts/current-version.sh)"
+          eval "$(scripts/release-train-env.sh stable)"
+          release_tag="$AO2_RELEASE_TRAIN_AO2_TAG"
           if gh release view "$release_tag" --repo uesugitorachiyo/ao2 >/dev/null 2>&1; then
             assets="$(gh release view "$release_tag" --repo uesugitorachiyo/ao2 --json assets --jq '.assets[].name')"
             if grep -Fxq ao2-release-provenance.json <<<"$assets" \

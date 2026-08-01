@@ -300,6 +300,10 @@ release_publication_closure_artifacts_ok = (
     and "target/release-publication-closure-ci" in release_publication_closure_artifacts
     and "dtolnay/rust-toolchain@stable" in release_publication_closure_artifacts
     and "Verify canonical hosted public release" in release_publication_closure_artifacts
+    and 'eval "$(scripts/release-train-env.sh stable)"' in release_publication_closure_artifacts
+    and 'version="$AO2_RELEASE_TRAIN_AO2_VERSION"' in release_publication_closure_artifacts
+    and 'tag="$AO2_RELEASE_TRAIN_AO2_TAG"' in release_publication_closure_artifacts
+    and "scripts/current-version.sh" not in release_publication_closure_artifacts
     and "scripts/hosted_release_promotion.py verify-public" in release_publication_closure_artifacts
     and "Check legacy provenance-sidecar state" in release_publication_closure_artifacts
     and "gh release download" in release_publication_closure_artifacts
