@@ -80,6 +80,7 @@ cat > "$evidence_path" <<JSON
   "version": "$version",
   "target": "$target",
   "binary": "$binary_name",
+  "installed_binary": "$dest_binary",
   "checksum_file": "SHA256SUMS",
   "offline_verification": {{
     "schema_version": "ao2.release-archive-offline-verification.v1",
@@ -153,6 +154,7 @@ $Evidence = [ordered]@{{
     version = $Manifest.version
     target = $Manifest.target
     binary = $BinaryName
+    installed_binary = $DestBinary
     checksum_file = "SHA256SUMS"
     offline_verification = [ordered]@{{
         schema_version = "ao2.release-archive-offline-verification.v1"

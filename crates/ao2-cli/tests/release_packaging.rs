@@ -4857,6 +4857,16 @@ fn unix_installer_installs_packaged_binary_without_admin_access() {
     assert_eq!(install_verification_json["status"], "verified");
     assert_eq!(install_verification_json["install_status"], "installed");
     assert_eq!(
+        Path::new(
+            install_verification_json["installed_binary"]
+                .as_str()
+                .expect("installed binary path")
+        )
+        .canonicalize()
+        .unwrap(),
+        installed.canonicalize().unwrap()
+    );
+    assert_eq!(
         install_verification_json["offline_verification"]["status"],
         "verified"
     );
@@ -4986,6 +4996,16 @@ fn windows_installer_writes_install_verification_sidecar_without_admin_access() 
     );
     assert_eq!(install_verification_json["status"], "verified");
     assert_eq!(install_verification_json["install_status"], "installed");
+    assert_eq!(
+        Path::new(
+            install_verification_json["installed_binary"]
+                .as_str()
+                .expect("installed binary path")
+        )
+        .canonicalize()
+        .unwrap(),
+        installed.canonicalize().unwrap()
+    );
     assert_eq!(
         install_verification_json["offline_verification"]["status"],
         "verified"

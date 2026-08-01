@@ -1,7 +1,8 @@
 use super::{json_string, read_json_file, runtime_target_label, terminate_workbench_child};
 use crate::cli_util::binary_name_for_target;
 use crate::install_paths::{
-    command_exists, default_install_dir, install_verification_evidence_path, is_binary_on_path,
+    binary_on_path, command_exists, default_install_dir, install_verification_evidence_path,
+    is_binary_on_path,
 };
 use crate::release_provenance::verify_release_provenance_signature;
 use anyhow::Result;
@@ -48,7 +49,12 @@ pub(crate) fn doctor_report_json(
 ) -> Result<serde_json::Value> {
     let target = runtime_target_label();
     let binary_name = binary_name_for_target(&target);
-    let install_dir = install_dir.unwrap_or_else(default_install_dir);
+    let install_dir = install_dir.unwrap_or_else(|| {
+        let default = default_install_dir();
+        binary_on_path(binary_name)
+            .and_then(|binary| binary.parent().map(Path::to_path_buf))
+            .unwrap_or(default)
+    });
     let installed_binary = install_dir.join(binary_name);
     let installed = installed_binary.is_file();
     let on_path = installed && is_binary_on_path(binary_name, &installed_binary);
@@ -155,6 +161,7 @@ fn doctor_install_verification_evidence_is_valid(
             == Some("ao2.release-archive-offline-verification.v1")
         && evidence["offline_verification"]["status"].as_str() == Some("verified")
         && evidence["offline_verification"]["checksum_coverage_verified"].as_bool() == Some(true)
+        && evidence["binary_path_matches"].as_bool() != Some(false)
 }
 fn doctor_install_verification_evidence_json(installed_binary: &Path) -> serde_json::Value {
     let evidence_path = install_verification_evidence_path(installed_binary);
@@ -166,17 +173,32 @@ fn doctor_install_verification_evidence_json(installed_binary: &Path) -> serde_j
         });
     }
     match read_json_file::<serde_json::Value>(&evidence_path) {
-        Ok(evidence) => serde_json::json!({
-            "present": true,
-            "path": evidence_path,
-            "schema_version": evidence["schema_version"],
-            "status": evidence["status"],
-            "install_status": evidence["install_status"],
-            "version": evidence["version"],
-            "target": evidence["target"],
-            "signature_verified": evidence["signature_verified"],
-            "offline_verification": evidence["offline_verification"],
-        }),
+        Ok(evidence) => {
+            let binary_path_matches = evidence["installed_binary"]
+                .as_str()
+                .map(|recorded| {
+                    fs::canonicalize(recorded)
+                        .and_then(|recorded| {
+                            fs::canonicalize(installed_binary)
+                                .map(|installed| installed == recorded)
+                        })
+                        .unwrap_or(false)
+                })
+                .unwrap_or(true);
+            serde_json::json!({
+                "present": true,
+                "path": evidence_path,
+                "schema_version": evidence["schema_version"],
+                "status": evidence["status"],
+                "install_status": evidence["install_status"],
+                "version": evidence["version"],
+                "target": evidence["target"],
+                "installed_binary": evidence["installed_binary"],
+                "binary_path_matches": binary_path_matches,
+                "signature_verified": evidence["signature_verified"],
+                "offline_verification": evidence["offline_verification"],
+            })
+        }
         Err(error) => serde_json::json!({
             "present": true,
             "status": "invalid",

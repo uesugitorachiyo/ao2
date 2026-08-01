@@ -42,6 +42,13 @@ pub(crate) fn command_exists(command: &str) -> bool {
     })
 }
 
+pub(crate) fn binary_on_path(binary_name: &str) -> Option<PathBuf> {
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    std::env::split_paths(&path)
+        .map(|dir| dir.join(binary_name))
+        .find(|candidate| candidate.is_file())
+}
+
 pub(crate) fn is_binary_on_path(binary_name: &str, installed_binary: &Path) -> bool {
     let Ok(expected) = fs::canonicalize(installed_binary) else {
         return false;

@@ -110,8 +110,14 @@ ao2 version --json
 ao2 doctor --json
 ```
 
-If you installed with a custom `AO2_INSTALL_DIR`, add that directory to `PATH`
-or run `/path/to/bin/ao2 version --json` directly.
+If you installed with a custom `AO2_INSTALL_DIR`, add that directory to `PATH`.
+`ao2 doctor` then discovers the verified custom installation from the matching
+PATH binary. If the directory is intentionally not on `PATH`, use:
+
+```sh
+/path/to/bin/ao2 version --json
+/path/to/bin/ao2 doctor --json --install-dir /path/to/bin
+```
 
 ## Local Pilots
 
