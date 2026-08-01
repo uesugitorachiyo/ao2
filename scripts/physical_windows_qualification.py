@@ -44,6 +44,9 @@ SAFETY_BOUNDARY_KEYS = {
 }
 ROW_KEYS = {
     "node_id",
+    "checkpoint_id",
+    "profile_digest",
+    "shard_id",
     "worker_source_commit",
     "request_id",
     "canonical_repository",
@@ -414,6 +417,9 @@ def _validate_row(
     expected_node_id: str,
     expected_request_id: str,
     expected_source_sha: str,
+    expected_checkpoint_id: str,
+    expected_profile_digest: str,
+    expected_shard_id: str,
     qualification_completed_at: datetime,
 ) -> dict[str, str]:
     row = _require_mapping(row, f"{expected_name} row", ROW_KEYS)
@@ -423,6 +429,12 @@ def _validate_row(
         raise ValidationError(f"{expected_name} node_id mismatch")
     if row["request_id"] != expected_request_id:
         raise ValidationError(f"{expected_name} request_id mismatch")
+    if row["checkpoint_id"] != expected_checkpoint_id:
+        raise ValidationError(f"{expected_name} checkpoint_id mismatch")
+    if row["profile_digest"] != expected_profile_digest:
+        raise ValidationError(f"{expected_name} profile_digest mismatch")
+    if row["shard_id"] != expected_shard_id:
+        raise ValidationError(f"{expected_name} shard_id mismatch")
     if row["worker_source_commit"] != expected_source_sha:
         raise ValidationError(f"{expected_name} worker_source_commit mismatch")
     if row["canonical_repository"] != "ao2":
@@ -506,6 +518,9 @@ def prepare_evidence(
 
     wrapper_completed = _parse_time(qualification_wrapper["completed_at"], "qualification wrapper completed_at")
     result_completed = _parse_time(qualification_result.get("completed_at"), "qualification completed_at")
+    checkpoint_id = _require_string(qualification_result.get("checkpoint_id"), "qualification checkpoint_id")
+    profile_digest = _require_string(qualification_result.get("profile_digest"), "qualification profile_digest")
+    shard_id = _require_string(qualification_result.get("shard_id"), "qualification shard_id")
     if result_completed > wrapper_completed:
         raise ValidationError("qualification completed_at exceeds wrapper completed_at")
     raw_rows = qualification_result.get("results")
@@ -523,6 +538,9 @@ def prepare_evidence(
             expected_node_id=qualification_wrapper["node_id"],
             expected_request_id=qualification_wrapper["request_id"],
             expected_source_sha=source_sha,
+            expected_checkpoint_id=checkpoint_id,
+            expected_profile_digest=profile_digest,
+            expected_shard_id=shard_id,
             qualification_completed_at=result_completed,
         )
 

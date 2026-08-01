@@ -35,6 +35,9 @@ NOW = datetime(2026, 7, 19, 20, 34, 30, tzinfo=timezone.utc)
 STATUS_COMPLETED_AT = "2026-07-19T20:30:00Z"
 QUALIFICATION_COMPLETED_AT = "2026-07-19T20:33:50Z"
 WRAPPER_COMPLETED_AT = "2026-07-19T20:34:00Z"
+CHECKPOINT_ID = "physical-windows-checkpoint"
+PROFILE_DIGEST = "sha256:physical-windows-profile"
+SHARD_ID = "physical-windows-shard"
 EXPECTED_ROWS = (
     "windows-worker-pytest",
     "ao2-doctor",
@@ -397,6 +400,9 @@ def stack_row(name: str, probe: dict[str, object]) -> dict[str, object]:
     output = json.dumps(probe, separators=(",", ":")) if name == "physical-windows-lifecycle" else "ok"
     return {
         "node_id": NODE_ID,
+        "checkpoint_id": CHECKPOINT_ID,
+        "profile_digest": PROFILE_DIGEST,
+        "shard_id": SHARD_ID,
         "worker_source_commit": SOURCE_SHA,
         "request_id": QUALIFICATION_REQUEST_ID,
         "canonical_repository": "ao2",
@@ -463,6 +469,9 @@ def qualification_board(
         "status": "accepted",
         "mode": "physical_unique",
         "profile_version": "ao2.windows-stack-qualification.profiles.v1",
+        "checkpoint_id": CHECKPOINT_ID,
+        "profile_digest": PROFILE_DIGEST,
+        "shard_id": SHARD_ID,
         "repositories": ["ao2"],
         "results": [stack_row(name, probe or lifecycle_probe_output()) for name in EXPECTED_ROWS],
         "completed_at": QUALIFICATION_COMPLETED_AT,
@@ -512,6 +521,26 @@ def test_production_fixture_matches_windows_outbound_worker_result_board_shape()
     )
     assert "worker_source_commit" not in qualification_result(qualification)
     assert set(row["sanitized_command_name"] for row in rows(qualification)) == set(EXPECTED_ROWS)
+    assert all(row["checkpoint_id"] == CHECKPOINT_ID for row in rows(qualification))
+    assert all(row["profile_digest"] == PROFILE_DIGEST for row in rows(qualification))
+    assert all(row["shard_id"] == SHARD_ID for row in rows(qualification))
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid"),
+    [
+        ("checkpoint_id", "wrong-checkpoint"),
+        ("profile_digest", "sha256:wrong-profile"),
+        ("shard_id", "wrong-shard"),
+    ],
+)
+def test_prepare_rejects_row_qualification_provenance_mismatch(field: str, invalid: str) -> None:
+    qualification = load_qualification_module()
+    board = qualification_board()
+    rows(board)[0][field] = invalid
+
+    with pytest.raises(qualification.ValidationError, match=field):
+        qualification.prepare_evidence(worker_status_board(), board, SOURCE_SHA, VERSION)
 
 
 def test_prepare_binds_real_wrapper_task_and_row_provenance() -> None:
