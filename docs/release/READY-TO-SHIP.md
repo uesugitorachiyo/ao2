@@ -4,10 +4,10 @@ Status: Phase 2 W4 workflow landed; manual dispatch verification pending
 
 ## Current Patch Rehearsal
 
-The current next-patch train is AO2 `v0.5.6` with AO2 Control Plane
-`v0.1.18`. The candidate adds bounded GitHub issue discovery, governed
-fork-only and draft-only repair publication, and stricter exact-diff evidence
-verification.
+The current next-patch train is AO2 `v0.5.7` with AO2 Control Plane
+`v0.1.18`. The candidate refreshes execution-receipt compatibility evidence,
+preserves the agent coordination contract, and binds physical-Windows row
+provenance to the qualified source.
 
 Promotion remains conditional on exact-head native and physical-platform
 qualification plus a hosted dry run whose publication status is
