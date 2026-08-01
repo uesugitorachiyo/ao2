@@ -5,7 +5,7 @@ This is the operator index for verifying public release evidence across
 
 The current public release pair is:
 
-- AO2 stable release: `v0.5.6`
+- AO2 stable release: `v0.5.7`
 - AO2 control-plane stable release: `v0.1.18`
 
 All checks below are read-only. They download release assets or GitHub Actions
@@ -16,7 +16,7 @@ AO artifacts, mutate GitHub releases, or include credential material.
 
 AO2 uses `Post Stable Release Verification` in
 `.github/workflows/post-stable-release-verification.yml`. It can be dispatched
-manually and runs on schedule. It downloads AO2 `v0.5.6` release archives,
+manually and runs on schedule. It downloads AO2 `v0.5.7` release archives,
 `promotion-plan.json`, and `SHA256SUMS`, then runs
 install/update, `version --json`, `doctor --json`, and
 `adapter doctor --provider scripted` on Ubuntu, macOS, and Windows.

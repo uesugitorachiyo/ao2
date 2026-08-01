@@ -1,19 +1,21 @@
 # Ready-to-Ship Release Gate
 
-Status: Phase 2 W4 workflow landed; manual dispatch verification pending
+Status: AO2 `v0.5.7` published and qualified; stable-train reconciliation complete
 
-## Current Patch Rehearsal
+## Current Stable Release
 
-The current next-patch train is AO2 `v0.5.7` with AO2 Control Plane
-`v0.1.18`. The candidate refreshes execution-receipt compatibility evidence,
-preserves the agent coordination contract, and binds physical-Windows row
-provenance to the qualified source.
+The current stable train is AO2 `v0.5.7` with AO2 Control Plane `v0.1.18`.
+AO2 `v0.5.7` was published from qualified source
+`a3d8d19cef8f3aa69ea14e46ef94cc9706a502a7`. Its five public release assets,
+checksums, attestations, three native platform installs, doctor checks,
+governed fixtures, and explicit companion compatibility completed release
+qualification before this documentation reconciliation.
 
-Promotion remains conditional on exact-head native and physical-platform
-qualification plus a hosted dry run whose publication status is
-`not_attempted`. The rehearsal does not authorize tag creation, release
-creation, public upload, deployment, credential changes, issue mutation,
-pull-request merge, or ready-for-review transitions.
+The release is available at
+<https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.7>. This document is a
+readback of the completed release; it does not authorize tag or release
+mutation, asset replacement, package publication, deployment, or preparation
+of a later patch candidate.
 
 ## Official Gate
 
