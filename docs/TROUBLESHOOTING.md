@@ -1,6 +1,6 @@
 # AO2 Troubleshooting
 
-Use this page for first-pass support on AO2 `v0.5.5` installs and local runs.
+Use this page for first-pass support on AO2 `v0.5.7` installs and local runs.
 Keep logs redacted before opening an issue. Do not include tokens, API keys,
 private repository names, or unreleased evidence values.
 
@@ -162,7 +162,7 @@ For already-downloaded public assets:
 
 ```sh
 shasum -a 256 -c SHA256SUMS
-tar -xzf ao2-0.5.5-<platform>.tar.gz
+tar -xzf ao2-0.5.7-<platform>.tar.gz
 ./verify-release.sh
 ```
 
@@ -179,5 +179,5 @@ do not paste private paths or credential values into public issues.
 ## Public Release Evidence
 
 Use [Public Release Verification](release/PUBLIC-RELEASE-VERIFICATION.md) to
-inspect hosted post-release smoke and consumer evidence. The AO2 `v0.5.5`
+inspect hosted post-release smoke and consumer evidence. The AO2 `v0.5.7`
 stable release is paired with AO2 Control Plane `v0.1.18`.
