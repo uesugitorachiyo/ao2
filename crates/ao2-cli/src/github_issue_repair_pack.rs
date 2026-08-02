@@ -7,6 +7,8 @@ use std::fs::{self, File, Metadata, OpenOptions};
 use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
+#[path = "github_issue_repair_pack/reproduction.rs"]
+mod reproduction;
 #[cfg(unix)]
 #[path = "unix_input.rs"]
 mod unix_input;
@@ -60,6 +62,12 @@ struct RepairPackManifest {
     source_archive: Artifact,
     issue_snapshot: Artifact,
     dependency_cache_manifest: Artifact,
+    #[serde(default)]
+    reproduction_evidence: reproduction::ArtifactField,
+    #[serde(default)]
+    reproduction_fixture: reproduction::ArtifactField,
+    #[serde(default)]
+    reproduction_output: reproduction::ArtifactField,
     toolchain: Toolchain,
     extracted_tree_sha256: String,
     known_fix_fetched: bool,
@@ -99,6 +107,8 @@ struct SafetyBoundary {
 struct ValidationReadback<'a> {
     schema_version: &'static str,
     status: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    eligibility_status: Option<&'static str>,
     request_id: &'a str,
     corpus_id: &'a str,
     candidate_id: &'a str,
@@ -112,6 +122,12 @@ struct ValidationReadback<'a> {
     source_archive_sha256: &'a str,
     issue_snapshot_sha256: &'a str,
     dependency_cache_manifest_sha256: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reproduction_evidence_sha256: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reproduction_fixture_sha256: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    reproduction_output_sha256: Option<&'a str>,
     extracted_tree_sha256: &'a str,
     failed_rows: u64,
     authority_level: &'static str,
@@ -150,7 +166,7 @@ fn validate(manifest_path: &Path, root_path: &Path, json: bool) -> Result<()> {
         read_regular_file(&root, &manifest_name, MANIFEST_MAX_BYTES, "manifest")?;
     let manifest: RepairPackManifest = serde_json::from_slice(&manifest_bytes)
         .context("parse strict repair pack manifest JSON")?;
-    validate_manifest(&manifest)?;
+    let version = validate_manifest(&manifest)?;
 
     let artifact_paths = [
         manifest.source_archive.path.as_str(),
@@ -206,10 +222,24 @@ fn validate(manifest_path: &Path, root_path: &Path, json: bool) -> Result<()> {
     {
         bail!("referenced artifacts must not alias one file");
     }
+    let reproduction = reproduction::validate(
+        &root,
+        &manifest,
+        &manifest_name,
+        manifest_identity,
+        [
+            source_identity,
+            snapshot_identity,
+            dependency_cache_identity,
+        ],
+        total_size,
+    )?;
 
+    let is_v2 = version == reproduction::Version::V2;
     let readback = ValidationReadback {
-        schema_version: "ao2.github-issue-repair-pack-validation.v1",
+        schema_version: version.validation_schema(),
         status: "passed",
+        eligibility_status: is_v2.then_some("reproduced"),
         request_id: &manifest.request_id,
         corpus_id: &manifest.corpus_id,
         candidate_id: &manifest.candidate_id,
@@ -223,6 +253,13 @@ fn validate(manifest_path: &Path, root_path: &Path, json: bool) -> Result<()> {
         source_archive_sha256: &source_verified.sha256,
         issue_snapshot_sha256: &snapshot_verified.sha256,
         dependency_cache_manifest_sha256: &dependency_cache_verified.sha256,
+        reproduction_evidence_sha256: reproduction.as_ref().map(|item| item.sha256.as_str()),
+        reproduction_fixture_sha256: reproduction
+            .as_ref()
+            .map(|item| item.fixture_sha256.as_str()),
+        reproduction_output_sha256: reproduction
+            .as_ref()
+            .map(|item| item.output_sha256.as_str()),
         extracted_tree_sha256: &manifest.extracted_tree_sha256,
         failed_rows: 0,
         authority_level: "L1",
@@ -248,6 +285,7 @@ fn validate(manifest_path: &Path, root_path: &Path, json: bool) -> Result<()> {
     } else {
         println!("status=passed");
         println!("manifest_sha256={}", readback.manifest_sha256);
+        reproduction::print_text(reproduction.as_ref());
         println!("failed_rows=0");
     }
     Ok(())
@@ -281,10 +319,13 @@ fn direct_manifest_child_name(
     Ok(declared.to_owned())
 }
 
-fn validate_manifest(manifest: &RepairPackManifest) -> Result<()> {
-    if manifest.schema_version != "ao2.github-issue-repair-pack.v1" {
-        bail!("unsupported repair pack schema_version");
-    }
+fn validate_manifest(manifest: &RepairPackManifest) -> Result<reproduction::Version> {
+    let version = reproduction::version(
+        &manifest.schema_version,
+        &manifest.reproduction_evidence,
+        &manifest.reproduction_fixture,
+        &manifest.reproduction_output,
+    )?;
     for (name, value) in [
         ("request_id", manifest.request_id.as_str()),
         ("corpus_id", manifest.corpus_id.as_str()),
@@ -332,7 +373,8 @@ fn validate_manifest(manifest: &RepairPackManifest) -> Result<()> {
     if manifest.known_fix_fetched {
         bail!("known_fix_fetched must be false");
     }
-    validate_safety(&manifest.safety)
+    validate_safety(&manifest.safety)?;
+    Ok(version)
 }
 
 fn validate_identifier(name: &str, value: &str, max_bytes: usize) -> Result<()> {
