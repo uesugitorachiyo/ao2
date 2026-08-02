@@ -15,6 +15,12 @@ const SNAPSHOT_SHA256: &str =
 const DEPENDENCY_CACHE_SHA256: &str =
     "sha256:832a373b36cffe46c94a00b2f5c31b1cd7ad76422b97cb431045274373c1a116";
 const TREE_SHA256: &str = "sha256:1111111111111111111111111111111111111111111111111111111111111111";
+const REPRODUCTION_PATH: &str = "reproduction-evidence.json";
+const REPRODUCTION_FIXTURE_PATH: &str = "reproduction-fixture.rs";
+const REPRODUCTION_OUTPUT_PATH: &str = "reproduction-output.txt";
+const REPRODUCTION_FIXTURE_BYTES: &[u8] = b"issue-derived regression fixture";
+const FAILURE_SIGNATURE: &str = "issue-specific assertion failed";
+const REPRODUCTION_OUTPUT_BYTES: &[u8] = b"test failed: issue-specific assertion failed\n";
 
 fn valid_manifest() -> Value {
     let fetched_at = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
@@ -64,6 +70,55 @@ fn valid_manifest() -> Value {
     })
 }
 
+fn valid_v2_pack() -> (Value, Value) {
+    let mut manifest = valid_manifest();
+    manifest["schema_version"] = json!("ao2.github-issue-repair-pack.v2");
+    let reproduction = json!({
+        "schema_version": "ao2.github-issue-reproduction-evidence.v1",
+        "request_id": manifest["request_id"],
+        "candidate_id": manifest["candidate_id"],
+        "source_sha": manifest["source_sha"],
+        "command_argv": ["cargo", "test", "--test", "withdrawn-issue-regression"],
+        "working_directory": ".",
+        "fixture_install_path": "tests/withdrawn-issue-regression.rs",
+        "test_identifier": "withdrawn-issue-regression",
+        "toolchain": {
+            "name": manifest["toolchain"]["name"],
+            "version": manifest["toolchain"]["version"],
+        },
+        "fixture_sha256": format!("sha256:{:x}", Sha256::digest(REPRODUCTION_FIXTURE_BYTES)),
+        "output_sha256": format!("sha256:{:x}", Sha256::digest(REPRODUCTION_OUTPUT_BYTES)),
+        "failure_signature": FAILURE_SIGNATURE,
+        "failure_signature_sha256": format!("sha256:{:x}", Sha256::digest(FAILURE_SIGNATURE.as_bytes())),
+        "result": "reproduced_failure",
+        "expected_exit_code": 1,
+        "observed_exit_code": 1,
+        "network": "none",
+        "git_history_present": false,
+        "oracle_present": false,
+        "credentials_present": false,
+        "external_effects": 0,
+        "completed_at": manifest["fetched_at"],
+    });
+    let bytes = serde_json::to_vec(&reproduction).unwrap();
+    manifest["reproduction_evidence"] = json!({
+        "path": REPRODUCTION_PATH,
+        "size_bytes": bytes.len(),
+        "sha256": format!("sha256:{:x}", Sha256::digest(&bytes)),
+    });
+    manifest["reproduction_fixture"] = json!({
+        "path": REPRODUCTION_FIXTURE_PATH,
+        "size_bytes": REPRODUCTION_FIXTURE_BYTES.len(),
+        "sha256": format!("sha256:{:x}", Sha256::digest(REPRODUCTION_FIXTURE_BYTES)),
+    });
+    manifest["reproduction_output"] = json!({
+        "path": REPRODUCTION_OUTPUT_PATH,
+        "size_bytes": REPRODUCTION_OUTPUT_BYTES.len(),
+        "sha256": format!("sha256:{:x}", Sha256::digest(REPRODUCTION_OUTPUT_BYTES)),
+    });
+    (manifest, reproduction)
+}
+
 fn write_pack_at(root: &Path, manifest: &Value) -> std::path::PathBuf {
     fs::create_dir_all(root).unwrap();
     fs::write(root.join("source.tar.gz"), SOURCE_BYTES).unwrap();
@@ -76,6 +131,38 @@ fn write_pack_at(root: &Path, manifest: &Value) -> std::path::PathBuf {
 
 fn write_pack(temp: &tempfile::TempDir, manifest: &Value) -> std::path::PathBuf {
     write_pack_at(temp.path(), manifest)
+}
+
+fn write_v2_pack_at(root: &Path, manifest: &mut Value, reproduction: &Value) -> std::path::PathBuf {
+    let bytes = serde_json::to_vec(reproduction).unwrap();
+    write_v2_pack_bytes_at(root, manifest, &bytes)
+}
+
+fn write_v2_pack_bytes_at(root: &Path, manifest: &mut Value, bytes: &[u8]) -> std::path::PathBuf {
+    manifest["reproduction_evidence"]["size_bytes"] = json!(bytes.len());
+    manifest["reproduction_evidence"]["sha256"] =
+        json!(format!("sha256:{:x}", Sha256::digest(bytes)));
+    let manifest_path = write_pack_at(root, manifest);
+    fs::write(root.join(REPRODUCTION_PATH), bytes).unwrap();
+    fs::write(
+        root.join(REPRODUCTION_FIXTURE_PATH),
+        REPRODUCTION_FIXTURE_BYTES,
+    )
+    .unwrap();
+    fs::write(
+        root.join(REPRODUCTION_OUTPUT_PATH),
+        REPRODUCTION_OUTPUT_BYTES,
+    )
+    .unwrap();
+    manifest_path
+}
+
+fn write_v2_pack(
+    temp: &tempfile::TempDir,
+    manifest: &mut Value,
+    reproduction: &Value,
+) -> std::path::PathBuf {
+    write_v2_pack_at(temp.path(), manifest, reproduction)
 }
 
 fn validate(manifest: &Path, root: &Path) -> Output {
@@ -163,6 +250,282 @@ fn validates_a_strict_read_only_repair_pack() {
             "approves_work": false,
         })
     );
+}
+
+#[test]
+fn validates_v2_only_with_digest_bound_reproduced_failure_evidence() {
+    let temp = tempfile::tempdir().unwrap();
+    let (mut manifest, reproduction) = valid_v2_pack();
+    let fetched_at = manifest["fetched_at"].clone();
+    let manifest_path = write_v2_pack(&temp, &mut manifest, &reproduction);
+    let reproduction_sha256 = manifest["reproduction_evidence"]["sha256"].clone();
+    let fixture_sha256 = manifest["reproduction_fixture"]["sha256"].clone();
+    let output_sha256 = manifest["reproduction_output"]["sha256"].clone();
+
+    let output = validate(&manifest_path, temp.path());
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let readback: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        readback,
+        json!({
+            "schema_version": "ao2.github-issue-repair-pack-validation.v2",
+            "status": "passed",
+            "eligibility_status": "reproduced",
+            "request_id": "request-20260801-001",
+            "corpus_id": "month-1-blind-corpus",
+            "candidate_id": "candidate-001",
+            "repository": "example/project",
+            "issue_number": 17,
+            "source_sha": "0123456789abcdef0123456789abcdef01234567",
+            "license": "Apache-2.0",
+            "language": "rust",
+            "fetched_at": fetched_at,
+            "manifest_sha256": manifest_digest(&manifest_path),
+            "source_archive_sha256": SOURCE_SHA256,
+            "issue_snapshot_sha256": SNAPSHOT_SHA256,
+            "dependency_cache_manifest_sha256": DEPENDENCY_CACHE_SHA256,
+            "reproduction_evidence_sha256": reproduction_sha256,
+            "reproduction_fixture_sha256": fixture_sha256,
+            "reproduction_output_sha256": output_sha256,
+            "extracted_tree_sha256": TREE_SHA256,
+            "failed_rows": 0,
+            "authority_level": "L1",
+            "network": "none",
+            "git_history_present": false,
+            "oracle_present": false,
+            "credentials_present": false,
+            "campaign_root_mounted": false,
+            "repair_pack_read_only": true,
+            "scratch_read_write": true,
+            "third_party_mutation_authorized": false,
+            "network_accessed": false,
+            "git_invoked": false,
+            "github_read_performed": false,
+            "github_write_performed": false,
+            "repair_executed": false,
+            "mutation_performed": false,
+            "executes_work": false,
+            "approves_work": false,
+        })
+    );
+}
+
+#[test]
+fn rejects_v2_without_reproduction_evidence() {
+    let temp = tempfile::tempdir().unwrap();
+    let (mut manifest, _) = valid_v2_pack();
+    manifest
+        .as_object_mut()
+        .unwrap()
+        .remove("reproduction_evidence");
+    let path = write_pack(&temp, &manifest);
+
+    assert_rejected(validate(&path, temp.path()));
+
+    for missing in ["reproduction_fixture", "reproduction_output"] {
+        let temp = tempfile::tempdir().unwrap();
+        let (mut manifest, reproduction) = valid_v2_pack();
+        manifest.as_object_mut().unwrap().remove(missing);
+        let path = write_v2_pack(&temp, &mut manifest, &reproduction);
+        assert_rejected(validate(&path, temp.path()));
+    }
+}
+
+#[test]
+fn rejects_reproduction_evidence_across_the_v1_v2_schema_boundary() {
+    let temp = tempfile::tempdir().unwrap();
+    let (mut v1_with_reproduction, reproduction) = valid_v2_pack();
+    v1_with_reproduction["schema_version"] = json!("ao2.github-issue-repair-pack.v1");
+    let path = write_v2_pack(&temp, &mut v1_with_reproduction, &reproduction);
+    assert_rejected(validate(&path, temp.path()));
+
+    let temp = tempfile::tempdir().unwrap();
+    let (mut v2_with_null, _) = valid_v2_pack();
+    v2_with_null["reproduction_evidence"] = Value::Null;
+    let path = write_pack(&temp, &v2_with_null);
+    assert_rejected(validate(&path, temp.path()));
+}
+
+#[test]
+fn rejects_v2_pass_no_failure_mismatch_unsafe_shell_and_side_effect_evidence() {
+    let mutations: &[fn(&mut Value)] = &[
+        |value| value["result"] = json!("passed"),
+        |value| value["expected_exit_code"] = json!(0),
+        |value| value["observed_exit_code"] = json!(0),
+        |value| value["observed_exit_code"] = json!(2),
+        |value| value["expected_exit_code"] = json!(256),
+        |value| value["observed_exit_code"] = json!(256),
+        |value| value["request_id"] = json!("request-mismatch"),
+        |value| value["candidate_id"] = json!("candidate-mismatch"),
+        |value| value["source_sha"] = json!("1111111111111111111111111111111111111111"),
+        |value| value["network"] = json!("host"),
+        |value| value["git_history_present"] = json!(true),
+        |value| value["oracle_present"] = json!(true),
+        |value| value["credentials_present"] = json!(true),
+        |value| value["external_effects"] = json!(1),
+        |value| value["command_argv"] = json!([]),
+        |value| value["command_argv"] = json!(["false"]),
+        |value| value["command_argv"] = json!(["cargo test"]),
+        |value| value["command_argv"] = json!(["sh", "-c", "exit 1"]),
+        |value| value["command_argv"] = json!([r"C:\Windows\System32\cmd.exe", "/c", "exit 1"]),
+        |value| value["command_argv"] = json!(["/bin/ash", "-c", "exit 1"]),
+        |value| value["command_argv"] = json!(["cargo", "build"]),
+        |value| {
+            value["command_argv"] =
+                json!(["cargo", "test", "--manifest-path", "../outside/Cargo.toml"])
+        },
+        |value| {
+            value["command_argv"] = json!(["cargo", "test", "--config", "build.rustc-wrapper=sh"])
+        },
+        |value| value["command_argv"] = json!(["cargo", "test", "--tests"]),
+        |value| value["command_argv"] = json!(["cargo", "test", "\nunsafe"]),
+        |value| value["command_argv"] = json!(["x".repeat(257)]),
+        |value| value["command_argv"] = json!(vec!["x"; 65]),
+        |value| value["command_argv"] = json!(vec!["x".repeat(256); 17]),
+        |value| value["working_directory"] = json!(".."),
+        |value| value["fixture_install_path"] = json!("tests/unrelated.rs"),
+        |value| value["test_identifier"] = json!("unrelated"),
+        |value| {
+            value["command_argv"] = json!(["cargo", "test", "--test", "target.name"]);
+            value["fixture_install_path"] = json!("tests/target.name.rs");
+            value["test_identifier"] = json!("target.name");
+        },
+        |value| value["toolchain"]["version"] = json!("mismatch"),
+        |value| value["fixture_sha256"] = json!("sha256:bad"),
+        |value| value["output_sha256"] = json!("sha256:bad"),
+        |value| value["failure_signature_sha256"] = json!("sha256:bad"),
+        |value| value["failure_signature"] = json!("invented unrelated failure"),
+        |value| {
+            value["failure_signature"] = json!("x");
+            value["failure_signature_sha256"] = json!(format!("sha256:{:x}", Sha256::digest(b"x")));
+        },
+    ];
+    for mutation in mutations {
+        let temp = tempfile::tempdir().unwrap();
+        let (mut manifest, mut reproduction) = valid_v2_pack();
+        mutation(&mut reproduction);
+        let path = write_v2_pack(&temp, &mut manifest, &reproduction);
+        assert_rejected(validate(&path, temp.path()));
+    }
+
+    let temp = tempfile::tempdir().unwrap();
+    let (mut manifest, mut reproduction) = valid_v2_pack();
+    reproduction.as_object_mut().unwrap().remove("command_argv");
+    reproduction["command"] = json!("cargo test");
+    let path = write_v2_pack(&temp, &mut manifest, &reproduction);
+    assert_rejected(validate(&path, temp.path()));
+}
+
+#[test]
+fn rejects_v2_output_that_does_not_contain_the_bound_failure_signature() {
+    let temp = tempfile::tempdir().unwrap();
+    let (mut manifest, mut reproduction) = valid_v2_pack();
+    let unrelated_output = b"test failed for an unrelated reason\n";
+    let unrelated_digest = format!("sha256:{:x}", Sha256::digest(unrelated_output));
+    reproduction["output_sha256"] = json!(unrelated_digest);
+    manifest["reproduction_output"]["size_bytes"] = json!(unrelated_output.len());
+    manifest["reproduction_output"]["sha256"] = json!(unrelated_digest);
+    let path = write_v2_pack(&temp, &mut manifest, &reproduction);
+    fs::write(temp.path().join(REPRODUCTION_OUTPUT_PATH), unrelated_output).unwrap();
+
+    assert_rejected(validate(&path, temp.path()));
+}
+
+#[test]
+fn rejects_v2_malformed_or_stale_reproduction_evidence() {
+    let (_, reproduction) = valid_v2_pack();
+    let valid = serde_json::to_string(&reproduction).unwrap();
+    let malformed = [
+        valid.replacen('{', "{\"request_id\":\"duplicate\",", 1),
+        valid.replacen('{', "{\"unknown\":true,", 1),
+        format!("{valid} true"),
+        "{".to_string(),
+    ];
+    for bytes in malformed.iter().map(String::as_bytes).chain([&[0xff][..]]) {
+        let temp = tempfile::tempdir().unwrap();
+        let (mut manifest, _) = valid_v2_pack();
+        let path = write_v2_pack_bytes_at(temp.path(), &mut manifest, bytes);
+        assert_rejected(validate(&path, temp.path()));
+    }
+
+    for completed_at in [
+        (Utc::now() - Duration::days(8)).to_rfc3339_opts(SecondsFormat::Secs, true),
+        (Utc::now() + Duration::minutes(6)).to_rfc3339_opts(SecondsFormat::Secs, true),
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        let (mut manifest, mut reproduction) = valid_v2_pack();
+        reproduction["completed_at"] = json!(completed_at);
+        let path = write_v2_pack(&temp, &mut manifest, &reproduction);
+        assert_rejected(validate(&path, temp.path()));
+    }
+
+    let temp = tempfile::tempdir().unwrap();
+    let (mut manifest, mut reproduction) = valid_v2_pack();
+    reproduction["completed_at"] =
+        json!((Utc::now() + Duration::minutes(1)).to_rfc3339_opts(SecondsFormat::Secs, true));
+    let path = write_v2_pack(&temp, &mut manifest, &reproduction);
+    assert_rejected(validate(&path, temp.path()));
+}
+
+#[test]
+fn rejects_v2_unsafe_aliased_linked_or_oversized_reproduction_artifact() {
+    for invalid_path in [
+        "/tmp/reproduction-evidence.json",
+        "../reproduction-evidence.json",
+        "nested/reproduction-evidence.json",
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        let (mut manifest, reproduction) = valid_v2_pack();
+        manifest["reproduction_evidence"]["path"] = json!(invalid_path);
+        let path = write_v2_pack(&temp, &mut manifest, &reproduction);
+        assert_rejected(validate(&path, temp.path()));
+    }
+
+    for alias in [
+        "source_archive",
+        "issue_snapshot",
+        "dependency_cache_manifest",
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        let (mut manifest, reproduction) = valid_v2_pack();
+        manifest["reproduction_evidence"] = manifest[alias].clone();
+        let path = write_v2_pack(&temp, &mut manifest, &reproduction);
+        assert_rejected(validate(&path, temp.path()));
+    }
+
+    let temp = tempfile::tempdir().unwrap();
+    let (mut manifest, _reproduction) = valid_v2_pack();
+    manifest["reproduction_evidence"]["size_bytes"] = json!(65_537_u64);
+    let path = write_pack(&temp, &manifest);
+    fs::write(temp.path().join(REPRODUCTION_PATH), vec![b'x'; 65_537]).unwrap();
+    assert_rejected(validate(&path, temp.path()));
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+
+        let temp = tempfile::tempdir().unwrap();
+        let (mut manifest, reproduction) = valid_v2_pack();
+        let path = write_v2_pack(&temp, &mut manifest, &reproduction);
+        let evidence = temp.path().join(REPRODUCTION_PATH);
+        fs::remove_file(&evidence).unwrap();
+        symlink(temp.path().join("issue.json"), &evidence).unwrap();
+        assert_rejected(validate(&path, temp.path()));
+    }
+
+    let temp = tempfile::tempdir().unwrap();
+    let (mut manifest, reproduction) = valid_v2_pack();
+    let path = write_v2_pack(&temp, &mut manifest, &reproduction);
+    fs::hard_link(
+        temp.path().join(REPRODUCTION_PATH),
+        temp.path().join("reproduction-alias.json"),
+    )
+    .unwrap();
+    assert_rejected(validate(&path, temp.path()));
 }
 
 #[test]
