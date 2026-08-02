@@ -4,6 +4,8 @@ use serde::Serialize;
 #[path = "github_issue_discovery.rs"]
 mod github_issue_discovery;
 pub(crate) mod github_issue_publish;
+#[path = "github_issue_repair_pack.rs"]
+mod github_issue_repair_pack;
 
 use super::{canonical_json_sha256, github_issue_draft};
 use crate::cli::IssueCommand;
@@ -60,6 +62,7 @@ pub(super) fn issue(command: IssueCommand) -> Result<()> {
             candidate_limit,
             json,
         }),
+        IssueCommand::RepairPack { command } => github_issue_repair_pack::run(command),
         IssueCommand::DraftPr { command } => {
             github_issue_draft::run(command, canonical_json_sha256)
         }

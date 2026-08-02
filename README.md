@@ -151,6 +151,21 @@ cargo run -p ao2-cli --bin ao2 -- \
   --run-id demo-run
 ```
 
+Validate a sanitized historical GitHub issue repair pack locally:
+
+```sh
+cargo run -p ao2-cli --bin ao2 -- issue repair-pack validate \
+  --manifest /path/to/manifest.json \
+  --root /path/to/pack-root \
+  --json
+```
+
+This command is validation-only. It does not unpack the source archive, execute
+a repair, access the network, invoke Git or GitHub, mutate a repository, or
+grant authority. The manifest and all referenced artifacts must be direct
+children of the repair pack root. See
+[the GitHub issue repair-pack contract](docs/contracts/GITHUB-ISSUE-REPAIR-PACK.md).
+
 Build a local release archive:
 
 ```sh

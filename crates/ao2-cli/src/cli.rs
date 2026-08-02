@@ -1040,6 +1040,11 @@ pub(crate) enum IssueCommand {
         #[arg(long)]
         json: bool,
     },
+    /// Validate a sanitized historical repair pack without executing work.
+    RepairPack {
+        #[command(subcommand)]
+        command: RepairPackCommand,
+    },
     /// Build, verify, or exercise a bounded local draft pull request action.
     DraftPr {
         #[command(subcommand)]
@@ -1049,6 +1054,19 @@ pub(crate) enum IssueCommand {
     Publish {
         #[command(subcommand)]
         command: github_issue_publish::PublishCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum RepairPackCommand {
+    /// Verify a strict manifest and its referenced artifacts without following links.
+    Validate {
+        #[arg(long)]
+        manifest: PathBuf,
+        #[arg(long)]
+        root: PathBuf,
+        #[arg(long)]
+        json: bool,
     },
 }
 
