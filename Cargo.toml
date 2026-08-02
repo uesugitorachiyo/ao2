@@ -31,7 +31,7 @@ hex = "0.4"
 base64 = "0.22"
 toml = "0.8"
 flate2 = "1"
-globset = "0.4"
+globset = "=0.4.16"
 rand = "0.8"
 rsa = { version = "0.9", features = ["sha2"] }
 signature = "2"
