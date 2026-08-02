@@ -9,13 +9,23 @@ use anyhow::{bail, Result};
 use windows_sys::Win32::Storage::FileSystem::{
     FileAttributeTagInfo, GetFileInformationByHandle, GetFileInformationByHandleEx, GetFileType,
     BY_HANDLE_FILE_INFORMATION, FILE_ATTRIBUTE_REPARSE_POINT, FILE_ATTRIBUTE_TAG_INFO,
-    FILE_FLAG_OPEN_REPARSE_POINT, FILE_TYPE_DISK, SECURITY_IDENTIFICATION, SECURITY_SQOS_PRESENT,
+    FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_READ, FILE_TYPE_DISK,
+    SECURITY_IDENTIFICATION, SECURITY_SQOS_PRESENT,
 };
 
 // Audited Windows input-handle boundary: callers pass already-opened read-only
-// handles, and this module only inspects handle type and reparse attributes.
+// handles, and this module only inspects handle type, identity, link count, and
+// reparse attributes.
 pub(crate) fn open_flags() -> u32 {
     FILE_FLAG_OPEN_REPARSE_POINT | SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION
+}
+
+pub(crate) fn root_open_flags() -> u32 {
+    open_flags() | FILE_FLAG_BACKUP_SEMANTICS
+}
+
+pub(crate) fn root_share_mode() -> u32 {
+    FILE_SHARE_READ
 }
 
 pub(crate) fn validate_disk_handle(file: &fs::File, path: &Path) -> Result<()> {
@@ -27,15 +37,34 @@ pub(crate) fn validate_non_reparse_disk_handle(file: &fs::File, path: &Path) -> 
     validate_file_characteristics(file_type(file), tag_info.FileAttributes, path)
 }
 
+pub(crate) fn metadata_is_reparse(metadata: &fs::Metadata) -> bool {
+    use std::os::windows::fs::MetadataExt;
+
+    metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct DiskFileIdentity {
     volume_serial_number: u32,
     file_index: u64,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) struct DiskFileState {
+    pub(crate) identity: DiskFileIdentity,
+    pub(crate) number_of_links: u32,
+}
+
 pub(crate) fn disk_file_identity(file: &fs::File, path: &Path) -> Result<DiskFileIdentity> {
+    Ok(disk_file_state(file, path)?.identity)
+}
+
+pub(crate) fn disk_file_state(file: &fs::File, path: &Path) -> Result<DiskFileState> {
     let inspection = inspect_disk_handle(file, path)?;
-    Ok(identity_from_file_information(&inspection.file_information))
+    Ok(DiskFileState {
+        identity: identity_from_file_information(&inspection.file_information),
+        number_of_links: inspection.file_information.nNumberOfLinks,
+    })
 }
 
 fn file_type(file: &fs::File) -> u32 {
@@ -133,6 +162,21 @@ mod tests {
     }
 
     #[test]
+    fn root_open_flags_open_directories_without_reparse_following_or_delete_sharing() {
+        let flags = root_open_flags();
+
+        assert_eq!(
+            flags & FILE_FLAG_OPEN_REPARSE_POINT,
+            FILE_FLAG_OPEN_REPARSE_POINT
+        );
+        assert_eq!(
+            flags & FILE_FLAG_BACKUP_SEMANTICS,
+            FILE_FLAG_BACKUP_SEMANTICS
+        );
+        assert_eq!(root_share_mode(), FILE_SHARE_READ);
+    }
+
+    #[test]
     fn draft_input_handle_type_accepts_only_disk_files() {
         let path = Path::new("input.json");
 
@@ -174,5 +218,65 @@ mod tests {
         assert_eq!(first, same);
         assert_ne!(first, different_volume);
         assert_ne!(first, different_index);
+    }
+
+    #[test]
+    fn disk_file_state_distinguishes_same_size_files_and_reports_hardlinks() {
+        let temp = tempfile::tempdir().unwrap();
+        let first_path = temp.path().join("first.bin");
+        let second_path = temp.path().join("second.bin");
+        let alias_path = temp.path().join("alias.bin");
+        fs::write(&first_path, b"same-size").unwrap();
+        fs::write(&second_path, b"same-size").unwrap();
+
+        let first = fs::File::open(&first_path).unwrap();
+        let second = fs::File::open(&second_path).unwrap();
+        let first_state = disk_file_state(&first, &first_path).unwrap();
+        let second_state = disk_file_state(&second, &second_path).unwrap();
+        assert_ne!(first_state.identity, second_state.identity);
+        assert_eq!(first_state.number_of_links, 1);
+        assert_eq!(second_state.number_of_links, 1);
+
+        fs::hard_link(&first_path, &alias_path).unwrap();
+        let alias = fs::File::open(&alias_path).unwrap();
+        let alias_state = disk_file_state(&alias, &alias_path).unwrap();
+        assert_eq!(first_state.identity, alias_state.identity);
+        assert_eq!(alias_state.number_of_links, 2);
+    }
+
+    #[test]
+    fn disk_file_state_detects_path_replacement() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("input.bin");
+        fs::write(&path, b"same-size").unwrap();
+        let opened = fs::File::open(&path).unwrap();
+        let opened_state = disk_file_state(&opened, &path).unwrap();
+
+        fs::rename(&path, temp.path().join("old.bin")).unwrap();
+        fs::write(&path, b"same-size").unwrap();
+        let replacement = fs::File::open(&path).unwrap();
+        let replacement_state = disk_file_state(&replacement, &path).unwrap();
+
+        assert_ne!(opened_state.identity, replacement_state.identity);
+    }
+
+    #[test]
+    fn retained_directory_handle_blocks_root_replacement_and_keeps_identity() {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("root");
+        let replacement = temp.path().join("replacement");
+        fs::create_dir(&root).unwrap();
+        let retained = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(root_share_mode())
+            .custom_flags(root_open_flags())
+            .open(&root)
+            .unwrap();
+        let before = disk_file_identity(&retained, &root).unwrap();
+
+        assert!(fs::rename(&root, &replacement).is_err());
+        assert_eq!(disk_file_identity(&retained, &root).unwrap(), before);
     }
 }
