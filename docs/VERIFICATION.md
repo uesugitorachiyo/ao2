@@ -7,9 +7,12 @@ Last verified: 2026-05-27
 ```sh
 npm run verify
 cargo test -p ao2-cli --test quality_exact_snapshot
+cargo test -p ao2-cli --test quality_hooks
 ao2 quality check commit --target /path/to/repository --json
 ao2 quality check push --target /path/to/repository --base <base-commit> --json
 ao2 quality check full --target /path/to/repository --json
+ao2 quality hooks status --target /path/to/repository --json
+ao2 quality hooks install --target /path/to/repository --json
 npm run build:release
 npm run package:local
 npm run phase1:prepare-prerequisites

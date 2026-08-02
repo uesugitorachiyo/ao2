@@ -1,4 +1,5 @@
 mod executor;
+mod hooks;
 mod manifest;
 mod snapshot;
 
@@ -45,6 +46,39 @@ pub(crate) enum QualityCommand {
         #[arg(long)]
         json: bool,
     },
+    Hooks {
+        #[command(subcommand)]
+        command: QualityHooksCommand,
+    },
+    #[command(hide = true)]
+    HookRun {
+        #[arg(value_enum)]
+        hook: QualityHook,
+        #[arg(long, default_value = ".")]
+        target: PathBuf,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum QualityHooksCommand {
+    Install {
+        #[arg(long, default_value = ".")]
+        target: PathBuf,
+        #[arg(long)]
+        json: bool,
+    },
+    Status {
+        #[arg(long, default_value = ".")]
+        target: PathBuf,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+pub(crate) enum QualityHook {
+    Commit,
+    Push,
 }
 
 #[derive(Debug, Args)]
@@ -83,10 +117,12 @@ pub(crate) fn quality(command: QualityCommand) -> Result<()> {
             out,
             json,
         } => quality_check(level, target, manifest, base, out, json),
+        QualityCommand::Hooks { command } => hooks::hooks(command),
+        QualityCommand::HookRun { hook, target } => hooks::hook_run(hook, target),
     }
 }
 
-fn quality_check(
+pub(super) fn quality_check(
     level: QualityLevel,
     target: PathBuf,
     manifest: Option<PathBuf>,
