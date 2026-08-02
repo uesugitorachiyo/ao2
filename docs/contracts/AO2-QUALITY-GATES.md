@@ -13,6 +13,8 @@ without inventing repository commands.
 ao2 quality check commit --target /path/to/repository --json
 ao2 quality check push --target /path/to/repository --base <base-commit> --json
 ao2 quality check full --target /path/to/repository --json
+ao2 quality hooks status --target /path/to/repository --json
+ao2 quality hooks install --target /path/to/repository --json
 ```
 
 `--manifest` may name the root manifest explicitly, but it must resolve to the
@@ -21,6 +23,28 @@ regular, non-symlinked `ao-quality-gates.json` directly under `--target`.
 result paths resolve below `--target` and must remain under the manifest's
 literal `local_artifact_root`; an absolute external evidence path is also
 accepted. Traversal and symlinked result paths fail before step execution.
+
+## Optional Git Hooks
+
+Hook installation is an explicit local opt-in. `status` is read-only and
+classifies both `pre-commit` and `pre-push` as absent, current, stale,
+unmanaged, or unsafe. `install` writes only missing wrappers or wrappers with a
+recognized older AO2 marker. It refuses a custom `core.hooksPath`, unmanaged
+content, symlinks, non-regular files, and oversized hook files before writing
+either wrapper. Repeating installation against current wrappers changes
+nothing.
+
+The managed wrappers contain only a version marker and an `exec` of the hidden
+AO2 `quality hook-run` entry point. Gate selection, manifest validation,
+snapshot construction, and safety policy remain in AO2. A normal pre-push
+binds one exact remote base and local `HEAD`; a new branch conservatively runs
+the full exact-head level. Ambiguous multi-head or multi-base push input fails
+closed. Deletion-only pushes need no source verification.
+
+Hooks are optional accelerators, never merge authority. The hook path performs
+no provider call or network operation, and it cannot repair, modify source,
+commit, push, release, deploy, publish, or promote. Required hosted checks
+remain authoritative even when local hooks are absent or bypassed.
 
 ## Snapshot Binding
 
