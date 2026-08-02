@@ -1,5 +1,4 @@
 #![recursion_limit = "256"]
-
 use anyhow::{anyhow, Context, Result};
 use ao2_adapters::{build_provider_prompt_command, doctor_provider, parse_provider};
 use ao2_policy::redact_secrets;
@@ -113,7 +112,7 @@ pub(crate) use artifact_safety::{
     factory_app_run_bundle_reject_secret_fields, factory_app_run_bundle_reject_secret_markers,
 };
 use build_identity::{runtime_git_commit, runtime_target_label, version};
-use cli::{Cli, Command, ReportCommand};
+use cli::{quality::quality, Cli, Command, ReportCommand};
 use cli_util::{
     atomic_write_text, canonical_json_sha256, create_tar_gz, is_git_sha_prefix, is_sha256_hex,
     json_array, json_bool, json_string, json_u64, json_value_text, now_unix_ms, read_json_file,
@@ -314,6 +313,7 @@ fn real_main() -> Result<()> {
         Command::Greenfield { command } => greenfield(command),
         Command::Sdd { command } => sdd_cmd::run(command),
         Command::Issue { command } => issue(command),
+        Command::Quality(args) => quality(args.command),
         Command::Support { command } => support_bundle::run(command, canonical_json_sha256),
         Command::Export { run_id, target } => export(target, run_id),
         Command::Version { json } => version(json),

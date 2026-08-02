@@ -13,6 +13,7 @@ ao2-runtime = { path = "../ao2-runtime" }
 chrono.workspace = true
 clap.workspace = true
 flate2.workspace = true
+globset.workspace = true
 sdd-planner.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -37,6 +38,7 @@ libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }
+win32job = "2.0.3"
 
 [lints.rust]
 unsafe_code = "deny"

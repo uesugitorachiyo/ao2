@@ -11,6 +11,7 @@ use crate::upgrade_cmd::UpgradeCommand;
 use crate::{
     github_issue_draft, github_issue_intake::github_issue_publish, sdd_cmd, support_bundle,
 };
+pub(crate) mod quality;
 
 #[derive(Debug, Parser)]
 #[command(name = "ao2")]
@@ -161,6 +162,7 @@ pub(crate) enum Command {
         #[command(subcommand)]
         command: IssueCommand,
     },
+    Quality(quality::QualityArgs),
     Export {
         run_id: String,
         #[arg(long, default_value = ".")]
