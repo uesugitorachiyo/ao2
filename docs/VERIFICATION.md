@@ -105,6 +105,13 @@ npm run gate:full            # 3-stage ready-to-ship gate (guard + replacement +
 scripts/smoke-release-archives.sh
 ```
 
+The root `ao-quality-gates.json` is AO2's source-owned local quality profile.
+Its commit level checks the exact staged tree, its push level selects bounded
+Rust and quality-contract checks from exact outgoing commits, and its full
+level preserves `npm run verify` plus the Rust architecture guard. Optional
+hooks delegate to these levels; they are not merge authority and do not weaken
+hosted CI.
+
 Pulse event-loop evidence written under `target/pulse-next-recommended-tasks`
 is local and ignored, but it can be removed by `cargo clean`. When preserving a
 local chain across cleanup, mirror the same packet, board, executor evidence,

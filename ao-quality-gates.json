@@ -1,0 +1,96 @@
+{
+  "schema_version": "ao.quality-gates.v1",
+  "repository": "ao2",
+  "lifecycle": "active_hosted",
+  "supported_platforms": ["linux", "macos", "windows"],
+  "required_tools": ["cargo", "git", "npm", "python3"],
+  "generated_paths": [
+    ".ao2/**",
+    ".ao2-local/**",
+    "dist*/**",
+    "node_modules/**",
+    "target/**"
+  ],
+  "protected_paths": [
+    ".git/**",
+    "docs/beta/**",
+    "docs/release/**"
+  ],
+  "compatibility": {
+    "minimum_consumer_version": "1.0.0",
+    "owner": "ao2"
+  },
+  "evidence": {
+    "public_safe": true,
+    "local_artifact_root": "target/quality-gates",
+    "maximum_result_bytes": 262144
+  },
+  "levels": {
+    "commit": {
+      "snapshot": "staged_tree",
+      "maximum_duration_seconds": 10,
+      "network_allowed": false,
+      "mutates_source": false,
+      "steps": [
+        {
+          "id": "staged-diff-check",
+          "argv": ["git", "diff", "--cached", "--check"],
+          "timeout_seconds": 10,
+          "path_triggers": ["**"]
+        }
+      ]
+    },
+    "push": {
+      "snapshot": "outgoing_commits",
+      "maximum_duration_seconds": 120,
+      "network_allowed": false,
+      "mutates_source": false,
+      "steps": [
+        {
+          "id": "rust-format",
+          "argv": ["cargo", "fmt", "--all", "--", "--check"],
+          "timeout_seconds": 30,
+          "path_triggers": ["Cargo.lock", "Cargo.toml", "crates/**"]
+        },
+        {
+          "id": "rust-architecture",
+          "argv": ["python3", "scripts/check-rust-architecture.py"],
+          "timeout_seconds": 30,
+          "path_triggers": [".github/workflows/**", "Cargo.lock", "Cargo.toml", "crates/**", "scripts/check-rust-architecture.py"]
+        },
+        {
+          "id": "quality-snapshot-regressions",
+          "argv": ["cargo", "test", "-p", "ao2-cli", "--test", "quality_exact_snapshot", "--locked"],
+          "timeout_seconds": 90,
+          "path_triggers": ["ao-quality-gates.json", "crates/ao2-cli/src/cli/quality/**", "crates/ao2-cli/tests/quality_exact_snapshot.rs", "docs/contracts/AO2-QUALITY-GATES.md"]
+        },
+        {
+          "id": "quality-hook-regressions",
+          "argv": ["cargo", "test", "-p", "ao2-cli", "--test", "quality_hooks", "--locked"],
+          "timeout_seconds": 90,
+          "path_triggers": ["ao-quality-gates.json", "crates/ao2-cli/src/cli/quality/**", "crates/ao2-cli/tests/quality_hooks.rs", "docs/contracts/AO2-QUALITY-GATES.md"]
+        }
+      ]
+    },
+    "full": {
+      "snapshot": "source_head",
+      "maximum_duration_seconds": 2400,
+      "network_allowed": true,
+      "mutates_source": false,
+      "steps": [
+        {
+          "id": "workspace-verification",
+          "argv": ["npm", "run", "verify"],
+          "timeout_seconds": 2340,
+          "path_triggers": ["**"]
+        },
+        {
+          "id": "rust-architecture",
+          "argv": ["python3", "scripts/check-rust-architecture.py"],
+          "timeout_seconds": 60,
+          "path_triggers": ["**"]
+        }
+      ]
+    }
+  }
+}
