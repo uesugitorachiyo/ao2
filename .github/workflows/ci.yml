@@ -232,6 +232,7 @@ jobs:
             command: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
           - os: ubuntu-latest
             phase: build-release
+            target: linux-x86_64
             timeout_minutes: 20
             command: cargo build --release -p ao2-cli
           - os: macos-latest
@@ -384,6 +385,7 @@ jobs:
             command: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
           - os: macos-latest
             phase: build-release
+            target: macos-aarch64
             timeout_minutes: 20
             command: cargo build --release -p ao2-cli
           - os: windows-latest
@@ -537,6 +539,7 @@ jobs:
             command: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
           - os: windows-latest
             phase: build-release
+            target: windows-x86_64
             timeout_minutes: 20
             command: cargo build --release -p ao2-cli
 
@@ -602,6 +605,66 @@ jobs:
             target/release/ao2
             target/release/ao2.exe
           if-no-files-found: ignore
+
+      - name: Checkout canonical supply-chain tooling
+        if: matrix.phase == 'build-release'
+        uses: actions/checkout@v6.0.3
+        with:
+          repository: uesugitorachiyo/ao-architecture
+          ref: 3bb918466ffec789c7cc0a73cd186b57f7958754
+          path: target/supply-chain-tools
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Build and verify Rust supply-chain evidence
+        if: matrix.phase == 'build-release'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python_command=python3
+          if ! command -v "$python_command" >/dev/null 2>&1; then
+            python_command=python
+          fi
+          binary=target/release/ao2
+          if [ "${{ runner.os }}" = Windows ]; then
+            binary=target/release/ao2.exe
+          fi
+          version=$(cargo metadata --no-deps --format-version 1 | "$python_command" -c 'import json,sys; print(next(p["version"] for p in json.load(sys.stdin)["packages"] if p["name"] == "ao2-cli"))')
+          metadata_dir="target/supply-chain-inputs/${{ matrix.target }}"
+          out="target/supply-chain/${{ matrix.target }}"
+          mkdir -p "$metadata_dir"
+          "$python_command" target/supply-chain-tools/scripts/read_rust_binary_metadata.py "$binary" > "$metadata_dir/rust-binary-metadata.json"
+          "$python_command" target/supply-chain-tools/scripts/build_rust_supply_chain_candidate.py \
+            --workspace-root "$PWD" \
+            --repository ao2 \
+            --source-sha "$GITHUB_SHA" \
+            --version "$version" \
+            --target "${{ matrix.target }}" \
+            --binary "$binary" \
+            --metadata-json "$metadata_dir/rust-binary-metadata.json" \
+            --dependency-lock Cargo.lock \
+            --license LICENSE \
+            --notice NOTICE \
+            --archive-name "ao2-$version-${{ matrix.target }}.tar.gz" \
+            --generated-at-utc "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --out "$out"
+          "$python_command" target/supply-chain-tools/scripts/verify_supply_chain_policy.py \
+            --inventory target/supply-chain-tools/stack/distributable-inventory.json \
+            --policy target/supply-chain-tools/stack/sbom-policy.json \
+            --evidence "$out/supply-chain-evidence.json" \
+            --workspace-root "$out" \
+            --expected-source-sha "$GITHUB_SHA" \
+            --expected-version "$version" \
+            --expected-target "${{ matrix.target }}" \
+            --now "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+      - name: Upload Rust supply-chain evidence
+        if: matrix.phase == 'build-release'
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: ao2-supply-chain-${{ matrix.target }}
+          path: target/supply-chain/${{ matrix.target }}
+          if-no-files-found: error
 
   non_approval_required_check_compat:
     name: Verify ${{ matrix.os }} / test-cli-non-approval

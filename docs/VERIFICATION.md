@@ -1793,6 +1793,13 @@ Hosted release packaging CI runs `npm run test:archive-resources` before
 `release_packaging` and executes archive-heavy shards with `--test-threads=1`
 to avoid parallel archive extraction and packaging pressure.
 
+Each hosted `build-release` job also uploads `ao2-supply-chain-<target>`. The
+bundle contains the exact release binary, `Cargo.lock`, deterministic
+CycloneDX SBOM, legal files, strict metadata, and Version 2 evidence. Canonical
+AO Architecture tooling verifies the binary's single embedded marker against
+the exact source SHA, clean-source state, package version, native target, and
+`Cargo.lock` SHA-256 before upload. This CI evidence does not authorize release or publication.
+
 ## Adapter Doctor Smoke Test
 
 ```sh
