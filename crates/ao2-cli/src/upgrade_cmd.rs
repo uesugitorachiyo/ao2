@@ -149,6 +149,7 @@ pub(crate) fn upgrade_apply(options: UpgradeApplyOptions) -> Result<()> {
         version: latest_version,
         target_label: Some(target),
         provenance_dir,
+        public_checksum_manifest: None,
         install_dir,
     })?;
     let result = serde_json::json!({

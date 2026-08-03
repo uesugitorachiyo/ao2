@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
@@ -12,6 +13,77 @@ use signature::{SignatureEncoding, Signer, Verifier};
 
 use crate::atomic_write_text;
 use crate::cli_util::sha256_file;
+
+const MAX_PUBLIC_CHECKSUM_MANIFEST_BYTES: u64 = 1024 * 1024;
+
+pub(crate) fn verify_public_release_archive_checksum(
+    archive: &Path,
+    checksum_manifest: &Path,
+) -> Result<()> {
+    let metadata = fs::symlink_metadata(checksum_manifest)
+        .with_context(|| format!("inspect {}", checksum_manifest.display()))?;
+    if !metadata.file_type().is_file() {
+        anyhow::bail!(
+            "public checksum manifest must be a regular file: {}",
+            checksum_manifest.display()
+        );
+    }
+    if metadata.len() > MAX_PUBLIC_CHECKSUM_MANIFEST_BYTES {
+        anyhow::bail!("public checksum manifest exceeds size limit");
+    }
+
+    let archive_name = archive
+        .file_name()
+        .and_then(|name| name.to_str())
+        .context("archive filename is utf8")?;
+    let text = fs::read_to_string(checksum_manifest)
+        .with_context(|| format!("read {}", checksum_manifest.display()))?;
+    let mut names = HashSet::new();
+    let mut expected = None;
+    for (index, line) in text.lines().enumerate() {
+        if line.is_empty() {
+            anyhow::bail!("empty public checksum row at line {}", index + 1);
+        }
+        let mut parts = line.split_whitespace();
+        let digest = parts
+            .next()
+            .with_context(|| format!("missing public checksum digest at line {}", index + 1))?;
+        let name = parts
+            .next()
+            .with_context(|| format!("missing public checksum path at line {}", index + 1))?;
+        if parts.next().is_some() {
+            anyhow::bail!("invalid public checksum row at line {}", index + 1);
+        }
+        if digest.len() != 64
+            || !digest
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            anyhow::bail!("invalid public checksum digest at line {}", index + 1);
+        }
+        if name == "."
+            || name == ".."
+            || !name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+        {
+            anyhow::bail!("unsafe public checksum path at line {}", index + 1);
+        }
+        if !names.insert(name.to_string()) {
+            anyhow::bail!("duplicate public checksum entry: {name}");
+        }
+        if name == archive_name {
+            expected = Some(digest.to_string());
+        }
+    }
+    let expected = expected.with_context(|| {
+        format!("public checksum manifest does not contain archive {archive_name}")
+    })?;
+    if sha256_file(archive)? != expected {
+        anyhow::bail!("public archive checksum mismatch");
+    }
+    Ok(())
+}
 
 pub(crate) fn verify_release_archive_signature(
     archive: &Path,

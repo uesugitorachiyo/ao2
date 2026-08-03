@@ -154,10 +154,17 @@ if [ "$AO2_RELEASE_ROLLBACK_VERIFY" = "1" ] && [ "$(uname -s)" = "Darwin" ]; the
   chmod 755 "$macos_install_dir/ao2"
   # Keep the install-target path cold on Darwin until rollback finishes; macOS
   # can kill a previously executed Mach-O path after that path is overwritten.
-  "$AO2_ROLLBACK_SEED_BIN" install update \
-    --archive "$AO2_RELEASE_DOWNLOAD_DIR/ao2-$AO2_RELEASE_VERSION-macos-aarch64.tar.gz" \
-    --provenance-dir "$AO2_RELEASE_DOWNLOAD_DIR" \
-    --install-dir "$macos_install_dir" > "$macos_rollback_root/update.json"
+  if [ -f "$AO2_RELEASE_DOWNLOAD_DIR/ao2-release-signing-public.pem" ]; then
+    "$AO2_ROLLBACK_SEED_BIN" install update \
+      --archive "$AO2_RELEASE_DOWNLOAD_DIR/ao2-$AO2_RELEASE_VERSION-macos-aarch64.tar.gz" \
+      --provenance-dir "$AO2_RELEASE_DOWNLOAD_DIR" \
+      --install-dir "$macos_install_dir" > "$macos_rollback_root/update.json"
+  else
+    "$AO2_ROLLBACK_SEED_BIN" install update \
+      --archive "$AO2_RELEASE_DOWNLOAD_DIR/ao2-$AO2_RELEASE_VERSION-macos-aarch64.tar.gz" \
+      --public-checksum-manifest "$AO2_RELEASE_DOWNLOAD_DIR/SHA256SUMS" \
+      --install-dir "$macos_install_dir" > "$macos_rollback_root/update.json"
+  fi
   grep -q '"rollback_binary"' "$macos_rollback_root/update.json"
   "$AO2_ROLLBACK_SEED_BIN" install rollback --install-dir "$macos_install_dir" --target-label macos-aarch64 > "$macos_rollback_root/rollback.json"
   grep -q '"status": "rolled_back"' "$macos_rollback_root/rollback.json"

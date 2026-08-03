@@ -7,7 +7,7 @@
     "new_integration_test_file_lines_hard_ceiling": 4000,
     "new_integration_test_file_tests_hard_ceiling": 35,
     "new_production_file_lines_hard_ceiling": 5000,
-    "production_total_lines_soft_cap": 81000,
+    "production_total_lines_soft_cap": 81200,
     "shared_test_leaf_lines_hard_ceiling": 500
   },
   "measurements": {
@@ -395,7 +395,8 @@
     "Existing oversize files are grandfathered debt and may not grow.",
     "Phase 5 bounded-discovery adds one separately ratcheted production module and its audited Windows identity boundary; the aggregate soft cap is raised only to 80000.",
     "The external issue repair-pack contract adds one separately ratcheted read-only validation module; the aggregate soft cap is raised only to 81000.",
-    "The repair-pack root-binding review adds one audited Unix openat ownership block; the validator retains its root handle and accepts only direct-child names."
+    "The repair-pack root-binding review adds one audited Unix openat ownership block; the validator retains its root handle and accepts only direct-child names.",
+    "The public update repair adds one explicit strict SHA256SUMS verification mode and doctor readback; the aggregate soft cap is raised only to 81200."
   ],
   "schema_version": "ao2.rust_architecture_baseline.v1"
 }
