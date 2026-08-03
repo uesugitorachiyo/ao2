@@ -3,6 +3,8 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 
+use sha2::{Digest, Sha256};
+
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("manifest dir"));
     let workspace = manifest_dir.join("../..");
@@ -21,14 +23,36 @@ fn main() {
         .filter(|value| is_sha1(value))
         .unwrap_or_else(|| "unknown".to_string());
     let profile = env::var("PROFILE").unwrap_or_else(|_| "unknown".to_string());
+    let lock = fs::read(&cargo_lock).expect("read Cargo.lock");
+    let lock_sha256 = format!("{:x}", Sha256::digest(&lock));
+    let source_modified = git_source_modified(&workspace);
+    let target = target_label();
 
     println!("cargo:rustc-env=AO2_GIT_COMMIT={git_commit}");
     println!("cargo:rustc-env=AO2_BUILD_PROFILE={profile}");
+    println!("cargo:rustc-env=AO2_CARGO_LOCK_SHA256={lock_sha256}");
+    println!("cargo:rustc-env=AO2_SOURCE_MODIFIED={source_modified}");
+    println!("cargo:rustc-env=AO2_BUILD_TARGET={target}");
 
-    let lock = fs::read_to_string(&cargo_lock).expect("read Cargo.lock");
-    let sbom = cyclonedx_from_lock(&lock);
+    let lock_text = String::from_utf8(lock).expect("Cargo.lock UTF-8");
+    let sbom = cyclonedx_from_lock(&lock_text);
     let out = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
     fs::write(out.join("ao2.cdx.json"), sbom).expect("write generated SBOM");
+}
+
+fn git_source_modified(workspace: &PathBuf) -> bool {
+    Command::new("git")
+        .args(["status", "--porcelain=v1", "--untracked-files=no"])
+        .current_dir(workspace)
+        .output()
+        .map(|output| !output.status.success() || !output.stdout.is_empty())
+        .unwrap_or(true)
+}
+
+fn target_label() -> String {
+    let os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_else(|_| "unknown".to_string());
+    let arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap_or_else(|_| "unknown".to_string());
+    format!("{os}-{arch}")
 }
 
 fn git_head_from(workspace: &PathBuf) -> Option<String> {

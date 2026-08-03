@@ -4582,6 +4582,45 @@ fn ci_workflow_runs_on_public_changes_while_release_gates_stay_manual() {
 }
 
 #[test]
+fn hosted_release_builds_emit_bound_rust_supply_chain_evidence() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let workflow = fs::read_to_string(root.join(".github/workflows/ci.yml"))
+        .expect("normal CI workflow exists");
+    let build =
+        fs::read_to_string(root.join("crates/ao2-cli/build.rs")).expect("AO2 build script exists");
+    let identity = fs::read_to_string(root.join("crates/ao2-cli/src/build_identity.rs"))
+        .expect("AO2 build identity exists");
+    let manifest = fs::read_to_string(root.join("crates/ao2-cli/Cargo.toml"))
+        .expect("AO2 CLI manifest exists");
+    let verification =
+        fs::read_to_string(root.join("docs/VERIFICATION.md")).expect("verification guide exists");
+
+    assert!(manifest.contains("[build-dependencies]"));
+    assert!(build.contains("AO2_CARGO_LOCK_SHA256"));
+    assert!(build.contains("AO2_SOURCE_MODIFIED"));
+    assert!(build.contains("--untracked-files=no"));
+    assert!(identity.contains("AO_RUST_BUILD_PROVENANCE_V1\\0"));
+    assert!(identity.contains("AO2_CARGO_LOCK_SHA256"));
+    assert!(identity.contains("AO2_SOURCE_MODIFIED"));
+    assert!(identity.contains("#[used]"));
+
+    assert!(workflow.contains("3bb918466ffec789c7cc0a73cd186b57f7958754"));
+    assert!(workflow.contains("persist-credentials: false"));
+    assert!(workflow.contains("read_rust_binary_metadata.py"));
+    assert!(workflow.contains("build_rust_supply_chain_candidate.py"));
+    assert!(workflow.contains("verify_supply_chain_policy.py"));
+    assert!(workflow.contains("--dependency-lock Cargo.lock"));
+    assert!(workflow.contains("metadata_dir=\"target/supply-chain-inputs/${{ matrix.target }}\""));
+    assert!(workflow.contains("> \"$metadata_dir/rust-binary-metadata.json\""));
+    assert!(workflow.contains("--metadata-json \"$metadata_dir/rust-binary-metadata.json\""));
+    assert!(!workflow.contains("> \"$out/rust-binary-metadata.json\""));
+    assert!(workflow.contains("name: ao2-supply-chain-${{ matrix.target }}"));
+    assert!(workflow.contains("if-no-files-found: error"));
+    assert!(verification.contains("ao2-supply-chain-<target>"));
+    assert!(verification.contains("does not authorize release or publication"));
+}
+
+#[test]
 fn project_declares_apache_license_and_third_party_notice() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let cargo_toml = fs::read_to_string(root.join("Cargo.toml")).expect("cargo toml exists");
