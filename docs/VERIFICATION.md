@@ -1336,8 +1336,10 @@ Workspace test coverage:
 - CLI pause/approve/resume/replay path works end to end;
 - CLI `version --json` reports package, version, target, git commit, build
   profile, and release schema compatibility;
-- CLI `install update` verifies archive checksum, verifies detached signature,
-  validates `RELEASE-MANIFEST.json`, and installs the target binary;
+- CLI `install update` verifies either signed detached provenance or an
+  explicitly selected strict public `SHA256SUMS` manifest, validates
+  `RELEASE-MANIFEST.json` and the embedded offline contract, and installs the
+  target binary without silently downgrading verification modes;
 - CLI `init` writes provider presets under `.ao2/provider-profiles.json`;
 - CLI `provider list` and `provider doctor` expose provider fast-start checks;
 - CLI `run --template <name>` materializes embedded templates under

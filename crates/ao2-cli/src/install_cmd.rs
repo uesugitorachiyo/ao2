@@ -13,7 +13,9 @@ use crate::release_archive_contract::{
     ensure_safe_release_archive_path, verify_release_archive_offline_contract,
 };
 use crate::release_assets::download_release_assets;
-use crate::release_crypto::{extract_tar_gz, verify_release_archive_signature};
+use crate::release_crypto::{
+    extract_tar_gz, verify_public_release_archive_checksum, verify_release_archive_signature,
+};
 use crate::{atomic_write_text, runtime_target_label};
 
 #[derive(Debug, Subcommand)]
@@ -29,6 +31,8 @@ pub(crate) enum InstallCommand {
         target_label: Option<String>,
         #[arg(long, default_value = "dist-provenance")]
         provenance_dir: PathBuf,
+        #[arg(long, conflicts_with = "release_base_url")]
+        public_checksum_manifest: Option<PathBuf>,
         #[arg(long)]
         install_dir: Option<PathBuf>,
     },
@@ -46,6 +50,7 @@ pub(crate) struct InstallUpdateOptions {
     pub(crate) version: String,
     pub(crate) target_label: Option<String>,
     pub(crate) provenance_dir: PathBuf,
+    pub(crate) public_checksum_manifest: Option<PathBuf>,
     pub(crate) install_dir: Option<PathBuf>,
 }
 
@@ -57,6 +62,7 @@ pub(crate) fn install(command: InstallCommand) -> Result<()> {
             version,
             target_label,
             provenance_dir,
+            public_checksum_manifest,
             install_dir,
         } => install_update(InstallUpdateOptions {
             archive,
@@ -64,6 +70,7 @@ pub(crate) fn install(command: InstallCommand) -> Result<()> {
             version,
             target_label,
             provenance_dir,
+            public_checksum_manifest,
             install_dir,
         }),
         InstallCommand::Rollback {
@@ -82,6 +89,10 @@ pub(crate) fn install_update(options: InstallUpdateOptions) -> Result<()> {
 pub(crate) fn install_update_result(options: InstallUpdateOptions) -> Result<serde_json::Value> {
     let target = options.target_label.unwrap_or_else(runtime_target_label);
     let binary_name = binary_name_for_target(&target);
+    let public_checksum_manifest = options.public_checksum_manifest;
+    if public_checksum_manifest.is_some() && options.archive.is_none() {
+        anyhow::bail!("--public-checksum-manifest requires --archive");
+    }
     let archive = match options.archive {
         Some(archive) => archive,
         None => {
@@ -96,7 +107,13 @@ pub(crate) fn install_update_result(options: InstallUpdateOptions) -> Result<ser
             )?
         }
     };
-    verify_release_archive_signature(&archive, &options.provenance_dir)?;
+    let public_checksum_verified = if let Some(checksum_manifest) = &public_checksum_manifest {
+        verify_public_release_archive_checksum(&archive, checksum_manifest)?;
+        true
+    } else {
+        verify_release_archive_signature(&archive, &options.provenance_dir)?;
+        false
+    };
 
     let work_dir = std::env::temp_dir().join(format!(
         "ao2-install-update-{}-{}",
@@ -133,6 +150,10 @@ pub(crate) fn install_update_result(options: InstallUpdateOptions) -> Result<ser
     }
     let offline_verification =
         verify_release_archive_offline_contract(&extract_dir, &manifest, &target, binary_name)?;
+    let public_checksum_manifest_sha256 = public_checksum_manifest
+        .as_ref()
+        .map(|path| sha256_file(path))
+        .transpose()?;
 
     let install_dir = options.install_dir.unwrap_or_else(default_install_dir);
     fs::create_dir_all(&install_dir)
@@ -169,7 +190,15 @@ pub(crate) fn install_update_result(options: InstallUpdateOptions) -> Result<ser
         "target": target,
         "installed_binary": installed_binary,
         "rollback_binary": rollback_created.then_some(rollback_binary),
-        "signature_verified": true,
+        "signature_verified": !public_checksum_verified,
+        "public_checksum_verified": public_checksum_verified,
+        "public_checksum_manifest": public_checksum_manifest,
+        "public_checksum_manifest_sha256": public_checksum_manifest_sha256,
+        "verification_mode": if public_checksum_verified {
+            "public_checksum_manifest"
+        } else {
+            "signed_provenance"
+        },
         "offline_verification": offline_verification,
         "archive": archive
     });

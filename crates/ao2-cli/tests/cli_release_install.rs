@@ -6,7 +6,12 @@ use std::time::Duration;
 use flate2::read::GzDecoder;
 use flate2::write::GzEncoder;
 use flate2::Compression;
+use sha2::{Digest, Sha256};
 use tar::{Archive, Builder};
+
+fn sha256_path(path: &Path) -> String {
+    format!("{:x}", Sha256::digest(fs::read(path).unwrap()))
+}
 
 fn copy_fixture(src: &Path, dst: &Path) {
     fs::create_dir_all(dst).unwrap();
@@ -1779,6 +1784,215 @@ fn cli_upgrade_apply_can_use_github_release_downloaded_assets() {
     assert_eq!(json["check"]["latest_version"], "9.9.9-test");
     assert_eq!(json["install"]["signature_verified"], true);
     assert!(Path::new(json["install"]["installed_binary"].as_str().unwrap()).is_file());
+}
+
+#[test]
+fn cli_install_update_accepts_explicit_public_checksum_manifest() {
+    let temp = tempfile::tempdir().unwrap();
+    let dist = temp.path().join("dist");
+    let install_dir = temp.path().join("bin");
+    fs::create_dir_all(&install_dir).unwrap();
+
+    let package = ao2([
+        "release",
+        "package",
+        "--out-dir",
+        dist.to_str().unwrap(),
+        "--version",
+        "9.9.9-test",
+    ]);
+    assert!(package.status.success(), "{}", stderr(&package));
+    let package_json: serde_json::Value = serde_json::from_str(&stdout(&package)).unwrap();
+    let archive = Path::new(package_json["archive"].as_str().unwrap());
+    let checksum_manifest = temp.path().join("SHA256SUMS");
+    fs::write(
+        &checksum_manifest,
+        format!(
+            "{}  {}\n",
+            sha256_path(archive),
+            archive.file_name().unwrap().to_str().unwrap()
+        ),
+    )
+    .unwrap();
+
+    let update = ao2([
+        "install",
+        "update",
+        "--archive",
+        archive.to_str().unwrap(),
+        "--public-checksum-manifest",
+        checksum_manifest.to_str().unwrap(),
+        "--install-dir",
+        install_dir.to_str().unwrap(),
+    ]);
+    assert!(update.status.success(), "{}", stderr(&update));
+    let json: serde_json::Value = serde_json::from_str(&stdout(&update)).unwrap();
+    assert_eq!(json["status"], "installed");
+    assert_eq!(json["signature_verified"], false);
+    assert_eq!(json["public_checksum_verified"], true);
+    assert_eq!(json["verification_mode"], "public_checksum_manifest");
+    assert_eq!(
+        json["public_checksum_manifest"],
+        checksum_manifest.to_str().unwrap()
+    );
+    assert_eq!(
+        json["public_checksum_manifest_sha256"],
+        sha256_path(&checksum_manifest)
+    );
+    assert_eq!(json["offline_verification"]["status"], "verified");
+
+    let path = prepend_path(&install_dir);
+    let doctor = ao2_with_env(
+        [
+            "doctor",
+            "--json",
+            "--install-dir",
+            install_dir.to_str().unwrap(),
+        ],
+        [("PATH", path.as_str())],
+    );
+    assert!(doctor.status.success(), "{}", stderr(&doctor));
+    let doctor_json: serde_json::Value = serde_json::from_str(&stdout(&doctor)).unwrap();
+    let evidence = &doctor_json["install"]["verification_evidence"];
+    assert_eq!(evidence["signature_verified"], false);
+    assert_eq!(evidence["public_checksum_verified"], true);
+    assert_eq!(evidence["verification_mode"], "public_checksum_manifest");
+    assert_eq!(
+        evidence["public_checksum_manifest_sha256"],
+        sha256_path(&checksum_manifest)
+    );
+}
+
+#[test]
+fn cli_install_update_rejects_unsafe_public_checksum_manifests() {
+    let temp = tempfile::tempdir().unwrap();
+    let dist = temp.path().join("dist");
+    let install_dir = temp.path().join("bin");
+
+    let package = ao2([
+        "release",
+        "package",
+        "--out-dir",
+        dist.to_str().unwrap(),
+        "--version",
+        "9.9.9-test",
+    ]);
+    assert!(package.status.success(), "{}", stderr(&package));
+    let package_json: serde_json::Value = serde_json::from_str(&stdout(&package)).unwrap();
+    let archive = Path::new(package_json["archive"].as_str().unwrap());
+    let archive_name = archive.file_name().unwrap().to_str().unwrap();
+    let valid_digest = sha256_path(archive);
+
+    for (name, contents, expected_error) in [
+        (
+            "altered",
+            format!("{}  {}\n", "0".repeat(64), archive_name),
+            "public archive checksum mismatch",
+        ),
+        (
+            "duplicate",
+            format!("{valid_digest}  {archive_name}\n{valid_digest}  {archive_name}\n"),
+            "duplicate public checksum entry",
+        ),
+        (
+            "unsafe-path",
+            format!("{valid_digest}  ../{archive_name}\n"),
+            "unsafe public checksum path",
+        ),
+        (
+            "missing",
+            format!("{valid_digest}  another-archive.tar.gz\n"),
+            "public checksum manifest does not contain archive",
+        ),
+        (
+            "malformed",
+            format!("NOT-A-DIGEST  {archive_name}\n"),
+            "invalid public checksum digest",
+        ),
+    ] {
+        let checksum_manifest = temp.path().join(format!("SHA256SUMS.{name}"));
+        fs::write(&checksum_manifest, contents).unwrap();
+        let update = ao2([
+            "install",
+            "update",
+            "--archive",
+            archive.to_str().unwrap(),
+            "--public-checksum-manifest",
+            checksum_manifest.to_str().unwrap(),
+            "--install-dir",
+            install_dir.to_str().unwrap(),
+        ]);
+        assert!(!update.status.success(), "{name} manifest was accepted");
+        assert!(
+            stderr(&update).contains(expected_error),
+            "case={name}\nstderr:\n{}",
+            stderr(&update)
+        );
+        assert!(!install_dir.exists(), "case={name} mutated install state");
+    }
+
+    let oversized_manifest = temp.path().join("SHA256SUMS.oversized");
+    fs::write(&oversized_manifest, vec![b'x'; 1024 * 1024 + 1]).unwrap();
+    let oversized = ao2([
+        "install",
+        "update",
+        "--archive",
+        archive.to_str().unwrap(),
+        "--public-checksum-manifest",
+        oversized_manifest.to_str().unwrap(),
+        "--install-dir",
+        install_dir.to_str().unwrap(),
+    ]);
+    assert!(!oversized.status.success());
+    assert!(stderr(&oversized).contains("public checksum manifest exceeds size limit"));
+    assert!(!install_dir.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn cli_install_update_rejects_symlinked_public_checksum_manifest() {
+    use std::os::unix::fs::symlink;
+
+    let temp = tempfile::tempdir().unwrap();
+    let dist = temp.path().join("dist");
+    let install_dir = temp.path().join("bin");
+    let package = ao2([
+        "release",
+        "package",
+        "--out-dir",
+        dist.to_str().unwrap(),
+        "--version",
+        "9.9.9-test",
+    ]);
+    assert!(package.status.success(), "{}", stderr(&package));
+    let package_json: serde_json::Value = serde_json::from_str(&stdout(&package)).unwrap();
+    let archive = Path::new(package_json["archive"].as_str().unwrap());
+    let real_manifest = temp.path().join("SHA256SUMS.real");
+    fs::write(
+        &real_manifest,
+        format!(
+            "{}  {}\n",
+            sha256_path(archive),
+            archive.file_name().unwrap().to_str().unwrap()
+        ),
+    )
+    .unwrap();
+    let linked_manifest = temp.path().join("SHA256SUMS");
+    symlink(&real_manifest, &linked_manifest).unwrap();
+
+    let update = ao2([
+        "install",
+        "update",
+        "--archive",
+        archive.to_str().unwrap(),
+        "--public-checksum-manifest",
+        linked_manifest.to_str().unwrap(),
+        "--install-dir",
+        install_dir.to_str().unwrap(),
+    ]);
+    assert!(!update.status.success());
+    assert!(stderr(&update).contains("public checksum manifest must be a regular file"));
+    assert!(!install_dir.exists());
 }
 
 #[test]

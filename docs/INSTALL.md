@@ -80,16 +80,30 @@ On Windows, extract the archive, run `Verify-Release.ps1`, then run
 `install.ps1` and confirm the installed identity with
 `ao2.exe version --json`.
 
-To upgrade an existing installation after verifying the stable archive:
+AO2 `v0.5.7` publishes aggregate checksums and GitHub attestations, but not the
+detached RSA provenance files required by the `v0.5.7` `install update`
+command. For that released binary, use the verified archive installer shown
+above. Do not synthesize detached signatures or claim rollback preservation.
+
+Current source builds support an explicit public-checksum update mode after the
+selected archive row has been verified:
 
 ```sh
 ao2 install update \
   --archive ao2-0.5.7-<platform>.tar.gz \
-  --provenance-dir .
+  --public-checksum-manifest SHA256SUMS
 ao2 version --json
 ```
 
-The update preserves the previous binary as the rollback copy. Restore it with:
+This mode verifies a strict, regular-file, size-bounded aggregate manifest and
+then validates the archive's complete embedded offline contract. It records
+`signature_verified=false`, `public_checksum_verified=true`, the manifest
+digest, and `verification_mode=public_checksum_manifest`. Signed private
+release updates continue to use `--provenance-dir` and do not downgrade to
+aggregate-checksum verification.
+
+The source-build update preserves the previous binary as the rollback copy.
+Restore it with:
 
 ```sh
 ao2 install rollback
@@ -122,8 +136,9 @@ npm run release:download-verify
 ```
 
 This downloads the GitHub release with `gh release download`, verifies every
-asset listed in `SHA256SUMS`, records rollback evidence, and verifies signed
-provenance from `ao2-release-signing-public.pem` plus provenance sidecars.
+asset listed in `SHA256SUMS`, and records rollback evidence. It verifies signed
+provenance when `ao2-release-signing-public.pem` and the detached sidecars are
+present; otherwise current source builds use the explicit public-checksum mode.
 
 For already-local release assets:
 

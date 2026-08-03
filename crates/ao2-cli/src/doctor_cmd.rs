@@ -151,7 +151,20 @@ fn doctor_install_verification_evidence_is_valid(
     evidence: &serde_json::Value,
     target: &str,
 ) -> bool {
-    evidence["present"].as_bool() == Some(true)
+    let verification_mode_valid = match evidence["verification_mode"].as_str() {
+        Some("signed_provenance") => evidence["signature_verified"].as_bool() == Some(true),
+        Some("public_checksum_manifest") => {
+            evidence["signature_verified"].as_bool() == Some(false)
+                && evidence["public_checksum_verified"].as_bool() == Some(true)
+                && evidence["public_checksum_manifest_sha256"]
+                    .as_str()
+                    .is_some_and(is_lower_sha256)
+        }
+        None => true,
+        Some(_) => false,
+    };
+    verification_mode_valid
+        && evidence["present"].as_bool() == Some(true)
         && evidence["schema_version"].as_str() == Some("ao2.install-verification-evidence.v1")
         && evidence["status"].as_str() == Some("verified")
         && evidence["install_status"].as_str() == Some("installed")
@@ -196,6 +209,10 @@ fn doctor_install_verification_evidence_json(installed_binary: &Path) -> serde_j
                 "installed_binary": evidence["installed_binary"],
                 "binary_path_matches": binary_path_matches,
                 "signature_verified": evidence["signature_verified"],
+                "public_checksum_verified": evidence["public_checksum_verified"],
+                "public_checksum_manifest": evidence["public_checksum_manifest"],
+                "public_checksum_manifest_sha256": evidence["public_checksum_manifest_sha256"],
+                "verification_mode": evidence["verification_mode"],
                 "offline_verification": evidence["offline_verification"],
             })
         }
@@ -207,6 +224,14 @@ fn doctor_install_verification_evidence_json(installed_binary: &Path) -> serde_j
         }),
     }
 }
+
+fn is_lower_sha256(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
 fn doctor_release_report_json(
     release_tag: String,
     release_repo: String,
