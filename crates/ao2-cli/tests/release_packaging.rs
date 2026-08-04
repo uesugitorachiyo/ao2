@@ -4621,6 +4621,17 @@ fn hosted_release_builds_emit_bound_rust_supply_chain_evidence() {
 }
 
 #[test]
+fn build_identity_watches_resolved_symbolic_head_ref() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let build =
+        fs::read_to_string(root.join("crates/ao2-cli/build.rs")).expect("AO2 build script exists");
+
+    assert!(build.contains("\"symbolic-ref\", \"-q\", \"HEAD\""));
+    assert!(build.contains("\"rev-parse\", \"--git-path\""));
+    assert!(build.contains("cargo:rerun-if-changed={}"));
+}
+
+#[test]
 fn project_declares_apache_license_and_third_party_notice() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let cargo_toml = fs::read_to_string(root.join("Cargo.toml")).expect("cargo toml exists");

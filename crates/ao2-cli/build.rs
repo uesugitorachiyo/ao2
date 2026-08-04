@@ -8,12 +8,17 @@ use sha2::{Digest, Sha256};
 fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("manifest dir"));
     let workspace = manifest_dir.join("../..");
-    let git_head = workspace.join(".git/HEAD");
+    let git_head = git_path(&workspace, "HEAD").unwrap_or_else(|| workspace.join(".git/HEAD"));
     let cargo_lock = workspace.join("Cargo.lock");
 
     println!("cargo:rerun-if-env-changed=AO2_BUILD_GIT_COMMIT");
     println!("cargo:rerun-if-env-changed=GITHUB_SHA");
     println!("cargo:rerun-if-changed={}", git_head.display());
+    if let Some(symbolic_head) = symbolic_head_ref(&workspace) {
+        if let Some(symbolic_head_path) = git_path(&workspace, &symbolic_head) {
+            println!("cargo:rerun-if-changed={}", symbolic_head_path.display());
+        }
+    }
     println!("cargo:rerun-if-changed={}", cargo_lock.display());
 
     let git_commit = env::var("AO2_BUILD_GIT_COMMIT")
@@ -38,6 +43,39 @@ fn main() {
     let sbom = cyclonedx_from_lock(&lock_text);
     let out = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
     fs::write(out.join("ao2.cdx.json"), sbom).expect("write generated SBOM");
+}
+
+fn symbolic_head_ref(workspace: &PathBuf) -> Option<String> {
+    let output = Command::new("git")
+        .args(["symbolic-ref", "-q", "HEAD"])
+        .current_dir(workspace)
+        .output()
+        .ok()?;
+    output
+        .status
+        .success()
+        .then(|| String::from_utf8(output.stdout).ok())
+        .flatten()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn git_path(workspace: &PathBuf, path: &str) -> Option<PathBuf> {
+    let output = Command::new("git")
+        .args(["rev-parse", "--git-path", path])
+        .current_dir(workspace)
+        .output()
+        .ok()?;
+    let value = output
+        .status
+        .success()
+        .then(|| String::from_utf8(output.stdout).ok())??;
+    let path = PathBuf::from(value.trim());
+    Some(if path.is_absolute() {
+        path
+    } else {
+        workspace.join(path)
+    })
 }
 
 fn git_source_modified(workspace: &PathBuf) -> bool {
