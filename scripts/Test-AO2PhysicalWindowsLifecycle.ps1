@@ -254,6 +254,7 @@ try {
     $result.installed_candidate_lifecycle.debug_prior_built = $true
     $result.installed_candidate_lifecycle.prior_digest = $priorDigest
 
+    $failureStage = "release-build"
     $env:AO2_BUILD_PROFILE = "release"
     $releaseBuildExitCode = Invoke-QuietNativeCommand -FilePath cargo -ArgumentList @(
         "build", "--locked", "--release", "-p", "ao2-cli", "--bin", "ao2", "--target-dir", $targetRoot
@@ -261,6 +262,7 @@ try {
     if ($releaseBuildExitCode -ne 0) {
         throw "exact-head release candidate build failed"
     }
+    $failureStage = "release-identity"
     $candidateBinary = Join-Path $targetRoot "release\ao2.exe"
     $candidateVersion = Get-VerifiedVersion $candidateBinary $version $sourceSha "release"
     $candidateDigest = Get-Sha256 $candidateBinary
@@ -271,6 +273,7 @@ try {
     $result.installed_candidate_lifecycle.source_version_verified = $true
     $result.installed_candidate_lifecycle.candidate_digest = $candidateDigest
 
+    $failureStage = "package"
     $env:AO2_PACKAGED_GIT_COMMIT = $sourceSha
     $env:AO2_PACKAGED_BUILD_PROFILE = "release"
     $packageText = (& $candidateBinary release package `
@@ -288,12 +291,14 @@ try {
     }
     $result.installed_candidate_lifecycle.candidate_package_created = $true
 
+    $failureStage = "package-extraction"
     $extractExitCode = Invoke-QuietNativeCommand -FilePath tar -ArgumentList @(
         "-xzf", $archive, "-C", $extractRoot
     )
     if ($extractExitCode -ne 0) {
         throw "release package extraction failed"
     }
+    $failureStage = "package-manifest"
     $manifest = Get-Content -Raw -LiteralPath (Join-Path $extractRoot "RELEASE-MANIFEST.json") | ConvertFrom-Json
     if (
         $manifest.schema_version -ne "ao2.release-manifest.v1" -or
@@ -307,6 +312,7 @@ try {
     }
     $result.installed_candidate_lifecycle.package_manifest_verified = $true
 
+    $failureStage = "package-provenance"
     $provenance = Get-Content -Raw -LiteralPath (Join-Path $extractRoot "BUILD-PROVENANCE.json") | ConvertFrom-Json
     if (
         $provenance.schema_version -ne "ao2.build-provenance.v1" -or
@@ -318,6 +324,7 @@ try {
     }
     $result.installed_candidate_lifecycle.package_provenance_verified = $true
 
+    $failureStage = "install"
     $env:AO2_INSTALL_DIR = $installRoot
     & (Join-Path $extractRoot "install.ps1") *> $null
     $installedBinary = Join-Path $installRoot "ao2.exe"
@@ -330,6 +337,7 @@ try {
     }
     $result.installed_candidate_lifecycle.install_completed = $true
 
+    $failureStage = "install-verification"
     $installVerification = Get-Content -Raw -LiteralPath $installSidecar | ConvertFrom-Json
     if (
         $installVerification.schema_version -ne "ao2.install-verification-evidence.v1" -or
@@ -351,6 +359,7 @@ try {
     }
     $result.installed_candidate_lifecycle.install_verification_verified = $true
 
+    $failureStage = "candidate-use"
     $installedCandidateDigest = Get-Sha256 $installedBinary
     if ($installedCandidateDigest -ne $candidateDigest) {
         throw "installed candidate digest does not match packaged candidate"
@@ -359,6 +368,7 @@ try {
     $result.installed_candidate_lifecycle.installed_candidate_digest = $installedCandidateDigest
     $result.installed_candidate_lifecycle.candidate_use_verified = $true
 
+    $failureStage = "rollback"
     $rollbackBinary = "$installedBinary.rollback"
     Copy-Item -LiteralPath $priorBinary -Destination $rollbackBinary -Force
     if ((Get-Sha256 $rollbackBinary) -ne $priorDigest) {
@@ -391,7 +401,8 @@ try {
     $result.installed_candidate_lifecycle.rollback_use_verified = $true
     $result.installed_candidate_lifecycle.windows_safe = $true
 
-    Remove-Item -LiteralPath $installedBinary, $rollbackBinary, $installSidecar -Force
+    $failureStage = "uninstall"
+    Remove-Item -LiteralPath $installedBinary, $rollbackBinary, $installSidecar -Force -ErrorAction SilentlyContinue
     $result.installed_candidate_lifecycle.uninstall_completed = (
         -not (Test-Path -LiteralPath $installedBinary) -and
         -not (Test-Path -LiteralPath $rollbackBinary) -and
