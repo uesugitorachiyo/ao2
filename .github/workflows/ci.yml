@@ -1488,10 +1488,9 @@ jobs:
           assert summary["byte_identical"] is True, summary
           assert summary["schema_aligned"] is True, summary
           assert summary["target_aligned"] is True, summary
-          assert summary["stable"]["ao2"]["tag"] == "v0.5.7", summary
-          assert summary["stable"]["ao2_control_plane"]["tag"] == "v0.1.18", summary
-          assert summary["next_patch"]["ao2"]["tag"] == "v0.5.7", summary
-          assert summary["next_patch"]["ao2_control_plane"]["tag"] == "v0.1.18", summary
+          manifest = json.loads(Path("docs/release/release-train.json").read_text(encoding="utf-8"))
+          for train in ("stable", "next_patch"):
+              assert summary[train] == manifest[train], (train, summary, manifest)
           assert summary["trust_boundary"]["mutates_github_releases"] is False, summary
           PY
       - name: Upload release train manifest parity

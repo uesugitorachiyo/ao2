@@ -1025,10 +1025,10 @@ def test_current_public_pair_tracks_control_plane_v0_1_18():
         "public_operator_confirm": "public-release-reviewed-v0.5.7-v0.1.18",
     }
     expected_next_patch = {
-        "ao2": {"tag": "v0.5.7", "version": "0.5.7"},
-        "ao2_control_plane": {"tag": "v0.1.18", "version": "0.1.18"},
-        "promotion_confirm": "promote-stable-v0.5.7-v0.1.18",
-        "public_operator_confirm": "public-release-reviewed-v0.5.7-v0.1.18",
+        "ao2": {"tag": "v0.5.8", "version": "0.5.8"},
+        "ao2_control_plane": {"tag": "v0.1.19", "version": "0.1.19"},
+        "promotion_confirm": "promote-stable-v0.5.8-v0.1.19",
+        "public_operator_confirm": "public-release-reviewed-v0.5.8-v0.1.19",
     }
     assert manifest["stable"] == expected_stable
     assert manifest["next_patch"] == expected_next_patch
@@ -14212,10 +14212,10 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
         "tag": "v0.1.18",
         "version": "0.1.18",
     }
-    assert manifest["next_patch"]["ao2"] == {"tag": "v0.5.7", "version": "0.5.7"}
+    assert manifest["next_patch"]["ao2"] == {"tag": "v0.5.8", "version": "0.5.8"}
     assert manifest["next_patch"]["ao2_control_plane"] == {
-        "tag": "v0.1.18",
-        "version": "0.1.18",
+        "tag": "v0.1.19",
+        "version": "0.1.19",
     }
     assert (
         manifest["stable"]["promotion_confirm"]
@@ -14223,7 +14223,7 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
     )
     assert (
         manifest["next_patch"]["promotion_confirm"]
-        == "promote-stable-v0.5.7-v0.1.18"
+        == "promote-stable-v0.5.8-v0.1.19"
     )
 
     helper = REPO_ROOT / "scripts" / "release-train-env.sh"
@@ -14240,15 +14240,15 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
     assert result.returncode == 0, result.stderr + result.stdout
     exported = dict(line.split("=", 1) for line in result.stdout.splitlines())
     assert exported["AO2_RELEASE_TRAIN_NAME"] == "next_patch"
-    assert exported["AO2_RELEASE_TRAIN_AO2_TAG"] == "v0.5.7"
-    assert exported["AO2_RELEASE_TRAIN_AO2_VERSION"] == "0.5.7"
-    assert exported["AO2_RELEASE_TRAIN_CP_TAG"] == "v0.1.18"
-    assert exported["AO2_RELEASE_TRAIN_CP_VERSION"] == "0.1.18"
+    assert exported["AO2_RELEASE_TRAIN_AO2_TAG"] == "v0.5.8"
+    assert exported["AO2_RELEASE_TRAIN_AO2_VERSION"] == "0.5.8"
+    assert exported["AO2_RELEASE_TRAIN_CP_TAG"] == "v0.1.19"
+    assert exported["AO2_RELEASE_TRAIN_CP_VERSION"] == "0.1.19"
     assert exported["AO2_RELEASE_TRAIN_PROMOTION_CONFIRM"] == (
-        "promote-stable-v0.5.7-v0.1.18"
+        "promote-stable-v0.5.8-v0.1.19"
     )
     assert exported["AO2_RELEASE_TRAIN_PUBLIC_OPERATOR_CONFIRM"] == (
-        "public-release-reviewed-v0.5.7-v0.1.18"
+        "public-release-reviewed-v0.5.8-v0.1.19"
     )
 
     for workflow_path in [
@@ -14822,7 +14822,7 @@ def test_release_train_manifest_parity_audit_contract(tmp_path):
     assert summary["schema_aligned"] is True
     assert summary["target_aligned"] is True
     assert summary["stable"]["ao2"]["tag"] == "v0.5.7"
-    assert summary["next_patch"]["ao2"]["tag"] == "v0.5.7"
+    assert summary["next_patch"]["ao2"]["tag"] == "v0.5.8"
 
     for needle in [
         "release-train-manifest-parity:",
@@ -14831,6 +14831,9 @@ def test_release_train_manifest_parity_audit_contract(tmp_path):
         "AO2_RELEASE_TRAIN_MANIFEST_PARITY_ROOT=target/release-train-manifest-parity-ci",
         "npm run release:train-manifest-parity -- --control-plane-root ao2-control-plane",
         "ao2.release-train-manifest-parity.v1",
+        'manifest = json.loads(Path("docs/release/release-train.json").read_text(encoding="utf-8"))',
+        'for train in ("stable", "next_patch"):',
+        'assert summary[train] == manifest[train], (train, summary, manifest)',
         "name: ao2-release-train-manifest-parity",
         "uses: actions/upload-artifact@v7.0.1",
     ]:
