@@ -1639,6 +1639,15 @@ def test_physical_lifecycle_probe_emits_only_a_fixed_failure_stage() -> None:
     assert "$_.Exception.Message" not in probe
 
 
+def test_physical_lifecycle_probe_cleanup_is_idempotent_and_diagnostically_staged() -> None:
+    probe = PHYSICAL_LIFECYCLE_PROBE_PATH.read_text(encoding="utf-8")
+
+    assert '$failureStage = "release-build"' in probe
+    assert '$failureStage = "rollback"' in probe
+    assert '$failureStage = "uninstall"' in probe
+    assert "Remove-Item -LiteralPath $installedBinary, $rollbackBinary, $installSidecar -Force -ErrorAction SilentlyContinue" in probe
+
+
 def test_physical_lifecycle_probe_preserves_native_exit_codes_under_strict_error_handling() -> None:
     probe = PHYSICAL_LIFECYCLE_PROBE_PATH.read_text(encoding="utf-8")
 
