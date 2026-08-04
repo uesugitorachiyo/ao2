@@ -308,6 +308,26 @@ def test_completed_action_result_is_retried_from_durable_outbox_after_post_failu
     assert state._ledger["tasks"]["deliver-later"]["status"] == "accepted"
 
 
+def test_malformed_outbox_result_is_quarantined_without_blocking_valid_delivery(tmp_path: Path) -> None:
+    worker = load_worker_module()
+    state = worker.WorkerState(tmp_path / "state")
+    malformed = state.result_outbox_dir / "corrupt-result.json"
+    malformed.write_text('{"schema_version":"ao2.ai-task-board.v1"}\ntrailing', encoding="utf-8")
+    valid = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        state=state,
+        transport=worker.MemoryTransport(),
+    )
+    valid.post_result("deliver-valid", "status", {"status": "accepted"})
+
+    valid.flush_result_outbox()
+
+    assert malformed.with_suffix(".invalid.json").is_file()
+    assert not malformed.exists()
+    assert valid.transport.posted_results_by_request_id()["deliver-valid"]["ao2_cross_host"]["result"]["status"] == "accepted"
+
+
 def test_duplicate_and_completed_tasks_are_not_executed_twice(tmp_path: Path) -> None:
     worker = load_worker_module()
     transport = worker.MemoryTransport()

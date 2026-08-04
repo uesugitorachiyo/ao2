@@ -1619,7 +1619,11 @@ class WorkerState:
             tmp.replace(path)
 
     def pending_result_paths(self) -> list[Path]:
-        return sorted(self.result_outbox_dir.glob("*.json"))
+        return sorted(
+            path
+            for path in self.result_outbox_dir.glob("*.json")
+            if not path.name.endswith(".invalid.json")
+        )
 
     def remove_queued_result(self, path: Path) -> None:
         try:
@@ -2189,6 +2193,7 @@ class WindowsOutboundWorker:
             try:
                 board = json.loads(path.read_text(encoding="utf-8"))
             except json.JSONDecodeError:
+                path.replace(path.with_suffix(".invalid.json"))
                 continue
             self.transport.post_board(board)
             self.state.remove_queued_result(path)
