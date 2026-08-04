@@ -1453,6 +1453,69 @@ fn cli_doctor_discovers_verified_custom_install_from_path() {
 }
 
 #[test]
+fn cli_doctor_accepts_verified_explicit_custom_install_off_path() {
+    let temp = tempfile::tempdir().unwrap();
+    let install_dir = temp.path().join("custom-bin");
+    let home = temp.path().join("home");
+    let missing_provenance = temp.path().join("missing-provenance");
+    fs::create_dir_all(&install_dir).unwrap();
+    fs::create_dir_all(&home).unwrap();
+
+    let (binary_name, target) = if cfg!(windows) {
+        ("ao2.exe", "windows-x86_64")
+    } else if cfg!(target_os = "macos") {
+        ("ao2", "macos-aarch64")
+    } else {
+        ("ao2", "linux-x86_64")
+    };
+    let installed_binary = install_dir.join(binary_name);
+    fs::copy(env!("CARGO_BIN_EXE_ao2"), &installed_binary).unwrap();
+    fs::write(
+        install_dir.join(format!("{binary_name}.install-verification.json")),
+        serde_json::to_vec_pretty(&serde_json::json!({
+            "schema_version": "ao2.install-verification-evidence.v1",
+            "status": "verified",
+            "install_status": "installed",
+            "version": env!("CARGO_PKG_VERSION"),
+            "target": target,
+            "installed_binary": installed_binary,
+            "offline_verification": {
+                "schema_version": "ao2.release-archive-offline-verification.v1",
+                "status": "verified",
+                "checksum_coverage_verified": true,
+            },
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+
+    let doctor = ao2_with_env(
+        [
+            "doctor",
+            "--json",
+            "--install-dir",
+            install_dir.to_str().unwrap(),
+            "--provenance-dir",
+            missing_provenance.to_str().unwrap(),
+        ],
+        [("HOME", home.to_str().unwrap())],
+    );
+    assert!(doctor.status.success(), "{}", stderr(&doctor));
+    let json: serde_json::Value = serde_json::from_str(&stdout(&doctor)).unwrap();
+    assert_eq!(json["status"], "ok");
+    assert_eq!(
+        json["install"]["install_dir"],
+        install_dir.to_str().unwrap()
+    );
+    assert_eq!(json["install"]["installed"], true);
+    assert_eq!(json["install"]["on_path"], false);
+    assert_eq!(
+        json["install"]["verification_evidence"]["status"],
+        "verified"
+    );
+}
+
+#[test]
 fn cli_doctor_prefers_custom_path_install_over_existing_default_install() {
     let temp = tempfile::tempdir().unwrap();
     let custom_dir = temp.path().join("custom-bin");

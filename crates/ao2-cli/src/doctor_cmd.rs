@@ -49,6 +49,7 @@ pub(crate) fn doctor_report_json(
 ) -> Result<serde_json::Value> {
     let target = runtime_target_label();
     let binary_name = binary_name_for_target(&target);
+    let explicit_install_dir = install_dir.is_some();
     let install_dir = install_dir.unwrap_or_else(|| {
         let default = default_install_dir();
         binary_on_path(binary_name)
@@ -120,7 +121,7 @@ pub(crate) fn doctor_report_json(
             )
     };
     let status = if installed
-        && on_path
+        && (on_path || explicit_install_dir)
         && provenance_ok
         && scripted.available
         && dependencies_ok
