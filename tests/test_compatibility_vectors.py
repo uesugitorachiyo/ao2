@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-VECTOR_PATH = ROOT / "tests" / "fixtures" / "compatibility" / "ao2-execution-receipt-v0.5.6.json"
+VECTOR_PATH = ROOT / "tests" / "fixtures" / "compatibility" / "ao2-execution-receipt-v0.5.8.json"
 COVENANT_AO2_VECTOR_PATH = (
     ROOT
     / "tests"
@@ -13,9 +13,9 @@ COVENANT_AO2_VECTOR_PATH = (
     / "covenant-approval-ticket-to-ao2-approved-execution-v0.1.json"
 )
 
-AO2_TAG_TARGET = "5706ec9cf3a108d20984973975c2a56b905a8173"
-CP_TAG_TARGET = "6257ec23fde726d4a0133c5b62231881fb6aaa9a"
-MANIFEST_DIGEST = "f3d7a5040de8e6fd2703791235fa67841db480d3401c7deadfb3288464d31a45"
+AO2_TAG_TARGET = "a879ae7969a26d13432c7cc402174861b2444c05"
+CP_TAG_TARGET = "5de3541e9007e12d95b125e7f911c02932e21479"
+MANIFEST_DIGEST = "7818def468eb212f949c38480c810cbd8c6e5717b43333767781fef96c2ee135"
 COVENANT_VECTOR_AO2_TAG_TARGET = "pending-v0.5.2-release-prep-merge"
 
 
@@ -44,14 +44,14 @@ def test_ao2_execution_receipt_vector_matches_current_public_pair():
     vector = load_vector()
 
     assert vector["schema_version"] == "ao.compatibility.execution-receipt-vector.v1"
-    assert vector["vector_id"] == "ao2-v0.5.6-execution-receipt-to-control-plane-evidence-event"
+    assert vector["vector_id"] == "ao2-v0.5.8-execution-receipt-to-control-plane-evidence-event"
     assert vector["edge"] == "ao2.execution_receipt -> ao2-control-plane.evidence_event"
 
     producer = vector["producer"]
     assert producer == {
         "repository": "ao2",
-        "version": "v0.5.6",
-        "release_url": "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.6",
+        "version": "v0.5.8",
+        "release_url": "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.8",
         "tag_target": AO2_TAG_TARGET,
         "approved_manifest_digest": MANIFEST_DIGEST,
     }
@@ -59,8 +59,8 @@ def test_ao2_execution_receipt_vector_matches_current_public_pair():
     consumer = vector["consumer"]
     assert consumer == {
         "repository": "ao2-control-plane",
-        "version": "v0.1.18",
-        "release_url": "https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.18",
+        "version": "v0.1.19",
+        "release_url": "https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.19",
         "tag_target": CP_TAG_TARGET,
     }
 
@@ -71,12 +71,12 @@ def test_ao2_execution_receipt_vector_derives_expected_control_plane_event():
     event = vector["expected_control_plane_event"]
 
     assert receipt["schema_version"] == "ao2.execution-receipt.v1"
-    assert receipt["receipt_id"] == "ao2-v0.5.6-provider-free-doctor-smoke"
+    assert receipt["receipt_id"] == "ao2-v0.5.8-provider-free-doctor-smoke"
     assert receipt["status"] == "passed"
     assert receipt["provider_execution_required"] is False
     assert receipt["workflow"] == "provider_free_doctor_smoke"
     assert receipt["command"] == "ao2 doctor --json"
-    assert receipt["release"]["version"] == "v0.5.6"
+    assert receipt["release"]["version"] == "v0.5.8"
     assert receipt["release"]["tag_target"] == AO2_TAG_TARGET
 
     assert event["schema_version"] == "ao2-control-plane.evidence-event.v1"
@@ -91,13 +91,18 @@ def test_ao2_execution_receipt_vector_derives_expected_control_plane_event():
 
     bridge = vector["compatibility_bridge"]
     assert bridge == {
-        "predecessor_producer_version": "v0.5.1",
-        "predecessor_producer_tag_target": "80ec5321f42d4bab17d5e64fdae6aa099ba59d4a",
-        "predecessor_consumer_version": "v0.1.16",
-        "predecessor_consumer_tag_target": "f4f5fea9fefa1081cebcbabac550b0e08b9f0e3d",
+        "predecessor_producer_version": "v0.5.6",
+        "predecessor_producer_tag_target": "5706ec9cf3a108d20984973975c2a56b905a8173",
+        "predecessor_consumer_version": "v0.1.18",
+        "predecessor_consumer_tag_target": "6257ec23fde726d4a0133c5b62231881fb6aaa9a",
         "contract_change": "unchanged",
         "producer_schema_version": receipt["schema_version"],
         "consumer_schema_version": event["schema_version"],
+    }
+
+    assert vector["release_evidence"] == {
+        "promotion_plan_sha256": "9e988764ba7232663ba3ca23bcaabe229f0c915084cdc402fbc4202b624f5f6d",
+        "physical_windows_evidence_sha256": "b0e64aeb386f5a1ca5884b52cb63b9e2bb1ebc98101cb2e0ce06e0bafccdd27c",
     }
 
 
