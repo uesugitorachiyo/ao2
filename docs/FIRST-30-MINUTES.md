@@ -1,6 +1,6 @@
 # First 30 Minutes With AO2
 
-This guide starts from the public AO2 `v0.5.7` release and ends with a local
+This guide starts from the public AO2 `v0.5.8` release and ends with a local
 governed demo run. It does not require provider API keys, a control-plane
 server, release access, or contact with other users.
 
@@ -12,7 +12,7 @@ is already authenticated, this is the shortest path:
 ```sh
 mkdir -p ao2-stable
 cd ao2-stable
-gh release download v0.5.7 --repo uesugitorachiyo/ao2
+gh release download v0.5.8 --repo uesugitorachiyo/ao2
 shasum -a 256 -c SHA256SUMS
 ```
 
@@ -23,33 +23,33 @@ release URLs instead. Choose one archive for your host and download
 ```sh
 mkdir -p ao2-stable
 cd ao2-stable
-base_url="https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.7"
+base_url="https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.8"
 curl -fLO "$base_url/SHA256SUMS"
-curl -fLO "$base_url/ao2-0.5.7-macos-aarch64.tar.gz"
-grep '  ao2-0.5.7-macos-aarch64.tar.gz$' SHA256SUMS > SHA256SUMS.selected
+curl -fLO "$base_url/ao2-0.5.8-macos-aarch64.tar.gz"
+grep '  ao2-0.5.8-macos-aarch64.tar.gz$' SHA256SUMS > SHA256SUMS.selected
 shasum -a 256 -c SHA256SUMS.selected
 ```
 
 Choose the archive for your host:
 
-- `ao2-0.5.7-macos-aarch64.tar.gz`
-- `ao2-0.5.7-linux-x86_64.tar.gz`
-- `ao2-0.5.7-windows-x86_64.tar.gz`
+- `ao2-0.5.8-macos-aarch64.tar.gz`
+- `ao2-0.5.8-linux-x86_64.tar.gz`
+- `ao2-0.5.8-windows-x86_64.tar.gz`
 
 These are the supported public archives. Linux aarch64 hosts may use the Linux
 x86_64 archive only under explicit Docker emulation; no Linux aarch64 archive
-is published for `v0.5.7`.
+is published for `v0.5.8`.
 
 On macOS or Linux:
 
 ```sh
-tar -xzf ao2-0.5.7-<platform>.tar.gz
+tar -xzf ao2-0.5.8-<platform>.tar.gz
 ./verify-release.sh
 AO2_INSTALL_DIR="$HOME/.local/bin" ./install.sh
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-On Windows PowerShell, extract `ao2-0.5.7-windows-x86_64.tar.gz`, then run:
+On Windows PowerShell, extract `ao2-0.5.8-windows-x86_64.tar.gz`, then run:
 
 ```powershell
 .\Verify-Release.ps1
@@ -63,7 +63,7 @@ ao2 version --json
 ao2 doctor --json
 ```
 
-The installed version should report `0.5.7`. `ao2 doctor --json` should include
+The installed version should report `0.5.8`. `ao2 doctor --json` should include
 install verification evidence when the binary came from the signed public
 archive.
 
@@ -100,7 +100,7 @@ not use a live provider transcript, so a nested `provider_score.verdict` of
   sections only.
 - Common failures: [Troubleshooting](TROUBLESHOOTING.md)
 - Public release evidence: [Public Release Verification](release/PUBLIC-RELEASE-VERIFICATION.md)
-- Compatible stable companion: [AO2 Control Plane v0.1.18](https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.18)
+- Compatible stable companion: [AO2 Control Plane v0.1.19](https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.19)
 
 Open an issue with the AO2 version, host OS, command, and redacted error output
 if the public archive verifies but install or the governed demo fails.
