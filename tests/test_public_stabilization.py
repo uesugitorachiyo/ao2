@@ -756,6 +756,28 @@ def test_public_release_publication_contract_matches_signed_sidecars_and_x86_art
     assert "provenance.json.signature" not in combined_contracts
 
 
+def test_next_patch_release_notes_contract_resolves_versioned_note():
+    result = subprocess.run(
+        [
+            "python3",
+            "scripts/validate_release_notes_contract.py",
+            "--release-train",
+            "docs/release/release-train.json",
+            "--release-root",
+            "docs/release",
+            "--train",
+            "next_patch",
+        ],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "docs/release/v0.5.8-stable.md"
+
+
 def test_public_release_build_uses_canonical_hosted_native_dry_run_contract():
     workflow = read(".github/workflows/public-release-build.yml")
 
