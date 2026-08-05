@@ -1,0 +1,74 @@
+{
+  "schema_version": "ao.compatibility.execution-receipt-vector.v1",
+  "vector_id": "ao2-v0.5.8-execution-receipt-to-control-plane-evidence-event",
+  "edge": "ao2.execution_receipt -> ao2-control-plane.evidence_event",
+  "producer": {
+    "repository": "ao2",
+    "version": "v0.5.8",
+    "release_url": "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.8",
+    "tag_target": "a879ae7969a26d13432c7cc402174861b2444c05",
+    "approved_manifest_digest": "7818def468eb212f949c38480c810cbd8c6e5717b43333767781fef96c2ee135"
+  },
+  "consumer": {
+    "repository": "ao2-control-plane",
+    "version": "v0.1.19",
+    "release_url": "https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.19",
+    "tag_target": "5de3541e9007e12d95b125e7f911c02932e21479"
+  },
+  "compatibility_bridge": {
+    "predecessor_producer_version": "v0.5.6",
+    "predecessor_producer_tag_target": "5706ec9cf3a108d20984973975c2a56b905a8173",
+    "predecessor_consumer_version": "v0.1.18",
+    "predecessor_consumer_tag_target": "6257ec23fde726d4a0133c5b62231881fb6aaa9a",
+    "contract_change": "unchanged",
+    "producer_schema_version": "ao2.execution-receipt.v1",
+    "consumer_schema_version": "ao2-control-plane.evidence-event.v1"
+  },
+  "release_evidence": {
+    "promotion_plan_sha256": "9e988764ba7232663ba3ca23bcaabe229f0c915084cdc402fbc4202b624f5f6d",
+    "physical_windows_evidence_sha256": "b0e64aeb386f5a1ca5884b52cb63b9e2bb1ebc98101cb2e0ce06e0bafccdd27c"
+  },
+  "execution_receipt": {
+    "schema_version": "ao2.execution-receipt.v1",
+    "receipt_id": "ao2-v0.5.8-provider-free-doctor-smoke",
+    "status": "passed",
+    "workflow": "provider_free_doctor_smoke",
+    "command": "ao2 doctor --json",
+    "provider_execution_required": false,
+    "evidence_path": "promotion-plan.json",
+    "release": {
+      "version": "v0.5.8",
+      "tag_target": "a879ae7969a26d13432c7cc402174861b2444c05",
+      "approved_manifest_digest": "7818def468eb212f949c38480c810cbd8c6e5717b43333767781fef96c2ee135"
+    },
+    "authority": {
+      "requires_provider_credentials": false,
+      "approves_execution": false,
+      "permits_release": false
+    }
+  },
+  "expected_control_plane_event": {
+    "schema_version": "ao2-control-plane.evidence-event.v1",
+    "event_type": "ao2.execution_receipt.observed",
+    "producer_receipt_id": "ao2-v0.5.8-provider-free-doctor-smoke",
+    "producer_schema_version": "ao2.execution-receipt.v1",
+    "producer_status": "passed",
+    "producer_release_version": "v0.5.8",
+    "producer_release_tag_target": "a879ae7969a26d13432c7cc402174861b2444c05",
+    "observed_evidence_path": "promotion-plan.json",
+    "status": "accepted",
+    "authority": {
+      "control_plane_approves_execution": false,
+      "mutates_ao2_artifacts": false,
+      "permits_release": false
+    }
+  },
+  "boundary": {
+    "provider_pilot": false,
+    "external_user_contact": false,
+    "release_or_tag_created": false,
+    "upload_or_deployment": false,
+    "rsi_work": false,
+    "rsi_remains_denied": true
+  }
+}
