@@ -401,6 +401,7 @@ stable_release_evidence_packet_artifacts_ok = (
     and "stores_credentials" in stable_release_evidence_packet_artifacts
     and "name: ao2-stable-release-evidence-packet" in stable_release_evidence_packet_artifacts
     and "target/stable-release-evidence-packet-ci" in stable_release_evidence_packet_artifacts
+    and "include-hidden-files: true" in stable_release_evidence_packet_artifacts
 )
 add(
     "ci_stable_release_evidence_packet_artifact_job",
