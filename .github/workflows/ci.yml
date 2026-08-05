@@ -978,6 +978,7 @@ jobs:
           name: ao2-stable-release-evidence-packet
           path: target/stable-release-evidence-packet-ci
           if-no-files-found: error
+          include-hidden-files: true
 
   release-publication-closure-artifacts:
     name: Release publication closure artifacts
