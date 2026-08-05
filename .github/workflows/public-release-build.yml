@@ -96,7 +96,10 @@ jobs:
               if re.fullmatch(r"[0-9a-f]{64}", plan_sha256) is None:
                   raise SystemExit("live promotion plan digest must be a lowercase SHA-256")
           PY
-          test -f docs/release/READY-TO-SHIP.md
+          notes="$(python3 scripts/validate_release_notes_contract.py \
+            --release-root docs/release \
+            --version "$RELEASE_VERSION")"
+          export RELEASE_NOTES_PATH="$notes"
           mkdir -p target/hosted-release/bound-plan
           {
             printf "version=%s\n" "$RELEASE_VERSION"
@@ -115,7 +118,7 @@ jobs:
               "version": os.environ["RELEASE_VERSION"],
               "tag": os.environ["RELEASE_TAG"],
               "source_sha": os.environ["GITHUB_SHA"],
-              "release_notes": "docs/release/READY-TO-SHIP.md",
+              "release_notes": os.environ["RELEASE_NOTES_PATH"],
               "approved_asset_manifest_sha256": os.environ["APPROVED_ASSET_MANIFEST_SHA256"],
               "trust_boundary": {
                   "mutates_releases": False,
@@ -671,8 +674,9 @@ jobs:
             echo "refusing public release because live confirmation did not match $required_confirm" >&2
             exit 1
           fi
-          notes="docs/release/v${RELEASE_VERSION}-stable.md"
-          test -f "$notes"
+          notes="$(python3 scripts/validate_release_notes_contract.py \
+            --release-root docs/release \
+            --version "$RELEASE_VERSION")"
       - name: Attest exact frozen release assets
         uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6
         with:
