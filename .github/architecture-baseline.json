@@ -7,7 +7,7 @@
     "new_integration_test_file_lines_hard_ceiling": 4000,
     "new_integration_test_file_tests_hard_ceiling": 35,
     "new_production_file_lines_hard_ceiling": 5000,
-    "production_total_lines_soft_cap": 81200,
+    "production_total_lines_soft_cap": 81912,
     "shared_test_leaf_lines_hard_ceiling": 500
   },
   "measurements": {

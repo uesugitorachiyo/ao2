@@ -30,7 +30,7 @@ struct VerifiedArtifact {
     sha256: String,
 }
 
-struct RootGuard {
+pub(super) struct RootGuard {
     canonical_path: PathBuf,
     directory: File,
     identity: FileIdentity,
@@ -457,7 +457,7 @@ fn validate_direct_child_name(declared: &str, label: &str) -> Result<()> {
 }
 
 impl RootGuard {
-    fn open(root_path: &Path) -> Result<Self> {
+    pub(super) fn open(root_path: &Path) -> Result<Self> {
         let root_metadata = fs::symlink_metadata(root_path)
             .with_context(|| format!("inspect repair pack root {}", root_path.display()))?;
         if metadata_is_link(&root_metadata) || !root_metadata.is_dir() {
@@ -506,7 +506,7 @@ impl RootGuard {
         Ok(guard)
     }
 
-    fn validate_root_identity(&self) -> Result<()> {
+    pub(super) fn validate_root_identity(&self) -> Result<()> {
         validate_root_directory_handle(&self.directory, &self.canonical_path)?;
         if root_file_identity(&self.directory, &self.canonical_path)? != self.identity {
             bail!("repair pack root handle identity changed");
@@ -602,6 +602,15 @@ fn read_regular_file(
     }
     root.revalidate_child_identity(name, identity, label)?;
     Ok((bytes, identity))
+}
+
+pub(super) fn read_guarded_file(
+    root: &RootGuard,
+    name: &str,
+    max_bytes: u64,
+    label: &str,
+) -> Result<Vec<u8>> {
+    read_regular_file(root, name, max_bytes, label).map(|(bytes, _)| bytes)
 }
 
 fn hash_regular_file(

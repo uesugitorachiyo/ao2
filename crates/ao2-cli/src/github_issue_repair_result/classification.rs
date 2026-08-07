@@ -297,7 +297,7 @@ fn failure_map(failures: &[Failure]) -> Result<BTreeMap<String, &Failure>> {
     Ok(result)
 }
 
-fn validate_repository(repository: &str) -> Result<()> {
+pub(super) fn validate_repository(repository: &str) -> Result<()> {
     let mut parts = repository.split('/');
     let (Some(owner), Some(name), None) = (parts.next(), parts.next(), parts.next()) else {
         bail!("repository must use canonical owner/name syntax");
@@ -333,14 +333,14 @@ fn validate_repository(repository: &str) -> Result<()> {
     Ok(())
 }
 
-fn validate_text(name: &str, value: &str, max_bytes: usize) -> Result<()> {
+pub(super) fn validate_text(name: &str, value: &str, max_bytes: usize) -> Result<()> {
     if value.is_empty() || value.len() > max_bytes || value.chars().any(char::is_control) {
         bail!("{name} must be printable, nonempty, and at most {max_bytes} bytes");
     }
     Ok(())
 }
 
-fn validate_fresh_timestamp(value: &str) -> Result<()> {
+pub(super) fn validate_fresh_timestamp(value: &str) -> Result<()> {
     let completed_at = DateTime::parse_from_rfc3339(value)
         .context("completed_at must use RFC3339 timestamp syntax")?
         .with_timezone(&Utc);
@@ -354,14 +354,14 @@ fn validate_fresh_timestamp(value: &str) -> Result<()> {
     Ok(())
 }
 
-fn is_sha(value: &str) -> bool {
+pub(super) fn is_sha(value: &str) -> bool {
     value.len() == 40
         && value
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
 
-fn is_digest(value: &str) -> bool {
+pub(super) fn is_digest(value: &str) -> bool {
     value.strip_prefix("sha256:").is_some_and(|digest| {
         digest.len() == 64
             && digest
@@ -370,6 +370,6 @@ fn is_digest(value: &str) -> bool {
     })
 }
 
-fn digest(bytes: &[u8]) -> String {
+pub(super) fn digest(bytes: &[u8]) -> String {
     format!("sha256:{:x}", Sha256::digest(bytes))
 }
