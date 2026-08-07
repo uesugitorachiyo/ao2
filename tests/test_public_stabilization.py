@@ -14844,7 +14844,7 @@ def test_release_train_manifest_parity_audit_contract(tmp_path):
     assert summary["schema_aligned"] is True
     assert summary["target_aligned"] is True
     assert summary["stable"]["ao2"]["tag"] == "v0.5.8"
-    assert summary["next_patch"]["ao2"]["tag"] == "v0.5.8"
+    assert summary["next_patch"]["ao2"]["tag"] == "v0.5.9"
 
     for needle in [
         "release-train-manifest-parity:",
