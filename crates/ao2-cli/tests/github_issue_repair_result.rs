@@ -304,6 +304,6 @@ fn rejects_oversized_and_symlinked_inputs() {
         let link = temp.path().join("link.json");
         write(&target, &verification("baseline"));
         symlink_file(&target, &link).expect("create file symlink");
-        assert_rejected(classify(&link, &candidate), "non-reparse FILE_TYPE_DISK");
+        assert_rejected(classify(&link, &candidate), "input must be a regular file");
     }
 }
