@@ -2634,6 +2634,30 @@ def token_from_args(args: argparse.Namespace) -> str:
     raise SystemExit("set --api-token-file or --api-token-env")
 
 
+def acquire_single_instance_lock(state_root: Path):
+    state_root.mkdir(parents=True, exist_ok=True)
+    lock = (state_root / "worker.lock").open("a+b")
+    if lock.tell() == 0:
+        lock.write(b"\0")
+        lock.flush()
+    lock.seek(0)
+    try:
+        if os.name == "nt":
+            import msvcrt
+
+            msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        lock.close()
+        raise RuntimeError(
+            "another AO2 Windows outbound worker owns this state root"
+        ) from exc
+    return lock
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--control-plane-url", required=True)
@@ -2649,6 +2673,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    instance_lock = acquire_single_instance_lock(args.state_root)
     transport = HttpTaskBoardTransport(args.control_plane_url, token_from_args(args))
     worker = WindowsOutboundWorker(
         node_id=args.node_id,
@@ -2659,8 +2684,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     if args.once:
         print(f"poll_once={worker.poll_once()}")
+        instance_lock.close()
         return 0
     worker.run_forever()
+    instance_lock.close()
     return 0
 
 

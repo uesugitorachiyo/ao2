@@ -30,6 +30,24 @@ def allow_test_execution(*_args, **_kwargs):
     return True, "test_fixture_authorized"
 
 
+def test_worker_state_root_allows_only_one_live_process(tmp_path: Path) -> None:
+    worker = load_worker_module()
+    state_root = tmp_path / "state"
+    first = worker.acquire_single_instance_lock(state_root)
+    try:
+        try:
+            worker.acquire_single_instance_lock(state_root)
+        except RuntimeError as exc:
+            assert str(exc) == "another AO2 Windows outbound worker owns this state root"
+        else:
+            raise AssertionError("duplicate worker acquired the same state root")
+    finally:
+        first.close()
+
+    restarted = worker.acquire_single_instance_lock(state_root)
+    restarted.close()
+
+
 def generate_rsa_keypair(tmp_path: Path) -> tuple[Path, Path]:
     tmp_path.mkdir(parents=True, exist_ok=True)
     private_key = tmp_path / "task-authorization-private.pem"
