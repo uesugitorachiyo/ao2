@@ -84,21 +84,21 @@ checksum = "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3"
 
 [[package]]
 name = "ao2-adapter-claude"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "ao2-adapter-codex"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "serde_json",
 ]
 
 [[package]]
 name = "ao2-adapters"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "anyhow",
  "ao2-adapter-claude",
@@ -113,7 +113,7 @@ dependencies = [
 
 [[package]]
 name = "ao2-artifacts"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "anyhow",
  "ao2-core",
@@ -125,7 +125,7 @@ dependencies = [
 
 [[package]]
 name = "ao2-cli"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "anyhow",
  "ao2-adapters",
@@ -156,7 +156,7 @@ dependencies = [
 
 [[package]]
 name = "ao2-core"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "chrono",
  "serde",
@@ -168,7 +168,7 @@ dependencies = [
 
 [[package]]
 name = "ao2-policy"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "anyhow",
  "ao2-core",
@@ -181,7 +181,7 @@ dependencies = [
 
 [[package]]
 name = "ao2-runtime"
-version = "0.5.8"
+version = "0.5.9"
 dependencies = [
  "anyhow",
  "ao2-adapters",
