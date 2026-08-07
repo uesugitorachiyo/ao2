@@ -1047,6 +1047,11 @@ pub(crate) enum IssueCommand {
         #[command(subcommand)]
         command: RepairPackCommand,
     },
+    /// Compare strict baseline and candidate repair verification evidence.
+    RepairResult {
+        #[command(subcommand)]
+        command: RepairResultCommand,
+    },
     /// Build, verify, or exercise a bounded local draft pull request action.
     DraftPr {
         #[command(subcommand)]
@@ -1067,6 +1072,19 @@ pub(crate) enum RepairPackCommand {
         manifest: PathBuf,
         #[arg(long)]
         root: PathBuf,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum RepairResultCommand {
+    /// Classify exact shared, resolved, changed, and candidate-only failures.
+    Classify {
+        #[arg(long)]
+        baseline: PathBuf,
+        #[arg(long)]
+        candidate: PathBuf,
         #[arg(long)]
         json: bool,
     },

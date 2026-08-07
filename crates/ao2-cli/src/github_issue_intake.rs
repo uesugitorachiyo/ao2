@@ -6,6 +6,8 @@ mod github_issue_discovery;
 pub(crate) mod github_issue_publish;
 #[path = "github_issue_repair_pack.rs"]
 mod github_issue_repair_pack;
+#[path = "github_issue_repair_result.rs"]
+mod github_issue_repair_result;
 
 use super::{canonical_json_sha256, github_issue_draft};
 use crate::cli::IssueCommand;
@@ -63,6 +65,7 @@ pub(super) fn issue(command: IssueCommand) -> Result<()> {
             json,
         }),
         IssueCommand::RepairPack { command } => github_issue_repair_pack::run(command),
+        IssueCommand::RepairResult { command } => github_issue_repair_result::run(command),
         IssueCommand::DraftPr { command } => {
             github_issue_draft::run(command, canonical_json_sha256)
         }
