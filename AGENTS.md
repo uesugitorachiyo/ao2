@@ -10,7 +10,7 @@ AO2 Control Plane consumes typed state and evidence as a read-only observer. It 
 
 - [docs/PRD.md](docs/PRD.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and [docs/SDD-risky-pr-run.md](docs/SDD-risky-pr-run.md) define product and execution boundaries.
 - [docs/SCHEMAS-AND-INTERFACES.md](docs/SCHEMAS-AND-INTERFACES.md), `schemas/`, and [docs/contracts/AO2-CANONICAL-V1.md](docs/contracts/AO2-CANONICAL-V1.md) own wire and evidence contracts.
-- [docs/contracts/GITHUB-ISSUE-REPAIR-PACK.md](docs/contracts/GITHUB-ISSUE-REPAIR-PACK.md) owns the strict sanitized historical repair-pack validation contract.
+- [docs/contracts/GITHUB-ISSUE-REPAIR-PACK.md](docs/contracts/GITHUB-ISSUE-REPAIR-PACK.md) owns the strict sanitized historical repair-pack validation and repair-result failure-classification contracts.
 - [docs/contracts/AO2-QUALITY-GATES.md](docs/contracts/AO2-QUALITY-GATES.md) owns exact staged, outgoing-commit, and source-head quality execution.
 - [docs/SECURITY.md](docs/SECURITY.md) owns fail-closed, secret, provider, approval, and side-effect rules.
 - [docs/VERIFICATION.md](docs/VERIFICATION.md), `package.json`, and [`.github/workflows/ci.yml`](.github/workflows/ci.yml) define current commands and CI coverage.

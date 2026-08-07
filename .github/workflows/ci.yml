@@ -72,6 +72,7 @@ jobs:
               cargo test -p ao2-cli --test github_issue_intake
               cargo test -p ao2-cli --test github_issue_discovery
               cargo test -p ao2-cli --test github_issue_fork_publish
+              cargo test -p ao2-cli --test github_issue_repair_result
           - os: ubuntu-latest
             phase: test-cli-approval-control-plane
             timeout_minutes: 20
@@ -254,6 +255,7 @@ jobs:
               cargo test -p ao2-cli --test github_issue_intake
               cargo test -p ao2-cli --test github_issue_discovery
               cargo test -p ao2-cli --test github_issue_fork_publish
+              cargo test -p ao2-cli --test github_issue_repair_result
           - os: macos-latest
             phase: test-cli-approval-control-plane
             timeout_minutes: 20
@@ -407,6 +409,7 @@ jobs:
               cargo test -p ao2-cli --test github_issue_intake
               cargo test -p ao2-cli --test github_issue_discovery
               cargo test -p ao2-cli --test github_issue_fork_publish
+              cargo test -p ao2-cli --test github_issue_repair_result
           - os: windows-latest
             phase: test-cli-approval-control-plane
             timeout_minutes: 20

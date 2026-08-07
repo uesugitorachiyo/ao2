@@ -6,7 +6,7 @@ mod github_issue_discovery;
 pub(crate) mod github_issue_publish;
 #[path = "github_issue_repair_pack.rs"]
 mod github_issue_repair_pack;
-#[path = "github_issue_repair_result.rs"]
+#[path = "github_issue_repair_result/classification.rs"]
 mod github_issue_repair_result;
 
 use super::{canonical_json_sha256, github_issue_draft};
