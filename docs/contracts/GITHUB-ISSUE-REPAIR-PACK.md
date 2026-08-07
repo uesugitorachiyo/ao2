@@ -172,3 +172,44 @@ archive, snapshot, dependency-cache manifest, and extracted-tree digests;
 report `failed_rows=0`; repeat the exact L1 safety boundary; and report every
 network, Git, GitHub, repair, mutation, execution, and approval flag as
 `false`.
+
+## Repair Result Failure Classification
+
+The separate read-only command
+
+```text
+ao2 issue repair-result classify --baseline <baseline.json> --candidate <candidate.json> --json
+```
+
+compares two strict `ao2.github-issue-repair-verification.v1` summaries. Each
+input is a regular non-symlink file of at most 65,536 bytes and binds its role,
+repository, issue number, baseline source SHA, exact source SHA, command
+SHA-256, toolchain name and version, completion timestamp, exit code, output
+SHA-256, failures, and offline effect-free safety state. Candidate evidence
+also binds a distinct candidate commit SHA. Evidence older than seven days or
+more than five minutes in the future is rejected.
+
+Each failure binds a printable identifier of at most 256 bytes and a lowercase
+`sha256:<64 hex>` signature digest. Identifiers must be unique within an input.
+The baseline and candidate must have identical repository, issue, baseline
+source, command, and toolchain identities. A zero exit code requires no
+failures; a nonzero exit requires at least one bound failure.
+
+The `ao2.github-issue-repair-result-classification.v1` readback sorts and
+classifies failures as:
+
+- `shared_failures`: identifier and signature digest are identical;
+- `resolved_failures`: present only on the baseline;
+- `changed_failures`: identifier is shared but the signature digest differs;
+- `candidate_only_failures`: present only on the candidate.
+
+Changed or candidate-only failures set `candidate_regression=true`. Exact
+shared failures set `baseline_failures_retained=true` without classifying them
+as candidate regressions. The readback binds both input-file digests and emits
+all network, Git, GitHub, provider, repair, mutation, approval, release,
+deployment, and publication flags as zero or false.
+
+`candidate_regression=false` means only that the supplied candidate evidence
+introduced no changed or candidate-only failure relative to the supplied
+baseline evidence. It is not a repair-passed, qualification, approval, or
+merge verdict. The command does not run tests or perform any side effect.
