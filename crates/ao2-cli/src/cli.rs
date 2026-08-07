@@ -1052,6 +1052,11 @@ pub(crate) enum IssueCommand {
         #[command(subcommand)]
         command: RepairResultCommand,
     },
+    /// Verify one strict, offline repair qualification bundle.
+    RepairQualification {
+        #[command(subcommand)]
+        command: RepairQualificationCommand,
+    },
     /// Build, verify, or exercise a bounded local draft pull request action.
     DraftPr {
         #[command(subcommand)]
@@ -1085,6 +1090,17 @@ pub(crate) enum RepairResultCommand {
         baseline: PathBuf,
         #[arg(long)]
         candidate: PathBuf,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum RepairQualificationCommand {
+    /// Verify a bounded repair qualification bundle without executing work.
+    Verify {
+        #[arg(long)]
+        bundle: PathBuf,
         #[arg(long)]
         json: bool,
     },

@@ -213,3 +213,64 @@ deployment, and publication flags as zero or false.
 introduced no changed or candidate-only failure relative to the supplied
 baseline evidence. It is not a repair-passed, qualification, approval, or
 merge verdict. The command does not run tests or perform any side effect.
+
+## Repair Qualification
+
+The separate offline command
+
+```text
+ao2 issue repair-qualification verify --bundle <bundle.json> --json
+```
+
+validates one `ao2.github-issue-repair-qualification-bundle.v1` JSON file. The
+bundle must be a regular non-symlink file of at most 65,536 bytes. It binds the
+exact repository and immutable upstream repository ID, authorized operator
+owner, issue, baseline and candidate SHAs, source and dependency
+digests, toolchain and platforms, a failing reproduction, focused baseline RED
+and candidate GREEN results, full-suite classification, candidate seal,
+independent review, operator-fork draft state, and a zero-effect safety record.
+All timestamps must be no more than seven days old or five minutes in the
+future and preserve source, reproduction, regression, full-suite, candidate
+seal, review, and draft-capture lifecycle order.
+
+The bundle's `artifact_sha256` map must include these direct sibling files:
+
+```text
+source.json
+reproduction.json
+regression.json
+full-suite.json
+candidate-seal.json
+review.json
+draft-pr.json
+```
+
+The map contains exactly those seven roles. Each file is strict JSON containing
+the same repository ID, issue, baseline and candidate SHAs plus the role's
+exact bundle evidence object. AO2 retains and revalidates the parent directory,
+opens direct children through that root, rejects symlinks, hardlinks, aliases,
+and root replacement, then verifies each SHA-256 and semantic object. Missing,
+oversized, digest-altered, or semantically divergent evidence fails before a
+passing result.
+
+Qualification requires a nonzero reproduction exit, a nonzero focused
+baseline exit, a zero focused candidate exit, no changed or candidate-only
+full-suite failure, no unresolved P1 or P2 review finding, and an open,
+unmerged, exact-head draft whose immutable repository ID, explicit fork flag,
+parent repository and ID, and owner match the authorized operator and upstream.
+Network, credentials, Git history, repair oracles, provider calls, external
+effects, upstream mutations, release mutations, deployments, and publications
+must all be absent.
+
+Success emits `ao2.github-issue-repair-qualification.v1` with
+`result=repair_qualified`, the bundle SHA-256, an aggregate qualification
+digest, all evidence bindings, and every execution, mutation, approval,
+release, deployment, and publication flag false. Rejection exits nonzero and,
+with `--json`, emits `result=repair_rejected` and the stable reason
+`invalid_bundle` before the diagnostic is written to stderr.
+
+`repair_qualified` means only that the supplied local evidence proves the
+bounded repair under this contract. It is not maintainer acceptance, merge
+approval, promotion authority, or release authorization. The command does not
+run tests, invoke Git or GitHub, access the network, execute repairs, mutate a
+repository, approve work, or publish anything.
