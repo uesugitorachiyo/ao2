@@ -8,7 +8,7 @@ sections describe advanced local operation surfaces and are not required for the
 first 30 minutes.
 
 AO2 now has a stable public release:
-[`v0.5.8`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.8).
+[`v0.5.9`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.9).
 The overview video is available at
 [https://youtu.be/pGhPooqC3hQ](https://youtu.be/pGhPooqC3hQ). Release
 archives are private-first in trust boundary and public-stable in distribution;
@@ -21,24 +21,24 @@ the normal flow is:
 5. Run `ao2 doctor` to confirm install, PATH, release provenance, local tools,
    and provider health.
 
-## Install AO2 v0.5.8 Stable
+## Install AO2 v0.5.9 Stable
 
-[`v0.5.8`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.8)
+[`v0.5.9`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.9)
 is the current stable public AO2 release. It is qualified with
 [AO2 Control Plane v0.1.19](https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.19).
 
 Choose one supported archive:
 
-- `ao2-0.5.8-macos-aarch64.tar.gz`
-- `ao2-0.5.8-linux-x86_64.tar.gz`
-- `ao2-0.5.8-windows-x86_64.tar.gz`
+- `ao2-0.5.9-macos-aarch64.tar.gz`
+- `ao2-0.5.9-linux-x86_64.tar.gz`
+- `ao2-0.5.9-windows-x86_64.tar.gz`
 
 Download the complete public asset set, then verify its checksums before using
 an archive:
 
 ```sh
 mkdir -p ao2-stable && cd ao2-stable
-gh release download v0.5.8 --repo uesugitorachiyo/ao2
+gh release download v0.5.9 --repo uesugitorachiyo/ao2
 shasum -a 256 -c SHA256SUMS
 ```
 
@@ -48,10 +48,10 @@ archive line:
 
 ```sh
 mkdir -p ao2-stable && cd ao2-stable
-base_url="https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.8"
+base_url="https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.9"
 curl -fLO "$base_url/SHA256SUMS"
-curl -fLO "$base_url/ao2-0.5.8-macos-aarch64.tar.gz"
-grep '  ao2-0.5.8-macos-aarch64.tar.gz$' SHA256SUMS > SHA256SUMS.selected
+curl -fLO "$base_url/ao2-0.5.9-macos-aarch64.tar.gz"
+grep '  ao2-0.5.9-macos-aarch64.tar.gz$' SHA256SUMS > SHA256SUMS.selected
 shasum -a 256 -c SHA256SUMS.selected
 ```
 
@@ -59,7 +59,7 @@ On macOS and Linux, extract the archive for the host and run its offline
 verification before installation:
 
 ```sh
-tar -xzf ao2-0.5.8-<platform>.tar.gz
+tar -xzf ao2-0.5.9-<platform>.tar.gz
 ./verify-release.sh
 AO2_INSTALL_DIR="$HOME/.local/bin" ./install.sh
 export PATH="$HOME/.local/bin:$PATH"
@@ -80,8 +80,8 @@ On Windows, extract the archive, run `Verify-Release.ps1`, then run
 `install.ps1` and confirm the installed identity with
 `ao2.exe version --json`.
 
-AO2 `v0.5.8` publishes aggregate checksums and GitHub attestations, but not the
-detached RSA provenance files required by the `v0.5.8` `install update`
+AO2 `v0.5.9` publishes aggregate checksums and GitHub attestations, but not the
+detached RSA provenance files required by the `v0.5.9` `install update`
 command. For that released binary, use the verified archive installer shown
 above. Do not synthesize detached signatures or claim rollback preservation.
 
@@ -90,7 +90,7 @@ selected archive row has been verified:
 
 ```sh
 ao2 install update \
-  --archive ao2-0.5.8-<platform>.tar.gz \
+  --archive ao2-0.5.9-<platform>.tar.gz \
   --public-checksum-manifest SHA256SUMS
 ao2 version --json
 ```
@@ -112,7 +112,7 @@ ao2 version --json
 
 To reinstall explicitly without a rollback copy, download and verify the
 matching archive from the
-[`v0.5.8` release](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.8)
+[`v0.5.9` release](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.9)
 and run its installer.
 
 Uninstall from the default Unix location with:
@@ -147,7 +147,7 @@ npm run release:verify-provenance
 npm run release:gate
 ```
 
-The current stable public release line is `v0.5.8`.
+The current stable public release line is `v0.5.9`.
 
 To publish the complete private release from a clean checkout, use the guarded
 shipper:
