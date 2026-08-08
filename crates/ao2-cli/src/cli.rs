@@ -14,7 +14,7 @@ use crate::{
 pub(crate) mod quality;
 
 #[derive(Debug, Parser)]
-#[command(name = "ao2")]
+#[command(name = "ao2", bin_name = "ao2")]
 #[command(about = "AO2 local governed software-delivery runner")]
 pub(crate) struct Cli {
     #[command(subcommand)]

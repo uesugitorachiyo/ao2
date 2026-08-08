@@ -83,3 +83,22 @@ fn cli_help_and_safe_json_surfaces_match_contract_fixture() {
         }
     }
 }
+
+#[test]
+fn cli_help_uses_platform_neutral_binary_name() {
+    let dir = tempfile::tempdir().expect("temporary directory");
+    let renamed = dir
+        .path()
+        .join(format!("ao2-renamed{}", std::env::consts::EXE_SUFFIX));
+    fs::copy(env!("CARGO_BIN_EXE_ao2"), &renamed).expect("copy AO2 executable");
+
+    let output = Command::new(renamed)
+        .arg("--help")
+        .output()
+        .expect("run renamed AO2 executable");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Usage: ao2 <COMMAND>"),
+        "help exposed executable filename:\n{stdout}"
+    );
+}
