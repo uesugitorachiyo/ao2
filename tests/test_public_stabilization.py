@@ -1193,7 +1193,7 @@ def test_public_release_download_verify_is_checksum_first_and_post_merge_canarie
         "verifies every\nasset listed in `SHA256SUMS`",
         "verifies signed\nprovenance",
         "public release download checksum verification",
-        "stable public release archives at v0.5.9",
+        "stable public release archives at v0.5.10",
     ]:
         assert needle in install + "\n" + verification
 
@@ -1368,9 +1368,9 @@ def test_public_release_pair_digest_audit_rejects_closure_release_asset_drift(tm
     ao2_release = tmp_path / "ao2-release.json"
     control_plane_release = tmp_path / "control-plane-release.json"
     ao2_assets = [
-        ("ao2-0.5.9-linux-x86_64.tar.gz", "d" * 64, 3345603),
-        ("ao2-0.5.9-macos-aarch64.tar.gz", "e" * 64, 3345605),
-        ("ao2-0.5.9-windows-x86_64.tar.gz", "f" * 64, 3345607),
+        ("ao2-0.5.10-linux-x86_64.tar.gz", "d" * 64, 3345603),
+        ("ao2-0.5.10-macos-aarch64.tar.gz", "e" * 64, 3345605),
+        ("ao2-0.5.10-windows-x86_64.tar.gz", "f" * 64, 3345607),
     ]
     control_plane_assets = [
         ("ao2-control-plane-0.1.19-linux-x86_64.tar.gz", "b" * 64, 4236805),
@@ -1412,11 +1412,11 @@ def test_public_release_pair_digest_audit_rejects_closure_release_asset_drift(tm
     ao2_release.write_text(
         json.dumps(
             {
-                "tagName": "v0.5.9",
-                "name": "AO2 v0.5.9",
+                "tagName": "v0.5.10",
+                "name": "AO2 v0.5.10",
                 "isPrerelease": False,
                 "publishedAt": "2026-06-10T18:45:16Z",
-                "url": "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.9",
+                "url": "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.10",
                 "assets": [
                     {"name": name, "digest": "sha256:" + digest, "size": size}
                     for name, digest, size in ao2_assets
@@ -1553,9 +1553,9 @@ def test_public_release_pair_digest_audit_rejects_missing_or_mismatched_full_arc
         assert needle in script
 
     ao2_archives = {
-        "ao2-0.5.9-linux-x86_64.tar.gz": ("b" * 64, 102),
-        "ao2-0.5.9-macos-aarch64.tar.gz": ("c" * 64, 103),
-        "ao2-0.5.9-windows-x86_64.tar.gz": ("d" * 64, 104),
+        "ao2-0.5.10-linux-x86_64.tar.gz": ("b" * 64, 102),
+        "ao2-0.5.10-macos-aarch64.tar.gz": ("c" * 64, 103),
+        "ao2-0.5.10-windows-x86_64.tar.gz": ("d" * 64, 104),
     }
     cp_archives = {
         "ao2-control-plane-0.1.19-linux-x86_64.tar.gz": ("e" * 64, 201),
@@ -1567,9 +1567,9 @@ def test_public_release_pair_digest_audit_rejects_missing_or_mismatched_full_arc
         path.write_text(
             json.dumps(
                 {
-                    "tagName": "v0.5.9" if component == "ao2" else "v0.1.19",
+                    "tagName": "v0.5.10" if component == "ao2" else "v0.1.19",
                     "name": (
-                            "AO2 v0.5.9"
+                            "AO2 v0.5.10"
                         if component == "ao2"
                         else "ao2-control-plane v0.1.19"
                     ),
@@ -1658,7 +1658,7 @@ def test_public_release_pair_digest_audit_rejects_missing_or_mismatched_full_arc
     assert any(
         item["component"] == "ao2"
         and item["code"] == "required_archive_presence"
-            and "ao2-0.5.9-windows-x86_64.tar.gz" in item["missing_assets"]
+            and "ao2-0.5.10-windows-x86_64.tar.gz" in item["missing_assets"]
         for item in missing_failed
     )
 
@@ -7918,7 +7918,7 @@ def test_dual_public_release_smoke_workflow_and_docs_contract():
         assert needle in workflow
 
     for needle in [
-            "AO2 stable release: `v0.5.9`",
+            "AO2 stable release: `v0.5.10`",
         "AO2 control-plane stable release: `v0.1.19`",
         "ao2-dual-public-release-smoke",
         "ao2.dual-public-release-smoke.v1",
@@ -14855,7 +14855,7 @@ def test_release_train_manifest_parity_audit_contract(tmp_path):
     assert summary["byte_identical"] is True
     assert summary["schema_aligned"] is True
     assert summary["target_aligned"] is True
-    assert summary["stable"]["ao2"]["tag"] == "v0.5.9"
+    assert summary["stable"]["ao2"]["tag"] == "v0.5.10"
     assert summary["next_patch"]["ao2"]["tag"] == "v0.5.10"
 
     for needle in [
@@ -16475,7 +16475,7 @@ def test_public_release_consumer_smoke_runs_against_offline_fixture(tmp_path):
     fixture = tmp_path / "fixture"
     out_root = tmp_path / "out"
     target_label = "linux-x86_64"
-    ao2_version = "0.5.9"
+    ao2_version = "0.5.10"
     cp_version = "0.1.19"
 
     def write_executable(path: Path, body: str) -> None:
@@ -16512,7 +16512,7 @@ def test_public_release_consumer_smoke_runs_against_offline_fixture(tmp_path):
         """#!/usr/bin/env sh
 set -eu
 if [ "${1:-}" = "version" ] && [ "${2:-}" = "--json" ]; then
-  printf '{"package":"ao2","version":"0.5.9","target":"linux-x86_64","release_manifest_schema":"ao2.release-manifest.v1"}\n'
+  printf '{"package":"ao2","version":"0.5.10","target":"linux-x86_64","release_manifest_schema":"ao2.release-manifest.v1"}\n'
   exit 0
 fi
 if [ "${1:-}" = "--help" ]; then
@@ -16574,7 +16574,7 @@ exit 2
     assert summary["schema_version"] == "ao2.public-release-consumer-smoke.v1"
     assert summary["status"] == "passed"
     assert summary["target_label"] == target_label
-    assert summary["release_pair"]["ao2"]["tag"] == "v0.5.9"
+    assert summary["release_pair"]["ao2"]["tag"] == "v0.5.10"
     assert summary["release_pair"]["ao2_control_plane"]["tag"] == "v0.1.19"
     assert summary["archives"]["ao2"]["manifest_schema"] == "ao2.release-manifest.v1"
     assert (

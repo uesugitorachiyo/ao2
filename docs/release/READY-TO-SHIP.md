@@ -1,18 +1,18 @@
 # Ready-to-Ship Release Gate
 
-Status: AO2 `v0.5.9` published and qualified; stable-train reconciliation complete
+Status: AO2 `v0.5.10` published and qualified; stable-train reconciliation complete
 
 ## Current Stable Release
 
-The current stable train is AO2 `v0.5.9` with AO2 Control Plane `v0.1.19`.
-AO2 `v0.5.9` was published from qualified source
-`fec09515dfe4e550eeaddc7da497b1fe912012b4`. Its five public release assets,
+The current stable train is AO2 `v0.5.10` with AO2 Control Plane `v0.1.19`.
+AO2 `v0.5.10` was published from qualified source
+`9f4f8a8cf596127a982627b4af25c90a9a842095`. Its five public release assets,
 checksums, attestations, three native platform installs, doctor checks,
 governed fixtures, and explicit companion compatibility completed release
 qualification before this documentation reconciliation.
 
 The release is available at
-<https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.9>. This document is a
+<https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.10>. This document is a
 readback of the completed release; it does not authorize tag or release
 mutation, asset replacement, package publication, deployment, or preparation
 of a later patch candidate.
