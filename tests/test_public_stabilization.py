@@ -756,7 +756,7 @@ def test_public_release_publication_contract_matches_signed_sidecars_and_x86_art
     assert "provenance.json.signature" not in combined_contracts
 
 
-def test_next_patch_release_notes_contract_rejects_unprepared_version():
+def test_next_patch_release_notes_contract_resolves_v0_5_10_note():
     result = subprocess.run(
         [
             "python3",
@@ -774,9 +774,20 @@ def test_next_patch_release_notes_contract_rejects_unprepared_version():
         check=False,
     )
 
-    assert result.returncode != 0
-    assert "versioned stable release notes are missing" in result.stderr
-    assert "v0.5.10-stable.md" in result.stderr
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "docs/release/v0.5.10-stable.md"
+
+
+def test_prepared_package_version_matches_next_patch_release_train():
+    release_train = json.loads(read("docs/release/release-train.json"))
+    expected = release_train["next_patch"]["ao2"]["version"]
+    cargo_version = re.search(
+        r'(?m)^version = "([^"]+)"$', read("Cargo.toml")
+    )
+
+    assert cargo_version is not None
+    assert cargo_version.group(1) == expected
+    assert json.loads(read("package.json"))["version"] == expected
 
 
 def test_public_release_build_uses_canonical_hosted_native_dry_run_contract():
