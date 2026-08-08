@@ -235,11 +235,11 @@ fn validate(manifest_path: &Path, root_path: &Path, json: bool) -> Result<()> {
         total_size,
     )?;
 
-    let is_v2 = version == reproduction::Version::V2;
+    let has_reproduction = version != reproduction::Version::V1;
     let readback = ValidationReadback {
         schema_version: version.validation_schema(),
         status: "passed",
-        eligibility_status: is_v2.then_some("reproduced"),
+        eligibility_status: has_reproduction.then_some("reproduced"),
         request_id: &manifest.request_id,
         corpus_id: &manifest.corpus_id,
         candidate_id: &manifest.candidate_id,
@@ -346,9 +346,6 @@ fn validate_manifest(manifest: &RepairPackManifest) -> Result<reproduction::Vers
     ) {
         bail!("license is not allowed");
     }
-    if !matches!(manifest.language.as_str(), "go" | "rust") {
-        bail!("language is not allowed");
-    }
     let fetched_at = DateTime::parse_from_rfc3339(&manifest.fetched_at)
         .context("fetched_at must use RFC3339 timestamp syntax")?
         .with_timezone(&Utc);
@@ -369,6 +366,7 @@ fn validate_manifest(manifest: &RepairPackManifest) -> Result<reproduction::Vers
         &manifest.toolchain.version,
         TOOLCHAIN_FIELD_MAX_BYTES,
     )?;
+    reproduction::validate_language(version, &manifest.language, &manifest.toolchain.name)?;
     validate_digest("extracted_tree_sha256", &manifest.extracted_tree_sha256)?;
     if manifest.known_fix_fetched {
         bail!("known_fix_fetched must be false");

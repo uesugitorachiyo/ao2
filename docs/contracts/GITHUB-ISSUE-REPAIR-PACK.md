@@ -16,11 +16,14 @@ Validation errors exit nonzero before a passing readback is emitted.
 ## Strict Manifests
 
 The manifest is strict JSON with schema version
-`ao2.github-issue-repair-pack.v1` or `ao2.github-issue-repair-pack.v2`.
+`ao2.github-issue-repair-pack.v1`, `ao2.github-issue-repair-pack.v2`, or
+`ao2.github-issue-repair-pack.v3`.
 Duplicate keys at any depth, trailing JSON, unknown fields, null required
 fields, malformed JSON, and invalid UTF-8 are rejected. Version 1 remains the
-three-artifact structural validation contract. Version 2 adds proof that the
-selected issue reproduced as a failing command on the exact source.
+three-artifact structural validation contract. Version 2 adds Go and Rust proof
+that the selected issue reproduced as a failing command on the exact source.
+Version 3 preserves that contract and adds a bounded direct Python pytest
+target.
 
 Required fields are:
 
@@ -36,15 +39,17 @@ Required fields are:
 - `issue_number`: positive integer
 - `source_sha`: exactly 40 lowercase hexadecimal characters
 - `license`: exactly `MIT`, `Apache-2.0`, `BSD-2-Clause`, or `BSD-3-Clause`
-- `language`: exactly `go` or `rust`
+- `language`: exactly `go` or `rust` in versions 1 and 2; version 3 also accepts
+  `python`
 - `fetched_at`: RFC3339 timestamp no more than 7 days old and no more than 5
   minutes in the future at validation time
 - `source_archive`, `issue_snapshot`, and `dependency_cache_manifest`: artifact
   objects
 - `reproduction_evidence`, `reproduction_fixture`, and
   `reproduction_output`: three additional artifact objects required only by
-  version 2
+  versions 2 and 3
 - `toolchain`: strict object with nonempty bounded `name` and `version`
+  (`name` is exactly `python` for a version 3 Python pack)
 - `extracted_tree_sha256`: lowercase `sha256:<64 hex>`
 - `known_fix_fetched`: exactly `false`
 - `safety`: the exact passing boundary below
@@ -55,9 +60,9 @@ nested paths are not supported. Sizes bind the exact nonnegative file length.
 Digests use lowercase `sha256:<64 hex>` syntax.
 
 Version 1 rejects every reproduction artifact, preserving its original strict
-shape. Version 2 rejects any missing or null reproduction artifact.
+shape. Versions 2 and 3 reject any missing or null reproduction artifact.
 
-## Version 2 Reproduction Evidence
+## Version 2 And 3 Reproduction Evidence
 
 The digest-bound reproduction artifact is strict JSON with schema version
 `ao2.github-issue-reproduction-evidence.v1`. It contains only these fields:
@@ -73,13 +78,21 @@ The digest-bound reproduction artifact is strict JSON with schema version
   accepted. Go requires the source-root package and an exact
   `-run ^<test_identifier>$` selector. Rust requires exactly one
   `--test <test_identifier>` target; broad library, binary, or test-suite
-  selectors are rejected.
+  selectors are rejected. Python is accepted only by version 3 and requires
+  exactly `python -m pytest <fixture_install_path>::<test_identifier>`.
+  Alternate executables, shell wrappers, `python -c`, broad pytest paths,
+  options, plugins, and additional selectors are rejected.
 - `working_directory`: exactly `.`, the extracted source root
-- `fixture_install_path`: the exact source-root Go test filename or Rust
-  `tests/<test_identifier>.rs` path where the bound fixture is installed
+- `fixture_install_path`: the exact source-root Go test filename, Rust
+  `tests/<test_identifier>.rs` path, or version 3 Python test path where the
+  bound fixture is installed. Python paths are relative normal components
+  beneath the source root, have a filename beginning `test_`, end in `.py`, and
+  reject absolute paths, parent traversal, empty components, backslashes, and
+  platform prefixes.
 - `test_identifier`: the focused test selected by `command_argv`. Go names
   begin with `Test` and otherwise use only ASCII alphanumerics or underscore;
-  Rust targets use only ASCII alphanumerics, hyphen, or underscore.
+  Rust targets use only ASCII alphanumerics, hyphen, or underscore. Python
+  identifiers begin with `test_` and use only ASCII alphanumerics or underscore.
 - `toolchain`: exact name and version match for the repair-pack manifest
 - `fixture_sha256`: digest of the issue-derived regression fixture
 - `output_sha256`: digest of the complete captured failing command output
@@ -163,8 +176,9 @@ Version 1 JSON output remains
 original fields. Version 2 JSON output uses
 `ao2.github-issue-repair-pack-validation.v2`, status `passed`, and
 `eligibility_status=reproduced`; it also binds the exact artifact digest as
-`reproduction_evidence_sha256`. Text output for version 2 reports the same
-eligibility status and digest.
+`reproduction_evidence_sha256`. Version 3 uses the corresponding
+`ao2.github-issue-repair-pack-validation.v3` readback. Text output for versions
+2 and 3 reports the same eligibility status and digest.
 
 Both readbacks preserve the request, corpus, candidate, repository, issue,
 source, license, language, and timestamp identities; bind the manifest,
