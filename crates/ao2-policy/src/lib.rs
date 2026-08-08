@@ -74,13 +74,23 @@ fn redact_secret_line(line: &str) -> String {
     if let Some(redacted) = redact_header_line(line) {
         return redacted;
     }
-    let mut redacted = line.to_string();
-    if let Some(index) = find_ascii_case_insensitive(&redacted, "Bearer ") {
-        redacted = format!("{}Bearer [REDACTED]", &redacted[..index]);
-    }
+    let redacted = redact_bearer_tokens(line);
     let redacted = redact_query_secret_values(&redacted);
     let redacted = redact_inline_secret_assignments(&redacted);
     redact_standalone_secret_tokens(&redacted)
+}
+
+fn redact_bearer_tokens(line: &str) -> String {
+    let mut redacted = String::with_capacity(line.len());
+    let mut rest = line;
+    while let Some(index) = find_ascii_case_insensitive(rest, "Bearer ") {
+        redacted.push_str(&rest[..index]);
+        redacted.push_str("Bearer [REDACTED]");
+        let value_start = index + "Bearer ".len();
+        rest = &rest[inline_secret_value_end(rest, value_start)..];
+    }
+    redacted.push_str(rest);
+    redacted
 }
 
 fn add_line_secret_redaction_class_counts(line: &str, counts: &mut BTreeMap<String, usize>) {
