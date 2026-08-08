@@ -113,6 +113,27 @@ fn redaction_masks_url_query_secret_values() {
 }
 
 #[test]
+fn redaction_preserves_nested_provider_exception_diagnostics() {
+    let input = r#"websocket handshake failed: {"provider":"cartesia","operation":"tts","headers":{"aUtHoRiZaTiOn":"bEaReR synthetic-private-marker"},"status":401,"error":"unauthorized"}"#;
+    let redacted = redact_secrets(input);
+
+    assert!(!redacted.contains("synthetic-private-marker"));
+    for diagnostic in [
+        "websocket handshake failed",
+        r#""provider":"cartesia""#,
+        r#""operation":"tts""#,
+        r#""status":401"#,
+        r#""error":"unauthorized""#,
+    ] {
+        assert!(
+            redacted.contains(diagnostic),
+            "missing {diagnostic}: {redacted}"
+        );
+    }
+    assert_eq!(secret_redaction_count(input), 1);
+}
+
+#[test]
 fn redaction_reports_secret_class_counts_without_values() {
     let input = "OPENAI_API_KEY=sk-secret\n\
          TWILIO_AUTH_TOKEN=twilio-secret\n\
