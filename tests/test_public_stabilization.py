@@ -998,7 +998,7 @@ def test_public_release_links_and_install_guide_track_current_stable():
     manifest = json.loads(read("docs/release/release-train.json"))
     stable = manifest["stable"]["ao2"]
 
-    assert stable == {"tag": "v0.5.9", "version": "0.5.9"}
+    assert stable == {"tag": "v0.5.10", "version": "0.5.10"}
 
     for needle in [
         f"https://github.com/uesugitorachiyo/ao2/releases/tag/{stable['tag']}",
@@ -1053,10 +1053,10 @@ def test_current_public_pair_tracks_control_plane_v0_1_19():
 
     manifest = json.loads(read("docs/release/release-train.json"))
     expected_stable = {
-        "ao2": {"tag": "v0.5.9", "version": "0.5.9"},
+        "ao2": {"tag": "v0.5.10", "version": "0.5.10"},
         "ao2_control_plane": {"tag": "v0.1.19", "version": "0.1.19"},
-        "promotion_confirm": "promote-stable-v0.5.9-v0.1.19",
-        "public_operator_confirm": "public-release-reviewed-v0.5.9-v0.1.19",
+        "promotion_confirm": "promote-stable-v0.5.10-v0.1.19",
+        "public_operator_confirm": "public-release-reviewed-v0.5.10-v0.1.19",
     }
     expected_next_patch = {
         "ao2": {"tag": "v0.5.10", "version": "0.5.10"},
@@ -14241,7 +14241,7 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
 
     assert manifest["schema_version"] == "ao2.release-train-manifest.v1"
-    assert manifest["stable"]["ao2"] == {"tag": "v0.5.9", "version": "0.5.9"}
+    assert manifest["stable"]["ao2"] == {"tag": "v0.5.10", "version": "0.5.10"}
     assert manifest["stable"]["ao2_control_plane"] == {
         "tag": "v0.1.19",
         "version": "0.1.19",
@@ -14253,7 +14253,7 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
     }
     assert (
         manifest["stable"]["promotion_confirm"]
-        == "promote-stable-v0.5.9-v0.1.19"
+        == "promote-stable-v0.5.10-v0.1.19"
     )
     assert (
         manifest["next_patch"]["promotion_confirm"]
@@ -16367,8 +16367,8 @@ def test_release_immutability_audit_composes_stable_asset_and_download_checks():
     assert "npm run release:immutability-audit" in verification
     assert "ao2.release-immutability-audit.v1" in verification
     assert "stable public release" in readme
-    assert "v0.5.9" in readme
-    assert "ao2-0.5.9-linux-x86_64.tar.gz" in readme
+    assert "v0.5.10" in readme
+    assert "ao2-0.5.10-linux-x86_64.tar.gz" in readme
     assert "https://youtu.be/pGhPooqC3hQ" in readme
     assert "stable public release" in install
     assert "v0.4.81" in next_patch
