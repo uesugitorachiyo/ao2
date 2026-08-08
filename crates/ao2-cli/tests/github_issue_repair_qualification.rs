@@ -135,6 +135,42 @@ fn valid_bundle(root: &Path) -> Value {
     bundle
 }
 
+fn valid_process_lifecycle_bundle(root: &Path) -> Value {
+    let completed_at = Utc::now().to_rfc3339_opts(SecondsFormat::Secs, true);
+    let mut bundle = valid_bundle(root);
+    bundle["schema_version"] = json!("ao2.github-issue-repair-qualification-bundle.v2");
+    bundle["qualification_profile"] = json!("process_lifecycle");
+    bundle["process_lifecycle"] = json!({
+        "completed_at": completed_at,
+        "evidence_sha256": digest('c'),
+        "process_death_observed": true,
+        "list_tools_failure_typed": true,
+        "tool_call_failure_typed": true,
+        "lifecycle_wakeup_observed": true,
+        "disconnected_state_truthful": true,
+        "explicit_close_passed": true,
+        "repeated_close_passed": true,
+        "initialization_failure_passed": true,
+        "reinitialization_passed": true,
+        "orphan_processes": 0,
+        "timeout_seconds": 30
+    });
+    write_artifacts(root, &mut bundle);
+    let artifact = json!({
+        "repository": bundle["repository"],
+        "upstream_repository_id": bundle["upstream_repository_id"],
+        "issue_number": bundle["issue_number"],
+        "baseline_source_sha": bundle["baseline_source_sha"],
+        "candidate_sha": bundle["candidate_sha"],
+        "evidence": bundle["process_lifecycle"]
+    });
+    let bytes = serde_json::to_vec(&artifact).unwrap();
+    fs::write(root.join("process-lifecycle.json"), &bytes).unwrap();
+    bundle["artifact_sha256"]["process-lifecycle.json"] =
+        json!(format!("sha256:{:x}", Sha256::digest(&bytes)));
+    bundle
+}
+
 fn write(path: &Path, value: &Value) {
     fs::write(path, serde_json::to_vec(value).unwrap()).unwrap();
 }
@@ -222,6 +258,119 @@ fn qualifies_a_strict_offline_repair_bundle() {
         .as_str()
         .unwrap()
         .starts_with("sha256:"));
+}
+
+#[test]
+fn qualifies_digest_bound_process_lifecycle_evidence() {
+    let temp = tempfile::tempdir().unwrap();
+    let bundle = temp.path().join("bundle.json");
+    write(&bundle, &valid_process_lifecycle_bundle(temp.path()));
+
+    let output = verify(&bundle);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let readback: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        readback["schema_version"],
+        "ao2.github-issue-repair-qualification.v2"
+    );
+    assert_eq!(readback["qualification_profile"], "process_lifecycle");
+    assert_eq!(readback["process_lifecycle_passed"], true);
+    assert_eq!(readback["orphan_processes"], 0);
+    assert_eq!(readback["timeout_seconds"], 30);
+}
+
+#[test]
+fn rejects_missing_or_incomplete_process_lifecycle_evidence() {
+    let cases: Vec<(Mutation, &str)> = vec![
+        (
+            |value| {
+                value.as_object_mut().unwrap().remove("process_lifecycle");
+            },
+            "process_lifecycle",
+        ),
+        (
+            |value| value["process_lifecycle"]["process_death_observed"] = json!(false),
+            "process lifecycle evidence",
+        ),
+        (
+            |value| value["process_lifecycle"]["list_tools_failure_typed"] = json!(false),
+            "process lifecycle evidence",
+        ),
+        (
+            |value| value["process_lifecycle"]["tool_call_failure_typed"] = json!(false),
+            "process lifecycle evidence",
+        ),
+        (
+            |value| value["process_lifecycle"]["lifecycle_wakeup_observed"] = json!(false),
+            "process lifecycle evidence",
+        ),
+        (
+            |value| value["process_lifecycle"]["disconnected_state_truthful"] = json!(false),
+            "process lifecycle evidence",
+        ),
+        (
+            |value| value["process_lifecycle"]["explicit_close_passed"] = json!(false),
+            "process lifecycle evidence",
+        ),
+        (
+            |value| value["process_lifecycle"]["repeated_close_passed"] = json!(false),
+            "process lifecycle evidence",
+        ),
+        (
+            |value| value["process_lifecycle"]["initialization_failure_passed"] = json!(false),
+            "process lifecycle evidence",
+        ),
+        (
+            |value| value["process_lifecycle"]["reinitialization_passed"] = json!(false),
+            "process lifecycle evidence",
+        ),
+        (
+            |value| value["process_lifecycle"]["orphan_processes"] = json!(1),
+            "process lifecycle evidence",
+        ),
+        (
+            |value| value["process_lifecycle"]["timeout_seconds"] = json!(0),
+            "process lifecycle timeout",
+        ),
+    ];
+    for (mutate, message) in cases {
+        let temp = tempfile::tempdir().unwrap();
+        let bundle = temp.path().join("bundle.json");
+        let mut value = valid_process_lifecycle_bundle(temp.path());
+        mutate(&mut value);
+        write(&bundle, &value);
+        let output = verify(&bundle);
+        assert!(!output.status.success(), "case unexpectedly passed");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(message),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+}
+
+#[test]
+fn rejects_missing_or_altered_process_lifecycle_artifact() {
+    let temp = tempfile::tempdir().unwrap();
+    let bundle = temp.path().join("bundle.json");
+    let value = valid_process_lifecycle_bundle(temp.path());
+    write(&bundle, &value);
+    fs::remove_file(temp.path().join("process-lifecycle.json")).unwrap();
+    let output = verify(&bundle);
+    assert!(!output.status.success());
+
+    let temp = tempfile::tempdir().unwrap();
+    let bundle = temp.path().join("bundle.json");
+    let value = valid_process_lifecycle_bundle(temp.path());
+    write(&bundle, &value);
+    fs::write(temp.path().join("process-lifecycle.json"), b"{}").unwrap();
+    let output = verify(&bundle);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("artifact digest mismatch"));
 }
 
 #[test]
@@ -454,7 +603,11 @@ fn rejects_malformed_oversized_missing_and_linked_inputs() {
     write(&missing, &value);
     let output = verify(&missing);
     assert!(!output.status.success());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("exactly seven evidence roles"));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("exactly seven evidence roles"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     let unsafe_name = temp.path().join("unsafe-name.json");
     let mut value = valid_bundle(temp.path());
