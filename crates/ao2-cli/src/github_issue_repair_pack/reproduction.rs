@@ -29,6 +29,7 @@ impl<'de> Deserialize<'de> for ArtifactField {
 pub(super) enum Version {
     V1,
     V2,
+    V3,
 }
 
 impl Version {
@@ -36,8 +37,21 @@ impl Version {
         match self {
             Self::V1 => "ao2.github-issue-repair-pack-validation.v1",
             Self::V2 => "ao2.github-issue-repair-pack-validation.v2",
+            Self::V3 => "ao2.github-issue-repair-pack-validation.v3",
         }
     }
+}
+
+pub(super) fn validate_language(version: Version, language: &str, toolchain: &str) -> Result<()> {
+    ensure!(
+        matches!(language, "go" | "rust") || version == Version::V3 && language == "python",
+        "language is not allowed"
+    );
+    ensure!(
+        language != "python" || toolchain == "python",
+        "Python v3 repair pack toolchain.name must be python"
+    );
+    Ok(())
 }
 
 pub(super) struct Validated {
@@ -105,8 +119,12 @@ pub(super) fn version(
             bail!("v1 repair pack must not declare reproduction artifacts")
         }
         "ao2.github-issue-repair-pack.v2" if present.iter().all(|item| *item) => Ok(Version::V2),
+        "ao2.github-issue-repair-pack.v3" if present.iter().all(|item| *item) => Ok(Version::V3),
         "ao2.github-issue-repair-pack.v2" => {
             bail!("v2 repair pack requires evidence, fixture, and output artifacts")
+        }
+        "ao2.github-issue-repair-pack.v3" => {
+            bail!("v3 repair pack requires evidence, fixture, and output artifacts")
         }
         _ => bail!("unsupported repair pack schema_version"),
     }
@@ -280,7 +298,12 @@ fn validate_evidence(
             && evidence.source_sha == manifest.source_sha,
         "reproduction evidence identity does not match manifest"
     );
-    validate_argv(&evidence.command_argv, manifest, &evidence.test_identifier)?;
+    validate_argv(
+        &evidence.command_argv,
+        manifest,
+        &evidence.fixture_install_path,
+        &evidence.test_identifier,
+    )?;
     ensure!(
         evidence.working_directory == ".",
         "reproduction evidence working_directory must be the extracted source root"
@@ -362,6 +385,7 @@ fn validate_evidence(
 fn validate_argv(
     argv: &[String],
     manifest: &RepairPackManifest,
+    fixture_install_path: &str,
     test_identifier: &str,
 ) -> Result<()> {
     ensure!(
@@ -391,6 +415,7 @@ fn validate_argv(
     match manifest.language.as_str() {
         "go" => validate_go_args(argv, test_identifier),
         "rust" => validate_rust_args(argv, test_identifier),
+        "python" => validate_python_args(argv, fixture_install_path, test_identifier),
         _ => bail!("reproduction evidence language has no supported test runner"),
     }
 }
@@ -414,6 +439,10 @@ fn validate_fixture_binding(evidence: &Evidence, manifest: &RepairPackManifest) 
                 evidence.fixture_install_path == format!("tests/{}.rs", evidence.test_identifier),
                 "Rust reproduction fixture install path must match the focused test target"
             );
+        }
+        "python" => {
+            validate_python_test_identifier(&evidence.test_identifier)?;
+            validate_python_test_path(&evidence.fixture_install_path)?;
         }
         _ => bail!("reproduction evidence language has no supported fixture binding"),
     }
@@ -465,6 +494,55 @@ fn validate_rust_args(argv: &[String], test_identifier: &str) -> Result<()> {
     ensure!(
         argv.len() == 4 && argv[2] == "--test" && argv[3] == test_identifier,
         "Rust reproduction must bind exactly one focused test target"
+    );
+    Ok(())
+}
+
+fn validate_python_args(
+    argv: &[String],
+    fixture_install_path: &str,
+    test_identifier: &str,
+) -> Result<()> {
+    validate_python_test_identifier(test_identifier)?;
+    ensure!(
+        argv.len() == 4
+            && argv[0] == "python"
+            && argv[1] == "-m"
+            && argv[2] == "pytest"
+            && argv[3] == format!("{fixture_install_path}::{test_identifier}"),
+        "Python reproduction must invoke one focused pytest target directly"
+    );
+    Ok(())
+}
+
+fn validate_python_test_path(path: &str) -> Result<()> {
+    let source_path = Path::new(path);
+    ensure!(
+        path.ends_with(".py")
+            && !path.contains('\\')
+            && !path.contains(':')
+            && !path.contains("//")
+            && source_path
+                .components()
+                .all(|component| matches!(component, Component::Normal(_)))
+            && source_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("test_")),
+        "Python reproduction fixture_install_path must be a relative test_*.py path beneath the source root"
+    );
+    Ok(())
+}
+
+fn validate_python_test_identifier(value: &str) -> Result<()> {
+    ensure!(
+        value.len() > "test_".len()
+            && value.len() <= IDENTIFIER_MAX_BYTES
+            && value.starts_with("test_")
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_'),
+        "Python reproduction test_identifier must name one portable test"
     );
     Ok(())
 }

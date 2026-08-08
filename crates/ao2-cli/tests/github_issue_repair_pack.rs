@@ -119,6 +119,26 @@ fn valid_v2_pack() -> (Value, Value) {
     (manifest, reproduction)
 }
 
+fn valid_v3_python_pack() -> (Value, Value) {
+    let (mut manifest, mut reproduction) = valid_v2_pack();
+    manifest["schema_version"] = json!("ao2.github-issue-repair-pack.v3");
+    manifest["language"] = json!("python");
+    manifest["toolchain"] = json!({
+        "name": "python",
+        "version": "3.13.12",
+    });
+    reproduction["command_argv"] = json!([
+        "python",
+        "-m",
+        "pytest",
+        "tests/test_withdrawn_issue.py::test_withdrawn_issue"
+    ]);
+    reproduction["fixture_install_path"] = json!("tests/test_withdrawn_issue.py");
+    reproduction["test_identifier"] = json!("test_withdrawn_issue");
+    reproduction["toolchain"] = manifest["toolchain"].clone();
+    (manifest, reproduction)
+}
+
 fn write_pack_at(root: &Path, manifest: &Value) -> std::path::PathBuf {
     fs::create_dir_all(root).unwrap();
     fs::write(root.join("source.tar.gz"), SOURCE_BYTES).unwrap();
@@ -312,6 +332,214 @@ fn validates_v2_only_with_digest_bound_reproduced_failure_evidence() {
             "approves_work": false,
         })
     );
+}
+
+#[test]
+fn validates_v3_python_only_with_a_bound_direct_pytest_target() {
+    let temp = tempfile::tempdir().unwrap();
+    let (mut manifest, reproduction) = valid_v3_python_pack();
+    let fetched_at = manifest["fetched_at"].clone();
+    let manifest_path = write_v2_pack(&temp, &mut manifest, &reproduction);
+    let reproduction_sha256 = manifest["reproduction_evidence"]["sha256"].clone();
+    let fixture_sha256 = manifest["reproduction_fixture"]["sha256"].clone();
+    let output_sha256 = manifest["reproduction_output"]["sha256"].clone();
+
+    let output = validate(&manifest_path, temp.path());
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let readback: Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        readback,
+        json!({
+            "schema_version": "ao2.github-issue-repair-pack-validation.v3",
+            "status": "passed",
+            "eligibility_status": "reproduced",
+            "request_id": "request-20260801-001",
+            "corpus_id": "month-1-blind-corpus",
+            "candidate_id": "candidate-001",
+            "repository": "example/project",
+            "issue_number": 17,
+            "source_sha": "0123456789abcdef0123456789abcdef01234567",
+            "license": "Apache-2.0",
+            "language": "python",
+            "fetched_at": fetched_at,
+            "manifest_sha256": manifest_digest(&manifest_path),
+            "source_archive_sha256": SOURCE_SHA256,
+            "issue_snapshot_sha256": SNAPSHOT_SHA256,
+            "dependency_cache_manifest_sha256": DEPENDENCY_CACHE_SHA256,
+            "reproduction_evidence_sha256": reproduction_sha256,
+            "reproduction_fixture_sha256": fixture_sha256,
+            "reproduction_output_sha256": output_sha256,
+            "extracted_tree_sha256": TREE_SHA256,
+            "failed_rows": 0,
+            "authority_level": "L1",
+            "network": "none",
+            "git_history_present": false,
+            "oracle_present": false,
+            "credentials_present": false,
+            "campaign_root_mounted": false,
+            "repair_pack_read_only": true,
+            "scratch_read_write": true,
+            "third_party_mutation_authorized": false,
+            "network_accessed": false,
+            "git_invoked": false,
+            "github_read_performed": false,
+            "github_write_performed": false,
+            "repair_executed": false,
+            "mutation_performed": false,
+            "executes_work": false,
+            "approves_work": false,
+        })
+    );
+}
+
+#[test]
+fn rejects_python_across_the_v2_v3_schema_boundary() {
+    let temp = tempfile::tempdir().unwrap();
+    let (mut manifest, reproduction) = valid_v3_python_pack();
+    manifest["schema_version"] = json!("ao2.github-issue-repair-pack.v2");
+    let path = write_v2_pack(&temp, &mut manifest, &reproduction);
+
+    assert_rejected(validate(&path, temp.path()));
+}
+
+#[test]
+fn preserves_v2_go_identifier_compatibility_beyond_the_v3_python_bound() {
+    let temp = tempfile::tempdir().unwrap();
+    let (mut manifest, mut reproduction) = valid_v2_pack();
+    let identifier = format!("Test{}", "A".repeat(125));
+    let fixture_path = "long_identifier_test.go";
+    manifest["language"] = json!("go");
+    manifest["toolchain"] = json!({"name": "go", "version": "1.26.4"});
+    manifest["reproduction_fixture"]["path"] = json!(fixture_path);
+    reproduction["command_argv"] = json!(["go", "test", ".", "-run", format!("^{identifier}$")]);
+    reproduction["fixture_install_path"] = json!(fixture_path);
+    reproduction["test_identifier"] = json!(identifier);
+    reproduction["toolchain"] = manifest["toolchain"].clone();
+    let path = write_v2_pack(&temp, &mut manifest, &reproduction);
+    fs::rename(
+        temp.path().join(REPRODUCTION_FIXTURE_PATH),
+        temp.path().join(fixture_path),
+    )
+    .unwrap();
+
+    let output = validate(&path, temp.path());
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn rejects_v3_python_wrappers_broad_targets_and_unbound_fixtures() {
+    let mutations: &[fn(&mut Value)] = &[
+        |value| {
+            value["command_argv"] = json!([
+                "python3",
+                "-m",
+                "pytest",
+                "tests/test_withdrawn_issue.py::test_withdrawn_issue"
+            ])
+        },
+        |value| value["command_argv"] = json!(["python", "-c", "import pytest"]),
+        |value| value["command_argv"] = json!(["sh", "-c", "python -m pytest"]),
+        |value| value["command_argv"] = json!(["python", "-m", "pytest"]),
+        |value| {
+            value["command_argv"] =
+                json!(["python", "-m", "pytest", "tests/test_withdrawn_issue.py"])
+        },
+        |value| {
+            value["command_argv"] = json!([
+                "python",
+                "-m",
+                "pytest",
+                "tests/test_withdrawn_issue.py::test_withdrawn_issue",
+                "-q"
+            ])
+        },
+        |value| {
+            value["command_argv"] =
+                json!(["python", "-m", "unittest", "tests.test_withdrawn_issue"])
+        },
+        |value| value["fixture_install_path"] = json!("../tests/test_withdrawn_issue.py"),
+        |value| value["fixture_install_path"] = json!("/tmp/test_withdrawn_issue.py"),
+        |value| value["fixture_install_path"] = json!(r"tests\test_withdrawn_issue.py"),
+        |value| value["fixture_install_path"] = json!("tests//test_withdrawn_issue.py"),
+        |value| value["fixture_install_path"] = json!("tests/test_withdrawn_issue.txt"),
+        |value| value["fixture_install_path"] = json!("tests/withdrawn_issue.py"),
+        |value| value["test_identifier"] = json!("withdrawn_issue"),
+        |value| value["test_identifier"] = json!("test_withdrawn_issue[param]"),
+        |value| value["test_identifier"] = json!("test_other_issue"),
+    ];
+    for mutation in mutations {
+        let temp = tempfile::tempdir().unwrap();
+        let (mut manifest, mut reproduction) = valid_v3_python_pack();
+        mutation(&mut reproduction);
+        let path = write_v2_pack(&temp, &mut manifest, &reproduction);
+        assert_rejected(validate(&path, temp.path()));
+    }
+}
+
+#[test]
+fn rejects_v3_python_identity_digest_freshness_toolchain_and_safety_drift() {
+    let mutations: &[fn(&mut Value, &mut Value)] = &[
+        |_, evidence| evidence["source_sha"] = json!("1111111111111111111111111111111111111111"),
+        |_, evidence| evidence["fixture_sha256"] = json!(TREE_SHA256),
+        |_, evidence| evidence["output_sha256"] = json!(TREE_SHA256),
+        |_, evidence| {
+            evidence["completed_at"] =
+                json!((Utc::now() - Duration::days(8)).to_rfc3339_opts(SecondsFormat::Secs, true))
+        },
+        |manifest, evidence| {
+            manifest["toolchain"]["name"] = json!("python3");
+            evidence["toolchain"]["name"] = json!("python3");
+        },
+        |manifest, _| manifest["safety"]["network"] = json!("host"),
+        |manifest, _| manifest["safety"]["credentials_present"] = json!(true),
+        |manifest, _| manifest["known_fix_fetched"] = json!(true),
+    ];
+    for mutation in mutations {
+        let temp = tempfile::tempdir().unwrap();
+        let (mut manifest, mut reproduction) = valid_v3_python_pack();
+        mutation(&mut manifest, &mut reproduction);
+        let path = write_v2_pack(&temp, &mut manifest, &reproduction);
+        assert_rejected(validate(&path, temp.path()));
+    }
+}
+
+#[test]
+fn rejects_v3_python_missing_malformed_or_oversized_evidence() {
+    for missing in [
+        "reproduction_evidence",
+        "reproduction_fixture",
+        "reproduction_output",
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        let (mut manifest, reproduction) = valid_v3_python_pack();
+        manifest.as_object_mut().unwrap().remove(missing);
+        let path = if missing == "reproduction_evidence" {
+            write_pack(&temp, &manifest)
+        } else {
+            write_v2_pack(&temp, &mut manifest, &reproduction)
+        };
+        assert_rejected(validate(&path, temp.path()));
+    }
+
+    let temp = tempfile::tempdir().unwrap();
+    let (mut manifest, _) = valid_v3_python_pack();
+    let path = write_v2_pack_bytes_at(temp.path(), &mut manifest, b"{");
+    assert_rejected(validate(&path, temp.path()));
+
+    let temp = tempfile::tempdir().unwrap();
+    let (mut manifest, _) = valid_v3_python_pack();
+    manifest["reproduction_evidence"]["size_bytes"] = json!(65_537_u64);
+    let path = write_pack(&temp, &manifest);
+    fs::write(temp.path().join(REPRODUCTION_PATH), vec![b'x'; 65_537]).unwrap();
+    assert_rejected(validate(&path, temp.path()));
 }
 
 #[test]
