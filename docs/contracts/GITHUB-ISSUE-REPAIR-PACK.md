@@ -267,6 +267,41 @@ and root replacement, then verifies each SHA-256 and semantic object. Missing,
 oversized, digest-altered, or semantically divergent evidence fails before a
 passing result.
 
+The v2 bundle adds one explicit `process_lifecycle` qualification profile for
+repairs that own a child process or transport lifecycle. It preserves every v1
+field and adds:
+
+```text
+schema_version=ao2.github-issue-repair-qualification-bundle.v2
+qualification_profile=process_lifecycle
+process_lifecycle.completed_at
+process_lifecycle.evidence_sha256
+process_lifecycle.process_death_observed=true
+process_lifecycle.list_tools_failure_typed=true
+process_lifecycle.tool_call_failure_typed=true
+process_lifecycle.lifecycle_wakeup_observed=true
+process_lifecycle.disconnected_state_truthful=true
+process_lifecycle.explicit_close_passed=true
+process_lifecycle.repeated_close_passed=true
+process_lifecycle.initialization_failure_passed=true
+process_lifecycle.reinitialization_passed=true
+process_lifecycle.orphan_processes=0
+process_lifecycle.timeout_seconds=1..300
+```
+
+V2 requires an eighth direct sibling, `process-lifecycle.json`, bound with the
+same repository, issue, source, candidate, digest, and strict-JSON rules as the
+other evidence files. Its completion timestamp falls after focused regression
+and before full-suite completion. Missing, failed, stale, reordered, altered,
+or linked lifecycle evidence rejects the bundle.
+
+V1 remains the generic repair qualification contract and rejects v2-only
+fields. A producer that classifies a repair as process-lifecycle-sensitive must
+use v2; passing v1 does not make a process-lifecycle claim. A v2 success emits
+`ao2.github-issue-repair-qualification.v2` and records the profile, lifecycle
+evidence digest, zero orphan count, bounded timeout, and
+`process_lifecycle_passed=true`.
+
 Qualification requires a nonzero reproduction exit, a nonzero focused
 baseline exit, a zero focused candidate exit, no changed or candidate-only
 full-suite failure, no unresolved P1 or P2 review finding, and an open,

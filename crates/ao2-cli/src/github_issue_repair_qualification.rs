@@ -5,12 +5,24 @@ use super::github_issue_repair_result::{
 use crate::cli::RepairQualificationCommand;
 use anyhow::{bail, Context, Result};
 use chrono::{DateTime, FixedOffset};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::Path;
 
-const BUNDLE_SCHEMA: &str = "ao2.github-issue-repair-qualification-bundle.v1";
-const READBACK_SCHEMA: &str = "ao2.github-issue-repair-qualification.v1";
+#[path = "github_issue_repair_qualification/evidence_files.rs"]
+mod evidence_files;
+#[path = "github_issue_repair_qualification/process_lifecycle.rs"]
+mod process_lifecycle;
+
+use evidence_files::{
+    validate_digests as validate_artifacts, validate_files as validate_artifact_files,
+};
+use process_lifecycle::{validate as validate_process_lifecycle, ProcessLifecycle};
+
+const BUNDLE_SCHEMA_V1: &str = "ao2.github-issue-repair-qualification-bundle.v1";
+const BUNDLE_SCHEMA_V2: &str = "ao2.github-issue-repair-qualification-bundle.v2";
+const READBACK_SCHEMA_V1: &str = "ao2.github-issue-repair-qualification.v1";
+const READBACK_SCHEMA_V2: &str = "ao2.github-issue-repair-qualification.v2";
 const MAX_INPUT_BYTES: u64 = 65_536;
 
 #[derive(Debug, Deserialize)]
@@ -23,6 +35,8 @@ struct Bundle {
     issue_number: u64,
     baseline_source_sha: String,
     candidate_sha: String,
+    #[serde(default)]
+    qualification_profile: Option<String>,
     source: Source,
     reproduction: Reproduction,
     regression: Regression,
@@ -30,6 +44,8 @@ struct Bundle {
     candidate_seal: CandidateSeal,
     review: Review,
     draft_pr: DraftPr,
+    #[serde(default)]
+    process_lifecycle: Option<ProcessLifecycle>,
     artifact_sha256: BTreeMap<String, String>,
     safety: Safety,
 }
@@ -204,6 +220,18 @@ struct Readback<'a> {
     draft_pr_parent_repository_id: &'a str,
     draft_pr_number: u64,
     draft_pr_head_sha: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    qualification_profile: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    process_lifecycle_completed_at: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    process_lifecycle_evidence_sha256: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    process_lifecycle_passed: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    orphan_processes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    timeout_seconds: Option<u64>,
     artifact_sha256: &'a BTreeMap<String, String>,
     bundle_sha256: &'a str,
     qualification_digest: String,
@@ -241,7 +269,7 @@ pub(crate) fn run(command: RepairQualificationCommand) -> Result<()> {
                     println!(
                         "{}",
                         serde_json::to_string(&RejectedReadback {
-                            schema_version: READBACK_SCHEMA,
+                            schema_version: READBACK_SCHEMA_V1,
                             result: "repair_rejected",
                             rejection_reason: "invalid_bundle",
                             mutation_performed: false,
@@ -279,9 +307,15 @@ fn verify(path: &Path, json: bool) -> Result<()> {
     validate_artifact_files(&root, bundle_name, &bundle)?;
     root.validate_root_identity()?;
     let bundle_sha256 = digest(&bytes);
-    let qualification_digest = digest(format!("{READBACK_SCHEMA}\n{bundle_sha256}").as_bytes());
+    let readback_schema = if bundle.schema_version == BUNDLE_SCHEMA_V2 {
+        READBACK_SCHEMA_V2
+    } else {
+        READBACK_SCHEMA_V1
+    };
+    let qualification_digest = digest(format!("{readback_schema}\n{bundle_sha256}").as_bytes());
+    let process_lifecycle = bundle.process_lifecycle.as_ref();
     let readback = Readback {
-        schema_version: READBACK_SCHEMA,
+        schema_version: readback_schema,
         result: "repair_qualified",
         repository: &bundle.repository,
         upstream_repository_id: &bundle.upstream_repository_id,
@@ -328,6 +362,13 @@ fn verify(path: &Path, json: bool) -> Result<()> {
         draft_pr_parent_repository_id: &bundle.draft_pr.parent_repository_id,
         draft_pr_number: bundle.draft_pr.number,
         draft_pr_head_sha: &bundle.draft_pr.head_sha,
+        qualification_profile: bundle.qualification_profile.as_deref(),
+        process_lifecycle_completed_at: process_lifecycle.map(|value| value.completed_at.as_str()),
+        process_lifecycle_evidence_sha256: process_lifecycle
+            .map(|value| value.evidence_sha256.as_str()),
+        process_lifecycle_passed: process_lifecycle.map(|_| true),
+        orphan_processes: process_lifecycle.map(|value| value.orphan_processes),
+        timeout_seconds: process_lifecycle.map(|value| value.timeout_seconds),
         artifact_sha256: &bundle.artifact_sha256,
         bundle_sha256: &bundle_sha256,
         qualification_digest,
@@ -353,8 +394,23 @@ fn verify(path: &Path, json: bool) -> Result<()> {
 }
 
 fn validate(bundle: &Bundle) -> Result<()> {
-    if bundle.schema_version != BUNDLE_SCHEMA {
-        bail!("unsupported qualification schema_version");
+    match bundle.schema_version.as_str() {
+        BUNDLE_SCHEMA_V1 => {
+            if bundle.qualification_profile.is_some() || bundle.process_lifecycle.is_some() {
+                bail!("v1 qualification must not contain a process lifecycle profile");
+            }
+        }
+        BUNDLE_SCHEMA_V2 => {
+            if bundle.qualification_profile.as_deref() != Some("process_lifecycle") {
+                bail!("v2 qualification_profile must be process_lifecycle");
+            }
+            let lifecycle = bundle
+                .process_lifecycle
+                .as_ref()
+                .context("process_lifecycle is required for the v2 profile")?;
+            validate_process_lifecycle(lifecycle)?;
+        }
+        _ => bail!("unsupported qualification schema_version"),
     }
     validate_repository(&bundle.repository)?;
     validate_text("operator_owner", &bundle.operator_owner, 128)?;
@@ -389,7 +445,7 @@ fn validate(bundle: &Bundle) -> Result<()> {
         &bundle.draft_pr,
     )?;
     validate_lifecycle_order(bundle)?;
-    validate_artifacts(&bundle.artifact_sha256)?;
+    validate_artifacts(&bundle.artifact_sha256, bundle.process_lifecycle.is_some())?;
     validate_safety(&bundle.safety)?;
     Ok(())
 }
@@ -546,15 +602,20 @@ fn validate_draft(
 }
 
 fn validate_lifecycle_order(bundle: &Bundle) -> Result<()> {
-    let timestamps = [
-        ("source", &bundle.source.fetched_at),
-        ("reproduction", &bundle.reproduction.completed_at),
-        ("regression", &bundle.regression.completed_at),
-        ("full_suite", &bundle.full_suite.completed_at),
-        ("candidate_seal", &bundle.candidate_seal.sealed_at),
-        ("review", &bundle.review.completed_at),
-        ("draft_pr", &bundle.draft_pr.captured_at),
+    let mut timestamps = vec![
+        ("source", bundle.source.fetched_at.as_str()),
+        ("reproduction", bundle.reproduction.completed_at.as_str()),
+        ("regression", bundle.regression.completed_at.as_str()),
     ];
+    if let Some(lifecycle) = &bundle.process_lifecycle {
+        timestamps.push(("process_lifecycle", lifecycle.completed_at.as_str()));
+    }
+    timestamps.extend([
+        ("full_suite", bundle.full_suite.completed_at.as_str()),
+        ("candidate_seal", bundle.candidate_seal.sealed_at.as_str()),
+        ("review", bundle.review.completed_at.as_str()),
+        ("draft_pr", bundle.draft_pr.captured_at.as_str()),
+    ]);
     let mut previous: Option<(&str, DateTime<FixedOffset>)> = None;
     for (label, value) in timestamps {
         let parsed = DateTime::parse_from_rfc3339(value)
@@ -565,105 +626,6 @@ fn validate_lifecycle_order(bundle: &Bundle) -> Result<()> {
             }
         }
         previous = Some((label, parsed));
-    }
-    Ok(())
-}
-
-fn validate_artifacts(values: &BTreeMap<String, String>) -> Result<()> {
-    if values.len() != 7 {
-        bail!("artifact_sha256 must contain exactly seven evidence roles");
-    }
-    for required in [
-        "source.json",
-        "reproduction.json",
-        "regression.json",
-        "full-suite.json",
-        "candidate-seal.json",
-        "review.json",
-        "draft-pr.json",
-    ] {
-        if !values.contains_key(required) {
-            bail!("artifact_sha256 is missing required evidence roles");
-        }
-    }
-    for (name, value) in values {
-        if name.is_empty()
-            || name.len() > 128
-            || name.contains("..")
-            || !name.bytes().all(|byte| {
-                byte.is_ascii_lowercase()
-                    || byte.is_ascii_digit()
-                    || matches!(byte, b'_' | b'-' | b'.')
-            })
-        {
-            bail!("artifact digest names must be bounded safe identifiers");
-        }
-        if !is_digest(value) {
-            bail!("artifact values must use lowercase sha256:<64 hex>");
-        }
-    }
-    Ok(())
-}
-
-fn validate_artifact_files(root: &RootGuard, bundle_name: &str, bundle: &Bundle) -> Result<()> {
-    validate_artifact(root, bundle_name, bundle, "source.json", &bundle.source)?;
-    validate_artifact(
-        root,
-        bundle_name,
-        bundle,
-        "reproduction.json",
-        &bundle.reproduction,
-    )?;
-    validate_artifact(
-        root,
-        bundle_name,
-        bundle,
-        "regression.json",
-        &bundle.regression,
-    )?;
-    validate_artifact(
-        root,
-        bundle_name,
-        bundle,
-        "full-suite.json",
-        &bundle.full_suite,
-    )?;
-    validate_artifact(
-        root,
-        bundle_name,
-        bundle,
-        "candidate-seal.json",
-        &bundle.candidate_seal,
-    )?;
-    validate_artifact(root, bundle_name, bundle, "review.json", &bundle.review)?;
-    validate_artifact(root, bundle_name, bundle, "draft-pr.json", &bundle.draft_pr)?;
-    Ok(())
-}
-
-fn validate_artifact<T: DeserializeOwned + PartialEq>(
-    root: &RootGuard,
-    bundle_name: &str,
-    bundle: &Bundle,
-    name: &str,
-    expected_evidence: &T,
-) -> Result<()> {
-    if name == bundle_name {
-        bail!("qualification bundle must not reference itself");
-    }
-    let bytes = read_guarded_file(root, name, MAX_INPUT_BYTES, name)?;
-    if digest(&bytes) != bundle.artifact_sha256[name] {
-        bail!("artifact digest mismatch for {name}");
-    }
-    let artifact: BoundArtifact<T> = serde_json::from_slice(&bytes)
-        .with_context(|| format!("parse strict qualification artifact {name}"))?;
-    if artifact.repository != bundle.repository
-        || artifact.upstream_repository_id != bundle.upstream_repository_id
-        || artifact.issue_number != bundle.issue_number
-        || artifact.baseline_source_sha != bundle.baseline_source_sha
-        || artifact.candidate_sha != bundle.candidate_sha
-        || artifact.evidence != *expected_evidence
-    {
-        bail!("artifact semantics mismatch for {name}");
     }
     Ok(())
 }
