@@ -126,16 +126,10 @@ fn read_server_port(child: &mut std::process::Child) -> u16 {
 }
 
 fn generate_native_signing_key(path: &Path, bits: usize) {
-    let output = Command::new("openssl")
-        .args([
-            "genpkey",
-            "-algorithm",
-            "RSA",
-            "-pkeyopt",
-            &format!("rsa_keygen_bits:{bits}"),
-            "-out",
-            path.to_str().unwrap(),
-        ])
+    let output = Command::new(env!("CARGO_BIN_EXE_ao2"))
+        .args(["workbench", "support-keygen", "--out"])
+        .arg(path)
+        .args(["--bits", &bits.to_string()])
         .output()
         .unwrap();
     assert!(
@@ -143,6 +137,11 @@ fn generate_native_signing_key(path: &Path, bits: usize) {
         "stdout={}\nstderr={}",
         stdout(&output),
         stderr(&output)
+    );
+    assert!(
+        path.is_file(),
+        "native signing key exists: {}",
+        path.display()
     );
 }
 
