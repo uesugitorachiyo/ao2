@@ -1,0 +1,89 @@
+{
+  "schema_version": "ao.compatibility.execution-receipt-vector.v1",
+  "vector_id": "ao2-v0.5.10-execution-receipt-to-control-plane-evidence-event",
+  "edge": "ao2.execution_receipt -> ao2-control-plane.evidence_event",
+  "producer": {
+    "repository": "ao2",
+    "version": "v0.5.10",
+    "release_url": "https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.10",
+    "tag_target": "9f4f8a8cf596127a982627b4af25c90a9a842095",
+    "approved_manifest_digest": "a44bb65d59f46f3c3bf469dc7b26f0688fbf640f4f04ee9932a5a8fe186aeee3"
+  },
+  "consumer": {
+    "repository": "ao2-control-plane",
+    "version": "v0.1.19",
+    "release_url": "https://github.com/uesugitorachiyo/ao2-control-plane/releases/tag/v0.1.19",
+    "tag_target": "5de3541e9007e12d95b125e7f911c02932e21479"
+  },
+  "native_qualification": {
+    "ao2_version": "v0.5.10",
+    "control_plane_version": "v0.1.19",
+    "hosted_windows_run_id": 31279647320,
+    "macos_summary_sha256": "5bf46636400d9f4709ab901f010c57fd329500d858bcea829f8f393dd93d9ba6",
+    "linux_summary_sha256": "c22f56c4e3e6f1cdac5af698f0a7ec3ed8f18dd5ddeb9ae6b93b5f24de332cd3",
+    "physical_windows_summary_sha256": "ac30e17c0eaa338ad2672a55736ffb90c82b86d1623f2a41f8d991e0a017a353",
+    "architecture_edges_tested": 16,
+    "architecture_edges_failed": 0
+  },
+  "release_evidence": {
+    "promotion_plan_sha256": "0e1ae4663eb09c3135b66326177855cb8d93bab84d776b130114c5d2c344dd21",
+    "physical_windows_evidence_sha256": "a46f869c2c3512746ae686d65935b1612c1ef1ac0788f16bcd7de0d719268d81"
+  },
+  "execution_receipt": {
+    "schema_version": "ao2.execution-receipt.v1",
+    "receipt_id": "ao2-v0.5.10-provider-free-doctor-smoke",
+    "status": "passed",
+    "workflow": "provider_free_doctor_smoke",
+    "command": "ao2 doctor --json",
+    "provider_execution_required": false,
+    "evidence_path": "promotion-plan.json",
+    "release": {
+      "version": "v0.5.10",
+      "tag_target": "9f4f8a8cf596127a982627b4af25c90a9a842095",
+      "approved_manifest_digest": "a44bb65d59f46f3c3bf469dc7b26f0688fbf640f4f04ee9932a5a8fe186aeee3"
+    },
+    "authority": {
+      "requires_provider_credentials": false,
+      "approves_execution": false,
+      "permits_release": false
+    }
+  },
+  "expected_control_plane_event": {
+    "schema_version": "ao2-control-plane.evidence-event.v1",
+    "event_id": "ao2-v0.5.10-provider-free-doctor-smoke-observation",
+    "event_type": "ao2.execution_receipt.observed",
+    "producer_receipt_id": "ao2-v0.5.10-provider-free-doctor-smoke",
+    "producer_schema_version": "ao2.execution-receipt.v1",
+    "producer_status": "passed",
+    "producer_release_version": "v0.5.10",
+    "producer_release_tag_target": "9f4f8a8cf596127a982627b4af25c90a9a842095",
+    "observed_evidence_path": "promotion-plan.json",
+    "status": "accepted",
+    "authority": {
+      "control_plane_approves_execution": false,
+      "mutates_ao2_artifacts": false,
+      "permits_release": false
+    }
+  },
+  "evidence_binding": {
+    "request_id": "ao2-v0.5.10-provider-free-doctor-smoke",
+    "observation_id": "ao2-v0.5.10-provider-free-doctor-smoke-observation",
+    "artifact_id": "promotion-plan.json",
+    "producer_schema": "ao2.execution-receipt.v1",
+    "consumer_schema": "ao2-control-plane.evidence-event.v1",
+    "execution_receipt_sha256": "355c1543695b7af01d485b004ec86003cb84887589b29520e902fcd654505703",
+    "expected_control_plane_event_sha256": "4699d618c7cd568ae08c8206af756ff5f45314d03ea35f91036bf768ae555d8c",
+    "generated_at_utc": "2026-08-09T02:55:00Z",
+    "fresh_until_utc": "2026-08-10T02:55:00Z",
+    "producer_verifier_base_sha": "e77a4927f42533ae6d5fd8c1de5d43c4d6a10f2a",
+    "consumer_verifier_base_sha": "5dc00501419be9f634db047cfa5b92d24aaa1129"
+  },
+  "boundary": {
+    "provider_pilot": false,
+    "external_user_contact": false,
+    "release_or_tag_created": false,
+    "upload_or_deployment": false,
+    "rsi_work": false,
+    "rsi_remains_denied": true
+  }
+}
