@@ -6,12 +6,13 @@ use std::path::Path;
 use std::process::{Command, Output};
 
 const SOURCE_BYTES: &[u8] = b"sanitized source archive";
-const SNAPSHOT_BYTES: &[u8] = b"sanitized issue snapshot";
+const SNAPSHOT_BYTES: &[u8] =
+    br#"{"number":17,"url":"https://github.com/example/project/issues/17"}"#;
 const DEPENDENCY_CACHE_BYTES: &[u8] = b"sanitized dependency cache manifest";
 const SOURCE_SHA256: &str =
     "sha256:0a7e768fe4cbff8db5cb4b847d3b240aea390866f090a4e9bb8a5619cff24709";
 const SNAPSHOT_SHA256: &str =
-    "sha256:efcd0e1fcc4d1a063ed40f63f0457aac63a57aa7e4b7e14d78b71e09b50b0e4b";
+    "sha256:2b0cef8cddfcf8606b5c16f5b6bb39d5340f1d60946cdc05847f090f70e90b16";
 const DEPENDENCY_CACHE_SHA256: &str =
     "sha256:832a373b36cffe46c94a00b2f5c31b1cd7ad76422b97cb431045274373c1a116";
 const TREE_SHA256: &str = "sha256:1111111111111111111111111111111111111111111111111111111111111111";
@@ -183,6 +184,12 @@ fn write_v2_pack(
     reproduction: &Value,
 ) -> std::path::PathBuf {
     write_v2_pack_at(temp.path(), manifest, reproduction)
+}
+
+fn replace_snapshot(temp: &tempfile::TempDir, manifest: &mut Value, bytes: &[u8]) {
+    manifest["issue_snapshot"]["size_bytes"] = json!(bytes.len());
+    manifest["issue_snapshot"]["sha256"] = json!(format!("sha256:{:x}", Sha256::digest(bytes)));
+    fs::write(temp.path().join("issue.json"), bytes).unwrap();
 }
 
 fn validate(manifest: &Path, root: &Path) -> Output {
@@ -394,6 +401,46 @@ fn validates_v3_python_only_with_a_bound_direct_pytest_target() {
             "approves_work": false,
         })
     );
+}
+
+#[test]
+fn rejects_v3_manifest_issue_number_mismatched_with_snapshot() {
+    let temp = tempfile::tempdir().unwrap();
+    let (mut manifest, reproduction) = valid_v3_python_pack();
+    manifest["issue_number"] = json!(18);
+    let path = write_v2_pack(&temp, &mut manifest, &reproduction);
+
+    assert_rejected(validate(&path, temp.path()));
+}
+
+#[test]
+fn rejects_v3_issue_snapshot_wrong_repository_url() {
+    let temp = tempfile::tempdir().unwrap();
+    let (mut manifest, reproduction) = valid_v3_python_pack();
+    let bytes = br#"{"number":17,"url":"https://github.com/other/project/issues/17"}"#;
+    let path = write_v2_pack(&temp, &mut manifest, &reproduction);
+    replace_snapshot(&temp, &mut manifest, bytes);
+    fs::write(&path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+
+    assert_rejected(validate(&path, temp.path()));
+}
+
+#[test]
+fn rejects_v3_issue_snapshot_malformed_duplicate_or_missing_identity() {
+    for bytes in [
+        br#"{"number":17,"url":"https://github.com/example/project/issues/17""#.as_slice(),
+        br#"{"number":17,"number":17,"url":"https://github.com/example/project/issues/17"}"#
+            .as_slice(),
+        br#"{"number":17}"#.as_slice(),
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        let (mut manifest, reproduction) = valid_v3_python_pack();
+        let path = write_v2_pack(&temp, &mut manifest, &reproduction);
+        replace_snapshot(&temp, &mut manifest, bytes);
+        fs::write(&path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+
+        assert_rejected(validate(&path, temp.path()));
+    }
 }
 
 #[test]

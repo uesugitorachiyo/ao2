@@ -62,6 +62,12 @@ Digests use lowercase `sha256:<64 hex>` syntax.
 Version 1 rejects every reproduction artifact, preserving its original strict
 shape. Versions 2 and 3 reject any missing or null reproduction artifact.
 
+For version 3, `issue_snapshot` is JSON containing unique required `number` and
+`url` fields. Other sanitized issue fields are allowed. `number` must equal
+`issue_number`, and `url` must equal
+`https://github.com/<repository>/issues/<issue_number>`. Versions 1 and 2 retain
+their historical byte-and-digest binding without this semantic requirement.
+
 ## Version 2 And 3 Reproduction Evidence
 
 The digest-bound reproduction artifact is strict JSON with schema version
