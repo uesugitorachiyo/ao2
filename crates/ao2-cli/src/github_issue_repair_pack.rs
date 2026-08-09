@@ -83,6 +83,12 @@ struct Artifact {
 }
 
 #[derive(Debug, Deserialize)]
+struct IssueSnapshotIdentity {
+    number: u64,
+    url: String,
+}
+
+#[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Toolchain {
     name: String,
@@ -204,6 +210,18 @@ fn validate(manifest_path: &Path, root_path: &Path, json: bool) -> Result<()> {
         ISSUE_SNAPSHOT_MAX_BYTES,
         "issue_snapshot",
     )?;
+    if version == reproduction::Version::V3 {
+        let (snapshot_bytes, identity) = read_regular_file(
+            &root,
+            &manifest.issue_snapshot.path,
+            ISSUE_SNAPSHOT_MAX_BYTES,
+            "issue_snapshot",
+        )?;
+        if identity != snapshot_identity {
+            bail!("issue_snapshot identity changed before identity validation");
+        }
+        validate_issue_snapshot_identity(&manifest, &snapshot_bytes)?;
+    }
     let (dependency_cache_verified, dependency_cache_identity) = verify_artifact(
         &root,
         &manifest.dependency_cache_manifest,
@@ -565,6 +583,22 @@ fn verify_artifact(
         bail!("{label} SHA-256 does not match manifest");
     }
     Ok((verified, identity))
+}
+
+fn validate_issue_snapshot_identity(manifest: &RepairPackManifest, bytes: &[u8]) -> Result<()> {
+    let snapshot: IssueSnapshotIdentity =
+        serde_json::from_slice(bytes).context("parse strict issue_snapshot identity JSON")?;
+    if snapshot.number != manifest.issue_number {
+        bail!("issue_snapshot number does not match manifest issue_number");
+    }
+    let expected_url = format!(
+        "https://github.com/{}/issues/{}",
+        manifest.repository, manifest.issue_number
+    );
+    if snapshot.url != expected_url {
+        bail!("issue_snapshot URL does not match manifest repository and issue_number");
+    }
+    Ok(())
 }
 
 fn read_regular_file(
