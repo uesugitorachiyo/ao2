@@ -85,9 +85,41 @@ The task payload does not provide command text for that fallback.
 `windows_stack_qualification` is a fixed native-Windows verification action.
 Its payload may only select:
 
-- `mode`: `diagnostic`, `targeted`, or `full`
+- `mode`: `diagnostic`, `targeted`, `full`, `physical_unique`, or `toolchain`
 - `repositories` or `repos`: names from the canonical AO stack inventory
 - `timeout_seconds`: a bounded value from 30 through 3600 seconds
+
+`physical_unique` additionally requires `physical_host_lease_base64` and
+`physical_host_lease_sha256`. The decoded strict JSON contract is
+`ao2.physical-host-exclusive-lease.v1`, is limited to 16 KiB, rejects duplicate
+or unknown keys, and binds the node, operator approval record, purpose, issuance,
+expiry, heartbeat, exclusive-use preflight, command profile, unique scratch
+root, and cleanup root. It must report zero active interactive sessions and no
+overlap, abort, release, broad process termination, or graphical-session
+mutation. The lease lasts at most 15 minutes and its heartbeat may be at most
+two minutes old. Its digest, ID, and scratch root are copied into the sanitized
+qualification result. A missing, altered, stale, unsafe, or inapplicable lease
+fails before any child command runs.
+
+The lease supplements the signed execution authorization; it does not replace
+it or grant release, deployment, publication, provider, credential, arbitrary
+command, session-management, or cleanup authority.
+
+The same parser can validate a regular non-symlink lease file offline on any
+host without starting the worker or contacting the Control Plane:
+
+```text
+python scripts/ao2_windows_outbound_worker.py \
+  --validate-physical-host-lease /bounded/scratch/lease.json \
+  --physical-host-lease-sha256 <sha256> \
+  --physical-host-lease-profile ubuntu_stack_qualification:lifecycle_noop \
+  --node-id <physical-node-id> \
+  --factory-root /bounded/factory
+```
+
+The profile selector accepts only the fixed Windows physical qualification and
+Ubuntu no-op lifecycle profiles. The worker action always uses the Windows
+profile; the Ubuntu profile is available only to an offline lifecycle wrapper.
 
 The payload must not provide command text, PowerShell text, executable paths,
 working directories, shell fragments, or environment variables. Repository

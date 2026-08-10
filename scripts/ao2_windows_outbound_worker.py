@@ -53,6 +53,14 @@ DEFAULT_STACK_QUALIFICATION_TIMEOUT_SECONDS = 600.0
 MIN_STACK_QUALIFICATION_TIMEOUT_SECONDS = 30.0
 MAX_STACK_QUALIFICATION_TIMEOUT_SECONDS = 3600.0
 DEFAULT_OUTPUT_LIMIT_BYTES = 64 * 1024
+PHYSICAL_HOST_LEASE_SCHEMA = "ao2.physical-host-exclusive-lease.v1"
+MAX_PHYSICAL_HOST_LEASE_BYTES = 16 * 1024
+MAX_PHYSICAL_HOST_LEASE_TTL_SECONDS = 15 * 60
+MAX_PHYSICAL_HOST_HEARTBEAT_AGE_SECONDS = 2 * 60
+PHYSICAL_HOST_LEASE_PROFILES = {
+    "windows_stack_qualification:physical_unique": "windows_stack_qualification",
+    "ubuntu_stack_qualification:lifecycle_noop": "ubuntu_stack_qualification",
+}
 ALLOWLISTED_ACTIONS = (
     "status",
     "publish_capability",
@@ -90,6 +98,8 @@ STACK_QUALIFICATION_ALLOWED_PARAMETERS = {
     "global_deadline_seconds",
     "reuse_from_request_id",
     "reuse_profile_digest",
+    "physical_host_lease_base64",
+    "physical_host_lease_sha256",
 }
 STACK_QUALIFICATION_FORBIDDEN_PARAMETERS = {
     "command",
@@ -1102,6 +1112,146 @@ def parse_utc_timestamp(value: Any) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def validate_physical_host_lease(
+    encoded: Any,
+    expected_sha256: Any,
+    *,
+    node_id: str,
+    factory_root: Path,
+    profile: str = "windows_stack_qualification:physical_unique",
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    def failed(category: str) -> dict[str, str]:
+        return {"status": "failed", "error_category": category}
+
+    if not isinstance(encoded, str):
+        return failed("malformed_lease")
+    if len(encoded) > ((MAX_PHYSICAL_HOST_LEASE_BYTES + 2) // 3) * 4 + 4:
+        return failed("lease_too_large")
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except (ValueError, TypeError):
+        return failed("malformed_lease")
+    if len(raw) > MAX_PHYSICAL_HOST_LEASE_BYTES:
+        return failed("lease_too_large")
+    if not isinstance(expected_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_sha256):
+        return failed("lease_digest_mismatch")
+    actual_sha256 = hashlib.sha256(raw).hexdigest()
+    if actual_sha256 != expected_sha256:
+        return failed("lease_digest_mismatch")
+
+    duplicate = False
+
+    def strict_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        nonlocal duplicate
+        result: dict[str, Any] = {}
+        for key, value in pairs:
+            if key in result:
+                duplicate = True
+            result[key] = value
+        return result
+
+    try:
+        lease = json.loads(raw.decode("utf-8"), object_pairs_hook=strict_object)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return failed("malformed_lease")
+    if duplicate:
+        return failed("duplicate_lease_key")
+    required_fields = {
+        "schema_version",
+        "lease_id",
+        "node_id",
+        "purpose",
+        "operator_approved",
+        "operator_approval_id",
+        "issued_at",
+        "expires_at",
+        "heartbeat_at",
+        "exclusive_use_confirmed",
+        "interactive_sessions_active",
+        "overlapping_lease_ids",
+        "command_profile",
+        "scratch_root",
+        "cleanup_roots",
+        "natural_completion_only",
+        "abort_requested",
+        "released",
+        "allow_broad_process_termination",
+        "allow_graphical_session_mutation",
+    }
+    if not isinstance(lease, dict) or set(lease) != required_fields:
+        return failed("lease_schema_mismatch")
+    if lease["schema_version"] != PHYSICAL_HOST_LEASE_SCHEMA:
+        return failed("lease_schema_mismatch")
+    lease_id = lease["lease_id"]
+    if not isinstance(lease_id, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{7,63}", lease_id):
+        return failed("lease_schema_mismatch")
+    if lease["node_id"] != node_id:
+        return failed("lease_node_mismatch")
+    expected_purpose = PHYSICAL_HOST_LEASE_PROFILES.get(profile)
+    if expected_purpose is None or lease["purpose"] != expected_purpose:
+        return failed("unsafe_command_profile")
+    if lease["operator_approved"] is not True or not isinstance(lease["operator_approval_id"], str) or not re.fullmatch(
+        r"[A-Za-z0-9][A-Za-z0-9._-]{7,127}", lease["operator_approval_id"]
+    ):
+        return failed("operator_approval_missing")
+    if lease["exclusive_use_confirmed"] is not True:
+        return failed("exclusive_use_unconfirmed")
+    if type(lease["interactive_sessions_active"]) is not int or lease["interactive_sessions_active"] != 0:
+        return failed("interactive_session_active")
+    if lease["overlapping_lease_ids"] != []:
+        return failed("overlapping_lease")
+    if lease["command_profile"] != profile:
+        return failed("unsafe_command_profile")
+    if lease["natural_completion_only"] is not True:
+        return failed("natural_completion_required")
+    if lease["allow_broad_process_termination"] is not False:
+        return failed("broad_process_termination_forbidden")
+    if lease["allow_graphical_session_mutation"] is not False:
+        return failed("graphical_session_mutation_forbidden")
+    if lease["abort_requested"] is not False:
+        return failed("lease_aborted")
+    if lease["released"] is not False:
+        return failed("lease_released")
+
+    issued_at = parse_utc_timestamp(lease["issued_at"])
+    expires_at = parse_utc_timestamp(lease["expires_at"])
+    heartbeat_at = parse_utc_timestamp(lease["heartbeat_at"])
+    if issued_at is None or expires_at is None or heartbeat_at is None:
+        return failed("lease_schema_mismatch")
+    checked_at = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    if issued_at > checked_at:
+        return failed("lease_not_yet_valid")
+    if expires_at <= checked_at:
+        return failed("lease_expired")
+    if expires_at <= issued_at or (expires_at - issued_at).total_seconds() > MAX_PHYSICAL_HOST_LEASE_TTL_SECONDS:
+        return failed("lease_ttl_out_of_bounds")
+    if heartbeat_at < issued_at or heartbeat_at > checked_at:
+        return failed("lease_schema_mismatch")
+    if (checked_at - heartbeat_at).total_seconds() > MAX_PHYSICAL_HOST_HEARTBEAT_AGE_SECONDS:
+        return failed("stale_lease_heartbeat")
+
+    lease_parent = factory_root.resolve(strict=False) / ".ao2-physical-host-leases"
+    expected_scratch = lease_parent / lease_id
+    try:
+        scratch_path = Path(lease["scratch_root"])
+    except (TypeError, ValueError, OSError):
+        return failed("unsafe_scratch_root")
+    if os.path.normcase(os.path.abspath(str(scratch_path))) != os.path.normcase(str(expected_scratch)):
+        return failed("unsafe_scratch_root")
+    if lease_parent.is_symlink() or scratch_path.is_symlink():
+        return failed("unsafe_scratch_root")
+    if lease["cleanup_roots"] != [lease["scratch_root"]]:
+        return failed("unsafe_cleanup_root")
+    return {
+        "status": "accepted",
+        "lease_id": lease_id,
+        "lease_sha256": actual_sha256,
+        "scratch_root": str(expected_scratch),
+        "expires_at": lease["expires_at"],
+    }
+
+
 def resolve_openssl() -> str | None:
     resolved = shutil.which("openssl") or shutil.which("openssl.exe")
     if resolved:
@@ -1915,6 +2065,23 @@ class WindowsOutboundWorker:
         mode = str(parameters.get("mode", "diagnostic"))
         if mode not in STACK_QUALIFICATION_MODES:
             return {"status": "failed", "error_category": "invalid_mode", "allowed_modes": list(STACK_QUALIFICATION_MODES)}
+        lease_result = None
+        lease_fields_present = any(
+            key in parameters for key in ("physical_host_lease_base64", "physical_host_lease_sha256")
+        )
+        if mode == "physical_unique":
+            if not all(key in parameters for key in ("physical_host_lease_base64", "physical_host_lease_sha256")):
+                return {"status": "failed", "error_category": "physical_host_lease_required"}
+            lease_result = validate_physical_host_lease(
+                parameters["physical_host_lease_base64"],
+                parameters["physical_host_lease_sha256"],
+                node_id=self.node_id,
+                factory_root=self.factory_root,
+            )
+            if lease_result["status"] != "accepted":
+                return lease_result
+        elif lease_fields_present:
+            return {"status": "failed", "error_category": "physical_host_lease_not_applicable"}
 
         timeout_value = parameters.get("timeout_seconds", DEFAULT_STACK_QUALIFICATION_TIMEOUT_SECONDS)
         try:
@@ -2108,6 +2275,12 @@ class WindowsOutboundWorker:
         for key, value in metadata.items():
             if value is not None:
                 result[key] = value
+        if lease_result is not None:
+            result["physical_host_lease"] = {
+                "lease_id": lease_result["lease_id"],
+                "lease_sha256": lease_result["lease_sha256"],
+                "scratch_root": lease_result["scratch_root"],
+            }
         return result
 
     def sync_ao_stack(self, parameters: dict[str, Any]) -> dict[str, Any]:
@@ -2660,7 +2833,7 @@ def acquire_single_instance_lock(state_root: Path):
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--control-plane-url", required=True)
+    parser.add_argument("--control-plane-url")
     parser.add_argument("--api-token-file")
     parser.add_argument("--api-token-env", default="AO2_CP_API_TOKEN")
     parser.add_argument("--node-id", default=os.environ.get("AO2_WINDOWS_WORKER_NODE_ID", DEFAULT_NODE_ID))
@@ -2668,11 +2841,43 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--state-root", type=Path, default=Path(os.environ.get("AO2_WINDOWS_WORKER_STATE_ROOT", str(DEFAULT_STATE_ROOT))))
     parser.add_argument("--poll-interval", type=float, default=DEFAULT_POLL_INTERVAL_SECONDS)
     parser.add_argument("--once", action="store_true")
-    return parser.parse_args(argv)
+    parser.add_argument("--validate-physical-host-lease", type=Path)
+    parser.add_argument("--physical-host-lease-sha256")
+    parser.add_argument(
+        "--physical-host-lease-profile",
+        choices=tuple(PHYSICAL_HOST_LEASE_PROFILES),
+        default="windows_stack_qualification:physical_unique",
+    )
+    args = parser.parse_args(argv)
+    if bool(args.validate_physical_host_lease) != bool(args.physical_host_lease_sha256):
+        parser.error("offline lease validation requires both lease path and SHA-256")
+    if args.validate_physical_host_lease is None and not args.control_plane_url:
+        parser.error("--control-plane-url is required unless validating a physical-host lease")
+    return args
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.validate_physical_host_lease is not None:
+        lease_path = args.validate_physical_host_lease
+        try:
+            if lease_path.is_symlink() or not lease_path.is_file():
+                raise ValueError("lease input must be a regular non-symlink file")
+            if lease_path.stat().st_size > MAX_PHYSICAL_HOST_LEASE_BYTES:
+                result = {"status": "failed", "error_category": "lease_too_large"}
+            else:
+                raw = lease_path.read_bytes()
+                result = validate_physical_host_lease(
+                    base64.b64encode(raw).decode("ascii"),
+                    args.physical_host_lease_sha256,
+                    node_id=args.node_id,
+                    factory_root=args.factory_root,
+                    profile=args.physical_host_lease_profile,
+                )
+        except (OSError, ValueError):
+            result = {"status": "failed", "error_category": "unsafe_lease_input"}
+        print(canonical_json_bytes(result).decode("utf-8"))
+        return 0 if result["status"] == "accepted" else 1
     instance_lock = acquire_single_instance_lock(args.state_root)
     transport = HttpTaskBoardTransport(args.control_plane_url, token_from_args(args))
     worker = WindowsOutboundWorker(
