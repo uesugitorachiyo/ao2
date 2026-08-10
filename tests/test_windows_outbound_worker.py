@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 import threading
@@ -28,6 +31,304 @@ def load_worker_module():
 
 def allow_test_execution(*_args, **_kwargs):
     return True, "test_fixture_authorized"
+
+
+def physical_host_lease_parameters(worker, factory_root: Path, *, now=None, **overrides):
+    now = now or datetime(2026, 8, 10, 18, 0, tzinfo=timezone.utc)
+    lease_id = "lease-windows-001"
+    scratch_root = factory_root / ".ao2-physical-host-leases" / lease_id
+    lease = {
+        "schema_version": "ao2.physical-host-exclusive-lease.v1",
+        "lease_id": lease_id,
+        "node_id": "windows-hp255_g10",
+        "purpose": "windows_stack_qualification",
+        "operator_approved": True,
+        "operator_approval_id": "approval-windows-001",
+        "issued_at": (now - timedelta(seconds=10)).isoformat().replace("+00:00", "Z"),
+        "expires_at": (now + timedelta(minutes=10)).isoformat().replace("+00:00", "Z"),
+        "heartbeat_at": now.isoformat().replace("+00:00", "Z"),
+        "exclusive_use_confirmed": True,
+        "interactive_sessions_active": 0,
+        "overlapping_lease_ids": [],
+        "command_profile": "windows_stack_qualification:physical_unique",
+        "scratch_root": str(scratch_root),
+        "cleanup_roots": [str(scratch_root)],
+        "natural_completion_only": True,
+        "abort_requested": False,
+        "released": False,
+        "allow_broad_process_termination": False,
+        "allow_graphical_session_mutation": False,
+    }
+    lease.update(overrides)
+    raw = json.dumps(lease, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return {
+        "physical_host_lease_base64": base64.b64encode(raw).decode("ascii"),
+        "physical_host_lease_sha256": hashlib.sha256(raw).hexdigest(),
+    }, now
+
+
+def test_physical_host_lease_validator_accepts_exact_exclusive_lease(tmp_path: Path) -> None:
+    worker = load_worker_module()
+    parameters, now = physical_host_lease_parameters(worker, tmp_path)
+
+    result = worker.validate_physical_host_lease(
+        parameters["physical_host_lease_base64"],
+        parameters["physical_host_lease_sha256"],
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        now=now,
+    )
+
+    assert result["status"] == "accepted"
+    assert result["lease_id"] == "lease-windows-001"
+    assert result["lease_sha256"] == parameters["physical_host_lease_sha256"]
+    assert result["scratch_root"] == str(tmp_path / ".ao2-physical-host-leases" / "lease-windows-001")
+
+
+def test_physical_host_lease_offline_cli_accepts_fixed_ubuntu_lifecycle_profile(tmp_path: Path) -> None:
+    worker = load_worker_module()
+    factory = tmp_path / "factory"
+    parameters, _ = physical_host_lease_parameters(
+        worker,
+        factory,
+        now=datetime.now(timezone.utc),
+        node_id="ubuntu-nucx",
+        purpose="ubuntu_stack_qualification",
+        command_profile="ubuntu_stack_qualification:lifecycle_noop",
+    )
+    raw = base64.b64decode(parameters["physical_host_lease_base64"])
+    lease_path = tmp_path / "lease.json"
+    lease_path.write_bytes(raw)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(WORKER_PATH),
+            "--validate-physical-host-lease",
+            str(lease_path),
+            "--physical-host-lease-sha256",
+            parameters["physical_host_lease_sha256"],
+            "--physical-host-lease-profile",
+            "ubuntu_stack_qualification:lifecycle_noop",
+            "--node-id",
+            "ubuntu-nucx",
+            "--factory-root",
+            str(factory),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert json.loads(result.stdout)["status"] == "accepted"
+
+
+def test_physical_host_lease_validator_fails_closed_for_unsafe_evidence(tmp_path: Path) -> None:
+    worker = load_worker_module()
+    cases = [
+        ({"operator_approved": False}, "operator_approval_missing"),
+        ({"node_id": "other-worker"}, "lease_node_mismatch"),
+        ({"exclusive_use_confirmed": False}, "exclusive_use_unconfirmed"),
+        ({"interactive_sessions_active": 1}, "interactive_session_active"),
+        ({"overlapping_lease_ids": ["other-lease"]}, "overlapping_lease"),
+        ({"command_profile": "arbitrary_shell"}, "unsafe_command_profile"),
+        ({"scratch_root": str(tmp_path / "outside")}, "unsafe_scratch_root"),
+        ({"cleanup_roots": [str(tmp_path)]}, "unsafe_cleanup_root"),
+        ({"natural_completion_only": False}, "natural_completion_required"),
+        ({"allow_broad_process_termination": True}, "broad_process_termination_forbidden"),
+        ({"allow_graphical_session_mutation": True}, "graphical_session_mutation_forbidden"),
+        ({"abort_requested": True}, "lease_aborted"),
+        ({"released": True}, "lease_released"),
+        ({"issued_at": "2026-08-10T18:01:00Z"}, "lease_not_yet_valid"),
+        ({"expires_at": "2026-08-10T17:59:59Z"}, "lease_expired"),
+        (
+            {"issued_at": "2026-08-10T17:57:50Z", "heartbeat_at": "2026-08-10T17:57:59Z"},
+            "stale_lease_heartbeat",
+        ),
+    ]
+    for overrides, expected_error in cases:
+        parameters, now = physical_host_lease_parameters(worker, tmp_path, **overrides)
+        result = worker.validate_physical_host_lease(
+            parameters["physical_host_lease_base64"],
+            parameters["physical_host_lease_sha256"],
+            node_id="windows-hp255_g10",
+            factory_root=tmp_path,
+            now=now,
+        )
+        assert result == {"status": "failed", "error_category": expected_error}
+
+    parameters, now = physical_host_lease_parameters(worker, tmp_path)
+    assert worker.validate_physical_host_lease(
+        parameters["physical_host_lease_base64"],
+        "0" * 64,
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        now=now,
+    )["error_category"] == "lease_digest_mismatch"
+    duplicate = b'{"schema_version":"ao2.physical-host-exclusive-lease.v1","lease_id":"a","lease_id":"b"}'
+    assert worker.validate_physical_host_lease(
+        base64.b64encode(duplicate).decode("ascii"),
+        hashlib.sha256(duplicate).hexdigest(),
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        now=now,
+    )["error_category"] == "duplicate_lease_key"
+    assert worker.validate_physical_host_lease(
+        "not-base64",
+        "0" * 64,
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        now=now,
+    )["error_category"] == "malformed_lease"
+    oversized = b"{}" + b" " * (worker.MAX_PHYSICAL_HOST_LEASE_BYTES + 1)
+    assert worker.validate_physical_host_lease(
+        base64.b64encode(oversized).decode("ascii"),
+        hashlib.sha256(oversized).hexdigest(),
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        now=now,
+    )["error_category"] == "lease_too_large"
+
+    raw = base64.b64decode(parameters["physical_host_lease_base64"])
+    lease = json.loads(raw)
+    del lease["released"]
+    missing = json.dumps(lease, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    assert worker.validate_physical_host_lease(
+        base64.b64encode(missing).decode("ascii"),
+        hashlib.sha256(missing).hexdigest(),
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        now=now,
+    )["error_category"] == "lease_schema_mismatch"
+
+    lease["released"] = False
+    lease["unknown"] = True
+    unknown = json.dumps(lease, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    assert worker.validate_physical_host_lease(
+        base64.b64encode(unknown).decode("ascii"),
+        hashlib.sha256(unknown).hexdigest(),
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        now=now,
+    )["error_category"] == "lease_schema_mismatch"
+
+
+def test_physical_host_lease_rejects_symlinked_scratch_root(tmp_path: Path) -> None:
+    worker = load_worker_module()
+    lease_parent = tmp_path / ".ao2-physical-host-leases"
+    lease_parent.mkdir()
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    try:
+        os.symlink(outside, lease_parent / "lease-windows-001", target_is_directory=True)
+    except OSError:
+        return
+    parameters, now = physical_host_lease_parameters(worker, tmp_path)
+    result = worker.validate_physical_host_lease(
+        parameters["physical_host_lease_base64"],
+        parameters["physical_host_lease_sha256"],
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        now=now,
+    )
+    assert result == {"status": "failed", "error_category": "unsafe_scratch_root"}
+
+
+def test_physical_unique_requires_and_binds_exact_host_lease(tmp_path: Path, monkeypatch) -> None:
+    worker = load_worker_module()
+    factory = tmp_path / "factory"
+    (factory / "ao2" / ".git").mkdir(parents=True)
+    commands_seen = []
+
+    def fake_run(command, **_kwargs):
+        commands_seen.append(list(command))
+        return {
+            "status": "accepted",
+            "exit_code": 0,
+            "timed_out": False,
+            "duration_seconds": 0.01,
+            "output": "ok",
+            "output_truncated": False,
+            "sanitized_stderr_category": "none",
+            "command_name": Path(command[0]).name,
+        }
+
+    monkeypatch.setattr(worker, "run_bounded_child", fake_run)
+    runtime = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=factory,
+        state=worker.WorkerState(tmp_path / "state"),
+        transport=worker.MemoryTransport(),
+    )
+    denied = runtime.run_action(
+        "windows_stack_qualification",
+        {"mode": "physical_unique", "repositories": ["ao2"]},
+        request_id="missing-lease",
+    )
+    assert denied == {"status": "failed", "error_category": "physical_host_lease_required"}
+    assert commands_seen == []
+
+    lease_parameters, _ = physical_host_lease_parameters(
+        worker, factory, now=datetime.now(timezone.utc)
+    )
+    result = runtime.run_action(
+        "windows_stack_qualification",
+        {
+            "mode": "physical_unique",
+            "repositories": ["ao2"],
+            **lease_parameters,
+        },
+        request_id="valid-lease",
+    )
+    assert result["status"] == "accepted"
+    assert result["physical_host_lease"] == {
+        "lease_id": "lease-windows-001",
+        "lease_sha256": lease_parameters["physical_host_lease_sha256"],
+        "scratch_root": str(factory / ".ao2-physical-host-leases" / "lease-windows-001"),
+    }
+    assert commands_seen
+
+
+def test_physical_host_lease_offline_cli_uses_same_strict_validator(tmp_path: Path) -> None:
+    worker = load_worker_module()
+    factory = tmp_path / "factory"
+    parameters, _ = physical_host_lease_parameters(
+        worker, factory, now=datetime.now(timezone.utc)
+    )
+    raw = base64.b64decode(parameters["physical_host_lease_base64"])
+    lease_path = tmp_path / "lease.json"
+    lease_path.write_bytes(raw)
+    command = [
+        sys.executable,
+        str(WORKER_PATH),
+        "--validate-physical-host-lease",
+        str(lease_path),
+        "--physical-host-lease-sha256",
+        parameters["physical_host_lease_sha256"],
+        "--node-id",
+        "windows-hp255_g10",
+        "--factory-root",
+        str(factory),
+    ]
+
+    accepted = subprocess.run(command, capture_output=True, text=True, check=False)
+    assert accepted.returncode == 0
+    assert json.loads(accepted.stdout)["status"] == "accepted"
+
+    linked = tmp_path / "lease-link.json"
+    try:
+        os.symlink(lease_path, linked)
+    except OSError:
+        return
+    rejected = subprocess.run(
+        [*command[:3], str(linked), *command[4:]],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert rejected.returncode == 1
+    assert json.loads(rejected.stdout) == {"status": "failed", "error_category": "unsafe_lease_input"}
 
 
 def test_worker_state_root_allows_only_one_live_process(tmp_path: Path) -> None:
@@ -1048,7 +1349,6 @@ def test_windows_stack_qualification_toolchain_mode_reports_fixed_tools(tmp_path
         transport=worker.MemoryTransport(),
         poll_interval_seconds=0.01,
     )
-
     result = runtime.run_action(
         "windows_stack_qualification",
         {"mode": "toolchain", "timeout_seconds": 30},
@@ -1448,6 +1748,9 @@ def test_windows_stack_qualification_physical_unique_runs_only_contract_physical
         transport=worker.MemoryTransport(),
         poll_interval_seconds=0.01,
     )
+    lease_parameters, _ = physical_host_lease_parameters(
+        worker, factory, now=datetime.now(timezone.utc)
+    )
 
     result = runtime.run_action(
         "windows_stack_qualification",
@@ -1455,6 +1758,7 @@ def test_windows_stack_qualification_physical_unique_runs_only_contract_physical
             "mode": "physical_unique",
             "repositories": ["ao2", "ao2-control-plane", "ao-command"],
             "profile_digest": "sha256:physical-unique",
+            **lease_parameters,
         },
         request_id="physical-unique",
     )
@@ -1504,10 +1808,13 @@ def test_physical_unique_doctor_uses_prepared_binary_not_cargo_run(
         transport=worker.MemoryTransport(),
         poll_interval_seconds=0.01,
     )
+    lease_parameters, _ = physical_host_lease_parameters(
+        worker, factory, now=datetime.now(timezone.utc)
+    )
 
     result = runtime.run_action(
         "windows_stack_qualification",
-        {"mode": "physical_unique", "repositories": ["ao2"]},
+        {"mode": "physical_unique", "repositories": ["ao2"], **lease_parameters},
         request_id="physical-unique-prepared-doctor",
     )
 
@@ -1550,10 +1857,13 @@ def test_physical_unique_lifecycle_probe_is_fixed_and_rejects_task_execution_ove
         transport=worker.MemoryTransport(),
         poll_interval_seconds=0.01,
     )
+    lease_parameters, _ = physical_host_lease_parameters(
+        worker, factory, now=datetime.now(timezone.utc)
+    )
 
     result = runtime.run_action(
         "windows_stack_qualification",
-        {"mode": "physical_unique", "repositories": ["ao2"]},
+        {"mode": "physical_unique", "repositories": ["ao2"], **lease_parameters},
         request_id="physical-lifecycle-fixed",
     )
 
