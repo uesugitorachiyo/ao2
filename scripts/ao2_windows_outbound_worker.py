@@ -1662,6 +1662,17 @@ def run_bounded_child(
     }
 
 
+def replace_path_with_retry(source: Path, target: Path) -> None:
+    for attempt in range(10):
+        try:
+            source.replace(target)
+            return
+        except PermissionError:
+            if attempt == 9:
+                raise
+            time.sleep(0.02 * (attempt + 1))
+
+
 class WorkerState:
     LEDGER_SCHEMA = "ao2.windows-outbound-worker-ledger.v1"
     LEDGER_EVENT_SCHEMA = "ao2.windows-outbound-worker-ledger-event.v1"
@@ -1733,7 +1744,7 @@ class WorkerState:
     def _save(self) -> None:
         tmp = self.ledger_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(self._ledger, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        tmp.replace(self.ledger_path)
+        replace_path_with_retry(tmp, self.ledger_path)
 
     def _append_journal_event(self, event: dict[str, Any]) -> None:
         self.state_root.mkdir(parents=True, exist_ok=True)
@@ -1781,7 +1792,7 @@ class WorkerState:
             path = self._result_outbox_path(request_id)
             tmp = path.with_suffix(".tmp")
             tmp.write_text(json.dumps(board, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-            tmp.replace(path)
+            replace_path_with_retry(tmp, path)
 
     def pending_result_paths(self) -> list[Path]:
         return sorted(

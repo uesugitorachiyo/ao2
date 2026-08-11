@@ -730,6 +730,27 @@ def test_duplicate_and_completed_tasks_are_not_executed_twice(tmp_path: Path) ->
     assert len(transport.posted_results_by_request_id()) == 1
 
 
+def test_worker_ledger_retries_transient_replace_denial(tmp_path: Path, monkeypatch) -> None:
+    worker = load_worker_module()
+    original_replace = worker.Path.replace
+    attempts = 0
+
+    def transient_replace(source, target):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise PermissionError("transient Windows file lock")
+        return original_replace(source, target)
+
+    monkeypatch.setattr(worker.Path, "replace", transient_replace)
+    monkeypatch.setattr(worker.time, "sleep", lambda _seconds: None)
+    state = worker.WorkerState(tmp_path / "state")
+
+    assert state.claim("retry-replace", "status") is True
+    assert attempts == 2
+    assert json.loads(state.ledger_path.read_text(encoding="utf-8"))["tasks"]["retry-replace"]
+
+
 def test_scaled_worker_ledger_recovers_duplicate_protection_after_primary_json_corruption(
     tmp_path: Path, monkeypatch
 ) -> None:
