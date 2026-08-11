@@ -83,15 +83,17 @@ The digest-bound reproduction artifact is strict JSON with schema version
   Paths, wrappers, shells, other executables, and non-test subcommands are not
   accepted. Go requires the source-root package and an exact
   `-run ^<test_identifier>$` selector. Rust requires exactly one
-  `--test <test_identifier>` target; broad library, binary, or test-suite
-  selectors are rejected. Python is accepted only by version 3 and requires
+  `--test <test_identifier>` target, optionally bound to one workspace package
+  with `--package <package>`; broad library, binary, or test-suite selectors
+  are rejected. Python is accepted only by version 3 and requires
   exactly `python -m pytest <fixture_install_path>::<test_identifier>`.
   Alternate executables, shell wrappers, `python -c`, broad pytest paths,
   options, plugins, and additional selectors are rejected.
 - `working_directory`: exactly `.`, the extracted source root
 - `fixture_install_path`: the exact source-root Go test filename, Rust
-  `tests/<test_identifier>.rs` path, or version 3 Python test path where the
-  bound fixture is installed. Python paths are relative normal components
+  `tests/<test_identifier>.rs` path, workspace Rust
+  `crates/<package>/tests/<test_identifier>.rs` path, or version 3 Python test
+  path where the bound fixture is installed. Python paths are relative normal components
   beneath the source root, have a filename beginning `test_`, end in `.py`, and
   reject absolute paths, parent traversal, empty components, backslashes, and
   platform prefixes.

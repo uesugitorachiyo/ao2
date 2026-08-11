@@ -342,6 +342,82 @@ fn validates_v2_only_with_digest_bound_reproduced_failure_evidence() {
 }
 
 #[test]
+fn validates_focused_rust_workspace_package_reproduction() {
+    let temp = tempfile::tempdir().unwrap();
+    let (mut manifest, mut reproduction) = valid_v2_pack();
+    reproduction["command_argv"] = json!([
+        "cargo",
+        "test",
+        "--package",
+        "ruff",
+        "--test",
+        "issue-27324"
+    ]);
+    reproduction["fixture_install_path"] = json!("crates/ruff/tests/issue-27324.rs");
+    reproduction["test_identifier"] = json!("issue-27324");
+    let manifest_path = write_v2_pack(&temp, &mut manifest, &reproduction);
+
+    let output = validate(&manifest_path, temp.path());
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn rejects_unbound_or_unsafe_rust_workspace_package_reproduction() {
+    let mutations: &[fn(&mut Value)] = &[
+        |value| {
+            value["command_argv"] = json!([
+                "cargo",
+                "test",
+                "--package",
+                "ruff",
+                "--test",
+                "issue-27324"
+            ]);
+            value["fixture_install_path"] = json!("crates/other/tests/issue-27324.rs");
+            value["test_identifier"] = json!("issue-27324");
+        },
+        |value| {
+            value["command_argv"] = json!([
+                "cargo",
+                "test",
+                "--package",
+                "../ruff",
+                "--test",
+                "issue-27324"
+            ]);
+            value["fixture_install_path"] = json!("crates/ruff/tests/issue-27324.rs");
+            value["test_identifier"] = json!("issue-27324");
+        },
+        |value| {
+            value["command_argv"] = json!([
+                "cargo",
+                "test",
+                "--package",
+                "ruff",
+                "--test",
+                "issue-27324",
+                "--",
+                "--nocapture"
+            ]);
+            value["fixture_install_path"] = json!("crates/ruff/tests/issue-27324.rs");
+            value["test_identifier"] = json!("issue-27324");
+        },
+    ];
+
+    for mutate in mutations {
+        let temp = tempfile::tempdir().unwrap();
+        let (mut manifest, mut reproduction) = valid_v2_pack();
+        mutate(&mut reproduction);
+        let manifest_path = write_v2_pack(&temp, &mut manifest, &reproduction);
+        assert_rejected(validate(&manifest_path, temp.path()));
+    }
+}
+
+#[test]
 fn validates_v3_python_only_with_a_bound_direct_pytest_target() {
     let temp = tempfile::tempdir().unwrap();
     let (mut manifest, reproduction) = valid_v3_python_pack();

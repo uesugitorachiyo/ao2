@@ -435,8 +435,14 @@ fn validate_fixture_binding(evidence: &Evidence, manifest: &RepairPackManifest) 
         }
         "rust" => {
             validate_rust_target(&evidence.test_identifier)?;
+            let package =
+                rust_workspace_package(&evidence.command_argv, &evidence.test_identifier)?;
+            let expected_path = package.map_or_else(
+                || format!("tests/{}.rs", evidence.test_identifier),
+                |package| format!("crates/{package}/tests/{}.rs", evidence.test_identifier),
+            );
             ensure!(
-                evidence.fixture_install_path == format!("tests/{}.rs", evidence.test_identifier),
+                evidence.fixture_install_path == expected_path,
                 "Rust reproduction fixture install path must match the focused test target"
             );
         }
@@ -491,11 +497,26 @@ fn validate_rust_args(argv: &[String], test_identifier: &str) -> Result<()> {
             && argv.get(1).is_some_and(|arg| arg == "test"),
         "Rust reproduction must invoke cargo test directly"
     );
-    ensure!(
-        argv.len() == 4 && argv[2] == "--test" && argv[3] == test_identifier,
-        "Rust reproduction must bind exactly one focused test target"
-    );
+    rust_workspace_package(argv, test_identifier)?;
     Ok(())
+}
+
+fn rust_workspace_package<'a>(
+    argv: &'a [String],
+    test_identifier: &str,
+) -> Result<Option<&'a str>> {
+    if argv.len() == 4 && argv[2] == "--test" && argv[3] == test_identifier {
+        return Ok(None);
+    }
+    if argv.len() == 6
+        && argv[2] == "--package"
+        && argv[4] == "--test"
+        && argv[5] == test_identifier
+    {
+        validate_rust_target(&argv[3])?;
+        return Ok(Some(&argv[3]));
+    }
+    bail!("Rust reproduction must bind exactly one focused test target")
 }
 
 fn validate_python_args(
