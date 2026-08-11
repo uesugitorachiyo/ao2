@@ -54,6 +54,7 @@ MIN_STACK_QUALIFICATION_TIMEOUT_SECONDS = 30.0
 MAX_STACK_QUALIFICATION_TIMEOUT_SECONDS = 3600.0
 DEFAULT_OUTPUT_LIMIT_BYTES = 64 * 1024
 PHYSICAL_HOST_LEASE_SCHEMA = "ao2.physical-host-exclusive-lease.v1"
+PHYSICAL_HOST_LEASE_LOCKED_SCHEMA = "ao2.physical-host-exclusive-lease.v2"
 MAX_PHYSICAL_HOST_LEASE_BYTES = 16 * 1024
 MAX_PHYSICAL_HOST_LEASE_TTL_SECONDS = 15 * 60
 MAX_PHYSICAL_HOST_HEARTBEAT_AGE_SECONDS = 2 * 60
@@ -1179,9 +1180,14 @@ def validate_physical_host_lease(
         "allow_broad_process_termination",
         "allow_graphical_session_mutation",
     }
-    if not isinstance(lease, dict) or set(lease) != required_fields:
+    if not isinstance(lease, dict):
         return failed("lease_schema_mismatch")
-    if lease["schema_version"] != PHYSICAL_HOST_LEASE_SCHEMA:
+    schema_version = lease.get("schema_version")
+    if schema_version == PHYSICAL_HOST_LEASE_LOCKED_SCHEMA:
+        required_fields |= {"interactive_session_state", "interactive_ao_workloads_active"}
+    elif schema_version != PHYSICAL_HOST_LEASE_SCHEMA:
+        return failed("lease_schema_mismatch")
+    if set(lease) != required_fields:
         return failed("lease_schema_mismatch")
     lease_id = lease["lease_id"]
     if not isinstance(lease_id, str) or not re.fullmatch(r"[a-z0-9][a-z0-9-]{7,63}", lease_id):
@@ -1197,8 +1203,17 @@ def validate_physical_host_lease(
         return failed("operator_approval_missing")
     if lease["exclusive_use_confirmed"] is not True:
         return failed("exclusive_use_unconfirmed")
-    if type(lease["interactive_sessions_active"]) is not int or lease["interactive_sessions_active"] != 0:
-        return failed("interactive_session_active")
+    if schema_version == PHYSICAL_HOST_LEASE_SCHEMA:
+        if type(lease["interactive_sessions_active"]) is not int or lease["interactive_sessions_active"] != 0:
+            return failed("interactive_session_active")
+    else:
+        sessions = lease["interactive_sessions_active"]
+        state = lease["interactive_session_state"]
+        workloads = lease["interactive_ao_workloads_active"]
+        if type(workloads) is not int or workloads != 0:
+            return failed("interactive_workload_active")
+        if type(sessions) is not int or (sessions, state) not in ((0, "none"), (1, "locked")):
+            return failed("interactive_session_active")
     if lease["overlapping_lease_ids"] != []:
         return failed("overlapping_lease")
     if lease["command_profile"] != profile:

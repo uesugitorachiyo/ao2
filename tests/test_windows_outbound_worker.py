@@ -85,6 +85,62 @@ def test_physical_host_lease_validator_accepts_exact_exclusive_lease(tmp_path: P
     assert result["scratch_root"] == str(tmp_path / ".ao2-physical-host-leases" / "lease-windows-001")
 
 
+def test_physical_host_lease_v2_accepts_one_locked_idle_console(tmp_path: Path) -> None:
+    worker = load_worker_module()
+    parameters, now = physical_host_lease_parameters(
+        worker,
+        tmp_path,
+        schema_version="ao2.physical-host-exclusive-lease.v2",
+        interactive_sessions_active=1,
+        interactive_session_state="locked",
+        interactive_ao_workloads_active=0,
+    )
+
+    result = worker.validate_physical_host_lease(
+        parameters["physical_host_lease_base64"],
+        parameters["physical_host_lease_sha256"],
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        now=now,
+    )
+
+    assert result["status"] == "accepted"
+    assert result["lease_id"] == "lease-windows-001"
+
+
+def test_physical_host_lease_v2_rejects_unsafe_locked_console_evidence(tmp_path: Path) -> None:
+    worker = load_worker_module()
+    cases = [
+        ({"interactive_sessions_active": True}, "interactive_session_active"),
+        ({"interactive_session_state": "unlocked"}, "interactive_session_active"),
+        ({"interactive_sessions_active": 2}, "interactive_session_active"),
+        ({"interactive_ao_workloads_active": 1}, "interactive_workload_active"),
+    ]
+    for overrides, expected_error in cases:
+        lease_overrides = {
+            "schema_version": "ao2.physical-host-exclusive-lease.v2",
+            "interactive_sessions_active": 1,
+            "interactive_session_state": "locked",
+            "interactive_ao_workloads_active": 0,
+        }
+        lease_overrides.update(overrides)
+        parameters, now = physical_host_lease_parameters(
+            worker,
+            tmp_path,
+            **lease_overrides,
+        )
+
+        result = worker.validate_physical_host_lease(
+            parameters["physical_host_lease_base64"],
+            parameters["physical_host_lease_sha256"],
+            node_id="windows-hp255_g10",
+            factory_root=tmp_path,
+            now=now,
+        )
+
+        assert result == {"status": "failed", "error_category": expected_error}
+
+
 def test_physical_host_lease_offline_cli_accepts_fixed_ubuntu_lifecycle_profile(tmp_path: Path) -> None:
     worker = load_worker_module()
     factory = tmp_path / "factory"
