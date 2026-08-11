@@ -1057,6 +1057,11 @@ pub(crate) enum IssueCommand {
         #[command(subcommand)]
         command: RepairQualificationCommand,
     },
+    /// Verify a sealed, read-only contribution packet without granting mutation authority.
+    ContributionPacket {
+        #[command(subcommand)]
+        command: ContributionPacketCommand,
+    },
     /// Build, verify, or exercise a bounded local draft pull request action.
     DraftPr {
         #[command(subcommand)]
@@ -1101,6 +1106,19 @@ pub(crate) enum RepairQualificationCommand {
     Verify {
         #[arg(long)]
         bundle: PathBuf,
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+pub(crate) enum ContributionPacketCommand {
+    /// Verify one strict contribution packet and its direct-child artifacts.
+    Verify {
+        #[arg(long)]
+        packet: PathBuf,
+        #[arg(long)]
+        root: PathBuf,
         #[arg(long)]
         json: bool,
     },

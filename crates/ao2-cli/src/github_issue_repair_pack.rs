@@ -393,7 +393,7 @@ fn validate_manifest(manifest: &RepairPackManifest) -> Result<reproduction::Vers
     Ok(version)
 }
 
-fn validate_identifier(name: &str, value: &str, max_bytes: usize) -> Result<()> {
+pub(super) fn validate_identifier(name: &str, value: &str, max_bytes: usize) -> Result<()> {
     if value.is_empty() || value.len() > max_bytes {
         bail!("{name} must be nonempty and at most {max_bytes} bytes");
     }
@@ -406,7 +406,7 @@ fn validate_identifier(name: &str, value: &str, max_bytes: usize) -> Result<()> 
     Ok(())
 }
 
-fn validate_repository(repository: &str) -> Result<()> {
+pub(super) fn validate_repository(repository: &str) -> Result<()> {
     let mut parts = repository.split('/');
     let (Some(owner), Some(name), None) = (parts.next(), parts.next(), parts.next()) else {
         bail!("repository must use canonical owner/name syntax");
@@ -645,6 +645,22 @@ pub(super) fn read_guarded_file(
     read_regular_file(root, name, max_bytes, label).map(|(bytes, _)| bytes)
 }
 
+pub(super) fn verify_guarded_artifact(
+    root: &RootGuard,
+    path: &str,
+    size_bytes: u64,
+    sha256: &str,
+    max_bytes: u64,
+    label: &str,
+) -> Result<()> {
+    let artifact = Artifact {
+        path: path.to_owned(),
+        size_bytes,
+        sha256: sha256.to_owned(),
+    };
+    verify_artifact(root, &artifact, max_bytes, label).map(|_| ())
+}
+
 fn hash_regular_file(
     root: &RootGuard,
     name: &str,
@@ -804,7 +820,7 @@ fn opened_file_identity(file: &File, path: &Path) -> Result<FileIdentity> {
     Ok(state.identity)
 }
 
-fn validate_digest(name: &str, value: &str) -> Result<()> {
+pub(super) fn validate_digest(name: &str, value: &str) -> Result<()> {
     let Some(hex) = value.strip_prefix("sha256:") else {
         bail!("{name} must use lowercase sha256:<64 hex> syntax");
     };
@@ -814,7 +830,7 @@ fn validate_digest(name: &str, value: &str) -> Result<()> {
     Ok(())
 }
 
-fn is_lower_hex(value: &str, length: usize) -> bool {
+pub(super) fn is_lower_hex(value: &str, length: usize) -> bool {
     value.len() == length
         && value
             .bytes()
