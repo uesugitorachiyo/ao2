@@ -1,11 +1,13 @@
 use anyhow::Result;
 use serde::Serialize;
 
+#[path = "github_issue_contribution_packet.rs"]
+mod github_issue_contribution_packet;
 #[path = "github_issue_discovery.rs"]
 mod github_issue_discovery;
 pub(crate) mod github_issue_publish;
 #[path = "github_issue_repair_pack.rs"]
-mod github_issue_repair_pack;
+pub(super) mod github_issue_repair_pack;
 #[path = "github_issue_repair_qualification.rs"]
 mod github_issue_repair_qualification;
 #[path = "github_issue_repair_result/classification.rs"]
@@ -70,6 +72,9 @@ pub(super) fn issue(command: IssueCommand) -> Result<()> {
         IssueCommand::RepairResult { command } => github_issue_repair_result::run(command),
         IssueCommand::RepairQualification { command } => {
             github_issue_repair_qualification::run(command)
+        }
+        IssueCommand::ContributionPacket { command } => {
+            github_issue_contribution_packet::run(command)
         }
         IssueCommand::DraftPr { command } => {
             github_issue_draft::run(command, canonical_json_sha256)

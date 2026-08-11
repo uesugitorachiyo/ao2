@@ -166,6 +166,16 @@ grant authority. The manifest and all referenced artifacts must be direct
 children of the repair pack root. See
 [the GitHub issue repair-pack contract](docs/contracts/GITHUB-ISSUE-REPAIR-PACK.md).
 
+Validate a sealed contribution packet without contacting GitHub or granting
+mutation authority:
+
+```sh
+cargo run -p ao2-cli --bin ao2 -- issue contribution-packet verify \
+  --root <packet-root> --packet <packet-root>/packet.json --json
+```
+
+See [the governed contribution-packet contract](docs/contracts/GITHUB-ISSUE-CONTRIBUTION-PACKET.md).
+
 Build a local release archive:
 
 ```sh
