@@ -19,13 +19,13 @@ if (-not (Test-Path $WorkerScript)) { throw "Worker script not found: $WorkerScr
 $StateRoot = Join-Path $env:LOCALAPPDATA "AO2\windows-outbound-worker"
 New-Item -ItemType Directory -Force -Path $StateRoot | Out-Null
 
-$Args = @(
+$ActionArguments = @(
     "-NoProfile",
     "-ExecutionPolicy", "Bypass",
     "-Command",
     "& '$Python' '$WorkerScript' --control-plane-url '$ControlPlaneUrl' --api-token-file '$ApiTokenFile' --factory-root '$FactoryRoot' --node-id '$NodeId'"
 )
-$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument ($Args -join " ")
+$Action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument ($ActionArguments -join " ")
 $Trigger = New-ScheduledTaskTrigger -AtLogOn
 $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
 

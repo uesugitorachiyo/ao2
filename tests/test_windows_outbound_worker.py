@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKER_PATH = ROOT / "scripts" / "ao2_windows_outbound_worker.py"
 AUTHORIZER_PATH = ROOT / "scripts" / "authorize_windows_control_task.py"
 PHYSICAL_LIFECYCLE_PROBE_PATH = ROOT / "scripts" / "Test-AO2PhysicalWindowsLifecycle.ps1"
+WINDOWS_WORKER_INSTALLER_PATH = ROOT / "scripts" / "Install-AO2WindowsOutboundWorker.ps1"
 
 
 def load_worker_module():
@@ -2015,6 +2016,15 @@ def test_physical_lifecycle_probe_reads_the_workspace_version_without_emitting_c
     assert "rollback_runner_separate" in probe
     assert "temp_cleanup_completed" in probe
     assert "ConvertTo-Json -Compress" in probe
+
+
+def test_windows_worker_installer_preserves_complete_scheduled_task_arguments() -> None:
+    installer = WINDOWS_WORKER_INSTALLER_PATH.read_text(encoding="utf-8")
+
+    assert "$Args =" not in installer
+    assert "$ActionArguments = @(" in installer
+    assert '"-ExecutionPolicy", "Bypass"' in installer
+    assert 'New-ScheduledTaskAction -Execute "powershell.exe" -Argument ($ActionArguments -join " ")' in installer
 
 
 def test_physical_lifecycle_probe_handles_clean_git_output_on_windows_powershell() -> None:
