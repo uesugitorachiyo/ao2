@@ -91,15 +91,20 @@ Its payload may only select:
 
 `physical_unique` additionally requires `physical_host_lease_base64` and
 `physical_host_lease_sha256`. The decoded strict JSON contract is
-`ao2.physical-host-exclusive-lease.v1`, is limited to 16 KiB, rejects duplicate
+`ao2.physical-host-exclusive-lease.v1` or
+`ao2.physical-host-exclusive-lease.v2`, is limited to 16 KiB, rejects duplicate
 or unknown keys, and binds the node, operator approval record, purpose, issuance,
 expiry, heartbeat, exclusive-use preflight, command profile, unique scratch
-root, and cleanup root. It must report zero active interactive sessions and no
-overlap, abort, release, broad process termination, or graphical-session
-mutation. The lease lasts at most 15 minutes and its heartbeat may be at most
-two minutes old. Its digest, ID, and scratch root are copied into the sanitized
-qualification result. A missing, altered, stale, unsafe, or inapplicable lease
-fails before any child command runs.
+root, and cleanup root. Version 1 requires zero active interactive sessions.
+Version 2 accepts either zero sessions with `interactive_session_state=none`,
+or one locked session with `interactive_session_state=locked`; both require
+`interactive_ao_workloads_active=0`. Unlocked, unknown, multiple, or busy
+sessions fail closed. Every version rejects overlap, abort, release, broad
+process termination, and graphical-session mutation. The lease lasts at most
+15 minutes and its heartbeat may be at most two minutes old. Its digest, ID,
+and scratch root are copied into the sanitized qualification result. A missing,
+altered, stale, unsafe, or inapplicable lease fails before any child command
+runs.
 
 The lease supplements the signed execution authorization; it does not replace
 it or grant release, deployment, publication, provider, credential, arbitrary
