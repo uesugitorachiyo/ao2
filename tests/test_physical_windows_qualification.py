@@ -574,6 +574,35 @@ def test_prepare_binds_real_wrapper_task_and_row_provenance() -> None:
     assert summary == qualification.validate_evidence(evidence, SOURCE_SHA, VERSION, NOW)
 
 
+def test_prepare_accepts_bounded_physical_release_evidence() -> None:
+    qualification = load_qualification_module()
+    board = qualification_board()
+    qualification_result(board)["mode"] = "physical_bounded"
+    qualification_result(board)["physical_host_lease"] = {
+        "lease_id": "lease-windows-001",
+        "lease_sha256": "a" * 64,
+        "scratch_root": r"C:\ao\factory\.ao2-physical-host-leases\lease-windows-001",
+        "isolation_mode": "bounded_shared",
+    }
+    for row in rows(board):
+        row["verification_profile"] = "physical_bounded"
+
+    evidence, summary = qualification.prepare_evidence(worker_status_board(), board, SOURCE_SHA, VERSION)
+
+    assert evidence["mode"] == "physical_bounded"
+    assert summary["mode"] == "physical_bounded"
+
+
+def test_validate_preserves_legacy_physical_unique_evidence() -> None:
+    qualification, evidence, _ = prepared_evidence()
+    del evidence["isolation_mode"]
+
+    summary = qualification.validate_evidence(evidence, SOURCE_SHA, VERSION, NOW)
+
+    assert summary["mode"] == "physical_unique"
+    assert summary["isolation_mode"] == "exclusive"
+
+
 def test_summary_matches_strict_hosted_consumer_contract() -> None:
     qualification, evidence, summary = prepared_evidence()
 
@@ -581,6 +610,7 @@ def test_summary_matches_strict_hosted_consumer_contract() -> None:
         "schema_version",
         "status",
         "mode",
+        "isolation_mode",
         "source_sha",
         "worker_source_commit",
         "version",
@@ -601,6 +631,7 @@ def test_summary_matches_strict_hosted_consumer_contract() -> None:
     assert summary["schema_version"] == "ao2.physical-windows-qualification-summary.v1"
     assert summary["status"] == "passed"
     assert summary["mode"] == "physical_unique"
+    assert summary["isolation_mode"] == "exclusive"
     assert summary["expires_at"] == "2026-07-20T20:34:00Z"
     assert summary["checks"] == {
         "scheduled_task": "passed",
@@ -1871,7 +1902,7 @@ def test_import_script_rejects_strict_validation_failure_without_partial_artifac
     monkeypatch.setattr(importer, "_utc_now", lambda: NOW)
 
     assert importer.main() == 2
-    assert "physical_unique" in capsys.readouterr().err
+    assert "physical_unique or physical_bounded" in capsys.readouterr().err
     assert not (repository / "target" / "physical-windows-qualification").exists()
 
 

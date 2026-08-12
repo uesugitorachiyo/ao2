@@ -109,6 +109,27 @@ def test_physical_host_bounded_lease_accepts_multiple_ssh_and_unrelated_workload
         now=now,
     )
 
+    assert result["status"] == "accepted", result
+    assert result["isolation_mode"] == "bounded_shared"
+
+
+def test_physical_host_bounded_lease_authorizes_bounded_release_qualification(tmp_path: Path) -> None:
+    worker = load_worker_module()
+    parameters, now = bounded_host_lease_parameters(
+        worker,
+        tmp_path,
+        command_profile="windows_stack_qualification:physical_bounded",
+    )
+
+    result = worker.validate_physical_host_lease(
+        parameters["physical_host_lease_base64"],
+        parameters["physical_host_lease_sha256"],
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        profile="windows_stack_qualification:physical_bounded",
+        now=now,
+    )
+
     assert result["status"] == "accepted"
     assert result["isolation_mode"] == "bounded_shared"
 
@@ -157,8 +178,51 @@ def test_physical_host_bounded_lease_preserves_v1_inventory_keys() -> None:
     lease_inventory = json.loads(WINDOWS_STACK_INVENTORY_PATH.read_text(encoding="utf-8"))["physical_host_lease"]
 
     assert lease_inventory["schema_version"] == "ao2.physical-host-exclusive-lease.v1"
-    assert lease_inventory["required_mode"] == "physical_unique"
+    assert lease_inventory["required_mode"] == "physical_bounded"
     assert "ao2.physical-host-bounded-lease.v1" in lease_inventory["schema_versions"]
+
+
+def test_physical_bounded_runs_release_rows_with_shared_lease(tmp_path: Path, monkeypatch) -> None:
+    worker = load_worker_module()
+    factory = tmp_path / "factory"
+    (factory / "ao2" / ".git").mkdir(parents=True)
+    monkeypatch.setattr(
+        worker,
+        "run_bounded_child",
+        lambda command, **kwargs: {
+            "status": "accepted",
+            "exit_code": 0,
+            "timed_out": False,
+            "duration_seconds": 0.01,
+            "output": "ok",
+            "output_truncated": False,
+            "sanitized_stderr_category": "none",
+            "command_name": Path(command[0]).name,
+        },
+    )
+    runtime = worker.WindowsOutboundWorker(
+        node_id="windows-hp255_g10",
+        factory_root=factory,
+        state=worker.WorkerState(tmp_path / "state"),
+        transport=worker.MemoryTransport(),
+    )
+    lease_parameters, _ = bounded_host_lease_parameters(
+        worker,
+        factory,
+        now=datetime.now(timezone.utc),
+        command_profile="windows_stack_qualification:physical_bounded",
+    )
+
+    result = runtime.run_action(
+        "windows_stack_qualification",
+        {"mode": "physical_bounded", "repositories": ["ao2"], **lease_parameters},
+        request_id="physical-bounded",
+    )
+
+    assert result["status"] == "accepted", result
+    assert result["mode"] == "physical_bounded"
+    assert result["physical_host_lease"]["isolation_mode"] == "bounded_shared"
+    assert all(row["verification_profile"] == "physical_bounded" for row in result["results"])
 
 
 def test_physical_host_lease_validator_accepts_exact_exclusive_lease(tmp_path: Path) -> None:

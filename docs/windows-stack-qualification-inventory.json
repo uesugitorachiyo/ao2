@@ -19,7 +19,7 @@
     "ao-promoter"
   ],
   "archived_repositories_rejected": ["agy-swarms"],
-  "modes": ["diagnostic", "targeted", "full", "physical_unique", "toolchain"],
+  "modes": ["diagnostic", "targeted", "full", "physical_unique", "physical_bounded", "toolchain"],
   "toolchain_capability_tools": ["git", "go", "python", "cargo", "rustc", "node", "npm", "powershell"],
   "allowed_parameters": ["checkpoint_id", "global_deadline_seconds", "mode", "physical_host_lease_base64", "physical_host_lease_sha256", "profile_digest", "repositories", "repos", "reuse_from_request_id", "reuse_profile_digest", "shard_id", "timeout_seconds"],
   "timeout_bounds_seconds": {
@@ -29,14 +29,14 @@
   },
   "physical_host_lease": {
     "schema_version": "ao2.physical-host-exclusive-lease.v1",
-    "required_mode": "physical_unique",
+    "required_mode": "physical_bounded",
     "schema_versions": ["ao2.physical-host-exclusive-lease.v1", "ao2.physical-host-exclusive-lease.v2", "ao2.physical-host-bounded-lease.v1"],
-    "exclusive_required_mode": "physical_unique",
+    "exclusive_legacy_mode": "physical_unique",
     "bounded_isolation_mode": "bounded_shared",
     "maximum_bytes": 16384,
     "maximum_ttl_seconds": 900,
     "maximum_heartbeat_age_seconds": 120,
-    "offline_profiles": ["ubuntu_stack_qualification:lifecycle_noop", "windows_stack_qualification:lifecycle_noop", "windows_stack_qualification:physical_unique"]
+    "offline_profiles": ["ubuntu_stack_qualification:lifecycle_noop", "windows_stack_qualification:lifecycle_noop", "windows_stack_qualification:physical_bounded", "windows_stack_qualification:physical_unique"]
   },
   "command_mapping_owner": "scripts/ao2_windows_outbound_worker.py::WINDOWS_REPOSITORY_PROFILES",
   "payload_must_not_supply": [

@@ -61,6 +61,7 @@ MAX_PHYSICAL_HOST_LEASE_TTL_SECONDS = 15 * 60
 MAX_PHYSICAL_HOST_HEARTBEAT_AGE_SECONDS = 2 * 60
 PHYSICAL_HOST_LEASE_PROFILES = {
     "windows_stack_qualification:physical_unique": "windows_stack_qualification",
+    "windows_stack_qualification:physical_bounded": "windows_stack_qualification",
     "windows_stack_qualification:lifecycle_noop": "windows_stack_qualification",
     "ubuntu_stack_qualification:lifecycle_noop": "ubuntu_stack_qualification",
 }
@@ -89,7 +90,7 @@ CANONICAL_REPOSITORIES = (
     "ao-promoter",
 )
 ARCHIVED_REPOSITORIES = ("agy-swarms",)
-STACK_QUALIFICATION_MODES = ("diagnostic", "targeted", "full", "physical_unique", "toolchain")
+STACK_QUALIFICATION_MODES = ("diagnostic", "targeted", "full", "physical_unique", "physical_bounded", "toolchain")
 STACK_QUALIFICATION_ALLOWED_PARAMETERS = {
     "mode",
     "repositories",
@@ -1219,7 +1220,11 @@ def validate_physical_host_lease(
     expected_purpose = PHYSICAL_HOST_LEASE_PROFILES.get(profile)
     if expected_purpose is None or lease["purpose"] != expected_purpose:
         return failed("unsafe_command_profile")
-    if schema_version == PHYSICAL_HOST_BOUNDED_LEASE_SCHEMA and not profile.endswith(":lifecycle_noop"):
+    if schema_version == PHYSICAL_HOST_BOUNDED_LEASE_SCHEMA and profile not in {
+        "windows_stack_qualification:physical_bounded",
+        "windows_stack_qualification:lifecycle_noop",
+        "ubuntu_stack_qualification:lifecycle_noop",
+    }:
         return failed("unsafe_command_profile")
     if lease["operator_approved"] is not True or not isinstance(lease["operator_approval_id"], str) or not re.fullmatch(
         r"[A-Za-z0-9][A-Za-z0-9._-]{7,127}", lease["operator_approval_id"]
@@ -2138,7 +2143,7 @@ class WindowsOutboundWorker:
         lease_fields_present = any(
             key in parameters for key in ("physical_host_lease_base64", "physical_host_lease_sha256")
         )
-        if mode == "physical_unique":
+        if mode in ("physical_unique", "physical_bounded"):
             if not all(key in parameters for key in ("physical_host_lease_base64", "physical_host_lease_sha256")):
                 return {"status": "failed", "error_category": "physical_host_lease_required"}
             lease_result = validate_physical_host_lease(
@@ -2146,6 +2151,7 @@ class WindowsOutboundWorker:
                 parameters["physical_host_lease_sha256"],
                 node_id=self.node_id,
                 factory_root=self.factory_root,
+                profile=f"windows_stack_qualification:{mode}",
             )
             if lease_result["status"] != "accepted":
                 return lease_result
@@ -2265,7 +2271,7 @@ class WindowsOutboundWorker:
                 ))
                 continue
 
-            if mode == "physical_unique" and not profile:
+            if mode in ("physical_unique", "physical_bounded") and not profile:
                 results.append(stack_qualification_row(
                     node_id=self.node_id,
                     worker_source_commit=worker_source_commit,
@@ -2350,6 +2356,8 @@ class WindowsOutboundWorker:
                 "lease_sha256": lease_result["lease_sha256"],
                 "scratch_root": lease_result["scratch_root"],
             }
+            if "isolation_mode" in lease_result:
+                result["physical_host_lease"]["isolation_mode"] = lease_result["isolation_mode"]
         return result
 
     def sync_ao_stack(self, parameters: dict[str, Any]) -> dict[str, Any]:
@@ -2607,6 +2615,8 @@ def repository_worktree_status(repo_path: Path, *, entry_limit: int = 32) -> dic
 def qualification_profile(repo_name: str, mode: str) -> tuple[dict[str, tuple[str, ...]], ...]:
     if mode == "diagnostic":
         return DIAGNOSTIC_PROFILE
+    if mode == "physical_bounded":
+        mode = "physical_unique"
     return WINDOWS_REPOSITORY_PROFILES[repo_name][mode]
 
 

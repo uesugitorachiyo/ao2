@@ -3574,6 +3574,8 @@ fn release_build_all_script_and_manual_workflow_cover_public_release_sequence() 
     assert!(workflow.contains("assemble-promotion-plan:"));
     assert!(workflow.contains("physical_windows_evidence_sha256"));
     assert!(workflow.contains("physical_windows_evidence_mismatch"));
+    assert!(workflow.contains("physical_windows_mode = \"physical_bounded\""));
+    assert!(!workflow.contains("physical_windows_mode = \"physical_unique\""));
     assert!(workflow.contains("x86_64-pc-windows-msvc"));
     assert!(workflow.contains("cross-package:windows:gnu:from-linux"));
     assert!(workflow.contains("actions/upload-artifact@v7.0.1"));

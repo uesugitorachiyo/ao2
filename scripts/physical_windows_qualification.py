@@ -22,6 +22,7 @@ PROFILE_VERSION = "ao2.windows-stack-qualification.profiles.v1"
 PROBE_SCHEMA = "ao2.physical-windows-lifecycle-probe.v1"
 EVIDENCE_SCHEMA = "ao2.physical-windows-qualification-evidence.v1"
 SUMMARY_SCHEMA = "ao2.physical-windows-qualification-summary.v1"
+PHYSICAL_RELEASE_MODES = {"physical_unique", "physical_bounded"}
 FRESHNESS_WINDOW_SECONDS = 86400
 MAX_ENCODED_PAYLOAD_CHARS = 60000
 MAX_DECODED_PAYLOAD_BYTES = 45000
@@ -89,6 +90,7 @@ LIFECYCLE_KEYS = {
 EVIDENCE_KEYS = {
     "schema_version",
     "mode",
+    "isolation_mode",
     "source_sha",
     "worker_source_commit",
     "version",
@@ -421,6 +423,7 @@ def _validate_row(
     expected_profile_digest: str,
     expected_shard_id: str,
     qualification_completed_at: datetime,
+    expected_verification_profile: str,
 ) -> dict[str, str]:
     row = _require_mapping(row, f"{expected_name} row", ROW_KEYS)
     if row["sanitized_command_name"] != expected_name:
@@ -441,8 +444,8 @@ def _validate_row(
         raise ValidationError(f"{expected_name} canonical_repository must be ao2")
     if row["repository_head"] != expected_source_sha:
         raise ValidationError(f"{expected_name} repository_head mismatch")
-    if row["verification_profile"] != "physical_unique":
-        raise ValidationError(f"{expected_name} verification_profile must be physical_unique")
+    if row["verification_profile"] != expected_verification_profile:
+        raise ValidationError(f"{expected_name} verification_profile mismatch")
     if row["status"] != "accepted":
         raise ValidationError(f"{expected_name} status must be accepted")
     _require_zero(row["exit_code"], f"{expected_name} exit_code")
@@ -509,8 +512,14 @@ def prepare_evidence(
         raise ValidationError("qualification schema_version is invalid")
     if qualification_result.get("status") != "accepted":
         raise ValidationError("qualification status must be accepted")
-    if qualification_result.get("mode") != "physical_unique":
-        raise ValidationError("qualification mode must be physical_unique")
+    mode = qualification_result.get("mode")
+    if mode not in PHYSICAL_RELEASE_MODES:
+        raise ValidationError("qualification mode must be physical_unique or physical_bounded")
+    lease = qualification_result.get("physical_host_lease")
+    isolation_mode = "exclusive" if mode == "physical_unique" else "bounded_shared"
+    if mode == "physical_bounded":
+        if not isinstance(lease, dict) or lease.get("isolation_mode") != isolation_mode:
+            raise ValidationError("physical_bounded qualification requires bounded_shared lease evidence")
     if qualification_result.get("profile_version") != PROFILE_VERSION:
         raise ValidationError("qualification profile_version is invalid")
     if qualification_result.get("repositories") != ["ao2"]:
@@ -542,6 +551,7 @@ def prepare_evidence(
             expected_profile_digest=profile_digest,
             expected_shard_id=shard_id,
             qualification_completed_at=result_completed,
+            expected_verification_profile=mode,
         )
 
     lifecycle_output = rows_by_name["physical-windows-lifecycle"]["bounded_sanitized_output"]
@@ -569,7 +579,8 @@ def prepare_evidence(
 
     evidence = {
         "schema_version": EVIDENCE_SCHEMA,
-        "mode": "physical_unique",
+        "mode": mode,
+        "isolation_mode": isolation_mode,
         "source_sha": source_sha,
         "worker_source_commit": status_result["worker_source_commit"],
         "version": version,
@@ -606,11 +617,17 @@ def validate_evidence(
     if not isinstance(now, datetime) or now.tzinfo is None:
         raise ValidationError("now must be a timezone-aware datetime")
     now = now.astimezone(timezone.utc)
+    legacy_keys = EVIDENCE_KEYS - {"isolation_mode"}
+    if set(evidence) == legacy_keys and evidence.get("mode") == "physical_unique":
+        evidence = {**evidence, "isolation_mode": "exclusive"}
     evidence = _require_mapping(evidence, "evidence", EVIDENCE_KEYS)
     if evidence["schema_version"] != EVIDENCE_SCHEMA:
         raise ValidationError("evidence schema_version is invalid")
-    if evidence["mode"] != "physical_unique":
-        raise ValidationError("evidence mode must be physical_unique")
+    if evidence["mode"] not in PHYSICAL_RELEASE_MODES:
+        raise ValidationError("evidence mode must be physical_unique or physical_bounded")
+    expected_isolation = "exclusive" if evidence["mode"] == "physical_unique" else "bounded_shared"
+    if evidence["isolation_mode"] != expected_isolation:
+        raise ValidationError("isolation_mode does not match evidence mode")
     if _require_sha(evidence["source_sha"], "source_sha") != expected_source_sha:
         raise ValidationError("source_sha does not match expected_source_sha")
     if _require_sha(evidence["worker_source_commit"], "worker_source_commit") != expected_source_sha:
@@ -731,7 +748,8 @@ def validate_evidence(
     return {
         "schema_version": SUMMARY_SCHEMA,
         "status": "passed",
-        "mode": "physical_unique",
+        "mode": evidence["mode"],
+        "isolation_mode": evidence["isolation_mode"],
         "source_sha": evidence["source_sha"],
         "worker_source_commit": evidence["worker_source_commit"],
         "version": evidence["version"],
