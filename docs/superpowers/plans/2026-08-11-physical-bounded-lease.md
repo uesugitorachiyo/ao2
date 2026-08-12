@@ -12,7 +12,7 @@
 
 - Preserve exclusive v1/v2 behavior and `physical_unique` requirements.
 - Permit multiple SSH connections and unrelated interactive/Codex workloads only in bounded lifecycle profiles.
-- Reject exact workload, lease, scratch, action, and resource conflicts before execution.
+- Reject exact workload, lease, scratch, and resource conflicts before execution.
 - Add no dependencies, provider paths, credentials, arbitrary commands, session mutation, release, deployment, or publication.
 
 ---

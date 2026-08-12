@@ -1298,14 +1298,16 @@ def validate_physical_host_lease(
         return failed("unsafe_scratch_root")
     if lease["cleanup_roots"] != [lease["scratch_root"]]:
         return failed("unsafe_cleanup_root")
-    return {
+    result = {
         "status": "accepted",
-        "isolation_mode": "bounded_shared" if schema_version == PHYSICAL_HOST_BOUNDED_LEASE_SCHEMA else "exclusive",
         "lease_id": lease_id,
         "lease_sha256": actual_sha256,
         "scratch_root": str(expected_scratch),
         "expires_at": lease["expires_at"],
     }
+    if schema_version == PHYSICAL_HOST_BOUNDED_LEASE_SCHEMA:
+        result["isolation_mode"] = "bounded_shared"
+    return result
 
 
 def resolve_openssl() -> str | None:
