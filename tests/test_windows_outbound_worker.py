@@ -18,6 +18,7 @@ WORKER_PATH = ROOT / "scripts" / "ao2_windows_outbound_worker.py"
 AUTHORIZER_PATH = ROOT / "scripts" / "authorize_windows_control_task.py"
 PHYSICAL_LIFECYCLE_PROBE_PATH = ROOT / "scripts" / "Test-AO2PhysicalWindowsLifecycle.ps1"
 WINDOWS_WORKER_INSTALLER_PATH = ROOT / "scripts" / "Install-AO2WindowsOutboundWorker.ps1"
+WINDOWS_STACK_INVENTORY_PATH = ROOT / "docs" / "windows-stack-qualification-inventory.json"
 
 
 def load_worker_module():
@@ -152,6 +153,14 @@ def test_physical_host_bounded_lease_cannot_authorize_physical_unique(tmp_path: 
     assert result == {"status": "failed", "error_category": "unsafe_command_profile"}
 
 
+def test_physical_host_bounded_lease_preserves_v1_inventory_keys() -> None:
+    lease_inventory = json.loads(WINDOWS_STACK_INVENTORY_PATH.read_text(encoding="utf-8"))["physical_host_lease"]
+
+    assert lease_inventory["schema_version"] == "ao2.physical-host-exclusive-lease.v1"
+    assert lease_inventory["required_mode"] == "physical_unique"
+    assert "ao2.physical-host-bounded-lease.v1" in lease_inventory["schema_versions"]
+
+
 def test_physical_host_lease_validator_accepts_exact_exclusive_lease(tmp_path: Path) -> None:
     worker = load_worker_module()
     parameters, now = physical_host_lease_parameters(worker, tmp_path)
@@ -168,6 +177,7 @@ def test_physical_host_lease_validator_accepts_exact_exclusive_lease(tmp_path: P
     assert result["lease_id"] == "lease-windows-001"
     assert result["lease_sha256"] == parameters["physical_host_lease_sha256"]
     assert result["scratch_root"] == str(tmp_path / ".ao2-physical-host-leases" / "lease-windows-001")
+    assert "isolation_mode" not in result
 
 
 def test_physical_host_lease_v2_accepts_one_locked_idle_console(tmp_path: Path) -> None:
