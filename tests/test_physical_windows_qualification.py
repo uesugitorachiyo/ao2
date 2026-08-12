@@ -221,7 +221,7 @@ def create_hosted_candidate_fixture(
                     {
                         "hosted_windows_portable_suite_owner": True,
                         "linux_mingw_x86_64_pc_windows_gnu": "non_authoritative",
-                        "physical_windows_mode": "physical_unique",
+                        "physical_windows_mode": "physical_bounded",
                         "schema_version": "ao2.windows-coverage-ownership.v1",
                         "status": "passed",
                         "target_triple": "x86_64-pc-windows-msvc",
