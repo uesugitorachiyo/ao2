@@ -6,7 +6,7 @@
 - Keep dry-run or preview behavior the default where the script offers it. A readiness or dry-run result must not trigger a live follow-up implicitly.
 - Use fail-closed shell evaluation: quote expansions, avoid `eval`, validate paths and digests before mutation, bound temporary directories, and install cleanup traps for task-owned state.
 - Preserve macOS/Linux portability and the repository's explicit PowerShell/Windows paths. Do not silently replace a platform gate with a host-only approximation.
-- Require an exact, fresh, digest-bound exclusive-host lease before a physical qualification action. A v2 lease may admit one locked console only with zero interactive AO workloads; it must deny unlocked, unknown, or busy sessions, overlapping leases, broad process termination, graphical-session mutation, and cleanup outside its unique scratch root. Lease readiness is not release or mutation authority.
+- Require an exact, fresh, digest-bound lease before a physical qualification action. Use bounded shared leases for fixed lifecycle checks and allow unrelated interactive, Codex, IDE, and multiple SSH sessions; reject concrete lease, workload, scratch, action, and resource conflicts. Keep release-sensitive or host-global actions on exclusive v1/v2 leases. Lease readiness is not release or mutation authority.
 - Generated packets, reports, caches, release assets, and evidence under ignored output roots are outputs, not source fixtures.
 
 ## Verification

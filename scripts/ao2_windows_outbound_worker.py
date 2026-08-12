@@ -55,11 +55,13 @@ MAX_STACK_QUALIFICATION_TIMEOUT_SECONDS = 3600.0
 DEFAULT_OUTPUT_LIMIT_BYTES = 64 * 1024
 PHYSICAL_HOST_LEASE_SCHEMA = "ao2.physical-host-exclusive-lease.v1"
 PHYSICAL_HOST_LEASE_LOCKED_SCHEMA = "ao2.physical-host-exclusive-lease.v2"
+PHYSICAL_HOST_BOUNDED_LEASE_SCHEMA = "ao2.physical-host-bounded-lease.v1"
 MAX_PHYSICAL_HOST_LEASE_BYTES = 16 * 1024
 MAX_PHYSICAL_HOST_LEASE_TTL_SECONDS = 15 * 60
 MAX_PHYSICAL_HOST_HEARTBEAT_AGE_SECONDS = 2 * 60
 PHYSICAL_HOST_LEASE_PROFILES = {
     "windows_stack_qualification:physical_unique": "windows_stack_qualification",
+    "windows_stack_qualification:lifecycle_noop": "windows_stack_qualification",
     "ubuntu_stack_qualification:lifecycle_noop": "ubuntu_stack_qualification",
 }
 ALLOWLISTED_ACTIONS = (
@@ -1158,7 +1160,7 @@ def validate_physical_host_lease(
         return failed("malformed_lease")
     if duplicate:
         return failed("duplicate_lease_key")
-    required_fields = {
+    common_fields = {
         "schema_version",
         "lease_id",
         "node_id",
@@ -1168,9 +1170,6 @@ def validate_physical_host_lease(
         "issued_at",
         "expires_at",
         "heartbeat_at",
-        "exclusive_use_confirmed",
-        "interactive_sessions_active",
-        "overlapping_lease_ids",
         "command_profile",
         "scratch_root",
         "cleanup_roots",
@@ -1184,8 +1183,31 @@ def validate_physical_host_lease(
         return failed("lease_schema_mismatch")
     schema_version = lease.get("schema_version")
     if schema_version == PHYSICAL_HOST_LEASE_LOCKED_SCHEMA:
-        required_fields |= {"interactive_session_state", "interactive_ao_workloads_active"}
-    elif schema_version != PHYSICAL_HOST_LEASE_SCHEMA:
+        required_fields = common_fields | {
+            "exclusive_use_confirmed",
+            "interactive_sessions_active",
+            "overlapping_lease_ids",
+            "interactive_session_state",
+            "interactive_ao_workloads_active",
+        }
+    elif schema_version == PHYSICAL_HOST_LEASE_SCHEMA:
+        required_fields = common_fields | {
+            "exclusive_use_confirmed",
+            "interactive_sessions_active",
+            "overlapping_lease_ids",
+        }
+    elif schema_version == PHYSICAL_HOST_BOUNDED_LEASE_SCHEMA:
+        required_fields = common_fields | {
+            "isolation_mode",
+            "interactive_sessions_active",
+            "interactive_ao_workloads_active",
+            "ssh_connections_active",
+            "conflicting_lease_ids",
+            "conflicting_workload_ids",
+            "conflicting_scratch_roots",
+            "resource_limits_satisfied",
+        }
+    else:
         return failed("lease_schema_mismatch")
     if set(lease) != required_fields:
         return failed("lease_schema_mismatch")
@@ -1197,13 +1219,31 @@ def validate_physical_host_lease(
     expected_purpose = PHYSICAL_HOST_LEASE_PROFILES.get(profile)
     if expected_purpose is None or lease["purpose"] != expected_purpose:
         return failed("unsafe_command_profile")
+    if schema_version == PHYSICAL_HOST_BOUNDED_LEASE_SCHEMA and not profile.endswith(":lifecycle_noop"):
+        return failed("unsafe_command_profile")
     if lease["operator_approved"] is not True or not isinstance(lease["operator_approval_id"], str) or not re.fullmatch(
         r"[A-Za-z0-9][A-Za-z0-9._-]{7,127}", lease["operator_approval_id"]
     ):
         return failed("operator_approval_missing")
-    if lease["exclusive_use_confirmed"] is not True:
+    if schema_version == PHYSICAL_HOST_BOUNDED_LEASE_SCHEMA:
+        counts = (
+            lease["interactive_sessions_active"],
+            lease["interactive_ao_workloads_active"],
+            lease["ssh_connections_active"],
+        )
+        if lease["isolation_mode"] != "bounded_shared" or any(type(value) is not int or value < 0 for value in counts):
+            return failed("lease_schema_mismatch")
+        if lease["conflicting_lease_ids"] != []:
+            return failed("conflicting_lease")
+        if lease["conflicting_workload_ids"] != []:
+            return failed("conflicting_workload")
+        if lease["conflicting_scratch_roots"] != []:
+            return failed("conflicting_scratch_root")
+        if lease["resource_limits_satisfied"] is not True:
+            return failed("resource_limits_exceeded")
+    elif lease["exclusive_use_confirmed"] is not True:
         return failed("exclusive_use_unconfirmed")
-    if schema_version == PHYSICAL_HOST_LEASE_SCHEMA:
+    elif schema_version == PHYSICAL_HOST_LEASE_SCHEMA:
         if type(lease["interactive_sessions_active"]) is not int or lease["interactive_sessions_active"] != 0:
             return failed("interactive_session_active")
     else:
@@ -1214,7 +1254,7 @@ def validate_physical_host_lease(
             return failed("interactive_workload_active")
         if type(sessions) is not int or (sessions, state) not in ((0, "none"), (1, "locked")):
             return failed("interactive_session_active")
-    if lease["overlapping_lease_ids"] != []:
+    if schema_version != PHYSICAL_HOST_BOUNDED_LEASE_SCHEMA and lease["overlapping_lease_ids"] != []:
         return failed("overlapping_lease")
     if lease["command_profile"] != profile:
         return failed("unsafe_command_profile")
@@ -1260,6 +1300,7 @@ def validate_physical_host_lease(
         return failed("unsafe_cleanup_root")
     return {
         "status": "accepted",
+        "isolation_mode": "bounded_shared" if schema_version == PHYSICAL_HOST_BOUNDED_LEASE_SCHEMA else "exclusive",
         "lease_id": lease_id,
         "lease_sha256": actual_sha256,
         "scratch_root": str(expected_scratch),
