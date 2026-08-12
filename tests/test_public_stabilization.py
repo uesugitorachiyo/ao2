@@ -995,10 +995,10 @@ def test_public_release_links_and_install_guide_track_current_stable():
     readme = read("README.md")
     first_30_minutes = read("docs/FIRST-30-MINUTES.md")
     install = read("docs/INSTALL.md")
-    manifest = json.loads(read("docs/release/release-train.json"))
-    stable = manifest["stable"]["ao2"]
+    version = json.loads(read("package.json"))["version"]
+    stable = {"tag": f"v{version}", "version": version}
 
-    assert stable == {"tag": "v0.5.10", "version": "0.5.10"}
+    assert stable == {"tag": "v0.5.11", "version": "0.5.11"}
 
     for needle in [
         f"https://github.com/uesugitorachiyo/ao2/releases/tag/{stable['tag']}",
@@ -1018,6 +1018,7 @@ def test_public_release_links_and_install_guide_track_current_stable():
         ("docs/INSTALL.md", install),
     ]:
         assert stable["tag"] in text, path
+        assert "v0.5.10" not in text, path
         for suffix in ["macos-aarch64", "linux-x86_64", "windows-x86_64"]:
             assert f"ao2-{stable['version']}-{suffix}.tar.gz" in text, path
 
@@ -1039,6 +1040,7 @@ def test_current_public_pair_tracks_control_plane_v0_1_19():
     for path in current_pair_paths:
         text = read(path)
         assert "v0.1.19" in text, path
+        assert "v0.5.10" not in text, path
         assert "v0.1.15" not in text, path
 
     next_patch_pair_paths = [
@@ -1193,7 +1195,7 @@ def test_public_release_download_verify_is_checksum_first_and_post_merge_canarie
         "verifies every\nasset listed in `SHA256SUMS`",
         "verifies signed\nprovenance",
         "public release download checksum verification",
-        "stable public release archives at v0.5.10",
+        "stable public release archives at v0.5.11",
     ]:
         assert needle in install + "\n" + verification
 
@@ -7918,7 +7920,7 @@ def test_dual_public_release_smoke_workflow_and_docs_contract():
         assert needle in workflow
 
     for needle in [
-            "AO2 stable release: `v0.5.10`",
+        "AO2 stable release: `v0.5.11`",
         "AO2 control-plane stable release: `v0.1.19`",
         "ao2-dual-public-release-smoke",
         "ao2.dual-public-release-smoke.v1",
@@ -16290,6 +16292,10 @@ def test_dual_repo_public_release_verification_index_is_documented():
         "# Public Release Verification",
         "uesugitorachiyo/ao2",
         "uesugitorachiyo/ao2-control-plane",
+        "v0.5.11",
+        "8307795b3434af920f6cef088e56ca8fcc76775b",
+        "31619411288",
+        "31622142672",
         "v0.5.2",
         "v0.1.17",
         "Post Stable Release Verification",
@@ -16367,8 +16373,8 @@ def test_release_immutability_audit_composes_stable_asset_and_download_checks():
     assert "npm run release:immutability-audit" in verification
     assert "ao2.release-immutability-audit.v1" in verification
     assert "stable public release" in readme
-    assert "v0.5.10" in readme
-    assert "ao2-0.5.10-linux-x86_64.tar.gz" in readme
+    assert "v0.5.11" in readme
+    assert "ao2-0.5.11-linux-x86_64.tar.gz" in readme
     assert "https://youtu.be/pGhPooqC3hQ" in readme
     assert "stable public release" in install
     assert "v0.4.81" in next_patch

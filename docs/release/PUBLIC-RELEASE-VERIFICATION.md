@@ -5,8 +5,17 @@ This is the operator index for verifying public release evidence across
 
 The current public release pair is:
 
-- AO2 stable release: `v0.5.10`
+- AO2 stable release: `v0.5.11`
 - AO2 control-plane stable release: `v0.1.19`
+
+AO2 `v0.5.11` was published from source
+[`8307795b3434af920f6cef088e56ca8fcc76775b`](https://github.com/uesugitorachiyo/ao2/commit/8307795b3434af920f6cef088e56ca8fcc76775b)
+by successful
+[Public Release Build run `31619411288`](https://github.com/uesugitorachiyo/ao2/actions/runs/31619411288).
+Successful
+[Post Stable Release Verification run `31622142672`](https://github.com/uesugitorachiyo/ao2/actions/runs/31622142672)
+verified the published release on Ubuntu, macOS, and Windows and ran the dual
+public release smoke against AO2 Control Plane `v0.1.19`.
 
 All checks below are read-only. They download release assets or GitHub Actions
 artifacts, verify checksums and summaries, and do not approve AO2 runs, mutate
@@ -16,7 +25,7 @@ AO artifacts, mutate GitHub releases, or include credential material.
 
 AO2 uses `Post Stable Release Verification` in
 `.github/workflows/post-stable-release-verification.yml`. It can be dispatched
-manually and runs on schedule. It downloads AO2 `v0.5.10` release archives,
+manually and runs on schedule. It downloads AO2 `v0.5.11` release archives,
 `promotion-plan.json`, and `SHA256SUMS`, then runs
 install/update, `version --json`, `doctor --json`, and
 `adapter doctor --provider scripted` on Ubuntu, macOS, and Windows.
