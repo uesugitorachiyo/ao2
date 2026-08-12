@@ -110,6 +110,17 @@ The lease supplements the signed execution authorization; it does not replace
 it or grant release, deployment, publication, provider, credential, arbitrary
 command, session-management, or cleanup authority.
 
+Fixed lifecycle checks use the separate strict
+`ao2.physical-host-bounded-lease.v1` contract. Its
+`isolation_mode=bounded_shared` permits non-negative counts of interactive
+sessions, unrelated AO workloads, and SSH connections. Multiple SSH
+connections do not create a conflict. The lease is accepted only when its
+conflicting lease, workload, and scratch lists are empty and
+`resource_limits_satisfied=true`. It retains the same digest, freshness,
+approval, unique scratch, cleanup, natural-completion, no-broad-kill, and
+no-graphical-session-mutation boundaries. Bounded leases are not accepted by
+`physical_unique` and cannot authorize release-sensitive or host-global work.
+
 The same parser can validate a regular non-symlink lease file offline on any
 host without starting the worker or contacting the Control Plane:
 
@@ -122,9 +133,10 @@ python scripts/ao2_windows_outbound_worker.py \
   --factory-root /bounded/factory
 ```
 
-The profile selector accepts only the fixed Windows physical qualification and
-Ubuntu no-op lifecycle profiles. The worker action always uses the Windows
-profile; the Ubuntu profile is available only to an offline lifecycle wrapper.
+The profile selector accepts the fixed Windows physical qualification plus
+Ubuntu and Windows no-op lifecycle profiles. The worker action always uses the
+exclusive Windows profile; lifecycle profiles are available only to offline
+fixed wrappers.
 
 The payload must not provide command text, PowerShell text, executable paths,
 working directories, shell fragments, or environment variables. Repository

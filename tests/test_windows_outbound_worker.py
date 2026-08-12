@@ -68,6 +68,90 @@ def physical_host_lease_parameters(worker, factory_root: Path, *, now=None, **ov
     }, now
 
 
+def bounded_host_lease_parameters(worker, factory_root: Path, *, now=None, **overrides):
+    parameters, now = physical_host_lease_parameters(worker, factory_root, now=now)
+    lease = json.loads(base64.b64decode(parameters["physical_host_lease_base64"]))
+    lease.pop("exclusive_use_confirmed")
+    lease.pop("overlapping_lease_ids")
+    lease.update(
+        {
+            "schema_version": "ao2.physical-host-bounded-lease.v1",
+            "command_profile": "windows_stack_qualification:lifecycle_noop",
+            "isolation_mode": "bounded_shared",
+            "interactive_sessions_active": 2,
+            "interactive_ao_workloads_active": 3,
+            "ssh_connections_active": 4,
+            "conflicting_lease_ids": [],
+            "conflicting_workload_ids": [],
+            "conflicting_scratch_roots": [],
+            "resource_limits_satisfied": True,
+        }
+    )
+    lease.update(overrides)
+    raw = json.dumps(lease, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return {
+        "physical_host_lease_base64": base64.b64encode(raw).decode("ascii"),
+        "physical_host_lease_sha256": hashlib.sha256(raw).hexdigest(),
+    }, now
+
+
+def test_physical_host_bounded_lease_accepts_multiple_ssh_and_unrelated_workloads(tmp_path: Path) -> None:
+    worker = load_worker_module()
+    parameters, now = bounded_host_lease_parameters(worker, tmp_path)
+
+    result = worker.validate_physical_host_lease(
+        parameters["physical_host_lease_base64"],
+        parameters["physical_host_lease_sha256"],
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        profile="windows_stack_qualification:lifecycle_noop",
+        now=now,
+    )
+
+    assert result["status"] == "accepted"
+    assert result["isolation_mode"] == "bounded_shared"
+
+
+def test_physical_host_bounded_lease_rejects_concrete_conflicts(tmp_path: Path) -> None:
+    worker = load_worker_module()
+    cases = [
+        ({"isolation_mode": "exclusive"}, "lease_schema_mismatch"),
+        ({"interactive_sessions_active": True}, "lease_schema_mismatch"),
+        ({"interactive_ao_workloads_active": -1}, "lease_schema_mismatch"),
+        ({"ssh_connections_active": -1}, "lease_schema_mismatch"),
+        ({"conflicting_lease_ids": ["lease-other"]}, "conflicting_lease"),
+        ({"conflicting_workload_ids": ["workload-other"]}, "conflicting_workload"),
+        ({"conflicting_scratch_roots": [str(tmp_path / "shared")]}, "conflicting_scratch_root"),
+        ({"resource_limits_satisfied": False}, "resource_limits_exceeded"),
+    ]
+    for overrides, expected_error in cases:
+        parameters, now = bounded_host_lease_parameters(worker, tmp_path, **overrides)
+        result = worker.validate_physical_host_lease(
+            parameters["physical_host_lease_base64"],
+            parameters["physical_host_lease_sha256"],
+            node_id="windows-hp255_g10",
+            factory_root=tmp_path,
+            profile="windows_stack_qualification:lifecycle_noop",
+            now=now,
+        )
+        assert result == {"status": "failed", "error_category": expected_error}
+
+
+def test_physical_host_bounded_lease_cannot_authorize_physical_unique(tmp_path: Path) -> None:
+    worker = load_worker_module()
+    parameters, now = bounded_host_lease_parameters(worker, tmp_path)
+
+    result = worker.validate_physical_host_lease(
+        parameters["physical_host_lease_base64"],
+        parameters["physical_host_lease_sha256"],
+        node_id="windows-hp255_g10",
+        factory_root=tmp_path,
+        now=now,
+    )
+
+    assert result == {"status": "failed", "error_category": "unsafe_command_profile"}
+
+
 def test_physical_host_lease_validator_accepts_exact_exclusive_lease(tmp_path: Path) -> None:
     worker = load_worker_module()
     parameters, now = physical_host_lease_parameters(worker, tmp_path)
