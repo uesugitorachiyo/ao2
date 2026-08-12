@@ -85,12 +85,14 @@ The task payload does not provide command text for that fallback.
 `windows_stack_qualification` is a fixed native-Windows verification action.
 Its payload may only select:
 
-- `mode`: `diagnostic`, `targeted`, `full`, `physical_unique`, or `toolchain`
+- `mode`: `diagnostic`, `targeted`, `full`, `physical_bounded`, legacy
+  `physical_unique`, or `toolchain`
 - `repositories` or `repos`: names from the canonical AO stack inventory
 - `timeout_seconds`: a bounded value from 30 through 3600 seconds
 
-`physical_unique` additionally requires `physical_host_lease_base64` and
-`physical_host_lease_sha256`. The decoded strict JSON contract is
+`physical_bounded` and legacy `physical_unique` additionally require
+`physical_host_lease_base64` and `physical_host_lease_sha256`. The decoded
+strict JSON contract is
 `ao2.physical-host-exclusive-lease.v1` or
 `ao2.physical-host-exclusive-lease.v2`, is limited to 16 KiB, rejects duplicate
 or unknown keys, and binds the node, operator approval record, purpose, issuance,
@@ -110,7 +112,7 @@ The lease supplements the signed execution authorization; it does not replace
 it or grant release, deployment, publication, provider, credential, arbitrary
 command, session-management, or cleanup authority.
 
-Fixed lifecycle checks use the separate strict
+New release qualification and fixed lifecycle checks use the separate strict
 `ao2.physical-host-bounded-lease.v1` contract. Its
 `isolation_mode=bounded_shared` permits non-negative counts of interactive
 sessions, unrelated AO workloads, and SSH connections. Multiple SSH
@@ -118,8 +120,11 @@ connections do not create a conflict. The lease is accepted only when its
 conflicting lease, workload, and scratch lists are empty and
 `resource_limits_satisfied=true`. It retains the same digest, freshness,
 approval, unique scratch, cleanup, natural-completion, no-broad-kill, and
-no-graphical-session-mutation boundaries. Bounded leases are not accepted by
-`physical_unique` and cannot authorize release-sensitive or host-global work.
+no-graphical-session-mutation boundaries. `physical_bounded` accepts this
+contract for release qualification; concrete lease, workload, scratch, or
+resource conflicts still fail closed. Legacy `physical_unique` remains
+available for preserved historical evidence. Neither mode authorizes
+host-global work.
 
 The same parser can validate a regular non-symlink lease file offline on any
 host without starting the worker or contacting the Control Plane:
