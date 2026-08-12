@@ -243,7 +243,7 @@ def _validate_windows_ownership(path: Path) -> None:
         "schema_version": WINDOWS_OWNERSHIP_SCHEMA,
         "status": "passed",
         "hosted_windows_portable_suite_owner": True,
-        "physical_windows_mode": "physical_unique",
+        "physical_windows_mode": "physical_bounded",
         "target_triple": "x86_64-pc-windows-msvc",
         "linux_mingw_x86_64_pc_windows_gnu": "non_authoritative",
     }
