@@ -1520,6 +1520,47 @@ def test_windows_stack_qualification_inventory_matches_worker_contract() -> None
     assert inventory["timeout_bounds_seconds"]["maximum"] == worker.MAX_STACK_QUALIFICATION_TIMEOUT_SECONDS
 
 
+def test_ao_next_windows_profiles_are_fixed_and_native() -> None:
+    worker = load_worker_module()
+
+    assert worker.WINDOWS_REPOSITORY_PROFILES["ao-next"] == {
+        "physical_unique": (
+            {
+                "name": "ao-next-workspace-test",
+                "argv": ("cargo", "test", "--locked", "--workspace"),
+            },
+            {
+                "name": "ao-next-release-build",
+                "argv": ("cargo", "build", "--locked", "--workspace", "--release"),
+            },
+        ),
+        "targeted": (
+            {
+                "name": "ao-next-workspace-test",
+                "argv": ("cargo", "test", "--locked", "--workspace"),
+            },
+        ),
+        "full": (
+            {
+                "name": "ao-next-workspace-test",
+                "argv": ("cargo", "test", "--locked", "--workspace"),
+            },
+            {
+                "name": "ao-next-fmt",
+                "argv": ("cargo", "fmt", "--all", "--", "--check"),
+            },
+            {
+                "name": "ao-next-clippy",
+                "argv": ("cargo", "clippy", "--locked", "--workspace", "--all-targets", "--", "-D", "warnings"),
+            },
+            {
+                "name": "ao-next-release-build",
+                "argv": ("cargo", "build", "--locked", "--workspace", "--release"),
+            },
+        ),
+    }
+
+
 def test_fixed_tool_resolver_uses_standard_go_location_when_path_lacks_go(tmp_path: Path, monkeypatch) -> None:
     worker = load_worker_module()
     go_exe = tmp_path / "ProgramFiles" / "Go" / "bin" / "go.exe"
@@ -1959,7 +2000,7 @@ def test_windows_stack_qualification_physical_unique_runs_only_contract_physical
 ) -> None:
     worker = load_worker_module()
     factory = tmp_path / "factory"
-    for repo_name in ("ao2", "ao2-control-plane", "ao-command"):
+    for repo_name in ("ao2", "ao2-control-plane", "ao-command", "ao-next"):
         (factory / repo_name / ".git").mkdir(parents=True)
     commands_seen: list[list[str]] = []
 
@@ -1992,7 +2033,7 @@ def test_windows_stack_qualification_physical_unique_runs_only_contract_physical
         "windows_stack_qualification",
         {
             "mode": "physical_unique",
-            "repositories": ["ao2", "ao2-control-plane", "ao-command"],
+            "repositories": ["ao2", "ao2-control-plane", "ao-command", "ao-next"],
             "profile_digest": "sha256:physical-unique",
             **lease_parameters,
         },
@@ -2009,10 +2050,12 @@ def test_windows_stack_qualification_physical_unique_runs_only_contract_physical
         "physical-windows-lifecycle",
         "delegated-to-hosted-native-windows",
         "delegated-to-hosted-native-windows",
+        "ao-next-workspace-test",
+        "ao-next-release-build",
     ]
     assert all("release-readiness" not in " ".join(command) for command in commands_seen)
     assert all("clippy" not in " ".join(command) for command in commands_seen)
-    assert len(commands_seen) == 4
+    assert len(commands_seen) == 6
 
 
 def test_physical_unique_doctor_uses_prepared_binary_not_cargo_run(

@@ -153,6 +153,8 @@ The canonical inventory is machine-readable at
 `docs/windows-stack-qualification-inventory.json`. The reviewed
 repository-to-command profiles live in
 `scripts/ao2_windows_outbound_worker.py::WINDOWS_REPOSITORY_PROFILES`.
+AO Next uses fixed Cargo workspace test and release-build commands for physical
+Windows qualification; task payloads cannot replace those commands.
 The AO2 full profile runs Cargo build/test gates with
 `--target-dir C:\ao\factory\.ao2-worker-target\ao2-full`, avoiding the shared
 repository `target\debug\ao2.exe` when that executable is locked by another
