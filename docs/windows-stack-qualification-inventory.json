@@ -12,6 +12,7 @@
     "ao-covenant",
     "ao2",
     "ao2-control-plane",
+    "ao-next",
     "ao-command",
     "ao-arena",
     "ao-crucible",

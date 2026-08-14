@@ -83,6 +83,7 @@ CANONICAL_REPOSITORIES = (
     "ao-covenant",
     "ao2",
     "ao2-control-plane",
+    "ao-next",
     "ao-command",
     "ao-arena",
     "ao-crucible",
@@ -1040,6 +1041,21 @@ WINDOWS_REPOSITORY_PROFILES: dict[str, dict[str, tuple[ProfileCommand, ...]]] = 
             {"name": "cargo-test-workspace", "argv": ("cargo", "test", "--workspace")},
             {"name": "cargo-fmt-check", "argv": ("cargo", "fmt", "--all", "--", "--check")},
             {"name": "cargo-clippy", "argv": ("cargo", "clippy", "--workspace", "--all-targets", "--", "-D", "warnings")},
+        ),
+    },
+    "ao-next": {
+        "physical_unique": (
+            {"name": "ao-next-workspace-test", "argv": ("cargo", "test", "--locked", "--workspace")},
+            {"name": "ao-next-release-build", "argv": ("cargo", "build", "--locked", "--workspace", "--release")},
+        ),
+        "targeted": (
+            {"name": "ao-next-workspace-test", "argv": ("cargo", "test", "--locked", "--workspace")},
+        ),
+        "full": (
+            {"name": "ao-next-workspace-test", "argv": ("cargo", "test", "--locked", "--workspace")},
+            {"name": "ao-next-fmt", "argv": ("cargo", "fmt", "--all", "--", "--check")},
+            {"name": "ao-next-clippy", "argv": ("cargo", "clippy", "--locked", "--workspace", "--all-targets", "--", "-D", "warnings")},
+            {"name": "ao-next-release-build", "argv": ("cargo", "build", "--locked", "--workspace", "--release")},
         ),
     },
     "ao-command": {

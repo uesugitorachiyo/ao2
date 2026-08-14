@@ -560,8 +560,11 @@ fn rejects_impossible_evidence_lifecycle_order() {
     let temp = tempfile::tempdir().unwrap();
     let bundle = temp.path().join("bundle.json");
     let mut value = valid_bundle(temp.path());
-    value["source"]["fetched_at"] = json!("2026-08-07T10:00:00Z");
-    value["reproduction"]["completed_at"] = json!("2026-08-07T09:59:59Z");
+    let fetched_at = Utc::now();
+    value["source"]["fetched_at"] = json!(fetched_at.to_rfc3339_opts(SecondsFormat::Secs, true));
+    value["reproduction"]["completed_at"] = json!(
+        (fetched_at - chrono::Duration::seconds(1)).to_rfc3339_opts(SecondsFormat::Secs, true)
+    );
     write_artifacts(temp.path(), &mut value);
     write(&bundle, &value);
 
