@@ -74,6 +74,10 @@ COMMON_ARCHIVE_MEMBERS = {
     "install.sh",
     "verify-release.sh",
 }
+WINDOWS_ARCHIVE_MEMBERS = {
+    "ao2-windows-outbound-worker.py",
+    "ao2-windows-worker.cmd",
+}
 
 
 class CandidateValidationError(ValueError):
@@ -113,6 +117,8 @@ def _safe_inventory(root: Path) -> list[str]:
 
 def _archive_members(archive: Path, target: str) -> dict[str, bytes]:
     expected = COMMON_ARCHIVE_MEMBERS | {TARGETS[target]["binary"]}
+    if target == "windows-x86_64":
+        expected |= WINDOWS_ARCHIVE_MEMBERS
     if not archive.is_file() or archive.is_symlink():
         raise CandidateValidationError(f"missing or unsafe archive for {target}")
     if archive.stat().st_size > MAX_ARCHIVE_BYTES:

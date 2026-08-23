@@ -134,6 +134,9 @@ def create_hosted_candidate_fixture(
         archive = dist / archive_name
         files = dict(common_files)
         files[binary_name] = f"binary:{target}\n".encode()
+        if target == "windows-x86_64":
+            files["ao2-windows-outbound-worker.py"] = b"#!/usr/bin/env python3\n"
+            files["ao2-windows-worker.cmd"] = b"@echo off\r\n"
         files["BUILD-PROVENANCE.json"] = (
             json.dumps(
                 {
