@@ -2902,6 +2902,11 @@ def token_from_args(args: argparse.Namespace) -> str:
     raise SystemExit("set --api-token-file or --api-token-env")
 
 
+def control_plane_url_from_args(args: argparse.Namespace) -> str | None:
+    override = os.environ.get("AO2_WINDOWS_CONTROL_PLANE_URL_OVERRIDE", "").strip()
+    return override or args.control_plane_url
+
+
 def acquire_single_instance_lock(state_root: Path):
     state_root.mkdir(parents=True, exist_ok=True)
     lock = (state_root / "worker.lock").open("a+b")
@@ -2946,8 +2951,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     args = parser.parse_args(argv)
     if bool(args.validate_physical_host_lease) != bool(args.physical_host_lease_sha256):
         parser.error("offline lease validation requires both lease path and SHA-256")
-    if args.validate_physical_host_lease is None and not args.control_plane_url:
-        parser.error("--control-plane-url is required unless validating a physical-host lease")
+    if args.validate_physical_host_lease is None and not control_plane_url_from_args(args):
+        parser.error(
+            "--control-plane-url or AO2_WINDOWS_CONTROL_PLANE_URL_OVERRIDE "
+            "is required unless validating a physical-host lease"
+        )
     return args
 
 
@@ -2974,7 +2982,7 @@ def main(argv: list[str] | None = None) -> int:
         print(canonical_json_bytes(result).decode("utf-8"))
         return 0 if result["status"] == "accepted" else 1
     instance_lock = acquire_single_instance_lock(args.state_root)
-    transport = HttpTaskBoardTransport(args.control_plane_url, token_from_args(args))
+    transport = HttpTaskBoardTransport(control_plane_url_from_args(args), token_from_args(args))
     worker = WindowsOutboundWorker(
         node_id=args.node_id,
         factory_root=args.factory_root,

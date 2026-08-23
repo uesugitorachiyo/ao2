@@ -88,6 +88,25 @@ def allow_test_execution(*_args, **_kwargs):
     return True, "test_fixture_authorized"
 
 
+def test_control_plane_url_uses_cli_value_without_operator_override(monkeypatch) -> None:
+    worker = load_worker_module()
+    monkeypatch.delenv("AO2_WINDOWS_CONTROL_PLANE_URL_OVERRIDE", raising=False)
+    args = worker.parse_args(["--control-plane-url", "http://10.0.0.160:18745"])
+
+    assert worker.control_plane_url_from_args(args) == "http://10.0.0.160:18745"
+
+
+def test_control_plane_url_operator_override_precedes_stale_scheduled_task_value(monkeypatch) -> None:
+    worker = load_worker_module()
+    monkeypatch.setenv(
+        "AO2_WINDOWS_CONTROL_PLANE_URL_OVERRIDE",
+        "http://ao-control-plane.local:18745",
+    )
+    args = worker.parse_args(["--control-plane-url", "http://10.0.0.160:18745"])
+
+    assert worker.control_plane_url_from_args(args) == "http://ao-control-plane.local:18745"
+
+
 def physical_host_lease_parameters(worker, factory_root: Path, *, now=None, **overrides):
     now = now or datetime(2026, 8, 10, 18, 0, tzinfo=timezone.utc)
     lease_id = "lease-windows-001"
