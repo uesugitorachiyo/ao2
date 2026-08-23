@@ -200,6 +200,11 @@ expected compatible stable companion is
 The overview video is available at
 [https://youtu.be/pGhPooqC3hQ](https://youtu.be/pGhPooqC3hQ).
 
+The next Windows patch archive adds the outbound worker at its package root.
+After extracting that Windows archive, run `ao2-windows-worker.cmd --help`;
+the launcher requires Python 3.11 or newer. Linux and macOS archives do not
+contain this Windows-only entry point. See [Windows outbound worker](docs/windows-outbound-worker.md).
+
 Download and verify a macOS archive:
 
 ```sh
@@ -352,6 +357,7 @@ ao2 pulse run-loop \
 - [Security](docs/SECURITY.md)
 - [Verification](docs/VERIFICATION.md)
 - [Public release verification](docs/release/PUBLIC-RELEASE-VERIFICATION.md)
+- [AO2 v0.5.12 stable patch release notes](docs/release/v0.5.12-stable.md)
 - [AO2 v0.5.11 stable release notes](docs/release/v0.5.11-stable.md)
 
 ## License

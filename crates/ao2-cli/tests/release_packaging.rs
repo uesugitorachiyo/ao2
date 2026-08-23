@@ -278,6 +278,12 @@ fn cli_packages_explicit_binary_for_cross_target_distribution() {
     assert!(entries
         .iter()
         .any(|entry| entry == "RELEASE-VERIFICATION.json"));
+    assert!(entries
+        .iter()
+        .any(|entry| entry == "ao2-windows-outbound-worker.py"));
+    assert!(entries
+        .iter()
+        .any(|entry| entry == "ao2-windows-worker.cmd"));
     assert!(entries.iter().any(|entry| entry == "LICENSE"));
     assert!(entries.iter().any(|entry| entry == "NOTICE"));
 
@@ -290,10 +296,64 @@ fn cli_packages_explicit_binary_for_cross_target_distribution() {
     assert_eq!(manifest_json["target"], "windows-x86_64");
     assert_eq!(manifest_json["binary"], "ao2.exe");
     assert_eq!(manifest_json["binary_path"], "bin/ao2.exe");
+    assert!(manifest_json["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|value| value == "ao2-windows-outbound-worker.py"));
+    assert!(manifest_json["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|value| value == "ao2-windows-worker.cmd"));
     assert_eq!(
         manifest_json["verifiers"],
         serde_json::json!(["verify-release.sh", "Verify-Release.ps1"])
     );
+    let checksums = archive_text_entry(
+        Path::new(json["archive"].as_str().expect("archive")),
+        "SHA256SUMS",
+    );
+    assert!(checksums.contains("ao2-windows-outbound-worker.py"));
+    assert!(checksums.contains("ao2-windows-worker.cmd"));
+}
+
+#[test]
+fn cli_omits_windows_worker_from_unix_target_archive() {
+    let ao2 = env!("CARGO_BIN_EXE_ao2");
+    let out_dir = tempfile::tempdir().expect("tempdir");
+
+    let output = Command::new(ao2)
+        .args([
+            "release",
+            "package",
+            "--out-dir",
+            out_dir.path().to_str().expect("utf8 out dir"),
+            "--version",
+            "9.9.9-test",
+            "--binary",
+            ao2,
+            "--target-label",
+            "linux-x86_64",
+        ])
+        .output()
+        .expect("run ao2 release package");
+
+    assert!(
+        output.status.success(),
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("package command prints json");
+    let entries = archive_entries(Path::new(json["archive"].as_str().expect("archive")));
+    assert!(!entries
+        .iter()
+        .any(|entry| entry == "ao2-windows-outbound-worker.py"));
+    assert!(!entries
+        .iter()
+        .any(|entry| entry == "ao2-windows-worker.cmd"));
 }
 
 #[test]
@@ -3505,6 +3565,14 @@ fn hosted_release_archive_smoke_ci_uploads_three_os_install_sidecar_artifacts() 
     assert!(windows_smoke.contains("windows-x86_64"));
     assert!(windows_smoke.contains("install.ps1"));
     assert!(windows_smoke.contains("provider matrix --json"));
+    assert!(windows_smoke.contains("worker package with spaces"));
+    assert!(windows_smoke.contains("ao2-windows-worker.cmd"));
+    assert!(windows_smoke.contains("--validate-physical-host-lease"));
+    assert!(windows_smoke.contains("yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'"));
+    assert!(windows_smoke.contains("windows_worker_launcher"));
+    assert!(windows_smoke.contains("windows_worker_python_requirement"));
+    assert!(windows_smoke.contains("provider_calls"));
+    assert!(windows_smoke.contains("credential_use"));
 }
 
 #[test]

@@ -48,6 +48,55 @@ if ($Provenance.version -ne $Version) { throw "unexpected provenance version: $(
 if ($Provenance.git_commit -ne $ExpectedCommit) { throw "unexpected provenance git_commit: $($Provenance.git_commit)" }
 if ($Provenance.build_profile -ne "release") { throw "unexpected provenance build_profile: $($Provenance.build_profile)" }
 
+$WorkerPackage = Join-Path $Root "worker package with spaces"
+Copy-Item -LiteralPath $Extract -Destination $WorkerPackage -Recurse
+$WorkerLauncher = Join-Path $WorkerPackage "ao2-windows-worker.cmd"
+if (!(Test-Path -LiteralPath $WorkerLauncher -PathType Leaf)) { throw "missing packaged Windows worker launcher" }
+& $WorkerLauncher --help | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $Root "windows-worker-help.txt")
+if ($LASTEXITCODE -ne 0) { throw "packaged Windows worker --help failed" }
+
+$FactoryRoot = Join-Path $Root "factory root with spaces"
+$LeaseId = "release-smoke-lease"
+$ScratchRoot = Join-Path (Join-Path $FactoryRoot ".ao2-physical-host-leases") $LeaseId
+$Now = [DateTimeOffset]::UtcNow
+$UtcFormat = "yyyy-MM-dd'T'HH:mm:ss.fffffff'Z'"
+$Lease = [ordered]@{
+    schema_version = "ao2.physical-host-exclusive-lease.v1"
+    lease_id = $LeaseId
+    node_id = "windows-release-smoke"
+    purpose = "windows_stack_qualification"
+    operator_approved = $true
+    operator_approval_id = "release-smoke-approval"
+    issued_at = $Now.AddMinutes(-1).ToString($UtcFormat)
+    expires_at = $Now.AddMinutes(10).ToString($UtcFormat)
+    heartbeat_at = $Now.ToString($UtcFormat)
+    exclusive_use_confirmed = $true
+    interactive_sessions_active = 0
+    overlapping_lease_ids = @()
+    command_profile = "windows_stack_qualification:lifecycle_noop"
+    scratch_root = $ScratchRoot
+    cleanup_roots = @($ScratchRoot)
+    natural_completion_only = $true
+    abort_requested = $false
+    released = $false
+    allow_broad_process_termination = $false
+    allow_graphical_session_mutation = $false
+}
+$LeasePath = Join-Path $Root "offline lease with spaces.json"
+$LeaseJson = $Lease | ConvertTo-Json -Compress
+[System.IO.File]::WriteAllText($LeasePath, $LeaseJson, [System.Text.UTF8Encoding]::new($false))
+$LeaseSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $LeasePath).Hash.ToLowerInvariant()
+$WorkerValidationPath = Join-Path $Root "windows-worker-offline-validation.json"
+& $WorkerLauncher `
+    --validate-physical-host-lease $LeasePath `
+    --physical-host-lease-sha256 $LeaseSha256 `
+    --physical-host-lease-profile "windows_stack_qualification:lifecycle_noop" `
+    --node-id "windows-release-smoke" `
+    --factory-root $FactoryRoot | Set-Content -Encoding UTF8 -LiteralPath $WorkerValidationPath
+if ($LASTEXITCODE -ne 0) { throw "packaged Windows worker offline lease validation failed" }
+$WorkerValidation = Get-Content -Raw -LiteralPath $WorkerValidationPath | ConvertFrom-Json
+if ($WorkerValidation.status -ne "accepted") { throw "packaged Windows worker offline lease was not accepted" }
+
 $env:AO2_INSTALL_DIR = $InstallDir
 & (Join-Path $Extract "install.ps1") | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $Root "install.txt")
 if ($LASTEXITCODE -ne 0) {
@@ -86,6 +135,10 @@ New-Item -ItemType Directory -Force -Path (Split-Path -Parent $SummaryJson) | Ou
     control_plane_approves_release = $false
     mutates_ao_artifacts = $false
     release_acceptance_owner = "factory-v3 evaluator-closer"
+    windows_worker_launcher = "passed"
+    windows_worker_python_requirement = ">=3.11"
+    provider_calls = 0
+    credential_use = 0
 } | ConvertTo-Json -Depth 5 | Set-Content -Encoding UTF8 -LiteralPath $SummaryJson
 
 $CandidateDist = Join-Path (Split-Path -Parent $SummaryJson) "dist"

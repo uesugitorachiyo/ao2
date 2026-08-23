@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping
@@ -43,6 +44,22 @@ def _required_environment(environ: Mapping[str, str]) -> dict[str, str]:
             raise ArtifactImportError(f"{name} must be a non-empty environment value")
         values[name] = value
     return values
+
+
+def repository_version(repository: Path) -> str:
+    manifest = repository / "Cargo.toml"
+    if manifest.is_symlink() or not manifest.is_file():
+        raise ArtifactImportError("Cargo.toml must be a regular file")
+    try:
+        document = tomllib.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
+        raise ArtifactImportError(f"Cargo.toml could not be parsed: {exc}") from exc
+    workspace = document.get("workspace")
+    package = workspace.get("package") if isinstance(workspace, dict) else None
+    version = package.get("version") if isinstance(package, dict) else None
+    if not isinstance(version, str) or not version:
+        raise ArtifactImportError("Cargo.toml must declare workspace.package.version")
+    return version
 
 
 def relative_file_inventory(root: Path) -> list[str]:
@@ -132,11 +149,7 @@ def import_qualification(
     if values["GITHUB_SHA"] != source_sha:
         raise ArtifactImportError("GITHUB_SHA does not match SOURCE_SHA")
 
-    discovered_version = subprocess.check_output(
-        [str(repository / "scripts" / "current-version.sh")],
-        cwd=repository,
-        text=True,
-    ).strip()
+    discovered_version = repository_version(repository)
     if discovered_version != version:
         raise ArtifactImportError("discovered repository version does not match VERSION")
 
