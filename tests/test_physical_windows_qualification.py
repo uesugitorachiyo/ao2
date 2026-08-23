@@ -211,6 +211,15 @@ def create_hosted_candidate_fixture(
             "target": target,
             "version": version,
         }
+        if target == "windows-x86_64":
+            summary.update(
+                {
+                    "credential_use": 0,
+                    "provider_calls": 0,
+                    "windows_worker_launcher": "passed",
+                    "windows_worker_python_requirement": ">=3.11",
+                }
+            )
         (artifact / "summary.json").write_text(
             json.dumps(summary, sort_keys=True) + "\n",
             encoding="utf-8",
@@ -1385,6 +1394,18 @@ def test_hosted_candidate_validator_accepts_exact_three_platform_contract(tmp_pa
         "requires_signing_credentials": False,
         "signed_four_archive_release_gate": "separate_canonical_gate",
     }
+
+
+def test_hosted_candidate_validator_rejects_unsafe_windows_smoke_boundary(tmp_path: Path) -> None:
+    validator = load_hosted_candidate_script()
+    root = create_hosted_candidate_fixture(tmp_path / "candidates")
+    summary_path = next(root.glob("*windows-x86_64*/summary.json"))
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    summary["provider_calls"] = 1
+    summary_path.write_text(json.dumps(summary) + "\n", encoding="utf-8")
+
+    with pytest.raises(validator.CandidateValidationError, match="provider_calls"):
+        validator.validate_candidates(root, SOURCE_SHA, VERSION)
 
 
 @pytest.mark.parametrize(
