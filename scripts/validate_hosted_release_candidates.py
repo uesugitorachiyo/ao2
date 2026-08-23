@@ -52,6 +52,12 @@ SUMMARY_KEYS = {
     "target",
     "version",
 }
+WINDOWS_SUMMARY_KEYS = {
+    "credential_use",
+    "provider_calls",
+    "windows_worker_launcher",
+    "windows_worker_python_requirement",
+}
 COMMON_ARCHIVE_MEMBERS = {
     "BUILD-PROVENANCE.json",
     "LICENSE",
@@ -269,8 +275,13 @@ def validate_candidates(root: Path, source_sha: str, version: str) -> dict[str, 
     for summary_path in summaries:
         artifact_root = summary_path.parent
         summary = _json_object(summary_path.read_bytes(), f"candidate summary {summary_path}")
-        _require_exact_keys(summary, SUMMARY_KEYS, f"candidate summary {summary_path}")
         target = summary.get("target")
+        summary_keys = (
+            SUMMARY_KEYS | WINDOWS_SUMMARY_KEYS
+            if target == "windows-x86_64"
+            else SUMMARY_KEYS
+        )
+        _require_exact_keys(summary, summary_keys, f"candidate summary {summary_path}")
         if target not in TARGETS or target in seen:
             raise CandidateValidationError(f"unexpected or duplicate target: {target}")
         expected_archive = f"ao2-{version}-{target}.tar.gz"
@@ -302,6 +313,14 @@ def validate_candidates(root: Path, source_sha: str, version: str) -> dict[str, 
             version,
         )
         if target == "windows-x86_64":
+            for key, expected in {
+                "credential_use": 0,
+                "provider_calls": 0,
+                "windows_worker_launcher": "passed",
+                "windows_worker_python_requirement": ">=3.11",
+            }.items():
+                if summary.get(key) != expected:
+                    raise CandidateValidationError(f"{target} summary {key} mismatch")
             _validate_windows_ownership(artifact_root / "windows-coverage-ownership.json")
         artifacts.append(
             {
