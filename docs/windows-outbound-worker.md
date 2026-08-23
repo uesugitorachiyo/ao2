@@ -39,6 +39,27 @@ powershell -NoProfile -ExecutionPolicy Bypass `
   -NodeId windows-hp255_g10
 ```
 
+Prefer a stable local hostname for `-ControlPlaneUrl` when the Mac host uses
+DHCP. If an existing administrator-owned task still contains a stale address,
+the task owner can redirect it without rewriting the task definition by setting
+the user-scoped override and restarting the task:
+
+```powershell
+[Environment]::SetEnvironmentVariable(
+  "AO2_WINDOWS_CONTROL_PLANE_URL_OVERRIDE",
+  "http://ao-control-plane.local:18745",
+  "User"
+)
+Stop-ScheduledTask -TaskName "AO2 Windows Outbound Worker"
+Start-ScheduledTask -TaskName "AO2 Windows Outbound Worker"
+```
+
+`AO2_WINDOWS_CONTROL_PLANE_URL_OVERRIDE` takes precedence over the task's
+`--control-plane-url` value. Set it only to a trusted authenticated Control
+Plane because the worker sends its bearer token to that endpoint. Clear the
+override by setting its user-scoped value to `$null` after the task definition
+has been updated.
+
 The task board allowlist is explicit: `status`, `publish_capability`,
 `sync_ao_stack`, `ao2_doctor`, `timeout_fixture`, and
 `windows_stack_qualification`. The worker rejects arbitrary command text and
