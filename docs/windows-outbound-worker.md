@@ -4,6 +4,20 @@ The Windows worker polls the Mac-hosted AO2 Control Plane outbound and posts
 task-board result evidence back to `/api/v1/ai/task-board`. It does not open an
 inbound Windows HTTP endpoint.
 
+AO2 `v0.5.12` Windows release archives include this worker as
+`ao2-windows-outbound-worker.py` plus the package-root
+`ao2-windows-worker.cmd` launcher. From an extracted archive, including a path
+containing spaces, run:
+
+```powershell
+.\ao2-windows-worker.cmd --help
+```
+
+The launcher requires Python 3.11 or newer. It prefers `py -3.11`, falls back
+to a suitable `python`, forwards all arguments to the packaged worker, and
+fails with an explicit prerequisite message when neither is available. The
+launcher and worker are omitted from Linux and macOS archives.
+
 Run the worker directly for a foreground smoke:
 
 ```powershell

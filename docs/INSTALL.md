@@ -80,6 +80,12 @@ On Windows, extract the archive, run `Verify-Release.ps1`, then run
 `install.ps1` and confirm the installed identity with
 `ao2.exe version --json`.
 
+The `v0.5.12` Windows archive also places `ao2-windows-worker.cmd` beside the
+archive manifest. It requires Python 3.11 or newer and may be checked before
+configuration with `ao2-windows-worker.cmd --help`, including from an extract
+directory whose path contains spaces. This launcher is not present in the
+Linux or macOS archives and does not start a listener by itself.
+
 AO2 `v0.5.11` publishes aggregate checksums and GitHub attestations, but not the
 detached RSA provenance files required by the `v0.5.11` `install update`
 command. For that released binary, use the verified archive installer shown

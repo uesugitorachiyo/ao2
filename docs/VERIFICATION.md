@@ -1274,6 +1274,11 @@ Result:
 - stable public release archives at v0.5.11 (macOS aarch64, Linux x86_64, and
   Windows x86_64) are SHA256 verified from the published `SHA256SUMS`; the
   canonical hosted release is bound by its immutable `promotion-plan.json`.
+- the `v0.5.12` candidate Windows archive checksum-covers
+  `ao2-windows-outbound-worker.py` and `ao2-windows-worker.cmd`; hosted smoke
+  runs the launcher from a path containing spaces and validates a synthetic
+  offline lease with Python 3.11 or newer, zero provider calls, and zero
+  credential use. Linux and macOS candidate archives omit both Windows files.
 - `.github/workflows/post-stable-release-verification.yml` runs a hosted
   consumer smoke for the stable public release on Ubuntu, macOS, and Windows:
   download the published archive, verify `SHA256SUMS`, install through the
