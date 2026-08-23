@@ -41,18 +41,11 @@ pub(crate) fn package_release(
     let package_name = format!("ao2-{version}-{target}");
     let stage_dir = out_dir.join(format!(".{package_name}.stage"));
     if stage_dir.exists() {
-        fs::remove_dir_all(&stage_dir)
-            .with_context(|| format!("remove stale {}", stage_dir.display()))?;
+        fs::remove_dir_all(&stage_dir)?;
     }
     fs::create_dir_all(stage_dir.join("bin"))?;
     let staged_binary = stage_dir.join("bin").join(binary_name);
-    fs::copy(&source_binary, &staged_binary).with_context(|| {
-        format!(
-            "copy {} to {}",
-            source_binary.display(),
-            staged_binary.display()
-        )
-    })?;
+    fs::copy(&source_binary, &staged_binary).context("copy release binary into stage")?;
     let binary_sha256 = sha256_file(&staged_binary)?;
     write_installer_scripts(&stage_dir, binary_name)?;
     write_release_verifier_scripts(&stage_dir)?;
@@ -60,6 +53,12 @@ pub(crate) fn package_release(
         .context("copy LICENSE into release stage")?;
     fs::copy(release_legal_file("NOTICE")?, stage_dir.join("NOTICE"))
         .context("copy NOTICE into release stage")?;
+    if target == "windows-x86_64" {
+        let worker = release_legal_file("scripts/ao2_windows_outbound_worker.py")?;
+        fs::copy(worker, stage_dir.join("ao2-windows-outbound-worker.py"))?;
+        let launcher = release_legal_file("scripts/ao2-windows-worker.cmd")?;
+        fs::copy(launcher, stage_dir.join("ao2-windows-worker.cmd"))?;
+    }
     fs::write(stage_dir.join("VERSION"), format!("{version}\n"))?;
     fs::write(
         stage_dir.join("BUILD-PROVENANCE.json"),
@@ -87,7 +86,7 @@ pub(crate) fn package_release(
         ),
     )?;
 
-    let checksum_paths = vec![
+    let mut checksum_paths = vec![
         format!("bin/{binary_name}"),
         "BUILD-PROVENANCE.json".to_string(),
         "LICENSE".to_string(),
@@ -103,6 +102,12 @@ pub(crate) fn package_release(
         "install.sh".to_string(),
         "verify-release.sh".to_string(),
     ];
+    if target == "windows-x86_64" {
+        checksum_paths.extend([
+            "ao2-windows-outbound-worker.py".to_string(),
+            "ao2-windows-worker.cmd".to_string(),
+        ]);
+    }
     let mut archive_files = checksum_paths.clone();
     archive_files.push("SHA256SUMS".to_string());
     archive_files.sort();
@@ -165,17 +170,11 @@ pub(crate) fn package_release(
 
     let sha256 = sha256_file(&archive_path)?;
     let checksum_path = out_dir.join("SHA256SUMS");
-    fs::write(
-        &checksum_path,
-        format!(
-            "{}  {}\n",
-            sha256,
-            archive_path
-                .file_name()
-                .and_then(|name| name.to_str())
-                .context("archive filename is utf8")?
-        ),
-    )?;
+    let archive_name = archive_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .context("archive filename is utf8")?;
+    fs::write(&checksum_path, format!("{sha256}  {archive_name}\n"))?;
 
     let result = serde_json::json!({
         "binary": binary_name,

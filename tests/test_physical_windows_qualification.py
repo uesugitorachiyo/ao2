@@ -1981,7 +1981,6 @@ def test_import_script_never_places_payload_in_child_argv(
     assert environment["EVIDENCE_BASE64"] not in flattened
     assert child_argv == [
         ["git", "rev-parse", "HEAD"],
-        [str(repository / "scripts" / "current-version.sh")],
     ]
 
 

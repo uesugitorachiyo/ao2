@@ -5,12 +5,16 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tarfile
 import threading
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,6 +23,55 @@ AUTHORIZER_PATH = ROOT / "scripts" / "authorize_windows_control_task.py"
 PHYSICAL_LIFECYCLE_PROBE_PATH = ROOT / "scripts" / "Test-AO2PhysicalWindowsLifecycle.ps1"
 WINDOWS_WORKER_INSTALLER_PATH = ROOT / "scripts" / "Install-AO2WindowsOutboundWorker.ps1"
 WINDOWS_STACK_INVENTORY_PATH = ROOT / "docs" / "windows-stack-qualification-inventory.json"
+
+
+@pytest.fixture(scope="module")
+def packaged_windows_worker(tmp_path_factory):
+    package_root = tmp_path_factory.mktemp("AO2 Worker Package")
+    dist = package_root / "dist"
+    fake_binary = package_root / "ao2.exe"
+    fake_binary.write_bytes(b"MZ")
+    result = subprocess.run(
+        [
+            "cargo",
+            "run",
+            "--quiet",
+            "-p",
+            "ao2-cli",
+            "--",
+            "release",
+            "package",
+            "--out-dir",
+            str(dist),
+            "--version",
+            "9.9.9-test",
+            "--binary",
+            str(fake_binary),
+            "--target-label",
+            "windows-x86_64",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    archive = Path(json.loads(result.stdout)["archive"])
+    extracted = package_root / "worker package with spaces"
+    extracted.mkdir()
+    with tarfile.open(archive, "r:gz") as bundle:
+        bundle.extractall(extracted, filter="data")
+    return extracted
+
+
+def run_packaged_windows_worker(package: Path, *args: str, env=None):
+    return subprocess.run(
+        [str(package / "ao2-windows-worker.cmd"), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
 
 
 def load_worker_module():
@@ -337,6 +390,90 @@ def test_physical_host_lease_offline_cli_accepts_fixed_ubuntu_lifecycle_profile(
 
     assert result.returncode == 0
     assert json.loads(result.stdout)["status"] == "accepted"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows batch launcher")
+def test_packaged_windows_worker_launcher_runs_help_from_path_with_spaces(
+    packaged_windows_worker: Path,
+) -> None:
+    result = run_packaged_windows_worker(packaged_windows_worker, "--help")
+
+    assert result.returncode == 0, result.stderr
+    assert "usage:" in result.stdout.lower()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows batch launcher")
+def test_packaged_windows_worker_launcher_preserves_spaced_offline_lease_arguments(
+    packaged_windows_worker: Path,
+    tmp_path: Path,
+) -> None:
+    worker = load_worker_module()
+    factory = tmp_path / "factory root with spaces"
+    parameters, _ = physical_host_lease_parameters(
+        worker,
+        factory,
+        now=datetime.now(timezone.utc),
+        node_id="ubuntu-nucx",
+        purpose="ubuntu_stack_qualification",
+        command_profile="ubuntu_stack_qualification:lifecycle_noop",
+    )
+    lease_path = tmp_path / "offline lease with spaces.json"
+    lease_path.write_bytes(base64.b64decode(parameters["physical_host_lease_base64"]))
+
+    result = run_packaged_windows_worker(
+        packaged_windows_worker,
+        "--validate-physical-host-lease",
+        str(lease_path),
+        "--physical-host-lease-sha256",
+        parameters["physical_host_lease_sha256"],
+        "--physical-host-lease-profile",
+        "ubuntu_stack_qualification:lifecycle_noop",
+        "--node-id",
+        "ubuntu-nucx",
+        "--factory-root",
+        str(factory),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["status"] == "accepted"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows batch launcher")
+def test_packaged_windows_worker_launcher_fails_clearly_without_python(
+    packaged_windows_worker: Path,
+    tmp_path: Path,
+) -> None:
+    environment = {
+        "COMSPEC": os.environ["COMSPEC"],
+        "PATH": str(tmp_path / "empty-path"),
+        "SystemRoot": os.environ["SystemRoot"],
+    }
+
+    result = run_packaged_windows_worker(packaged_windows_worker, "--help", env=environment)
+
+    assert result.returncode == 1
+    assert "AO2 Windows outbound worker requires Python 3.11 or newer." in result.stderr
+
+
+@pytest.mark.skipif(os.name != "nt", reason="Windows batch launcher")
+def test_packaged_windows_worker_launcher_fails_clearly_with_old_python(
+    packaged_windows_worker: Path,
+    tmp_path: Path,
+) -> None:
+    fake_bin = tmp_path / "old python"
+    fake_bin.mkdir()
+    for name in ("py.exe", "python.exe"):
+        shutil.copyfile(Path(os.environ["SystemRoot"]) / "System32" / "where.exe", fake_bin / name)
+    environment = {
+        "COMSPEC": os.environ["COMSPEC"],
+        "PATH": os.pathsep.join([str(fake_bin), str(Path(os.environ["SystemRoot"]) / "System32")]),
+        "SystemRoot": os.environ["SystemRoot"],
+    }
+
+    result = run_packaged_windows_worker(packaged_windows_worker, "--help", env=environment)
+
+    assert result.returncode == 1
+    assert "AO2 Windows outbound worker requires Python 3.11 or newer." in result.stderr
 
 
 def test_physical_host_lease_validator_fails_closed_for_unsafe_evidence(tmp_path: Path) -> None:
