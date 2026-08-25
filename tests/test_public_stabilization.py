@@ -16648,3 +16648,11 @@ def test_public_release_consumer_smoke_is_documented():
 
     assert "ao2.public-release-consumer-smoke.v1" in verification
     assert "release:public-consumer-smoke" in verification
+
+
+def test_public_docs_cleanup_does_not_leave_internal_doc_consumers():
+    refactor_check = read("scripts/refactor-check.sh")
+
+    assert not (REPO_ROOT / "docs" / "roadmap" / "PHASE-2-W4-CI-INTEGRATION.md").exists()
+    assert "docs/refactor-cleanup" not in refactor_check
+    assert "docs/VERIFICATION.md" in refactor_check

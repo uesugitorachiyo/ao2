@@ -4365,8 +4365,6 @@ fn w4_release_workflows_include_no_factory_v3_guard_artifacts() {
     let hosted_validator =
         fs::read_to_string(root.join("scripts/validate_hosted_release_candidates.py"))
             .expect("hosted native candidate validator exists");
-    let w4_roadmap = fs::read_to_string(root.join("docs/roadmap/PHASE-2-W4-CI-INTEGRATION.md"))
-        .expect("W4 roadmap exists");
     let ready_to_ship = fs::read_to_string(root.join("docs/release/READY-TO-SHIP.md"))
         .expect("ready-to-ship release runbook exists");
 
@@ -4386,8 +4384,8 @@ fn w4_release_workflows_include_no_factory_v3_guard_artifacts() {
     assert!(public_release.contains("target/hosted-release/native-gate/summary.json"));
     assert!(hosted_validator.contains("signed_four_archive_release_gate"));
     assert!(!public_release.contains("npm run gate:full"));
-    assert!(w4_roadmap.contains("Stage 0"));
-    assert!(w4_roadmap.contains("gate_with_replacement_passed=3/3"));
+    assert!(ready_to_ship.contains("Stage Contract"));
+    assert!(ready_to_ship.contains("gate_with_replacement_passed=3/3"));
     assert!(ready_to_ship.contains("release-gate.yml"));
     assert!(ready_to_ship.contains("npm run verify:no-factory-v3"));
     assert!(ready_to_ship.contains("npm run gate:full"));
