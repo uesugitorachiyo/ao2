@@ -5,6 +5,8 @@
 /dist-windows/
 /dist-provenance/
 /.release-signing/
+/docs/refactor-cleanup/
+/docs/superpowers/
 /node_modules/
 **/__pycache__/
 *.py[cod]

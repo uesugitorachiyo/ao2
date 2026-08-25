@@ -8,7 +8,7 @@ usage() {
   cat <<'EOF'
 usage: bash scripts/refactor-check.sh <docs|scripts|rust|full>
 
-docs    Check markdown/task docs and whitespace-sensitive diff issues.
+docs    Check maintained public docs and whitespace-sensitive diff issues.
 scripts Check shell syntax for the refactor helper scripts and diff issues.
 rust    Run Rust formatting check.
 full    Run the repository's npm verify gate.
@@ -59,13 +59,16 @@ PY
 case "$mode" in
   docs)
     run check_text_files \
-      docs/refactor-cleanup/REFACTOR_AGENT_HANDOFF_TEMPLATE.md \
-      docs/refactor-cleanup/REFACTOR_CLEANUP_WORKFLOW.md \
-      docs/refactor-cleanup/REFACTOR_TASK_TEMPLATE.md \
-      docs/refactor-cleanup/cleanup-agent-loop.md \
+      README.md \
+      AGENTS.md \
+      docs/PRD.md \
+      docs/ARCHITECTURE.md \
+      docs/SCHEMAS-AND-INTERFACES.md \
+      docs/SECURITY.md \
+      docs/VERIFICATION.md \
       scripts/refactor-scan.sh \
       scripts/refactor-check.sh
-    run git status --short -- docs/refactor-cleanup scripts/refactor-scan.sh scripts/refactor-check.sh
+    run git diff --check
     ;;
   scripts)
     run bash -n scripts/refactor-scan.sh
