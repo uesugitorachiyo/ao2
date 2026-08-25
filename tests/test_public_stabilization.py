@@ -1060,6 +1060,21 @@ def test_public_release_links_and_install_guide_track_current_stable():
     assert "v0.5.6" not in readme
     assert "v0.4.79" not in install
 
+    assert (
+        "git clone --depth 1 --branch v0.5.12 https://github.com/uesugitorachiyo/ao2.git"
+        in first_30_minutes
+    )
+    for needle in [
+        "New-Item -ItemType Directory -Path $tmpdir",
+        "Copy-Item -LiteralPath fixtures\\discount-service -Destination $target -Recurse",
+        "ao2 run examples\\risky-pr-run\\risky-pr.yaml",
+        "ao2 runs show demo-run --target $target --json",
+        "ao2 report demo-run --target $target",
+        "digest_failures",
+        "not use a live provider transcript",
+    ]:
+        assert needle in first_30_minutes
+
 
 def test_published_v0_5_12_is_current_operational_release_truth():
     release_train = json.loads(read("docs/release/release-train.json"))

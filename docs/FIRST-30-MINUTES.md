@@ -72,7 +72,7 @@ archive.
 From an AO2 checkout:
 
 ```sh
-git clone https://github.com/uesugitorachiyo/ao2.git
+git clone --depth 1 --branch v0.5.12 https://github.com/uesugitorachiyo/ao2.git
 cd ao2
 tmpdir=$(mktemp -d /tmp/ao2-demo.XXXXXX)
 cp -R fixtures/discount-service "$tmpdir/discount-service"
@@ -86,6 +86,21 @@ Inspect the retained run evidence:
 ```sh
 ao2 runs show demo-run --target "$tmpdir/discount-service" --json
 ao2 report demo-run --target "$tmpdir/discount-service"
+```
+
+On Windows PowerShell, clone the same pinned checkout and use a disposable
+target copy:
+
+```powershell
+git clone --depth 1 --branch v0.5.12 https://github.com/uesugitorachiyo/ao2.git
+Set-Location ao2
+$tmpdir = Join-Path ([IO.Path]::GetTempPath()) ("ao2-demo-" + [guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Path $tmpdir | Out-Null
+$target = Join-Path $tmpdir "discount-service"
+Copy-Item -LiteralPath fixtures\discount-service -Destination $target -Recurse
+ao2 run examples\risky-pr-run\risky-pr.yaml --target $target --run-id demo-run
+ao2 runs show demo-run --target $target --json
+ao2 report demo-run --target $target
 ```
 
 The demo success signal is `status=Accepted` from `ao2 run` and an accepted run
