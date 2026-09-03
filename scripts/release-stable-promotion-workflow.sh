@@ -510,8 +510,19 @@ channel_blockers = [
 required_confirm = f"promote-stable-{ao2_tag}-{cp_tag}"
 confirmed = confirm == required_confirm
 evidence_ready = evidence.get("post_release_evidence_ready") is True
-stable_channel_only = not non_channel_blockers and not missing_components and evidence_ready and bool(channel_blockers)
-already_stable = bool(readiness.get("stable_release_ready")) and not readiness.get("promotion_blockers")
+stable_channel_only = (
+    readiness.get("status") == "blocked"
+    and readiness.get("stable_release_ready") is False
+    and not non_channel_blockers
+    and not missing_components
+    and evidence_ready
+    and bool(channel_blockers)
+)
+already_stable = (
+    readiness.get("status") == "ready"
+    and readiness.get("stable_release_ready") is True
+    and not readiness.get("promotion_blockers")
+)
 status = (
     "ready_to_promote"
     if stable_channel_only
@@ -577,7 +588,7 @@ plan = {
     ],
     "trust_boundary": {
         "queries_public_releases": True,
-        "mutates_releases": confirmed,
+        "mutates_releases": confirmed and status == "ready_to_promote",
         "stores_credentials": False,
     },
 }
@@ -595,22 +606,25 @@ PY
 
 promotion_status="not_attempted"
 if [ "$AO2_STABLE_PROMOTION_CONFIRM" = "promote-stable-$AO2_RELEASE_TAG-$AO2_CP_RELEASE_TAG" ]; then
-  if [ "$plan_status" != "ready_to_promote" ]; then
+  if [ "$plan_status" = "already_stable" ]; then
+    promotion_status="already_stable_noop"
+  elif [ "$plan_status" != "ready_to_promote" ]; then
     echo "refusing stable promotion because plan status is $plan_status" >&2
     cp "$PLAN" "$SUMMARY"
     exit 1
+  else
+    {
+      gh release edit "$AO2_RELEASE_TAG" \
+        --repo "$AO2_RELEASE_REPO" \
+        --prerelease=false \
+        --latest
+      gh release edit "$AO2_CP_RELEASE_TAG" \
+        --repo "$AO2_CP_RELEASE_REPO" \
+        --prerelease=false \
+        --latest
+    } > "$PROMOTION_LOG" 2>&1
+    promotion_status="promoted"
   fi
-  {
-    gh release edit "$AO2_RELEASE_TAG" \
-      --repo "$AO2_RELEASE_REPO" \
-      --prerelease=false \
-      --latest
-    gh release edit "$AO2_CP_RELEASE_TAG" \
-      --repo "$AO2_CP_RELEASE_REPO" \
-      --prerelease=false \
-      --latest
-  } > "$PROMOTION_LOG" 2>&1
-  promotion_status="promoted"
 fi
 
 python3 - "$PLAN" "$SUMMARY" "$promotion_status" "$PROMOTION_LOG" <<'PY'
