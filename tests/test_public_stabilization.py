@@ -756,7 +756,7 @@ def test_public_release_publication_contract_matches_signed_sidecars_and_x86_art
     assert "provenance.json.signature" not in combined_contracts
 
 
-def test_next_patch_release_notes_contract_resolves_v0_5_12_note():
+def test_next_patch_release_notes_contract_resolves_v0_5_13_note():
     result = subprocess.run(
         [
             "python3",
@@ -775,7 +775,7 @@ def test_next_patch_release_notes_contract_resolves_v0_5_12_note():
     )
 
     assert result.returncode == 0, result.stderr
-    assert Path(result.stdout.strip()).as_posix() == "docs/release/v0.5.12-stable.md"
+    assert Path(result.stdout.strip()).as_posix() == "docs/release/v0.5.13-stable.md"
 
 
 def test_prepared_package_version_matches_next_patch_release_train():
@@ -794,10 +794,6 @@ def test_v0_5_12_windows_worker_release_contract():
     release_train = json.loads(read("docs/release/release-train.json"))
 
     assert release_train["stable"]["ao2"] == {
-        "tag": "v0.5.12",
-        "version": "0.5.12",
-    }
-    assert release_train["next_patch"]["ao2"] == {
         "tag": "v0.5.12",
         "version": "0.5.12",
     }
@@ -821,6 +817,30 @@ def test_v0_5_12_windows_worker_release_contract():
     assert "Linux and macOS archives remain unchanged" in notes
     assert "ao2-windows-worker.cmd" in documentation
     assert "Python 3.11" in documentation
+
+
+def test_v0_5_13_source_growth_release_contract():
+    release_train = json.loads(read("docs/release/release-train.json"))
+
+    assert release_train["stable"]["ao2"] == {
+        "tag": "v0.5.12",
+        "version": "0.5.12",
+    }
+    assert release_train["next_patch"]["ao2"] == {
+        "tag": "v0.5.13",
+        "version": "0.5.13",
+    }
+    notes = read("docs/release/v0.5.13-stable.md")
+    for required in [
+        "context.software_source_policy",
+        "Agent-backed SDD execution",
+        "Generated and vendored source",
+        "non-source artifacts remain outside",
+        "base/head",
+        "quality snapshots",
+        "does not add a universal language parser",
+    ]:
+        assert required in notes
 
 
 def test_public_release_build_uses_canonical_hosted_native_dry_run_contract():
@@ -1086,7 +1106,12 @@ def test_published_v0_5_12_is_current_operational_release_truth():
     }
 
     assert release_train["stable"] == expected_pair
-    assert release_train["next_patch"] == expected_pair
+    assert release_train["next_patch"] == {
+        "ao2": {"tag": "v0.5.13", "version": "0.5.13"},
+        "ao2_control_plane": {"tag": "v0.1.19", "version": "0.1.19"},
+        "promotion_confirm": "promote-stable-v0.5.13-v0.1.19",
+        "public_operator_confirm": "public-release-reviewed-v0.5.13-v0.1.19",
+    }
 
     for path in (
         "README.md",
@@ -1133,10 +1158,10 @@ def test_current_public_pair_tracks_control_plane_v0_1_19():
         "public_operator_confirm": "public-release-reviewed-v0.5.12-v0.1.19",
     }
     expected_next_patch = {
-        "ao2": {"tag": "v0.5.12", "version": "0.5.12"},
+        "ao2": {"tag": "v0.5.13", "version": "0.5.13"},
         "ao2_control_plane": {"tag": "v0.1.19", "version": "0.1.19"},
-        "promotion_confirm": "promote-stable-v0.5.12-v0.1.19",
-        "public_operator_confirm": "public-release-reviewed-v0.5.12-v0.1.19",
+        "promotion_confirm": "promote-stable-v0.5.13-v0.1.19",
+        "public_operator_confirm": "public-release-reviewed-v0.5.13-v0.1.19",
     }
     assert manifest["stable"] == expected_stable
     assert manifest["next_patch"] == expected_next_patch
@@ -14320,7 +14345,7 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
         "tag": "v0.1.19",
         "version": "0.1.19",
     }
-    assert manifest["next_patch"]["ao2"] == {"tag": "v0.5.12", "version": "0.5.12"}
+    assert manifest["next_patch"]["ao2"] == {"tag": "v0.5.13", "version": "0.5.13"}
     assert manifest["next_patch"]["ao2_control_plane"] == {
         "tag": "v0.1.19",
         "version": "0.1.19",
@@ -14331,7 +14356,7 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
     )
     assert (
         manifest["next_patch"]["promotion_confirm"]
-        == "promote-stable-v0.5.12-v0.1.19"
+        == "promote-stable-v0.5.13-v0.1.19"
     )
 
     helper = REPO_ROOT / "scripts" / "release-train-env.sh"
@@ -14348,15 +14373,15 @@ def test_release_train_manifest_centralizes_stable_and_next_patch_defaults():
     assert result.returncode == 0, result.stderr + result.stdout
     exported = dict(line.split("=", 1) for line in result.stdout.splitlines())
     assert exported["AO2_RELEASE_TRAIN_NAME"] == "next_patch"
-    assert exported["AO2_RELEASE_TRAIN_AO2_TAG"] == "v0.5.12"
-    assert exported["AO2_RELEASE_TRAIN_AO2_VERSION"] == "0.5.12"
+    assert exported["AO2_RELEASE_TRAIN_AO2_TAG"] == "v0.5.13"
+    assert exported["AO2_RELEASE_TRAIN_AO2_VERSION"] == "0.5.13"
     assert exported["AO2_RELEASE_TRAIN_CP_TAG"] == "v0.1.19"
     assert exported["AO2_RELEASE_TRAIN_CP_VERSION"] == "0.1.19"
     assert exported["AO2_RELEASE_TRAIN_PROMOTION_CONFIRM"] == (
-        "promote-stable-v0.5.12-v0.1.19"
+        "promote-stable-v0.5.13-v0.1.19"
     )
     assert exported["AO2_RELEASE_TRAIN_PUBLIC_OPERATOR_CONFIRM"] == (
-        "public-release-reviewed-v0.5.12-v0.1.19"
+        "public-release-reviewed-v0.5.13-v0.1.19"
     )
 
     for workflow_path in [
@@ -14930,7 +14955,7 @@ def test_release_train_manifest_parity_audit_contract(tmp_path):
     assert summary["schema_aligned"] is True
     assert summary["target_aligned"] is True
     assert summary["stable"]["ao2"]["tag"] == "v0.5.12"
-    assert summary["next_patch"]["ao2"]["tag"] == "v0.5.12"
+    assert summary["next_patch"]["ao2"]["tag"] == "v0.5.13"
 
     for needle in [
         "release-train-manifest-parity:",
