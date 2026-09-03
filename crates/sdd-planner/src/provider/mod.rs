@@ -35,6 +35,17 @@ pub const CANDIDATE_SCHEMA: &str = "ao2.sdd-plan-candidate.v1";
 /// §5.1 V7).
 pub const MAX_STEPS: u32 = 25;
 
+/// Engine-owned constraints for software source created or changed by AO2.
+/// Repositories still own language-specific thresholds and verifier commands.
+pub const SOFTWARE_SOURCE_POLICY: &str = r#"Software-source growth policy:
+- Classify by repository and language context. Handwritten production source, test source, executable scripts, and executable qualification runners are in scope. Documentation, evidence, logs, manifests, checksums, reports, non-executable fixtures, schemas, migrations, binaries, archives, runtime state, and other non-source artifacts are outside this policy.
+- Before proposing source changes, inspect the destination repository before editing and stop at the first sufficient option: (1) No source change; (2) Reuse or delete existing code; (3) use the standard library or native platform; (4) use an already-installed dependency; (5) make the smallest cohesive change in the existing structure; (6) only then add the minimum new module, abstraction, dependency usage, configuration, compatibility path, or layer required now.
+- Before extending a file, check existing helpers and callers, present responsibility, unhealthy file or function growth, dependency direction, and whether extraction creates cohesion or merely fragmentation. No speculative scaffolding, duplicate behavior, unrelated refactors, or copied tests when a table-driven case suffices.
+- generated or vendored source stays classified as source and requires an explicit reviewable exception from handwritten-source limits. Cohesive source may also receive a reasoned exception when splitting would worsen the design. Non-source artifacts need no exception.
+- After implementation, evaluate the exact base/head source diff with repository-native policy and tools when supplied. Treat size and complexity as signals and ratchets, not universal quality definitions. Do not grow grandfathered oversized source without a recorded exception; behavior-neutral touches without growth remain allowed.
+- Prefer deterministic checks for objective facts and model judgment for cohesion. Do not invent a universal parser or threshold or add a counting dependency. Do not split or compress code merely to evade a threshold.
+- Do not simplify away trust-boundary validation, security controls, accessibility, data-loss-preventing error handling, required compatibility, or explicitly requested behavior."#;
+
 pub(crate) fn provider_command(command: &str) -> Command {
     if cfg!(windows) {
         if let Some(script) = resolve_windows_posix_script(command) {
@@ -99,6 +110,7 @@ pub struct ProviderRequest {
 pub struct ProviderContext {
     pub surface_map: SurfaceMap,
     pub prior_errors: Vec<String>,
+    pub software_source_policy: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -121,6 +133,7 @@ impl ProviderRequest {
             context: ProviderContext {
                 surface_map,
                 prior_errors,
+                software_source_policy: SOFTWARE_SOURCE_POLICY.to_string(),
             },
             expected_output: ExpectedOutput {
                 schema: CANDIDATE_SCHEMA.to_string(),

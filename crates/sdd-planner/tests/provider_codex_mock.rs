@@ -139,6 +139,48 @@ fn stdin_envelope_matches_spec_8_1() {
         ctx.get("prior_errors").is_some(),
         "context.prior_errors missing"
     );
+    let source_policy = ctx
+        .get("software_source_policy")
+        .and_then(|value| value.as_str())
+        .expect("context.software_source_policy missing");
+    for (case, required) in [
+        ("existing capability", "No source change"),
+        (
+            "reuse or standard library",
+            "standard library or native platform",
+        ),
+        ("small suitable change", "smallest cohesive change"),
+        (
+            "overloaded source growth",
+            "unhealthy file or function growth",
+        ),
+        ("cohesive new module", "minimum new module"),
+        (
+            "behavior-neutral oversized touch",
+            "behavior-neutral touches without growth",
+        ),
+        (
+            "generated or vendored exception",
+            "generated or vendored source",
+        ),
+        (
+            "cohesive split exception",
+            "splitting would worsen the design",
+        ),
+        ("unjustified source layer", "No speculative scaffolding"),
+        (
+            "large non-source artifact",
+            "non-source artifacts are outside this policy",
+        ),
+    ] {
+        assert!(
+            source_policy.contains(required),
+            "software source policy omitted representative case {case:?}: {source_policy}"
+        );
+    }
+    assert!(source_policy.contains("exact base/head source diff"));
+    assert!(source_policy.contains("repository-native"));
+    assert!(source_policy.contains("security controls"));
     let expected = envelope
         .get("expected_output")
         .expect("envelope must have expected_output (§8.1)");

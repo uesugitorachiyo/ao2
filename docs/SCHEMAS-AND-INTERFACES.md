@@ -244,6 +244,18 @@ the provider request. The provider sees bounded file metadata only: paths, kinds
 hashes, and public symbols. AO2 does not send full file bodies and does not rely
 on long conversational compaction for SDD planning.
 
+The request's `context.software_source_policy` carries the same engine-owned
+source-only guardrail used by agent-backed SDD execution. It requires the
+planner and implementer to inspect the destination, prefer no change, reuse,
+the standard library or native platform, and already-installed dependencies,
+then make only the smallest cohesive source change. Generated or vendored
+source remains source and needs an explicit reviewable exception; documentation,
+evidence, reports, non-executable fixtures, and other non-source artifacts are
+outside this policy. Destination repositories continue to own language- and
+role-specific thresholds and deterministic checks. AO2 binds those declared
+checks to its existing staged or exact base/head quality snapshots rather than
+acting as a universal source parser or architecture engine.
+
 The default planning budget is `8000` cl100k_base tokens and can be overridden
 per run:
 

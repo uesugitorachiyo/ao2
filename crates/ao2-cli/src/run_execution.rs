@@ -8,6 +8,7 @@ use ao2_runtime::{
     resume_risky_pr_provider_free, run_risky_pr_provider_free, run_risky_pr_with_provider_prompt,
     start_risky_pr_provider_free, ProviderRunOptions, ResumeOptions, RunOptions,
 };
+use sdd_planner::provider::SOFTWARE_SOURCE_POLICY;
 
 use crate::cli_util::{
     atomic_write_text, json_array, json_string, read_prompt, sanitize_greenfield_id,
@@ -761,7 +762,7 @@ Plan id: {plan_id}
 Source schema: {source_schema}
 Target repository: {target_repo}
 Task count: {task_count}
-
+{SOFTWARE_SOURCE_POLICY}
 Execute the task graph below in dependency order. Keep changes scoped to the listed paths and acceptance criteria. Run the verifier when possible. Report:
 Summary: <short summary>
 Changed files: <comma-separated files>
