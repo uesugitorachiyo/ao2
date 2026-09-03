@@ -2,7 +2,7 @@
 
 [Watch the AO2 overview video](https://youtu.be/pGhPooqC3hQ)
 
-[![Latest release](https://img.shields.io/github/v/release/uesugitorachiyo/ao2?label=latest%20stable%20release)](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.12)
+[![Latest release](https://img.shields.io/github/v/release/uesugitorachiyo/ao2?label=latest%20stable%20release)](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.13)
 
 AO2 is the governed execution runtime for local agent work. It compiles and runs scoped workflows, enforces policy and exact-digest approvals, invokes execution adapters, evaluates results, and emits replayable evidence. Use AO2 when an authorized plan is ready to execute and the run must remain reviewable, reproducible, and bound to its approved inputs.
 
@@ -123,7 +123,7 @@ published to a read-only control plane.
 
 ## Status
 
-This public export is prepared from AO2 `0.5.12`. It is intentionally
+This public export is prepared from AO2 `0.5.13`. It is intentionally
 local-first:
 
 - no provider API-key authentication paths;
@@ -192,7 +192,7 @@ checksum verification before install.
 ## Install From Stable Public Release
 
 The current stable public release is
-[`v0.5.12`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.12).
+[`v0.5.13`](https://github.com/uesugitorachiyo/ao2/releases/tag/v0.5.13).
 It publishes native release archives for macOS aarch64, Linux x86_64, and
 Windows x86_64, plus `promotion-plan.json` and aggregate `SHA256SUMS`. The
 expected compatible stable companion is
@@ -209,18 +209,18 @@ Download and verify a macOS archive:
 
 ```sh
 mkdir -p dist-release
-gh release download v0.5.12 --repo uesugitorachiyo/ao2 \
-  --pattern ao2-0.5.12-macos-aarch64.tar.gz \
+gh release download v0.5.13 --repo uesugitorachiyo/ao2 \
+  --pattern ao2-0.5.13-macos-aarch64.tar.gz \
   --pattern SHA256SUMS \
   --dir dist-release
-(cd dist-release && grep 'ao2-0.5.12-macos-aarch64.tar.gz' SHA256SUMS | shasum -a 256 -c -)
+(cd dist-release && grep 'ao2-0.5.13-macos-aarch64.tar.gz' SHA256SUMS | shasum -a 256 -c -)
 ```
 
 Use the same release base URL for Linux and Windows archives:
 
 ```text
-https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.12/ao2-0.5.12-linux-x86_64.tar.gz
-https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.12/ao2-0.5.12-windows-x86_64.tar.gz
+https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.13/ao2-0.5.13-linux-x86_64.tar.gz
+https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.13/ao2-0.5.13-windows-x86_64.tar.gz
 ```
 
 ## First 30 Minutes With AO2
@@ -230,8 +230,8 @@ public archive, install AO2, run `ao2 doctor`, and execute the governed demo.
 For install, rollback, and uninstall details, see [Install](docs/INSTALL.md).
 For common support cases, see [Troubleshooting](docs/TROUBLESHOOTING.md).
 
-For Rust/Cargo work with the published `v0.5.12` binary, run the Cargo workflow
-file by path from an AO2 checkout at the `v0.5.12` tag or newer:
+For Rust/Cargo work with the published `v0.5.13` binary, run the Cargo workflow
+file by path from an AO2 checkout at the `v0.5.13` tag or newer:
 
 ```sh
 ao2 run examples/task-templates/rust-cargo-bug-fix.yaml \
@@ -267,7 +267,7 @@ downloading the current archive:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\smoke-windows-release.ps1 `
-  -Archive .\dist-windows\ao2-0.5.12-windows-x86_64.tar.gz
+  -Archive .\dist-windows\ao2-0.5.13-windows-x86_64.tar.gz
 ```
 
 The main CI workflow in `.github/workflows/ci.yml` runs on pull request and
@@ -357,7 +357,7 @@ ao2 pulse run-loop \
 - [Security](docs/SECURITY.md)
 - [Verification](docs/VERIFICATION.md)
 - [Public release verification](docs/release/PUBLIC-RELEASE-VERIFICATION.md)
-- [AO2 v0.5.12 stable patch release notes](docs/release/v0.5.12-stable.md)
+- [AO2 v0.5.13 stable patch release notes](docs/release/v0.5.13-stable.md)
 - [AO2 v0.5.11 stable release notes](docs/release/v0.5.11-stable.md)
 
 ## License
