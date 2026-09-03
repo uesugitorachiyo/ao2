@@ -3963,7 +3963,7 @@ JSON
     )
 
 
-def test_stable_promotion_accepts_downloaded_public_pair_digest_layout(tmp_path):
+def test_confirmed_stable_promotion_only_noops_for_consistent_already_stable(tmp_path):
     fixture = tmp_path / "fixture"
     for name, target_label in [
         ("ao2-linux", "linux-x86_64"),
@@ -4070,15 +4070,13 @@ mkdir -p "$AO2_STABLE_RELEASE_READINESS_ROOT"
 cat > "$AO2_STABLE_RELEASE_READINESS_ROOT/summary.json" <<'JSON'
 {
   "schema_version": "ao2.stable-release-readiness.v1",
-  "stable_release_ready": false,
+  "status": "ready",
+  "stable_release_ready": true,
   "components": [
     {"name": "ao2", "repo": "uesugitorachiyo/ao2", "tag": "v0.4.81"},
     {"name": "ao2-control-plane", "repo": "uesugitorachiyo/ao2-control-plane", "tag": "v0.1.14"}
   ],
-  "promotion_blockers": [
-    {"component": "ao2", "code": "stable_release_absent", "severity": "blocking"},
-    {"component": "ao2-control-plane", "code": "current_channel_is_prerelease", "severity": "blocking"}
-  ]
+  "promotion_blockers": []
 }
 JSON
 """,
@@ -4086,7 +4084,7 @@ JSON
     )
     (bin_dir / "npm").chmod(0o755)
     (bin_dir / "gh").write_text(
-        "#!/usr/bin/env bash\nexit 1\n",
+        "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" >> \"$GH_CALL_LOG\"\n",
         encoding="utf-8",
     )
     (bin_dir / "gh").chmod(0o755)
@@ -4100,6 +4098,10 @@ JSON
             "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
             "AO2_STABLE_PROMOTION_ROOT": str(out_root),
             "AO2_STABLE_PROMOTION_EVIDENCE_FIXTURE_DIR": str(fixture),
+            "AO2_RELEASE_TAG": "v0.4.81",
+            "AO2_CP_RELEASE_TAG": "v0.1.14",
+            "AO2_STABLE_PROMOTION_CONFIRM": "promote-stable-v0.4.81-v0.1.14",
+            "GH_CALL_LOG": str(tmp_path / "gh-calls.log"),
         },
         capture_output=True,
         text=True,
@@ -4139,11 +4141,44 @@ JSON
     )
 
     summary = json.loads((out_root / "summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "already_stable"
+    assert summary["promotion_status"] == "already_stable_noop"
     assert summary["post_release_evidence_ready"] is True
+    assert summary["trust_boundary"]["mutates_releases"] is False
+    assert not (tmp_path / "gh-calls.log").exists()
     assert not any(
         blocker["code"] == "post_release_evidence_missing"
         for blocker in summary["blockers"]
     )
+
+    npm = bin_dir / "npm"
+    npm.write_text(
+        npm.read_text(encoding="utf-8").replace(
+            '"promotion_blockers": []',
+            '"promotion_blockers": [{"code": "stable_release_absent"}]',
+        ),
+        encoding="utf-8",
+    )
+    blocked_result = subprocess.run(
+        ["node", "scripts/run-sh-script.js", "scripts/release-stable-promotion-workflow.sh"],
+        cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+            "AO2_STABLE_PROMOTION_ROOT": str(tmp_path / "contradictory-promotion"),
+            "AO2_STABLE_PROMOTION_EVIDENCE_FIXTURE_DIR": str(fixture),
+            "AO2_RELEASE_TAG": "v0.4.81",
+            "AO2_CP_RELEASE_TAG": "v0.1.14",
+            "AO2_STABLE_PROMOTION_CONFIRM": "promote-stable-v0.4.81-v0.1.14",
+            "GH_CALL_LOG": str(tmp_path / "contradictory-gh-calls.log"),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert blocked_result.returncode != 0
+    assert "plan status is blocked" in blocked_result.stderr
+    assert not (tmp_path / "contradictory-gh-calls.log").exists()
 
 
 def test_operator_release_evidence_bundle_downloads_and_verifies_cross_repo_artifacts(tmp_path):
