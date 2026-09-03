@@ -4,7 +4,7 @@ The Windows worker polls the Mac-hosted AO2 Control Plane outbound and posts
 task-board result evidence back to `/api/v1/ai/task-board`. It does not open an
 inbound Windows HTTP endpoint.
 
-AO2 `v0.5.12` Windows release archives include this worker as
+AO2 `v0.5.13` Windows release archives include this worker as
 `ao2-windows-outbound-worker.py` plus the package-root
 `ao2-windows-worker.cmd` launcher. From an extracted archive, including a path
 containing spaces, run:

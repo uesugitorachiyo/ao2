@@ -1,6 +1,6 @@
 # First 30 Minutes With AO2
 
-This guide starts from the public AO2 `v0.5.12` release and ends with a local
+This guide starts from the public AO2 `v0.5.13` release and ends with a local
 governed demo run. It does not require provider API keys, a control-plane
 server, release access, or contact with other users.
 
@@ -12,7 +12,7 @@ is already authenticated, this is the shortest path:
 ```sh
 mkdir -p ao2-stable
 cd ao2-stable
-gh release download v0.5.12 --repo uesugitorachiyo/ao2
+gh release download v0.5.13 --repo uesugitorachiyo/ao2
 shasum -a 256 -c SHA256SUMS
 ```
 
@@ -23,33 +23,33 @@ release URLs instead. Choose one archive for your host and download
 ```sh
 mkdir -p ao2-stable
 cd ao2-stable
-base_url="https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.12"
+base_url="https://github.com/uesugitorachiyo/ao2/releases/download/v0.5.13"
 curl -fLO "$base_url/SHA256SUMS"
-curl -fLO "$base_url/ao2-0.5.12-macos-aarch64.tar.gz"
-grep '  ao2-0.5.12-macos-aarch64.tar.gz$' SHA256SUMS > SHA256SUMS.selected
+curl -fLO "$base_url/ao2-0.5.13-macos-aarch64.tar.gz"
+grep '  ao2-0.5.13-macos-aarch64.tar.gz$' SHA256SUMS > SHA256SUMS.selected
 shasum -a 256 -c SHA256SUMS.selected
 ```
 
 Choose the archive for your host:
 
-- `ao2-0.5.12-macos-aarch64.tar.gz`
-- `ao2-0.5.12-linux-x86_64.tar.gz`
-- `ao2-0.5.12-windows-x86_64.tar.gz`
+- `ao2-0.5.13-macos-aarch64.tar.gz`
+- `ao2-0.5.13-linux-x86_64.tar.gz`
+- `ao2-0.5.13-windows-x86_64.tar.gz`
 
 These are the supported public archives. Linux aarch64 hosts may use the Linux
 x86_64 archive only under explicit Docker emulation; no Linux aarch64 archive
-is published for `v0.5.12`.
+is published for `v0.5.13`.
 
 On macOS or Linux:
 
 ```sh
-tar -xzf ao2-0.5.12-<platform>.tar.gz
+tar -xzf ao2-0.5.13-<platform>.tar.gz
 ./verify-release.sh
 AO2_INSTALL_DIR="$HOME/.local/bin" ./install.sh
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-On Windows PowerShell, extract `ao2-0.5.12-windows-x86_64.tar.gz`, then run:
+On Windows PowerShell, extract `ao2-0.5.13-windows-x86_64.tar.gz`, then run:
 
 ```powershell
 .\Verify-Release.ps1
@@ -63,7 +63,7 @@ ao2 version --json
 ao2 doctor --json
 ```
 
-The installed version should report `0.5.12`. `ao2 doctor --json` should include
+The installed version should report `0.5.13`. `ao2 doctor --json` should include
 install verification evidence when the binary came from the signed public
 archive.
 
@@ -72,7 +72,7 @@ archive.
 From an AO2 checkout:
 
 ```sh
-git clone --depth 1 --branch v0.5.12 https://github.com/uesugitorachiyo/ao2.git
+git clone --depth 1 --branch v0.5.13 https://github.com/uesugitorachiyo/ao2.git
 cd ao2
 tmpdir=$(mktemp -d /tmp/ao2-demo.XXXXXX)
 cp -R fixtures/discount-service "$tmpdir/discount-service"
@@ -92,7 +92,7 @@ On Windows PowerShell, clone the same pinned checkout and use a disposable
 target copy:
 
 ```powershell
-git clone --depth 1 --branch v0.5.12 https://github.com/uesugitorachiyo/ao2.git
+git clone --depth 1 --branch v0.5.13 https://github.com/uesugitorachiyo/ao2.git
 Set-Location ao2
 $tmpdir = Join-Path ([IO.Path]::GetTempPath()) ("ao2-demo-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $tmpdir | Out-Null
