@@ -5,6 +5,9 @@ return EXACTLY ONE JSON object matching schema
 Constraints:
 - Use ONLY file paths from `context.surface_map.files[].path`.
   Hallucinated paths are rejected.
+- Apply `context.software_source_policy` when choosing whether and where source
+  should change and when defining post-implementation verification. It governs
+  software source only; do not turn excluded non-source growth into a plan gate.
 - `plan.title` length MUST NOT exceed 80 characters (validator rule
   V10). Longer titles are rejected.
 - `plan.steps` length ∈ [1, 25].

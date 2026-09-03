@@ -42,6 +42,7 @@ AO2 Control Plane consumes typed state and evidence as a read-only observer. It 
 ## Working Method
 
 - Start from the smallest owned surface. Preserve state-transition, retry, approval, evidence, and artifact provenance invariants across producer/consumer changes.
+- AO2 SDD planning and agent execution must apply the shared software-source growth policy before editing: inspect the destination, prefer no change/reuse/standard-library/native/already-installed options, and add only the smallest cohesive source change. Keep non-source artifacts outside this policy, require explicit generated/vendored or cohesion exceptions, and leave language-specific thresholds and deterministic source-growth commands to the destination repository's exact-snapshot quality gates.
 - Add or update negative tests for fail-closed behavior. Do not hand-edit outputs merely to satisfy schemas, evaluators, release gates, or readbacks.
 - Use the four nested instruction scopes for runtime, policy, scripts, and workflows; keep repository-wide safety boundaries summarized here.
 - If durable commands, authority, architecture, or ownership changes, update this file in the same pull request.
